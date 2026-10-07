@@ -2263,9 +2263,30 @@ export default function POSPage() {
     if (!videoRef.current || !canvasRef.current) return;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      });
+      let stream: MediaStream;
+      try {
+        // Request a higher resolution so small or distant QR codes have enough pixels
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        });
+      } catch (firstErr: any) {
+        if (firstErr?.name === 'NotAllowedError' || firstErr?.name === 'SecurityError') throw firstErr;
+        // OverconstrainedError or other non-permission failure: retry once with the simple constraint
+        console.warn('[pos] Camera HD constraint failed, retrying with basic constraint:', firstErr);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+        });
+      }
+      // Best effort continuous autofocus where supported; ignore any failure
+      try {
+        const track: any = stream.getVideoTracks()[0];
+        const caps: any = track?.getCapabilities ? track.getCapabilities() : null;
+        if (track && caps && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+          await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] } as any);
+        }
+      } catch {
+        // ignore: focus control is optional
+      }
       videoRef.current.srcObject = stream;
       setQrScanStatus('scanning');
       setQrScanMessage('');
@@ -2454,28 +2475,101 @@ export default function POSPage() {
     };
 
     let attempts = 0;
-    const maxAttempts = 10;
+    const maxAttempts = 20;
 
-    const tryFrame = () => {
+    // BarcodeDetector (native, much more tolerant than jsQR) when the browser supports QR
+    let detectorPromise: Promise<any> | null = null;
+    const getDetector = (): Promise<any> => {
+      if (!detectorPromise) {
+        detectorPromise = (async () => {
+          try {
+            const BD = (window as any).BarcodeDetector;
+            if (!BD) return null;
+            if (typeof BD.getSupportedFormats === 'function') {
+              const formats: string[] = await BD.getSupportedFormats();
+              if (!formats.includes('qr_code')) return null;
+            }
+            return new BD({ formats: ['qr_code'] });
+          } catch {
+            return null;
+          }
+        })();
+      }
+      return detectorPromise;
+    };
+
+    const decodeFrame = async (): Promise<string | null> => {
+      // (a) Native BarcodeDetector on the full frame; prefer the code closest to the tap
+      try {
+        const detector = await getDetector();
+        if (detector) {
+          const results: any[] = await detector.detect(video);
+          if (results && results.length > 0) {
+            let best = results[0];
+            let bestDist = Infinity;
+            for (const r of results) {
+              const b = r.boundingBox;
+              if (!b) continue;
+              const d = Math.hypot(b.x + b.width / 2 - tapX, b.y + b.height / 2 - tapY);
+              if (d < bestDist) { bestDist = d; best = r; }
+            }
+            if (best?.rawValue) return best.rawValue as string;
+          }
+        }
+      } catch {
+        // fall through to jsQR
+      }
+
       const context = canvas.getContext('2d');
-      if (!context) return;
-      // Draw only the cropped region so jsQR sees just what the user tapped
-      canvas.width = cropW;
-      canvas.height = cropH;
-      context.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-      // @ts-ignore
-      const code = jsQR(imageData.data, canvas.width, canvas.height);
-      if (code) {
-        processCode(code.data);
+      if (!context) return null;
+
+      // (b) jsQR on the cropped tap region
+      try {
+        if (cropW >= 32 && cropH >= 32) {
+          canvas.width = cropW;
+          canvas.height = cropH;
+          context.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+          // @ts-ignore
+          const code = jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+          if (code) return code.data;
+        }
+      } catch {
+        // fall through to full-frame
+      }
+
+      // (c) jsQR on the full frame, scaled so the longer side is at most 1280px
+      try {
+        const longer = Math.max(video.videoWidth, video.videoHeight);
+        const scale = longer > 1280 ? 1280 / longer : 1;
+        const fw = Math.max(1, Math.round(video.videoWidth * scale));
+        const fh = Math.max(1, Math.round(video.videoHeight * scale));
+        canvas.width = fw;
+        canvas.height = fh;
+        context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, fw, fh);
+        const full = context.getImageData(0, 0, fw, fh);
+        // @ts-ignore
+        const code = jsQR(full.data, fw, fh, { inversionAttempts: 'attemptBoth' });
+        if (code) return code.data;
+      } catch {
+        // counted as a failed attempt below
+      }
+      return null;
+    };
+
+    const tryFrame = async () => {
+      const text = await decodeFrame();
+      if (text) {
+        processCode(text);
         return;
       }
       attempts++;
       if (attempts < maxAttempts) {
         setTimeout(tryFrame, 100);
       } else {
+        console.warn('[pos] QR scan failed', { videoWidth: video.videoWidth, videoHeight: video.videoHeight });
         setQrScanStatus('error');
-        setQrScanMessage('No QR code detected. Try again');
+        setQrScanMessage('No QR code detected. Hold steady, fill more of the frame with the code, and tap again.');
         setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 1500);
       }
     };
