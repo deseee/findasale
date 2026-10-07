@@ -40,6 +40,7 @@ import SmartInventoryUpload from '../../../components/SmartInventoryUpload';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
+import { useConsignmentMinimumCents } from '../../../hooks/useWorkspaceSettings';
 import { useFeedbackSurvey } from '../../../hooks/useFeedbackSurvey';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -827,7 +828,12 @@ const AddItemsDetailPage = () => {
 
   // Consignor picker for individual item intake (TEAMS-tier only) -- lets the organizer
   // attach this item to a consignor at creation time instead of a separate edit trip.
-  const { data: consignorOptions } = useQuery({
+  const {
+    data: consignorOptions,
+    isLoading: consignorsLoading,
+    isError: consignorsError,
+    refetch: refetchConsignors,
+  } = useQuery({
     queryKey: ['consignors-for-item-picker'],
     queryFn: async () => {
       const response = await api.get('/consignors');
@@ -836,6 +842,16 @@ const AddItemsDetailPage = () => {
     enabled: orgTier === 'TEAMS',
     staleTime: 60 * 1000,
   });
+
+  // Consignment minimum is a SUGGESTION only (Patrick, 2026-10-07): non-blocking amber hint
+  // under the Consignor field. TEAMS-only fetch; never gates save/submit.
+  const consignmentMinimumCents = useConsignmentMinimumCents(orgTier === 'TEAMS');
+  const consignorPriceNum = parseFloat(formData.price);
+  const belowConsignmentMinimum =
+    !!formData.consignorId &&
+    formData.price !== '' &&
+    !isNaN(consignorPriceNum) &&
+    Math.round(consignorPriceNum * 100) < consignmentMinimumCents;
 
   // Per-marketplace pause (2026-09-30): paused platforms are shown as unavailable on the channel dots.
   // PRO-gated endpoint, so a 403 (lower tier) or any failure simply means "nothing paused".
@@ -2646,19 +2662,52 @@ const AddItemsDetailPage = () => {
                         <option value="REVERSE_AUCTION">Reverse Auction (daily price drop)</option>
                       </select>
                     </div>
-                    {orgTier === 'TEAMS' && consignorOptions && consignorOptions.length > 0 && (
+                    {orgTier === 'TEAMS' && (
                       <div>
                         <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Consignor (optional)</label>
-                        <select
-                          value={formData.consignorId}
-                          onChange={(e) => setFormData({ ...formData, consignorId: e.target.value })}
-                          className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
-                        >
-                          <option value="">Not consigned</option>
-                          {consignorOptions.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
+                        {consignorsLoading ? (
+                          <select
+                            disabled
+                            value=""
+                            className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm opacity-60"
+                          >
+                            <option value="">Loading consignors...</option>
+                          </select>
+                        ) : consignorsError ? (
+                          <p className="text-xs text-red-600 dark:text-red-400">
+                            Could not load consignors.{' '}
+                            <button
+                              type="button"
+                              onClick={() => refetchConsignors()}
+                              className="underline font-medium hover:text-red-700 dark:hover:text-red-300"
+                            >
+                              Retry
+                            </button>
+                          </p>
+                        ) : !consignorOptions || consignorOptions.length === 0 ? (
+                          <p className="text-xs text-warm-600 dark:text-warm-400">
+                            No consignors yet.{' '}
+                            <Link href="/organizer/consignors" className="underline font-medium text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300">
+                              Add a consignor
+                            </Link>
+                          </p>
+                        ) : (
+                          <select
+                            value={formData.consignorId}
+                            onChange={(e) => setFormData({ ...formData, consignorId: e.target.value })}
+                            className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                          >
+                            <option value="">Not consigned</option>
+                            {consignorOptions.map((c) => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        )}
+                        {belowConsignmentMinimum && (
+                          <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                            Below your consignment minimum of ${(consignmentMinimumCents / 100).toFixed(2)}. You can still save.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>

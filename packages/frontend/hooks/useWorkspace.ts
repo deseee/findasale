@@ -34,7 +34,7 @@ export interface WorkspaceWithMembers {
 /**
  * Fetch my workspace (owned or member of)
  */
-export const useMyWorkspace = () => {
+export const useMyWorkspace = (options?: { enabled?: boolean }) => {
   return useQuery<Workspace | null>({
     queryKey: ['workspace', 'me'],
     queryFn: async () => {
@@ -48,6 +48,7 @@ export const useMyWorkspace = () => {
         throw error;
       }
     },
+    enabled: options?.enabled ?? true,
   });
 };
 

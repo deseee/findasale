@@ -348,7 +348,8 @@ const fieldValueChanged = (existing: unknown, next: unknown): boolean => {
 // organizer-settable via WorkspaceSettings.consignmentMinimumPriceCents (GET/PATCH
 // /api/workspace/:workspaceId/settings, workspaceController.ts). Null/unset = platform
 // default of 4000 cents ($40). Stored/compared in cents to avoid float rounding on a
-// dollars comparison. Shared by createItem and updateItem's floor checks below.
+// dollars comparison. ADVISORY only as of 2026-10-07 (no longer enforced by createItem/
+// updateItem); still read by consignorAgreementService for the agreement wording.
 const DEFAULT_CONSIGNMENT_MINIMUM_PRICE_CENTS = 4000;
 
 export async function getConsignmentMinimumPriceCents(organizerId: string): Promise<number> {
@@ -1684,26 +1685,12 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       resolvedConsignorId = matchedConsignor.id;
     }
 
-    // Patrick's intake rule (2026-09-25, made organizer-configurable same day): a
-    // consigned item priced under the workspace's configured floor (default $40/4000
-    // cents) should be donated or refused/returned at intake, not listed -- hard-blocked
-    // here (not just a warning) so it can never be saved by accident, same style as the
-    // price >= 0 check above. Applies ONLY when a consignor is attached
-    // (resolvedConsignorId); a non-consignor item has no floor. Deliberately does NOT
-    // touch the markdown system -- markdownCron.ts / markdownCycleCron.ts write
-    // Item.price directly via Prisma and never call createItem/updateItem, so a consigned
-    // item's price CAN still legitimately drop below the floor later via markdown
-    // (confirmed by reading both jobs, 2026-09-25).
-    if (resolvedConsignorId && price !== undefined && price !== null && price !== '') {
-      const consignorPrice = parseFloat(price);
-      if (!isNaN(consignorPrice)) {
-        const floorCents = await getConsignmentMinimumPriceCents(organizer!.id);
-        if (Math.round(consignorPrice * 100) < floorCents) {
-          const floorDisplay = (floorCents / 100).toFixed(2);
-          return res.status(400).json({ message: `Consigned items must be priced at $${floorDisplay} or more at intake. Items under $${floorDisplay} should be donated or declined per policy.` });
-        }
-      }
-    }
+    // Consignment minimum is ADVISORY only (Patrick, 2026-10-07): organizers part out lots
+    // and take in collections where some pieces are not worth the configured floor
+    // (WorkspaceSettings.consignmentMinimumPriceCents, default $40) individually, so a
+    // consigned item priced under it is never rejected here. The setting is surfaced in
+    // the UI as a non-blocking hint and in the consignor agreement wording only.
+    // (Previously a hard 400 -- removed.)
 
     // Resolve photo URLs: accept pre-uploaded URLs from body, or upload files now
     let photoUrls: string[] = [];
@@ -2100,21 +2087,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       if (fieldValueChanged(item.consignorId, updateData.consignorId)) fieldsBeingEdited.push('consignorId');
     }
 
-    // Patrick's intake rule (2026-09-25, made organizer-configurable same day): mirrors
-    // createItem's configurable floor -- see there for the full reasoning and the
-    // markdown-cron caveat. Effective consignor = the one this request is (re)attaching,
-    // or the item's existing one if this edit doesn't touch it.
-    const effectiveConsignorId = consignorId !== undefined ? updateData.consignorId : item.consignorId;
-    if (effectiveConsignorId && price !== undefined && price !== null && price !== '') {
-      const consignorPrice = parseFloat(price);
-      if (!isNaN(consignorPrice)) {
-        const floorCents = await getConsignmentMinimumPriceCents(ownerOrganizer.id);
-        if (Math.round(consignorPrice * 100) < floorCents) {
-          const floorDisplay = (floorCents / 100).toFixed(2);
-          return res.status(400).json({ message: `Consigned items must be priced at $${floorDisplay} or more. Items under $${floorDisplay} should be donated or declined per policy.` });
-        }
-      }
-    }
+    // Consignment minimum is ADVISORY only (Patrick, 2026-10-07): see createItem. The
+    // price is never rejected here based on the consignment floor.
 
     // Only update fields that are explicitly provided
     if (title !== undefined) {

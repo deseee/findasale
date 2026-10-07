@@ -12,6 +12,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
+import { useMyWorkspace } from './useWorkspace';
 
 export interface WorkspaceSettings {
   id: string;
@@ -160,4 +161,16 @@ export function useCostCalculator(workspaceId: string | null) {
     enabled: !!workspaceId,
     staleTime: 60 * 1000, // 60 seconds
   });
+}
+
+// ─── Consignment minimum (ADVISORY only) ────────────────────────────────────
+// Returns the workspace's consignment minimum in cents (null setting = platform default
+// 4000). Used only for a non-blocking hint on the item forms; the backend never rejects a
+// save over it. Pass enabled=false (non-TEAMS) and no request is made at all.
+export const DEFAULT_CONSIGNMENT_MINIMUM_PRICE_CENTS = 4000;
+export function useConsignmentMinimumCents(enabled: boolean): number {
+  const { data: workspace } = useMyWorkspace({ enabled });
+  const { data: settings } = useWorkspaceSettings(enabled ? workspace?.id || null : null);
+  const cents = settings?.consignmentMinimumPriceCents;
+  return cents !== null && cents !== undefined ? cents : DEFAULT_CONSIGNMENT_MINIMUM_PRICE_CENTS;
 }
