@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate, getInclusivePlatformFeeRate, MINIMUM_TRANSACTION_FEE_CENTS, SubscriptionTier } from '../utils/feeCalculator';
+import { getPlatformFeeRate, getInclusivePlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 
 /**
  * ── CASH / OFF-PLATFORM COMMISSION ACCRUAL ───────────────────────────────────────────────
@@ -91,13 +91,13 @@ export async function resolveCashCommissionRate(
   return getInclusivePlatformFeeRate(organizer.subscriptionTier as SubscriptionTier, 'IN_PERSON');
 }
 
-/** The commission owed on one line's amount, in dollars, rounded to cents. Floored at
- *  MINIMUM_TRANSACTION_FEE_CENTS whenever `rate` is positive (2026-09-24) -- a rate of
- *  exactly 0 (referral discount) is left at $0, never floored up. */
+/** The commission owed on one line's amount, in dollars, rounded to cents: amount x rate, nothing more.
+ *  NO flat minimum (Patrick ruling, 2026-10-07): the $0.75 floor exists to cover Square's card cost, and a
+ *  cash / off-platform sale has no card processing. The floor stays on card sales only
+ *  (feeCalculator.calculateInclusiveCommissionCents). A rate of 0 (referral discount) stays $0. */
 export const cashCommissionOn = (amount: number, rate: number): number => {
   if (!(rate > 0)) return 0;
-  const raw = roundMoney((Number(amount) || 0) * rate);
-  return Math.max(raw, MINIMUM_TRANSACTION_FEE_CENTS / 100);
+  return roundMoney((Number(amount) || 0) * rate);
 };
 
 /**
