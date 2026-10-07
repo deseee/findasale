@@ -29,12 +29,24 @@ jest.mock('../controllers/consignorController', () => {
   return Object.fromEntries(names.map((n) => [n, jest.fn()]));
 });
 jest.mock('../controllers/consignorPortalSquareController', () => {
-  const names = ['getPortalSquare', 'startPortalSquare', 'completePortalSquare', 'refreshPortalSquare'];
+  const names = [
+    'getPortalSquare',
+    'startPortalSquare',
+    'completePortalSquare',
+    'refreshPortalSquare',
+    'disconnectPortalSquare',
+    'requestPortalDataRemovalHandler',
+  ];
   return Object.fromEntries(names.map((n) => [n, jest.fn()]));
 });
 
 import router from '../routes/consignors';
-import { consignorInviteResendLimiter, consignorPortalSquareLimiter, consignorWriteLimiter } from '../middleware/rateLimiter';
+import {
+  consignorInviteResendLimiter,
+  consignorPortalDataRemovalLimiter,
+  consignorPortalSquareLimiter,
+  consignorWriteLimiter,
+} from '../middleware/rateLimiter';
 import { resendConsignorInvite } from '../controllers/consignorController';
 
 function fakeRes() {
@@ -141,6 +153,34 @@ describe('consignorPortalSquareLimiter', () => {
   });
 });
 
+describe('consignorPortalDataRemovalLimiter', () => {
+  const removalReq = (token: string) => ({
+    params: { token },
+    ip: '198.51.100.20',
+    headers: {},
+    method: 'POST',
+    app: { get: () => undefined },
+  });
+
+  it('allows 3 accepted requests per token per day and blocks the 4th (202 counts)', async () => {
+    for (let i = 0; i < 3; i++) expect(await hit(consignorPortalDataRemovalLimiter, removalReq('tok_rm_a'), 202)).toBe(202);
+    expect(await hit(consignorPortalDataRemovalLimiter, removalReq('tok_rm_a'), 202)).toBe('blocked');
+  });
+
+  it('keys per token, so another consignor is unaffected', async () => {
+    for (let i = 0; i < 3; i++) await hit(consignorPortalDataRemovalLimiter, removalReq('tok_rm_b'), 202);
+    expect(await hit(consignorPortalDataRemovalLimiter, removalReq('tok_rm_b'), 202)).toBe('blocked');
+    expect(await hit(consignorPortalDataRemovalLimiter, removalReq('tok_rm_c'), 202)).toBe(202);
+  });
+
+  it.each([[404], [503]])('a %i (nothing sent) does not use up the quota', async (failStatus) => {
+    const token = `tok_rm_fail_${failStatus}`;
+    for (let i = 0; i < 6; i++) expect(await hit(consignorPortalDataRemovalLimiter, removalReq(token), failStatus)).toBe(failStatus);
+    for (let i = 0; i < 3; i++) expect(await hit(consignorPortalDataRemovalLimiter, removalReq(token), 202)).toBe(202);
+    expect(await hit(consignorPortalDataRemovalLimiter, removalReq(token), 202)).toBe('blocked');
+  });
+});
+
 describe('route table', () => {
   const stack: any[] = (router as any).stack;
   const routes = stack
@@ -158,6 +198,8 @@ describe('route table', () => {
       ['/portal/:token/square/start', 'post'],
       ['/portal/:token/square/callback', 'post'],
       ['/portal/:token/square/refresh', 'post'],
+      ['/portal/:token/square/disconnect', 'post'],
+      ['/portal/:token/data-removal-request', 'post'],
     ]) {
       const i = idx(path, method);
       expect(i).toBeGreaterThan(-1);
@@ -165,6 +207,14 @@ describe('route table', () => {
       const layer = stack[i];
       expect(layer.route.stack.some((s: any) => s.handle === consignorPortalSquareLimiter)).toBe(true);
     }
+  });
+
+  it('data-removal-request is also behind the per-token removal limiter, and nothing else is', () => {
+    const i = idx('/portal/:token/data-removal-request', 'post');
+    const handles = stack[i].route.stack.map((s: any) => s.handle);
+    expect(handles).toContain(consignorPortalDataRemovalLimiter);
+    const others = routes.filter((r) => r.path !== '/portal/:token/data-removal-request');
+    expect(others.some((r) => r.layer.route.stack.some((s: any) => s.handle === consignorPortalDataRemovalLimiter))).toBe(false);
   });
 
   it('create and edit (which report the existing-account boolean) are behind the write limiter', () => {

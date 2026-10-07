@@ -233,6 +233,26 @@ describe('state variants', () => {
       expect(u.searchParams.get('state')).toBe(built.state);
     }
   });
+
+  it('portal authorize URL requests ONLY the minimal scopes; organizer scopes are unchanged', () => {
+    const portalScopes = (new URL(buildSquarePortalAuthorizeUrl('con_1').url).searchParams.get('scope') || '').split(' ');
+    expect(portalScopes.sort()).toEqual(['BANK_ACCOUNTS_READ', 'MERCHANT_PROFILE_READ']);
+    for (const s of portalScopes) expect(s).not.toMatch(/PAYMENTS|ORDERS|CUSTOMERS/);
+
+    const orgScopes = (new URL(buildSquareAuthorizeUrl('CONSIGNOR', 'con_1', 'user_org').url).searchParams.get('scope') || '').split(' ');
+    expect(orgScopes).toEqual([
+      'MERCHANT_PROFILE_READ',
+      'PAYMENTS_WRITE',
+      'PAYMENTS_READ',
+      'BANK_ACCOUNTS_READ',
+      'ORDERS_WRITE',
+      'ORDERS_READ',
+      'PAYMENTS_WRITE_SHARED_ONFILE',
+      'CUSTOMERS_WRITE',
+      'CUSTOMERS_READ',
+      'PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS',
+    ]);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────

@@ -296,6 +296,17 @@ const SQUARE_OAUTH_SCOPES = [
 ].join(' ');
 
 /**
+ * Minimal scopes for the consignor PORTAL connect (2026-10-06 legal/security review). The consignor token is
+ * used only for: ListMerchants (connection status, MERCHANT_PROFILE_READ), the Bank Accounts list for the
+ * bank-fingerprint fraud check (BANK_ACCOUNTS_READ), and token refresh (no scope). It must NOT carry any
+ * payment, order or customer scope. Organizer flow keeps SQUARE_OAUTH_SCOPES unchanged.
+ */
+export const SQUARE_PORTAL_OAUTH_SCOPES = ['MERCHANT_PROFILE_READ', 'BANK_ACCOUNTS_READ'].join(' ');
+
+/** Organizer-flow scope string, exported read-only for tests. */
+export const SQUARE_ORGANIZER_OAUTH_SCOPES = SQUARE_OAUTH_SCOPES;
+
+/**
  * Resolves the Square application id for the current SQUARE_ENVIRONMENT, or throws with the
  * same setup guidance the original inline lookup in buildSquareAuthorizeUrl used. Extracted
  * (2026-10-06) so the consignor-portal builder below shares the exact same lookup.
@@ -331,10 +342,10 @@ const getSquareAuthorizeClientId = (): string => {
  * with multiple Square accounts use the correct account". That matters doubly for the
  * consignor portal flow, which may run on an organizer's shared device at drop-off.
  */
-const buildAuthorizeUrlForState = (state: string): string => {
+const buildAuthorizeUrlForState = (state: string, scope: string = SQUARE_OAUTH_SCOPES): string => {
   const params = new URLSearchParams({
     client_id: getSquareAuthorizeClientId(),
-    scope: SQUARE_OAUTH_SCOPES,
+    scope,
     state,
     session: 'false',
   });
@@ -445,7 +456,7 @@ export const decodeSquarePortalOAuthState = (state: string): SquarePortalOAuthSt
 };
 
 /**
- * Authorize URL for the consignor portal flow. Same scopes, same `session=false`, same fixed
+ * Authorize URL for the consignor portal flow. MINIMAL scopes (SQUARE_PORTAL_OAUTH_SCOPES), same `session=false`, same fixed
  * registered redirect URL as every other owner type -- Square has exactly one redirect URL per
  * application, so the frontend callback page routes on the state variant. Returns the nonce
  * so the caller can store its hash before handing the URL out.
@@ -453,7 +464,7 @@ export const decodeSquarePortalOAuthState = (state: string): SquarePortalOAuthSt
 export const buildSquarePortalAuthorizeUrl = (consignorId: string): { url: string; state: string; nonce: string } => {
   getSquareAuthorizeClientId();
   const { state, nonce } = encodeSquarePortalOAuthState(consignorId);
-  return { url: buildAuthorizeUrlForState(state), state, nonce };
+  return { url: buildAuthorizeUrlForState(state, SQUARE_PORTAL_OAUTH_SCOPES), state, nonce };
 };
 
 // ---------------------------------------------------------------------------
@@ -634,6 +645,47 @@ export const getSquareGrantedScopes = async (accessToken: string): Promise<strin
   } catch (err) {
     console.error('[squareConnectService] getSquareGrantedScopes: token/status call failed -- treating as no scopes granted (fail closed):', err);
     return [];
+  }
+};
+
+/**
+ * Revokes a merchant's OAuth access (and, because revokeOnlyAccessToken is not set, the refresh
+ * token tied to it) at Square: POST /oauth2/revoke authorized with the application secret
+ * (`Authorization: Client <secret>`). Used when a consignor disconnects Square from their portal
+ * or is archived (2026-10-06). The SDK's oAuth client is not used for the same reason as
+ * getSquareGrantedScopes above: this raw REST call is the documented one.
+ *
+ * NEVER throws and never logs the token: returns true only when Square confirmed the revoke.
+ * Callers treat false as non-fatal (log, still clear the stored tokens locally).
+ */
+export const revokeSquareAccessToken = async (accessToken: string): Promise<boolean> => {
+  try {
+    const isProdSquareEnv = getSquareEnvironment() === SquareEnvironment.Production;
+    const clientId = isProdSquareEnv ? process.env.SQUARE_APPLICATION_ID : process.env.SQUARE_SANDBOX_APPLICATION_ID;
+    const clientSecret = isProdSquareEnv
+      ? process.env.SQUARE_APPLICATION_SECRET
+      : process.env.SQUARE_SANDBOX_APPLICATION_SECRET;
+    if (!clientId || !clientSecret || !accessToken) {
+      console.warn('[squareConnectService] revokeSquareAccessToken: missing Square application credentials or token; not revoked at Square.');
+      return false;
+    }
+    const response = await fetch(`${squareOAuthBaseUrl()}/oauth2/revoke`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Client ${clientSecret}`,
+        'Content-Type': 'application/json',
+        'Square-Version': '2026-08-19',
+      },
+      body: JSON.stringify({ client_id: clientId, access_token: accessToken }),
+    });
+    if (!response.ok) {
+      console.warn(`[squareConnectService] revokeSquareAccessToken: Square returned HTTP ${response.status}; token not confirmed revoked.`);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('[squareConnectService] revokeSquareAccessToken: call failed:', err?.message || 'unknown');
+    return false;
   }
 };
 

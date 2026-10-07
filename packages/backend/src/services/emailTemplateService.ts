@@ -58,6 +58,15 @@ export interface EmailOptions {
   modules?: string[];
   unsubLabel?: string;
   unsubUrl?: string;
+  /**
+   * For transactional emails to people who have no FindA.Sale account (e.g. consignors): omit the
+   * "Unsubscribe" and "Manage preferences" footer links (the generic /unsubscribe page needs a token and
+   * /settings/notifications needs a login, so both are dead ends for them). The physical-address footer
+   * is kept. Default false, so every existing caller is unchanged.
+   */
+  hideUnsubscribe?: boolean;
+  /** Plain text (escaped here) shown in the footer as why the recipient got this email. Optional. */
+  footerReason?: string;
 }
 
 export interface ItemCardData {
@@ -95,7 +104,25 @@ function baseWrapper(opts: {
   content: string;
   unsubLabel?: string;
   unsubUrl?: string;
+  hideUnsubscribe?: boolean;
+  footerReason?: string;
 }): string {
+  const unsubLinksRow = opts.hideUnsubscribe
+    ? ''
+    : `<tr>
+                  <td align="center" style="padding-bottom:10px;">
+                    <a href="${escapeHtml(unsubUrl)}" style="font-size:12px; color:${T.inkDim}; text-decoration:underline;" class="em-ink-dim">${unsubLabel}</a>
+                    <span style="color:${T.inkFaint};"> &middot; </span>
+                    <a href="${FRONTEND_URL}/settings/notifications" style="font-size:12px; color:${T.inkDim}; text-decoration:underline;" class="em-ink-dim">Manage preferences</a>
+                  </td>
+                </tr>`;
+  const footerReasonRow = opts.footerReason
+    ? `<tr>
+                  <td align="center" style="font-size:11px; color:${T.inkFaint}; padding-bottom:10px;" class="em-ink-dim">
+                    ${escapeHtml(opts.footerReason)}
+                  </td>
+                </tr>`
+    : '';
   const unsubLabel = opts.unsubLabel || 'Unsubscribe from these emails';
   const unsubUrl   = opts.unsubUrl   || `${FRONTEND_URL}/unsubscribe`;
 
@@ -168,13 +195,8 @@ function baseWrapper(opts: {
                     219 E Michigan Ave, Suite F &middot; Paw Paw, MI 49079
                   </td>
                 </tr>
-                <tr>
-                  <td align="center" style="padding-bottom:10px;">
-                    <a href="${escapeHtml(unsubUrl)}" style="font-size:12px; color:${T.inkDim}; text-decoration:underline;" class="em-ink-dim">${unsubLabel}</a>
-                    <span style="color:${T.inkFaint};"> &middot; </span>
-                    <a href="${FRONTEND_URL}/settings/notifications" style="font-size:12px; color:${T.inkDim}; text-decoration:underline;" class="em-ink-dim">Manage preferences</a>
-                  </td>
-                </tr>
+                ${footerReasonRow}
+                ${unsubLinksRow}
                 <tr>
                   <td align="center" style="font-size:10.5px; color:${T.inkFaint}; letter-spacing:0.05em;" class="em-ink-dim">
                     &copy; FindA.Sale 2026
@@ -478,6 +500,8 @@ export function buildEmail(options: EmailOptions): string {
     footerNote,
     unsubLabel,
     unsubUrl,
+    hideUnsubscribe,
+    footerReason,
   } = options;
 
   const ctaRow = ctaText && ctaUrl
@@ -495,7 +519,7 @@ export function buildEmail(options: EmailOptions): string {
     ${ctaRow}
   `;
 
-  return baseWrapper({ preheader, content, unsubLabel, unsubUrl });
+  return baseWrapper({ preheader, content, unsubLabel, unsubUrl, hideUnsubscribe, footerReason });
 }
 
 // ─────────────────────────────────────────────────────────────────

@@ -351,6 +351,28 @@ export const consignorPortalSquareLimiter = rateLimit({
 });
 
 /**
+ * Consignor portal data-removal request: 3 per 24 hours per portal token (2026-10-06). Each accepted
+ * request emails the organizer, so the cap stops a leaked or looping link from flooding their inbox.
+ * Runs after consignorPortalSquareLimiter (per IP). Failed requests (404, undeliverable 503) do not
+ * count, so a consignor can retry after a temporary failure.
+ */
+export const consignorPortalDataRemovalLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 3,
+  keyGenerator: (req: Request) => `consignor-portal-removal:${String(req.params.token ?? '').slice(0, 128)}`,
+  validate: false,
+  skipFailedRequests: true,
+  handler: (_req: Request, res: any) => {
+    res.status(429).json({
+      error: 'Your request was already sent. Please give your organizer a little time to reply.',
+      code: 'RATE_LIMITED',
+    });
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Shopper reservations limiter: 40 requests per minute, keyed by req.user.id (rate-limit
  * hardening Item 1, 2026-08-27 -- Architect + Hacker sign-off, incident: a ~17min external
  * 429-storm against /api/reservations/shopper and /api/reservations/my-holds-full, fully

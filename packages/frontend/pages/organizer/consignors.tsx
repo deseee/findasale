@@ -49,7 +49,6 @@ interface Consignor {
   createdAt: string;
   archivedAt?: string | null; // set when archived (hidden from pickers, kept for the money trail)
   // Consignor invite + Square (2026-10-06). Optional so an older API response cannot break the page.
-  linkedExistingUser?: boolean; // email matches an existing FindA.Sale account (boolean only)
   inviteEmailSentAt?: string | null; // last successful welcome-invite email
   squareStatus?: 'NOT_CONNECTED' | 'ACTIVE' | 'NEEDS_ACTIVATION';
 }
@@ -162,6 +161,9 @@ const ConsignorsPage: React.FC = () => {
 
   // Record a payment: which consignor the payment modal is open for (null = closed).
   const [paymentTarget, setPaymentTarget] = useState<Consignor | null>(null);
+
+  // Permission attestation (2026-10-06): required when ADDING a consignor, never shown on edit.
+  const [permissionToEmail, setPermissionToEmail] = useState(false);
 
   // Form fields
   const [formData, setFormData] = useState({
@@ -298,6 +300,7 @@ const ConsignorsPage: React.FC = () => {
     setItemTitle('');
     setItemPrice('');
     setItemCategory('');
+    setPermissionToEmail(false);
     setEditingConsignor(null);
     setModalMode('create');
   };
@@ -343,6 +346,11 @@ const ConsignorsPage: React.FC = () => {
       return;
     }
 
+    if (modalMode === 'create' && !permissionToEmail) {
+      showToast("Please confirm you have this person's permission to email them", 'error');
+      return;
+    }
+
     // Merged single-item intake: only meaningful at create time. Mirrors the backend's
     // own item.saleId / item.title required-field validation so the organizer sees the
     // problem immediately instead of round-tripping to the server first.
@@ -374,6 +382,9 @@ const ConsignorsPage: React.FC = () => {
         preferredPayoutMethod: formData.preferredPayoutMethod || (modalMode === 'edit' ? null : undefined),
         notes: formData.notes || undefined,
       };
+      if (modalMode === 'create') {
+        payload.permissionToEmail = true; // server rejects the create without it
+      }
       if (modalMode === 'create' && includeItem) {
         payload.item = {
           saleId: itemSaleId,
@@ -445,9 +456,16 @@ const ConsignorsPage: React.FC = () => {
   const performArchive = async (consignorId: string, archive: boolean) => {
     setIsArchiving(consignorId);
     try {
-      await api.post(`/consignors/${consignorId}/${archive ? 'archive' : 'unarchive'}`);
+      const archiveResponse = await api.post(`/consignors/${consignorId}/${archive ? 'archive' : 'unarchive'}`);
       setConsignors(prev => prev.filter(c => c.id !== consignorId));
-      showToast(archive ? 'Consignor archived. Their sales and payouts are unchanged.' : 'Consignor restored', 'success');
+      showToast(
+        archive
+          ? archiveResponse.data?.squareConnectionRemoved
+            ? 'Consignor archived. Square connection removed. Records kept.'
+            : 'Consignor archived. Their sales and payouts are unchanged.'
+          : 'Consignor restored',
+        'success'
+      );
     } catch (error: any) {
       console.error('Error archiving consignor:', error);
       showToast(error.response?.data?.error || `Failed to ${archive ? 'archive' : 'restore'} consignor`, 'error');
@@ -923,11 +941,6 @@ const ConsignorsPage: React.FC = () => {
                       )}
                       {/* Consignor invite + Square (2026-10-06) */}
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {consignor.linkedExistingUser && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                            Existing FindA.Sale account
-                          </span>
-                        )}
                         {consignor.squareStatus && SQUARE_BADGE[consignor.squareStatus] && (
                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${SQUARE_BADGE[consignor.squareStatus].className}`}>
                             {SQUARE_BADGE[consignor.squareStatus].label}
@@ -1212,6 +1225,25 @@ const ConsignorsPage: React.FC = () => {
                   </p>
                 )}
               </div>
+
+              {modalMode === 'create' && (
+                <div className="mb-4">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="permissionToEmail"
+                      checked={permissionToEmail}
+                      onChange={(e) => setPermissionToEmail(e.target.checked)}
+                      className="mt-1"
+                      required
+                      aria-label="I have this person's permission to email them."
+                    />
+                    <span className="text-sm text-warm-700 dark:text-warm-300">
+                      I have this person's permission to email them. *
+                    </span>
+                  </label>
+                </div>
+              )}
 
               <div className="mb-4">
                 <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">

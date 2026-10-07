@@ -11,7 +11,9 @@
  *      Because a link alone must never be able to silently redirect where someone's money goes,
  *      the portal path is FIRST CONNECT ONLY:
  *        - start and callback both refuse (409 SQUARE_ALREADY_CONNECTED) once the consignor is
- *          squareOnboarded with a squareAccountId; changing it is an organizer action;
+ *          squareOnboarded with a squareAccountId; to swap accounts the consignor (or the organizer)
+ *          must disconnect first (disconnectPortalSquare below, 2026-10-06), which emails the
+ *          organizer and the consignor;
  *        - if a not-yet-active Square account is already stored, the portal may only reconnect
  *          the SAME Square merchant (SQUARE_ACCOUNT_MISMATCH otherwise);
  *        - the write itself is conditional (updateMany guarded on squareAccountId being null or
@@ -41,7 +43,18 @@ import {
   type SquareAccountStatus,
   type SquareTokenResult,
 } from './squareConnectService';
-import { sendConsignorSquareConnectedNotice, sendOrganizerConsignorSquareConnectedNotice } from './consignorEmailService';
+import {
+  sendConsignorSquareConnectedNotice,
+  sendConsignorSquareDisconnectedNotice,
+  sendOrganizerConsignorDataRemovalRequest,
+  sendOrganizerConsignorSquareConnectedNotice,
+  sendOrganizerConsignorSquareDisconnectedNotice,
+} from './consignorEmailService';
+import {
+  CONSIGNOR_SQUARE_CLEARED_FIELDS,
+  consignorHasSquareData,
+  revokeConsignorSquareConnection,
+} from './consignorSquareDisconnectService';
 import { consignorSquareStatus, portalCanConnectSquare, type ConsignorSquareStatus } from '../utils/consignorSquareStatus';
 
 // ---------------------------------------------------------------------------------------------
@@ -122,7 +135,8 @@ export type PortalSquareErrorCode =
   | 'STATE_USED'
   | 'CODE_INVALID'
   | 'SQUARE_EXCHANGE_FAILED'
-  | 'SQUARE_ACCOUNT_MISMATCH';
+  | 'SQUARE_ACCOUNT_MISMATCH'
+  | 'REQUEST_NOT_SENT';
 
 export class PortalSquareError extends Error {
   status: number;
@@ -138,7 +152,7 @@ export class PortalSquareError extends Error {
 const MSG = {
   notFound: 'Portal not found',
   alreadyConnected:
-    'A Square account is already connected for your payouts. If it needs to change, please contact your organizer.',
+    'A Square account is already connected for your payouts. To use a different one, disconnect it first from your portal.',
   unavailable: 'Square connection is not available right now. Please try again later.',
   stateInvalid: 'This Square connection link has expired or is not valid. Please start again from your portal.',
   stateUsed: 'This Square connection was already used or replaced by a newer one. Please start again from your portal.',
@@ -157,6 +171,7 @@ const PORTAL_CONSIGNOR_SELECT = {
   squareAccessTokenEncrypted: true,
   squareRefreshTokenEncrypted: true,
   squareTokenExpiresAt: true,
+  squarePortalOAuthNonce: true,
   payoutsFlaggedForReview: true,
 } as const;
 
@@ -389,4 +404,120 @@ export async function refreshPortalSquareStatus(portalToken: unknown): Promise<P
     );
     return statusView(consignor);
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Self-serve disconnect + data-removal request (2026-10-06)
+// ---------------------------------------------------------------------------------------------
+
+export interface PortalSquareDisconnectResult extends PortalSquareStatusView {
+  /** true when this call actually removed a connection; false when there was nothing to remove. */
+  disconnected: boolean;
+}
+
+/**
+ * Consignor disconnects Square from their portal. Revokes at Square (non-fatal, skipped when the
+ * same merchant is connected elsewhere, see consignorSquareDisconnectService), clears the stored
+ * Square columns AND any in-flight OAuth nonce, keeps every ledger/payout/sales record, then tells
+ * the organizer and the consignor (non-blocking). Idempotent: already disconnected is a 200 with
+ * disconnected=false and no email. The clear is conditional on the merchant id read above, so two
+ * concurrent calls cannot both send notices.
+ */
+export async function disconnectPortalSquare(portalToken: unknown): Promise<PortalSquareDisconnectResult> {
+  const consignor = await findConsignorByPortalToken(portalToken);
+  if (!consignor) throw new PortalSquareError(404, 'PORTAL_NOT_FOUND', MSG.notFound);
+
+  const notConnected = (): PortalSquareDisconnectResult => ({
+    status: 'NOT_CONNECTED',
+    canConnect: true,
+    payoutsFlaggedForReview: Boolean(consignor.payoutsFlaggedForReview),
+    disconnected: false,
+  });
+  if (!consignorHasSquareData(consignor)) return notConnected();
+
+  await revokeConsignorSquareConnection(consignor);
+
+  const cleared = await prisma.consignor.updateMany({
+    where: { id: consignor.id, squareAccountId: consignor.squareAccountId ?? null },
+    data: { ...CONSIGNOR_SQUARE_CLEARED_FIELDS },
+  });
+  if (cleared.count === 0) return notConnected();
+
+  console.log(`[consignorSquareConnect] Portal Square disconnect completed for consignor ${consignor.id}.`);
+  void notifyPortalSquareDisconnected(consignor.id).catch((err) =>
+    console.warn('[consignorSquareConnect] disconnect notices failed:', err?.message || err)
+  );
+  return { ...notConnected(), disconnected: true };
+}
+
+/** Emails the workspace owner (and the consignor) after a portal disconnect. Never throws. */
+export async function notifyPortalSquareDisconnected(consignorId: string): Promise<void> {
+  try {
+    const row = await prisma.consignor.findUnique({
+      where: { id: consignorId },
+      select: {
+        name: true,
+        email: true,
+        workspace: { select: { name: true, owner: { select: { user: { select: { email: true } } } } } },
+      },
+    });
+    if (!row) return;
+    const organizerName = row.workspace?.name || 'Your organizer';
+    const organizerEmail = row.workspace?.owner?.user?.email ?? null;
+    const at = new Date();
+    await Promise.all([
+      sendOrganizerConsignorSquareDisconnectedNotice({
+        organizerEmail,
+        organizerName,
+        consignorName: row.name,
+        disconnectedAt: at,
+      }),
+      sendConsignorSquareDisconnectedNotice({
+        consignorName: row.name,
+        consignorEmail: row.email,
+        organizerName,
+        disconnectedAt: at,
+      }),
+    ]);
+  } catch (err: any) {
+    console.warn('[consignorSquareConnect] notifyPortalSquareDisconnected failed:', err?.message || err);
+  }
+}
+
+/**
+ * Consignor asks, from their portal, for their personal data to be removed or reviewed. Records and
+ * deletes NOTHING: it only emails the workspace owner so a person can follow up (sales and payout
+ * records may have to be kept for legal and accounting reasons). Throws REQUEST_NOT_SENT (503) when
+ * the organizer could not be emailed, so the consignor is never told a request went through when it
+ * did not. Rate limited per token at the route (consignorPortalDataRemovalLimiter).
+ */
+export async function requestPortalDataRemoval(portalToken: unknown): Promise<{ requested: true }> {
+  const found = await findConsignorByPortalToken(portalToken);
+  if (!found) throw new PortalSquareError(404, 'PORTAL_NOT_FOUND', MSG.notFound);
+  const row = await prisma.consignor.findUnique({
+    where: { id: found.id },
+    select: {
+      name: true,
+      email: true,
+      workspace: { select: { name: true, owner: { select: { user: { select: { email: true } } } } } },
+    },
+  });
+  if (!row) throw new PortalSquareError(404, 'PORTAL_NOT_FOUND', MSG.notFound);
+  const result = await sendOrganizerConsignorDataRemovalRequest({
+    organizerEmail: row.workspace?.owner?.user?.email ?? null,
+    organizerName: row.workspace?.name || 'Your organizer',
+    consignorName: row.name,
+    consignorEmail: row.email,
+    requestedAt: new Date(),
+  });
+  if (!result.sent) {
+    console.warn(`[consignorSquareConnect] data-removal request for consignor ${found.id} not delivered: ${result.reason}`);
+    throw new PortalSquareError(
+      503,
+      'REQUEST_NOT_SENT',
+      'We could not send your request right now. Please try again later, or contact your organizer directly.'
+    );
+  }
+  console.log(`[consignorSquareConnect] Data-removal request sent to organizer for consignor ${found.id}.`);
+  return { requested: true };
 }

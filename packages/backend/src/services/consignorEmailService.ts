@@ -44,6 +44,9 @@ export const sendConsignorItemSold = async (params: {
       ctaText: 'View Sale',
       ctaUrl: `${siteUrl}/organizer/sales/${params.saleId}`,
       accentColor: '#10b981',
+      // Consignors have no FindA.Sale account, so the generic unsubscribe / preferences links would be dead ends.
+      hideUnsubscribe: true,
+      footerReason: `You received this because ${params.organizerName} added you as a consignor on FindA.Sale.`,
     });
 
     await transactionalEmailService.emails.send({
@@ -93,6 +96,9 @@ export const sendConsignorPayout = async (params: {
       ctaText: 'Back to FindA.Sale',
       ctaUrl: siteUrl,
       accentColor: '#3b82f6',
+      // Consignors have no FindA.Sale account, so the generic unsubscribe / preferences links would be dead ends.
+      hideUnsubscribe: true,
+      footerReason: `You received this because ${params.organizerName} added you as a consignor on FindA.Sale.`,
     });
 
     await transactionalEmailService.emails.send({
@@ -152,6 +158,9 @@ export const sendConsignorPaymentSetupInvite = async (params: {
       ctaText: 'Set Up Automatic Payout',
       ctaUrl: params.onboardingUrl,
       accentColor: '#10b981',
+      // Consignors have no FindA.Sale account, so the generic unsubscribe / preferences links would be dead ends.
+      hideUnsubscribe: true,
+      footerReason: `You received this because ${params.organizerName} added you as a consignor on FindA.Sale.`,
     });
 
     await transactionalEmailService.emails.send({
@@ -229,6 +238,9 @@ export const sendConsignorExpiryNotice = async (params: {
       ctaText: 'View Your Items',
       ctaUrl: `${siteUrl}/consignor/items`,
       accentColor: '#f59e0b',
+      // Consignors have no FindA.Sale account, so the generic unsubscribe / preferences links would be dead ends.
+      hideUnsubscribe: true,
+      footerReason: `You received this because ${params.organizerName} added you as a consignor on FindA.Sale.`,
     });
 
     await transactionalEmailService.emails.send({
@@ -298,6 +310,9 @@ export const sendConsignorPickupWindowReminder = async (params: {
       ctaText: params.pickupAppointmentLinkUrl ? 'Book Pickup Time' : 'View Your Items',
       ctaUrl: params.pickupAppointmentLinkUrl || `${siteUrl}/consignor/items`,
       accentColor: '#f59e0b',
+      // Consignors have no FindA.Sale account, so the generic unsubscribe / preferences links would be dead ends.
+      hideUnsubscribe: true,
+      footerReason: `You received this because ${params.organizerName} added you as a consignor on FindA.Sale.`,
     });
 
     await transactionalEmailService.emails.send({
@@ -500,6 +515,9 @@ export const sendConsignorStatement = async (params: {
       ${table}
       <p style="color:#666;font-size:12px;">${escapeHtml(st.footer)}</p>`,
     accentColor: '#3b82f6',
+    // Consignors have no FindA.Sale account, so the generic unsubscribe / preferences links would be dead ends.
+    hideUnsubscribe: true,
+    footerReason: `You received this because ${st.organizerName} added you as a consignor on FindA.Sale.`,
   });
 
   const textLines = [
@@ -559,6 +577,9 @@ export const sendConsignorPaymentRecorded = async (params: {
       <div style="background:#f3f4f6;padding:16px;border-radius:8px;margin:20px 0;">${details}</div>
       <p style="color:#666;font-size:13px;">The payment was made by ${escapeHtml(params.organizerName)} directly. FindA.Sale keeps the records but does not hold or send consignor payments. If something looks wrong, contact ${escapeHtml(params.organizerName)}.</p>`,
     accentColor: '#3b82f6',
+    // Consignors have no FindA.Sale account, so the generic unsubscribe / preferences links would be dead ends.
+    hideUnsubscribe: true,
+    footerReason: `You received this because ${params.organizerName} added you as a consignor on FindA.Sale.`,
   });
 
   const text = [
@@ -643,6 +664,9 @@ export const sendConsignorWelcomeInvite = async (params: {
     ctaText: 'Open my portal',
     ctaUrl: portalUrl,
     accentColor: '#10b981',
+    // Consignors have no FindA.Sale account, so the generic unsubscribe / preferences links would be dead ends.
+    hideUnsubscribe: true,
+    footerReason: `You received this because ${params.organizerName} added you as a consignor on FindA.Sale.`,
   });
 
   const text = [
@@ -693,8 +717,10 @@ export const sendConsignorSquareConnectedNotice = async (params: {
     body: `<p>Hi ${escapeHtml(params.consignorName)},</p>
       <p>A Square account was connected to your consignment portal with ${organizer} on ${when}.</p>
       ${activationLine}
-      <p style="color:#666;font-size:13px;">If you did not do this, contact ${organizer} right away. A connected Square account cannot be changed from your portal.</p>`,
+      <p style="color:#666;font-size:13px;">If you did not do this, contact ${organizer} right away. You can disconnect Square from your portal at any time.</p>`,
     accentColor: '#10b981',
+    hideUnsubscribe: true,
+    footerReason: `You received this because ${params.organizerName} added you as a consignor on FindA.Sale.`,
   });
   const text = [
     `A Square account was connected to your consignment portal with ${params.organizerName} on ${fmtDate(params.connectedAt)}.`,
@@ -721,10 +747,13 @@ export const sendOrganizerConsignorSquareConnectedNotice = async (params: {
     body: `<p>Hi ${escapeHtml(params.organizerName)},</p>
       <p><strong>${consignor}</strong> connected a Square account from their consignor portal on ${escapeHtml(fmtDate(params.connectedAt))}.</p>
       <p style="color:#444;">${params.active ? 'Square reports the account as active.' : 'Square reports the account is not fully activated yet. Their portal shows them how to finish.'}</p>
-      <p style="color:#666;font-size:13px;">If you did not expect this, check with ${consignor}. Their portal cannot change a connected Square account, so any change has to start with you.</p>`,
+      <p style="color:#666;font-size:13px;">If you did not expect this, check with ${consignor}. They can disconnect Square from their portal at any time, and you will be emailed when they do.</p>`,
     ctaText: 'View consignors',
     ctaUrl: `${siteUrl}/organizer/consignors`,
     accentColor: '#3b82f6',
+    // Account-security notice for the organizer: the generic token-less unsubscribe link is a dead end.
+    hideUnsubscribe: true,
+    footerReason: 'You received this because a consignor in your FindA.Sale workspace connected Square.',
   });
   const text = [
     `${params.consignorName} connected a Square account from their consignor portal on ${fmtDate(params.connectedAt)}.`,
@@ -734,6 +763,109 @@ export const sendOrganizerConsignorSquareConnectedNotice = async (params: {
   return sendLedgerEmail(
     params.organizerEmail,
     `${oneLine(params.consignorName)} connected Square for payouts`,
+    html,
+    text
+  );
+};
+
+/** Tells the organizer (workspace owner) that a consignor disconnected Square from their portal. */
+export const sendOrganizerConsignorSquareDisconnectedNotice = async (params: {
+  organizerEmail: string | null | undefined;
+  organizerName: string;
+  consignorName: string;
+  disconnectedAt: Date;
+}): Promise<ConsignorEmailResult> => {
+  const consignor = escapeHtml(params.consignorName);
+  const html = buildEmail({
+    preheader: escapeHtml(`${params.consignorName} disconnected Square`),
+    headline: 'A consignor disconnected Square',
+    body: `<p>Hi ${escapeHtml(params.organizerName)},</p>
+      <p><strong>${consignor}</strong> disconnected Square. Their records are kept.</p>
+      <p style="color:#444;">The change was made from their consignor portal on ${escapeHtml(fmtDate(params.disconnectedAt))}. Until they connect Square again, please pay them another way.</p>`,
+    ctaText: 'View consignors',
+    ctaUrl: `${siteUrl}/organizer/consignors`,
+    accentColor: '#3b82f6',
+    hideUnsubscribe: true,
+    footerReason: 'You received this because a consignor in your FindA.Sale workspace disconnected Square.',
+  });
+  const text = [
+    `${params.consignorName} disconnected Square. Their records are kept.`,
+    `The change was made from their consignor portal on ${fmtDate(params.disconnectedAt)}. Until they connect Square again, please pay them another way.`,
+    `View consignors: ${siteUrl}/organizer/consignors`,
+  ].join('\n');
+  return sendLedgerEmail(
+    params.organizerEmail,
+    `${oneLine(params.consignorName)} disconnected Square`,
+    html,
+    text
+  );
+};
+
+/**
+ * Tells the consignor Square was just disconnected from their portal, so an unexpected disconnect
+ * (someone else holding their link) is visible to them right away.
+ */
+export const sendConsignorSquareDisconnectedNotice = async (params: {
+  consignorName: string;
+  consignorEmail: string | null | undefined;
+  organizerName: string;
+  disconnectedAt: Date;
+}): Promise<ConsignorEmailResult> => {
+  const organizer = escapeHtml(params.organizerName);
+  const html = buildEmail({
+    preheader: 'Square was disconnected from your consignment portal',
+    headline: 'Square disconnected',
+    body: `<p>Hi ${escapeHtml(params.consignorName)},</p>
+      <p>Square was disconnected from your consignment portal with ${organizer} on ${escapeHtml(fmtDate(params.disconnectedAt))}. Your payout records are kept, and you can connect Square again from your portal any time.</p>
+      <p style="color:#666;font-size:13px;">If you did not do this, contact ${organizer} right away.</p>`,
+    accentColor: '#3b82f6',
+    hideUnsubscribe: true,
+    footerReason: `You received this because ${params.organizerName} added you as a consignor on FindA.Sale.`,
+  });
+  const text = [
+    `Square was disconnected from your consignment portal with ${params.organizerName} on ${fmtDate(params.disconnectedAt)}.`,
+    'Your payout records are kept, and you can connect Square again from your portal any time.',
+    `If you did not do this, contact ${params.organizerName} right away.`,
+  ].join('\n');
+  return sendLedgerEmail(params.consignorEmail, 'Square disconnected from your consignment portal', html, text);
+};
+
+/** Tells the organizer a consignor asked, from their portal, for their personal data to be removed or reviewed. */
+export const sendOrganizerConsignorDataRemovalRequest = async (params: {
+  organizerEmail: string | null | undefined;
+  organizerName: string;
+  consignorName: string;
+  consignorEmail?: string | null;
+  requestedAt: Date;
+}): Promise<ConsignorEmailResult> => {
+  const consignor = escapeHtml(params.consignorName);
+  const contact = params.consignorEmail
+    ? `<p style="color:#444;">Their email on file: ${escapeHtml(params.consignorEmail)}</p>`
+    : '';
+  const html = buildEmail({
+    preheader: escapeHtml(`${params.consignorName} asked for their personal data to be removed or reviewed`),
+    headline: 'A consignor made a data request',
+    body: `<p>Hi ${escapeHtml(params.organizerName)},</p>
+      <p><strong>${consignor}</strong> asked for their personal data to be removed or reviewed. They sent the request from their consignor portal on ${escapeHtml(fmtDate(params.requestedAt))}.</p>
+      ${contact}
+      <p style="color:#444;">Nothing has been deleted. Please follow up with them directly. Sales and payout records may need to be kept for legal and accounting reasons.</p>`,
+    ctaText: 'View consignors',
+    ctaUrl: `${siteUrl}/organizer/consignors`,
+    accentColor: '#3b82f6',
+    hideUnsubscribe: true,
+    footerReason: 'You received this because a consignor in your FindA.Sale workspace made a data request.',
+  });
+  const text = [
+    `${params.consignorName} asked for their personal data to be removed or reviewed. They sent the request from their consignor portal on ${fmtDate(params.requestedAt)}.`,
+    params.consignorEmail ? `Their email on file: ${params.consignorEmail}` : '',
+    'Nothing has been deleted. Please follow up with them directly. Sales and payout records may need to be kept for legal and accounting reasons.',
+    `View consignors: ${siteUrl}/organizer/consignors`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return sendLedgerEmail(
+    params.organizerEmail,
+    `${oneLine(params.consignorName)} made a data request`,
     html,
     text
   );

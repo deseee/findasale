@@ -25,7 +25,7 @@ import {
 import { renderConsignorAgreementForConsignor } from '../services/consignorAgreementService';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 import { findLinkableUserId, sendWelcomeInviteNonBlocking, sendWelcomeInviteForConsignor } from '../services/consignorInviteService';
-import { consignorSquareStatus } from '../utils/consignorSquareStatus';
+import { CONSIGNOR_SQUARE_CLEARED_FIELDS, consignorHasSquareData, consignorSquareStatus } from '../utils/consignorSquareStatus';
 
 // Consignor intake follow-up (2026-09-24): tiny, deliberately-duplicated mirror of
 // itemController.ts's local (non-exported) assignRarity() -- same 4-line price-tier
@@ -93,25 +93,23 @@ export class ConsignorValidationError extends Error {
 // Railway build failure 2026-09-25, TS2345 on this exact function -- see STATE.md).
 /**
  * Consignor invite + account link (2026-10-06): strips fields an organizer must never receive from
- * every organizer-facing Consignor response. userId is replaced by the boolean linkedExistingUser
- * (never another person's account details); the portal OAuth nonce hash and the encrypted Square
- * tokens are internal. Adds squareStatus (NOT_CONNECTED | ACTIVE | NEEDS_ACTIVATION).
+ * every organizer-facing Consignor response. userId (the link to a FindA.Sale account) is stripped and
+ * NOT replaced by any flag (2026-10-06 privacy decision: an organizer must not learn whether an email
+ * belongs to a FindA.Sale account); the portal OAuth nonce hash and the encrypted Square tokens are
+ * internal. Adds squareStatus (NOT_CONNECTED | ACTIVE | NEEDS_ACTIVATION).
  */
 export function toOrganizerConsignorView<T extends Record<string, any>>(row: T) {
   const {
-    userId,
+    userId: _userId,
     squarePortalOAuthNonce: _nonce,
     squareAccessTokenEncrypted: _at,
     squareRefreshTokenEncrypted: _rt,
-    linkedExistingUser: _linked,
     ...rest
   } = row as any;
   return {
     ...rest,
-    linkedExistingUser: Boolean(userId),
     squareStatus: consignorSquareStatus(row as any),
   } as Omit<T, 'userId' | 'squarePortalOAuthNonce' | 'squareAccessTokenEncrypted' | 'squareRefreshTokenEncrypted'> & {
-    linkedExistingUser: boolean;
     squareStatus: ReturnType<typeof consignorSquareStatus>;
   };
 }
@@ -187,8 +185,9 @@ export async function createConsignorCore(
     },
   });
 
-  // Additive return field: existing callers that only read the row (e.g. `.id`) are unaffected.
-  return { ...consignor, linkedExistingUser: userId !== null };
+  // Returns the raw row (including userId, internal only). Callers that answer an organizer pass it
+  // through toOrganizerConsignorView, which strips userId; no account-link flag is ever returned.
+  return consignor;
 }
 
 /**
@@ -310,7 +309,7 @@ export const listConsignors = async (req: AuthRequest, res: Response) => {
 
     // Convert Decimal fields to strings for JSON serialization
     const serialized = consignors.map((c) => ({
-      // toOrganizerConsignorView (2026-10-06): adds linkedExistingUser + squareStatus and strips
+      // toOrganizerConsignorView (2026-10-06): adds squareStatus and strips
       // userId, the portal OAuth nonce hash and the encrypted Square tokens from the response.
       ...toOrganizerConsignorView(c),
       unclaimedCount: unclaimedCountByConsignor.get(c.id) || 0,
@@ -348,7 +347,18 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { name, email, phone, commissionRate, notes, useTieredCommission, unsoldItemDisposition, item } = req.body;
+    const { name, email, phone, commissionRate, notes, useTieredCommission, unsoldItemDisposition, item, permissionToEmail } = req.body;
+
+    // Permission attestation (2026-10-06): this endpoint is the organizer's manual "Add Consignor" form,
+    // which emails the person a welcome invite. The organizer must affirm they have permission. Enforced
+    // here only; createConsignorCore (shared with intake Approve, where the consignor asked to be added)
+    // and other internal creators do not require it.
+    if (permissionToEmail !== true) {
+      return res.status(400).json({
+        error: "Please confirm you have this person's permission to email them.",
+        code: 'PERMISSION_TO_EMAIL_REQUIRED',
+      });
+    }
 
     // Get organizer's workspace
     const result = await getOrganizerWorkspace(req.user.id);
@@ -405,7 +415,6 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
     // Transaction: when an item is included, the Consignor and its first Item are created
     // together or not at all -- never a Consignor left with a half-failed item attach.
     let newConsignorId: string;
-    let linkedExistingUser = false;
     try {
       const txResult = await prisma.$transaction(async (tx) => {
       const createdConsignor = await createConsignorCore(
@@ -444,10 +453,9 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
         });
       }
 
-      return { consignorId: createdConsignor.id, linkedExistingUser: createdConsignor.linkedExistingUser };
+      return { consignorId: createdConsignor.id };
       });
       newConsignorId = txResult.consignorId;
-      linkedExistingUser = txResult.linkedExistingUser;
     } catch (err) {
       if (err instanceof ConsignorValidationError) {
         return res.status(err.status).json({ error: err.message });
@@ -486,7 +494,6 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
       ...(consignor ? toOrganizerConsignorView(consignor) : {}),
       markdownPolicyNotice,
       welcomeEmail,
-      linkedExistingUser,
     });
   } catch (error) {
     console.error('[createConsignor] Error:', error);
@@ -741,23 +748,44 @@ async function setConsignorArchived(req: AuthRequest, res: Response, archive: bo
     }
     const consignor = await prisma.consignor.findFirst({
       where: { id, workspaceId: workspace.id },
-      select: { id: true, archivedAt: true },
+      select: {
+        id: true,
+        archivedAt: true,
+        squareAccountId: true,
+        squareOnboarded: true,
+        squareAccessTokenEncrypted: true,
+        squareRefreshTokenEncrypted: true,
+        squarePortalOAuthNonce: true,
+      },
     });
     if (!consignor) {
       return res.status(404).json({ error: 'Consignor not found' });
     }
-    if (archive && consignor.archivedAt) {
+    // Archiving removes the consignor's Square connection (2026-10-06): revoke at Square (non-fatal),
+    // clear the stored tokens/merchant/nonce, keep every ledger, payout and sales record. Restoring
+    // does not bring it back; the consignor reconnects from their portal. An already-archived
+    // consignor that reconnected Square afterwards is purged on the next archive call.
+    const hasSquare = archive && consignorHasSquareData(consignor);
+    if (archive && consignor.archivedAt && !hasSquare) {
       return res.status(200).json({ id: consignor.id, archivedAt: consignor.archivedAt });
     }
     if (!archive && !consignor.archivedAt) {
       return res.status(200).json({ id: consignor.id, archivedAt: null });
     }
+    if (hasSquare) {
+      // Lazy import: only archives that actually hold a Square connection load the Square SDK graph.
+      const { revokeConsignorSquareConnection } = await import('../services/consignorSquareDisconnectService');
+      await revokeConsignorSquareConnection(consignor);
+    }
     const updated = await prisma.consignor.update({
       where: { id: consignor.id },
-      data: { archivedAt: archive ? new Date() : null },
+      data: {
+        archivedAt: archive ? (consignor.archivedAt ?? new Date()) : null,
+        ...(hasSquare ? CONSIGNOR_SQUARE_CLEARED_FIELDS : {}),
+      },
       select: { id: true, archivedAt: true },
     });
-    return res.status(200).json(updated);
+    return res.status(200).json(hasSquare ? { ...updated, squareConnectionRemoved: true } : updated);
   } catch (error) {
     console.error(`[${archive ? 'archiveConsignor' : 'unarchiveConsignor'}] Error:`, error);
     return res.status(500).json({ error: `Failed to ${archive ? 'archive' : 'unarchive'} consignor` });

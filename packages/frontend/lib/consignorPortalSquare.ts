@@ -12,6 +12,8 @@
  * HMAC signature, expiry, consignor binding and single-use nonce; nothing here is trusted for that.
  */
 
+import axios from 'axios';
+
 const KEY = 'fas_portal_square_pending';
 const MAX_AGE_MS = 30 * 60 * 1000;
 
@@ -68,4 +70,23 @@ export function clearPendingPortalSquareToken(): void {
 
 export function portalSquareResultHref(portalToken: string, outcome: PortalSquareOutcome): string {
   return `/consignor/portal/${encodeURIComponent(portalToken)}?square=${outcome}#${PORTAL_SQUARE_ANCHOR}`;
+}
+
+export interface PortalSquareDisconnectResponse {
+  status: 'NOT_CONNECTED' | 'ACTIVE' | 'NEEDS_ACTIVATION';
+  canConnect: boolean;
+  payoutsFlaggedForReview: boolean;
+  /** false when there was nothing to disconnect (already disconnected). */
+  disconnected: boolean;
+}
+
+/** Consignor disconnects Square from their portal (public, capability-token endpoint; records are kept). */
+export async function disconnectPortalSquare(apiBase: string, portalToken: string): Promise<PortalSquareDisconnectResponse> {
+  const response = await axios.post(`${apiBase}/consignors/portal/${encodeURIComponent(portalToken)}/square/disconnect`);
+  return response.data;
+}
+
+/** Consignor asks their organizer to remove or review their personal data. Deletes nothing by itself. */
+export async function requestPortalDataRemoval(apiBase: string, portalToken: string): Promise<void> {
+  await axios.post(`${apiBase}/consignors/portal/${encodeURIComponent(portalToken)}/data-removal-request`);
 }

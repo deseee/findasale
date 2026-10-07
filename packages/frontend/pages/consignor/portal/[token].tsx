@@ -15,7 +15,9 @@ import Head from 'next/head';
 import axios from 'axios';
 import {
   PORTAL_SQUARE_ANCHOR,
+  disconnectPortalSquare,
   rememberPendingPortalSquareToken,
+  requestPortalDataRemoval,
 } from '../../../lib/consignorPortalSquare';
 
 // Consignor portal Square payouts (2026-10-06). Mirrors GET /consignors/portal/:token/square.
@@ -25,7 +27,7 @@ interface PortalSquareStatus {
   payoutsFlaggedForReview: boolean;
 }
 
-type SquareNotice = 'connected' | 'needs-activation' | 'cancelled' | 'already-connected' | 'error' | null;
+type SquareNotice = 'connected' | 'needs-activation' | 'cancelled' | 'already-connected' | 'error' | 'disconnected' | null;
 
 const SQUARE_SIGNUP_URL = 'https://squareup.com/signup';
 
@@ -88,9 +90,14 @@ const ConsignorPortalPage: React.FC = () => {
 
   // Square payouts card state (2026-10-06)
   const [square, setSquare] = useState<PortalSquareStatus | null>(null);
-  const [squareBusy, setSquareBusy] = useState<'start' | 'refresh' | null>(null);
+  const [squareBusy, setSquareBusy] = useState<'start' | 'refresh' | 'disconnect' | null>(null);
   const [squareError, setSquareError] = useState<string | null>(null);
   const [squareNotice, setSquareNotice] = useState<SquareNotice>(null);
+
+  // Privacy request state (2026-10-06)
+  const [removalBusy, setRemovalBusy] = useState(false);
+  const [removalSent, setRemovalSent] = useState(false);
+  const [removalError, setRemovalError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -193,6 +200,52 @@ const ConsignorPortalPage: React.FC = () => {
       setSquareBusy(null);
     }
   };
+
+  const handleDisconnectSquare = async () => {
+    if (!tokenStr) return;
+    const ok = window.confirm('Your organizer will be told. Your payout records are kept. You can reconnect later.');
+    if (!ok) return;
+    setSquareBusy('disconnect');
+    setSquareError(null);
+    setSquareNotice(null);
+    try {
+      const result = await disconnectPortalSquare(apiBase, tokenStr);
+      setSquare({ status: result.status, canConnect: result.canConnect, payoutsFlaggedForReview: result.payoutsFlaggedForReview });
+      setSquareNotice('disconnected');
+    } catch (err: any) {
+      setSquareError(err.response?.data?.error || 'Could not disconnect Square right now. Please try again.');
+    } finally {
+      setSquareBusy(null);
+    }
+  };
+
+  const handleRequestDataRemoval = async () => {
+    if (!tokenStr) return;
+    const ok = window.confirm('Send your organizer a request to remove or review your personal data? Nothing is deleted automatically.');
+    if (!ok) return;
+    setRemovalBusy(true);
+    setRemovalError(null);
+    try {
+      await requestPortalDataRemoval(apiBase, tokenStr);
+      setRemovalSent(true);
+    } catch (err: any) {
+      setRemovalError(err.response?.data?.error || 'Could not send your request right now. Please try again later.');
+    } finally {
+      setRemovalBusy(false);
+    }
+  };
+
+  const renderDisconnectSquare = () => (
+    <div className="mt-3">
+      <button
+        onClick={handleDisconnectSquare}
+        disabled={squareBusy !== null}
+        className="px-4 py-2 rounded-lg text-sm font-bold border border-warm-300 dark:border-gray-600 text-warm-800 dark:text-warm-200 hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      >
+        {squareBusy === 'disconnect' ? 'Disconnecting...' : 'Disconnect Square'}
+      </button>
+    </div>
+  );
 
   const handleAcceptAgreement = async () => {
     if (!token) return;
@@ -400,9 +453,15 @@ const ConsignorPortalPage: React.FC = () => {
                 We could not finish connecting Square. The link may have expired. Please try again.
               </p>
             )}
+            {squareNotice === 'disconnected' && (
+              <p className="mb-3 text-sm rounded-lg p-3 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200">
+                Square was disconnected. Your organizer has been told and your payout records are kept. You can connect Square again any time.
+              </p>
+            )}
+
             {squareNotice === 'already-connected' && (
               <p className="mb-3 text-sm rounded-lg p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200">
-                A Square account is already connected for your payouts. If it needs to change, please contact your organizer.
+                A Square account is already connected for your payouts. To use a different one, disconnect it first.
               </p>
             )}
             {squareError && (
@@ -443,6 +502,9 @@ const ConsignorPortalPage: React.FC = () => {
                   </li>
                   <li>Prefer cash, check or another method? Just tell your organizer. Nothing changes for you.</li>
                 </ul>
+                <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+                  FindA.Sale can only see which Square account is connected and basic details of its linked bank accounts (for fraud checks); it cannot take payments or move money, and you can disconnect any time from your Square dashboard under Apps.
+                </p>
                 <button
                   onClick={handleStartSquare}
                   disabled={squareBusy !== null}
@@ -480,6 +542,7 @@ const ConsignorPortalPage: React.FC = () => {
                     </button>
                   )}
                 </div>
+                {renderDisconnectSquare()}
               </div>
             )}
 
@@ -489,8 +552,9 @@ const ConsignorPortalPage: React.FC = () => {
                   {squareNotice === 'connected' ? 'Square connected. You are all set.' : 'Square is connected for your payouts.'}
                 </p>
                 <p className="text-sm text-warm-700 dark:text-warm-300">
-                  Your organizer can pay you through Square. To change the connected account, please contact your organizer.
+                  Your organizer can pay you through Square. To use a different Square account, disconnect this one and connect the new one.
                 </p>
+                {renderDisconnectSquare()}
               </div>
             )}
 
@@ -707,6 +771,28 @@ const ConsignorPortalPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Privacy (2026-10-06) */}
+          <div className="mt-8 rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
+            <h2 className="text-lg font-bold text-warm-900 dark:text-white mb-1">Privacy</h2>
+            <p className="text-sm text-warm-700 dark:text-warm-300 mb-3">
+              You can ask your organizer to remove or review the personal data held about you. Sales and payout records may be kept for legal and accounting reasons.
+            </p>
+            {removalSent ? (
+              <p className="text-sm font-bold text-green-700 dark:text-green-400">
+                Your request was sent to your organizer. They will follow up with you.
+              </p>
+            ) : (
+              <button
+                onClick={handleRequestDataRemoval}
+                disabled={removalBusy}
+                className="px-4 py-2 rounded-lg text-sm font-bold border border-warm-300 dark:border-gray-600 text-warm-800 dark:text-warm-200 hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                {removalBusy ? 'Sending...' : 'Ask for my data to be removed'}
+              </button>
+            )}
+            {removalError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{removalError}</p>}
+          </div>
 
           {/* Footer */}
           <div className="mt-12 text-center text-xs text-warm-500 dark:text-warm-400">

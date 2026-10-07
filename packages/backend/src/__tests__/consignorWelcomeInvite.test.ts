@@ -145,6 +145,51 @@ describe('sendConsignorWelcomeInvite', () => {
   });
 });
 
+describe('footer links (real buildEmail)', () => {
+  const realBuild = jest.requireActual('../services/emailTemplateService').buildEmail as (o: any) => string;
+
+  it('default buildEmail keeps the unsubscribe and preferences links (other callers unchanged)', () => {
+    const html = realBuild({ headline: 'H', body: '<p>b</p>' });
+    expect(html).toContain('/unsubscribe');
+    expect(html).toContain('/settings/notifications');
+  });
+
+  it('hideUnsubscribe removes both links but keeps the address; footerReason is escaped', () => {
+    const html = realBuild({ headline: 'H', body: '<p>b</p>', hideUnsubscribe: true, footerReason: 'Because <b>Maple</b> added you.' });
+    expect(html).not.toContain('/unsubscribe');
+    expect(html).not.toContain('/settings/notifications');
+    expect(html).toContain('219 E Michigan Ave');
+    expect(html).toContain('Because &lt;b&gt;Maple&lt;/b&gt; added you.');
+  });
+
+  it('welcome invite and both Square notices pass hideUnsubscribe and the on-behalf footer', async () => {
+    const spy = jest.fn((o: any) => realBuild(o));
+    // Re-require the service against a spy-wrapped real template.
+    jest.resetModules();
+    jest.doMock('../services/emailTemplateService', () => ({ buildEmail: spy }));
+    const svc = require('../services/consignorEmailService');
+    const rail = require('../lib/transactionalEmailService').transactionalEmailService.emails.send as jest.Mock;
+    rail.mockResolvedValue({ sent: true });
+    require('../services/suppressionService').suppressionService.isHardSuppressed.mockResolvedValue(false);
+
+    await svc.sendConsignorWelcomeInvite(inviteParams());
+    await svc.sendConsignorSquareConnectedNotice({ consignorName: 'L', consignorEmail: GOOD, organizerName: 'Maple Lake Consignments', active: true, connectedAt: new Date() });
+    await svc.sendOrganizerConsignorSquareConnectedNotice({ organizerEmail: 'owner@maplemail.net', organizerName: 'Maple', consignorName: 'L', active: true, connectedAt: new Date() });
+
+    expect(spy).toHaveBeenCalledTimes(3);
+    for (const call of spy.mock.calls) expect(call[0].hideUnsubscribe).toBe(true);
+    const htmls = rail.mock.calls.map((c: any[]) => c[0].html as string);
+    for (const html of htmls) {
+      expect(html).not.toContain('/unsubscribe');
+      expect(html).not.toContain('/settings/notifications');
+      expect(html).toContain('219 E Michigan Ave');
+    }
+    expect(htmls[0]).toContain('You received this because Maple Lake Consignments added you as a consignor on FindA.Sale.');
+    expect(htmls[1]).toContain('You received this because Maple Lake Consignments added you as a consignor on FindA.Sale.');
+    jest.dontMock('../services/emailTemplateService');
+  });
+});
+
 describe('Square connected notices', () => {
   it('consignor notice: sent, escaped, needs-activation wording when not active', async () => {
     expect(
@@ -177,10 +222,17 @@ describe('existing-user linking (findLinkableUserId)', () => {
     const c = client([{ id: 'u1' }]);
     expect(await findLinkableUserId(c, '  LucyTL060@Gmail.com ')).toBe('u1');
     expect(c.user.findMany).toHaveBeenCalledWith({
-      where: { email: { equals: 'lucytl060@gmail.com', mode: 'insensitive' }, deletedAt: null },
+      where: { email: { equals: 'lucytl060@gmail.com', mode: 'insensitive' }, deletedAt: null, emailVerified: true },
       select: { id: true },
       take: 2,
     });
+  });
+
+  it('only links to a VERIFIED account: the lookup filters on emailVerified, so an unverified match links nothing', async () => {
+    // The real DB applies the filter; the stub proves the query asks for it and that no match means no link.
+    const c = client([]);
+    expect(await findLinkableUserId(c, GOOD)).toBeNull();
+    expect(c.user.findMany.mock.calls[0][0].where.emailVerified).toBe(true);
   });
 
   it('no email, blank, or not an address: no lookup, no link', async () => {

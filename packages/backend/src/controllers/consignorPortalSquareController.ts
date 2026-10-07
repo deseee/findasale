@@ -7,6 +7,8 @@
  *   POST /api/consignors/portal/:token/square/start      returns { onboardingUrl }
  *   POST /api/consignors/portal/:token/square/callback   body { code, state }
  *   POST /api/consignors/portal/:token/square/refresh    re-check activation with Square
+ *   POST /api/consignors/portal/:token/square/disconnect revoke + clear Square, organizer told, records kept (idempotent)
+ *   POST /api/consignors/portal/:token/data-removal-request  emails the organizer only; deletes nothing; 202
  *
  * Responses never include a merchant id, token, user id or any other consignor's data. Errors are
  * { error, code } from PortalSquareError (consignorSquareConnectService.ts).
@@ -15,8 +17,10 @@ import { Request, Response } from 'express';
 import {
   PortalSquareError,
   completePortalSquareConnection,
+  disconnectPortalSquare as disconnectPortalSquareService,
   getPortalSquareStatus,
   refreshPortalSquareStatus,
+  requestPortalDataRemoval,
   startPortalSquareConnection,
 } from '../services/consignorSquareConnectService';
 
@@ -61,5 +65,23 @@ export const refreshPortalSquare = async (req: Request, res: Response) => {
     return res.status(200).json(await refreshPortalSquareStatus(req.params.token));
   } catch (err) {
     return sendError(res, err, 'refreshPortalSquare');
+  }
+};
+
+export const disconnectPortalSquare = async (req: Request, res: Response) => {
+  try {
+    // The portal token in the URL is the only input; nothing is read from the body.
+    return res.status(200).json(await disconnectPortalSquareService(req.params.token));
+  } catch (err) {
+    return sendError(res, err, 'disconnectPortalSquare');
+  }
+};
+
+export const requestPortalDataRemovalHandler = async (req: Request, res: Response) => {
+  try {
+    await requestPortalDataRemoval(req.params.token);
+    return res.status(202).json({ requested: true });
+  } catch (err) {
+    return sendError(res, err, 'requestPortalDataRemoval');
   }
 };

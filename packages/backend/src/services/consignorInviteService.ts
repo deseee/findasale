@@ -6,9 +6,12 @@
  * /api/consignors/:id/send-invite), and createConsignorCore / updateConsignor for the account link.
  *
  * Account link rule: a consignor is linked to a User only when the trimmed email matches EXACTLY
- * ONE live (not soft-deleted) User, compared case-insensitively. "User"."email" is unique but
+ * ONE live (not soft-deleted) User whose email is VERIFIED (User.emailVerified), compared
+ * case-insensitively. An unverified account never links, so typing someone's address while
+ * registering cannot attach a stranger's consignments to it. "User"."email" is unique but
  * case-sensitive, so two legacy rows differing only by case are possible; that case links nothing
- * rather than guessing. The link is informational. The organizer only ever sees a boolean.
+ * rather than guessing. The link is informational and is never shown to organizers (no flag in any
+ * organizer response); only the consignor's own welcome email mentions it.
  */
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
@@ -36,7 +39,7 @@ export function normalizeConsignorEmail(raw: unknown): string | null {
 }
 
 /**
- * Finds the single live User whose email matches (case-insensitive), or null. `client` may be a
+ * Finds the single live, email-verified User whose email matches (case-insensitive), or null. `client` may be a
  * transaction client so the lookup runs inside the caller's transaction.
  */
 export async function findLinkableUserId(
@@ -46,7 +49,7 @@ export async function findLinkableUserId(
   const email = normalizeConsignorEmail(rawEmail);
   if (!email || !email.includes('@') || email.length > 254) return null;
   const users = await client.user.findMany({
-    where: { email: { equals: email, mode: 'insensitive' }, deletedAt: null },
+    where: { email: { equals: email, mode: 'insensitive' }, deletedAt: null, emailVerified: true },
     select: { id: true },
     take: 2,
   });

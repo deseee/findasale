@@ -17,9 +17,16 @@ import {
   startPortalSquare,
   completePortalSquare,
   refreshPortalSquare,
+  disconnectPortalSquare,
+  requestPortalDataRemovalHandler,
 } from '../controllers/consignorPortalSquareController';
 import { authenticate } from '../middleware/auth';
-import { consignorInviteResendLimiter, consignorPortalSquareLimiter, consignorWriteLimiter } from '../middleware/rateLimiter';
+import {
+  consignorInviteResendLimiter,
+  consignorPortalDataRemovalLimiter,
+  consignorPortalSquareLimiter,
+  consignorWriteLimiter,
+} from '../middleware/rateLimiter';
 
 const router = Router();
 
@@ -36,6 +43,16 @@ router.get('/portal/:token/square', consignorPortalSquareLimiter, getPortalSquar
 router.post('/portal/:token/square/start', consignorPortalSquareLimiter, startPortalSquare);
 router.post('/portal/:token/square/callback', consignorPortalSquareLimiter, completePortalSquare);
 router.post('/portal/:token/square/refresh', consignorPortalSquareLimiter, refreshPortalSquare);
+// Self-serve disconnect (revokes at Square, clears locally, keeps all records) and a data-removal
+// REQUEST (emails the organizer, deletes nothing). Both capability-token gated; the request is also
+// capped at 3 per day per token.
+router.post('/portal/:token/square/disconnect', consignorPortalSquareLimiter, disconnectPortalSquare);
+router.post(
+  '/portal/:token/data-removal-request',
+  consignorPortalSquareLimiter,
+  consignorPortalDataRemovalLimiter,
+  requestPortalDataRemovalHandler
+);
 
 // All routes below require authentication
 router.use(authenticate);

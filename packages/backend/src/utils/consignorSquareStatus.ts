@@ -14,3 +14,37 @@ export function consignorSquareStatus(row: { squareAccountId?: string | null; sq
 export function portalCanConnectSquare(row: { squareAccountId?: string | null; squareOnboarded?: boolean | null }): boolean {
   return !(row.squareOnboarded && row.squareAccountId);
 }
+
+/**
+ * Every Square column on Consignor that a disconnect clears. ConnectBankFingerprint rows are NOT
+ * Consignor columns and are kept on purpose (admin fraud-review evidence, keyed by merchant id);
+ * payoutsFlaggedForReview / payoutsFlaggedReason are likewise left for admin review.
+ */
+export const CONSIGNOR_SQUARE_CLEARED_FIELDS = {
+  squareAccountId: null,
+  squareOnboarded: false,
+  squareAccessTokenEncrypted: null,
+  squareRefreshTokenEncrypted: null,
+  squareTokenExpiresAt: null,
+  squarePortalOAuthNonce: null,
+} as const;
+
+export interface ConsignorSquareRow {
+  id: string;
+  squareAccountId?: string | null;
+  squareOnboarded?: boolean | null;
+  squareAccessTokenEncrypted?: string | null;
+  squareRefreshTokenEncrypted?: string | null;
+  squarePortalOAuthNonce?: string | null;
+}
+
+/** True when the row holds any Square connection data worth clearing. */
+export function consignorHasSquareData(row: Partial<ConsignorSquareRow>): boolean {
+  return Boolean(
+    row.squareAccountId ||
+      row.squareOnboarded ||
+      row.squareAccessTokenEncrypted ||
+      row.squareRefreshTokenEncrypted ||
+      row.squarePortalOAuthNonce
+  );
+}

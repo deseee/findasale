@@ -466,7 +466,7 @@ export const approveIntakeRequest = async (req: AuthRequest, res: Response) => {
           });
         }
 
-        return { consignorId: consignor.id, appointment, linkedExistingUser: consignor.linkedExistingUser };
+        return { consignorId: consignor.id, appointment };
       });
       consignorId = txResult.consignorId;
 
@@ -479,7 +479,6 @@ export const approveIntakeRequest = async (req: AuthRequest, res: Response) => {
         consignor: fullConsignor ? toOrganizerConsignorView(fullConsignor) : null,
         appointment: txResult.appointment,
         welcomeEmail,
-        linkedExistingUser: txResult.linkedExistingUser,
       });
     } catch (err) {
       if (err instanceof ConsignorValidationError) {
