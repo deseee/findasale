@@ -39,8 +39,9 @@ import { postZ } from './posts/two-apps-partnering-still-two-logins';
 import { postAA } from './posts/sale-item-caps-cataloging-software-tiers';
 import { postAB } from './posts/what-organizers-spend-to-get-found';
 import { postAC } from './posts/cataloging-is-getting-cheaper-discovery-still-isnt';
+import { postAD } from './posts/that-free-cataloging-tool-has-a-30-day-clock';
 
-export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR, postS, postT, postU, postV, postW, postX, postY, postZ, postAA, postAB, postAC];
+export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR, postS, postT, postU, postV, postW, postX, postY, postZ, postAA, postAB, postAC, postAD];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {
   return posts.find((p) => p.slug === slug);
