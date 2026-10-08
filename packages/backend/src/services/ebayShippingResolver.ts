@@ -32,7 +32,14 @@
  */
 
 import { computeCheapestForOrigin, ShippingHardBlockError } from './ebayRateEstimateService';
-import { computeFvfFlatRate, roundUpToBucket, applyCharmPricing } from './ebayFlatRatePolicyService';
+import {
+  computeFvfFlatRate,
+  roundUpToBucket,
+  applyCharmPricing,
+  zone9TierForPackage,
+  buildFlatPolicyName,
+  priceBasisFromCheapest,
+} from './ebayFlatRatePolicyService';
 import { computeCalculatedWithHandling } from './ebayCalculatedPolicyService';
 import {
   matchStandardEnvelopePolicy,
@@ -316,7 +323,14 @@ export async function resolveItemShipping(input: {
       return {
         fulfillmentPolicyId: null,
         buyerAmountCents: dollarsToCents(flatRate),
-        policyName: `FindA.Sale Flat $${flatRate.toFixed(2)}`,
+        // Same tier + basis inputs as ensureFvfFlatRatePolicy so preview == push name.
+        // (Push may demote T1-T3 to T4 if the seller's AK/HI/PR rate table is missing;
+        // the preview cannot call eBay, so it assumes the table resolves.)
+        policyName: buildFlatPolicyName(
+          zone9TierForPackage(weightOz, dims),
+          flatRate.toFixed(2),
+          priceBasisFromCheapest(cheapest, weightOz, dims)
+        ),
         source: 'fvf-flat',
         ...(standardEnvelopeUnmatched ? { standardEnvelopeUnmatched: true } : {}),
       };

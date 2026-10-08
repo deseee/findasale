@@ -25,6 +25,9 @@ jest.mock('../ebayFlatRatePolicyService', () => ({
   computeFvfFlatRate: (rate: number) => rate,
   roundUpToBucket: (rate: number) => rate,
   applyCharmPricing: (rate: number) => rate,
+  zone9TierForPackage: () => 'T4',
+  priceBasisFromCheapest: () => null,
+  buildFlatPolicyName: (_tier: string, rateStr: string) => `Lower 48 only | Flat $${rateStr}`,
 }));
 
 jest.mock('../ebayCalculatedPolicyService', () => ({

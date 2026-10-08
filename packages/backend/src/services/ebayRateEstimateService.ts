@@ -3514,3 +3514,260 @@ export async function computeCheapestForOrigin(input: {
     destinationZip: input.destinationZip ?? null,
   });
 }
+
+// ============================================================================
+// ISLAND_AK_RATE_TABLE -- PR / USVI / HI / AK (and APO/FPO) measured rates.
+// ADDITIVE ONLY: not wired into computeCheapestForOrigin or any other path.
+//
+// SOURCE: live eBay calculator API POST /shp/calc/api/shipping/services,
+// origin 49079, Patrick's real seller account, sweep run 2026-10-07.
+// Destination ZIPs: 00802 (USVI), 00901 (PR), 96813 (HI), 99501 (AK).
+// Box 12x12x6, irregular=false, weights 1-40 lb. Weights 1-4 lb measured at
+// 12x12x6 (cubic-eligible).
+//
+// FINDINGS (recorded verbatim):
+//  - USPS Ground Advantage is IDENTICAL across USVI/PR/HI/AK at every one of
+//    the 40 weights.
+//  - FedEx Ground Economy is identical at USVI/HI/AK.
+//  - UPS Ground HI == AK; PR is slightly higher.
+//  - USVI offers NO UPS Ground and NO FedEx Ground/Home Delivery.
+//  - USPS cubic cap: at 12x12x6 weights 5-20 lb are $19.95 (cubic tier,
+//    requires <=1 cu ft, <=20 lb, longest <=22in); weight-based pricing
+//    applies otherwise and billable weight = max(actual, L*W*H/139).
+//  - Cross-check: a 20x14x10 box (2800 cu in => 21 lb billed) returns $44.76
+//    at EVERY actual weight 1-20 lb, equal to the 21 lb row; 36x14x8
+//    (4032 cu in => 29 lb billed) returns $135.30 for low actual weights.
+//  - FedEx Ground/Home Delivery to HI/AK at 1-40lb was seen at e.g. 119.73
+//    @5lb (12x12x6 AK), 357.66 @40lb HI; not fully swept, NOT tabulated.
+//
+// Index = lb - 1 (lb 1..40). Dollars.
+// ============================================================================
+export const ISLAND_AK_RATE_TABLE = {
+  USPS_GROUND_ADVANTAGE: {
+    // identical for USVI, PR, HI, AK
+    ALL: [11.22, 13.42, 16.30, 19.06, 19.95, 19.95, 19.95, 19.95, 19.95, 19.95, 19.95, 19.95, 19.95, 19.95, 19.95, 19.95, 19.95, 19.95, 19.95, 19.95, 44.76, 51.49, 60.16, 70.72, 79.94, 90.50, 95.16, 98.23, 101.28, 104.30, 107.27, 110.21, 113.12, 115.99, 118.86, 121.64, 124.44, 127.21, 129.95, 132.66] as readonly number[],
+  },
+  UPS_GROUND: {
+    HI: [33.02, 36.26, 39.55, 42.81, 46.07, 49.34, 52.60, 56.13, 59.39, 62.68, 65.97, 69.24, 72.53, 75.80, 79.09, 82.36, 85.63, 88.92, 92.20, 95.47, 98.76, 102.03, 105.31, 108.60, 111.86, 115.16, 118.42, 121.70, 124.97, 128.26, 131.53, 133.53, 136.77, 140.02, 143.26, 146.52, 149.76, 153.03, 156.25, 159.50] as readonly number[],
+    AK: [33.02, 36.26, 39.55, 42.81, 46.07, 49.34, 52.60, 56.13, 59.39, 62.68, 65.97, 69.24, 72.53, 75.80, 79.09, 82.36, 85.63, 88.92, 92.20, 95.47, 98.76, 102.03, 105.31, 108.60, 111.86, 115.16, 118.42, 121.70, 124.97, 128.26, 131.53, 133.53, 136.77, 140.02, 143.26, 146.52, 149.76, 153.03, 156.25, 159.50] as readonly number[],
+    PR: [33.95, 38.04, 42.14, 46.25, 50.35, 54.43, 58.54, 62.64, 66.75, 70.82, 74.92, 79.02, 83.12, 87.22, 91.32, 95.42, 99.51, 103.62, 107.72, 111.82, 115.91, 120.01, 124.11, 128.21, 132.31, 136.41, 140.50, 144.60, 148.70, 152.81, 156.88, 160.98, 165.09, 169.19, 173.30, 177.37, 181.48, 185.58, 189.69, 193.78] as readonly number[],
+    // USVI: not offered
+  },
+  FEDEX_GROUND_ECONOMY: {
+    // identical for USVI, PR, HI, AK
+    ALL: [68.05, 68.05, 68.05, 68.05, 68.05, 68.05, 68.05, 72.63, 76.58, 84.05, 89.90, 96.47, 103.06, 109.72, 116.22, 121.72, 127.76, 134.25, 140.67, 147.29, 153.49, 160.12, 166.70, 173.15, 179.59, 186.04, 192.55, 199.30, 206.04, 212.60, 219.03, 225.66, 232.02, 238.52, 244.72, 259.75, 264.53, 269.43, 274.15, 278.92] as readonly number[],
+  },
+} as const;
+
+/** True for PR/USVI (006-009), APO/FPO (962-966), HI (967-968), AK (995-999). */
+export function isIslandOrAkZip(zip: string | null | undefined): boolean {
+  const z = String(zip ?? '').trim().slice(0, 5);
+  if (!/^\d{5}$/.test(z)) return false;
+  const p = parseInt(z.slice(0, 3), 10);
+  return (p >= 6 && p <= 9) || (p >= 962 && p <= 968) || (p >= 995 && p <= 999);
+}
+
+/**
+ * Measured island/AK rate for a destination ZIP, billable weight and carrier.
+ * Returns null when unmeasured/unavailable (non-island ZIP, APO/FPO, USVI
+ * UPS Ground, FedEx Ground/Home Delivery, weight outside 1-40 lb).
+ * Weight is rounded UP to the next whole pound.
+ */
+export function islandAkDestinationRate(
+  destZip: string | null | undefined,
+  billableLb: number,
+  carrier: 'USPS' | 'UPS' | 'FEDEX' | string,
+): number | null {
+  if (!isIslandOrAkZip(destZip) || !Number.isFinite(billableLb) || billableLb <= 0) return null;
+  const z = String(destZip).trim().slice(0, 5);
+  const p = parseInt(z.slice(0, 3), 10);
+  if (p >= 962 && p <= 966) return null; // APO/FPO: unmeasured
+  const lb = Math.max(1, Math.ceil(billableLb));
+  if (lb > 40) return null;
+  const isUsvi = p === 8; // 008xx
+  const isHi = p === 967 || p === 968;
+  const isAk = p >= 995 && p <= 999;
+  const isPr = !isUsvi && p >= 6 && p <= 9;
+  const c = String(carrier).toUpperCase();
+  let table: readonly number[] | undefined;
+  if (c === 'USPS') table = ISLAND_AK_RATE_TABLE.USPS_GROUND_ADVANTAGE.ALL;
+  else if (c === 'FEDEX') table = ISLAND_AK_RATE_TABLE.FEDEX_GROUND_ECONOMY.ALL;
+  else if (c === 'UPS') {
+    if (isUsvi) return null;
+    table = isHi ? ISLAND_AK_RATE_TABLE.UPS_GROUND.HI : isAk ? ISLAND_AK_RATE_TABLE.UPS_GROUND.AK : isPr ? ISLAND_AK_RATE_TABLE.UPS_GROUND.PR : undefined;
+  }
+  return table ? table[lb - 1] ?? null : null;
+}
+
+// ---------------------------------------------------------------------------
+// LIGHT_PACKAGE_OZ_QUOTES -- live eBay calculator quotes for light packages.
+// Source: live eBay calculator API POST /shp/calc/api/shipping/services,
+// origin ZIP 49079, Patrick's real seller account, 2026-10-07,
+// box 9x6x2 in, irregular=false, weights 1-32 oz.
+// Each {fromOz, price} breakpoint applies from fromOz until the next
+// breakpoint, through 32 oz. null service = not offered to that destination.
+// Findings:
+//  - USPS Ground Advantage breaks at 16 oz (15.999); FedEx/UPS break at 17 oz.
+//  - USPS GA is identical across USVI/PR/HI/AK.
+//  - FedEx destination tier C ZIPs add $15.03 to FedEx Ground/HD
+//    (29.33 = 14.18 + 15.03 + rounding), while USPS GA rural adds only ~$2.3 vs CA.
+// ---------------------------------------------------------------------------
+export interface LightPackageBreakpoint { fromOz: number; price: number }
+export const LIGHT_PACKAGE_OZ_QUOTES: {
+  box: string;
+  destinations: Record<string, Record<string, LightPackageBreakpoint[] | null>>;
+} = {
+  box: '9x6x2',
+  destinations: {
+    CA_90210: {
+      'USPS Ground Advantage': [{ fromOz: 1, price: 6.07 }, { fromOz: 5, price: 6.34 }, { fromOz: 9, price: 7.05 }, { fromOz: 13, price: 8.23 }, { fromOz: 16, price: 9.54 }],
+      'USPS Priority Mail': [{ fromOz: 1, price: 13.48 }, { fromOz: 17, price: 13.70 }],
+      'FedEx Ground/Home Delivery': [{ fromOz: 1, price: 14.18 }],
+      'FedEx Ground Economy': [{ fromOz: 1, price: 7.08 }, { fromOz: 17, price: 10.21 }],
+      'UPS Ground Saver': [{ fromOz: 1, price: 8.51 }, { fromOz: 17, price: 10.25 }],
+      'UPS Ground': [{ fromOz: 1, price: 10.88 }, { fromOz: 17, price: 13.35 }],
+    },
+    RURAL_59087: {
+      'USPS Ground Advantage': [{ fromOz: 1, price: 8.41 }, { fromOz: 16, price: 9.76 }],
+      'USPS Priority Mail': [{ fromOz: 1, price: 15.32 }, { fromOz: 17, price: 15.54 }],
+      'FedEx Ground/Home Delivery': [{ fromOz: 1, price: 29.33 }],
+      'FedEx Ground Economy': [{ fromOz: 1, price: 6.83 }, { fromOz: 17, price: 8.62 }],
+      'UPS Ground Saver': [{ fromOz: 1, price: 24.26 }, { fromOz: 17, price: 25.63 }],
+      'UPS Ground': [{ fromOz: 1, price: 25.92 }, { fromOz: 17, price: 27.15 }],
+    },
+    RURAL_97910: {
+      'USPS Ground Advantage': [{ fromOz: 1, price: 8.62 }, { fromOz: 16, price: 10.08 }],
+      'USPS Priority Mail': [{ fromOz: 1, price: 15.93 }, { fromOz: 17, price: 16.24 }],
+      'FedEx Ground/Home Delivery': [{ fromOz: 1, price: 29.33 }],
+      'FedEx Ground Economy': [{ fromOz: 1, price: 6.90 }, { fromOz: 17, price: 9.45 }],
+      'UPS Ground Saver': [{ fromOz: 1, price: 24.49 }, { fromOz: 17, price: 26.00 }],
+      'UPS Ground': [{ fromOz: 1, price: 26.69 }, { fromOz: 17, price: 28.67 }],
+    },
+    USVI_00802: {
+      'USPS Ground Advantage': [{ fromOz: 1, price: 8.95 }, { fromOz: 16, price: 10.68 }],
+      'USPS Priority Mail': [{ fromOz: 1, price: 16.07 }, { fromOz: 17, price: 16.36 }],
+      'FedEx Ground/Home Delivery': null,
+      'FedEx Ground Economy': [{ fromOz: 1, price: 36.73 }, { fromOz: 17, price: 43.41 }],
+      'UPS Ground Saver': null,
+      'UPS Ground': null,
+    },
+    PR_00901: {
+      'USPS Ground Advantage': [{ fromOz: 1, price: 8.95 }, { fromOz: 16, price: 10.68 }],
+      'USPS Priority Mail': [{ fromOz: 1, price: 16.07 }, { fromOz: 17, price: 16.36 }],
+      'FedEx Ground/Home Delivery': null,
+      'FedEx Ground Economy': [{ fromOz: 1, price: 36.73 }, { fromOz: 17, price: 43.41 }],
+      'UPS Ground Saver': null,
+      'UPS Ground': [{ fromOz: 1, price: 33.95 }, { fromOz: 17, price: 38.04 }],
+    },
+    HI_96813: {
+      'USPS Ground Advantage': [{ fromOz: 1, price: 8.95 }, { fromOz: 16, price: 10.68 }],
+      'USPS Priority Mail': [{ fromOz: 1, price: 16.07 }, { fromOz: 17, price: 16.36 }],
+      'FedEx Ground/Home Delivery': [{ fromOz: 1, price: 72.66 }, { fromOz: 17, price: 80.68 }],
+      'FedEx Ground Economy': [{ fromOz: 1, price: 36.73 }, { fromOz: 17, price: 43.41 }],
+      'UPS Ground Saver': null,
+      'UPS Ground': [{ fromOz: 1, price: 33.02 }, { fromOz: 17, price: 36.26 }],
+    },
+    AK_99501: {
+      'USPS Ground Advantage': [{ fromOz: 1, price: 8.95 }, { fromOz: 16, price: 10.68 }],
+      'USPS Priority Mail': [{ fromOz: 1, price: 16.07 }, { fromOz: 17, price: 16.36 }],
+      'FedEx Ground/Home Delivery': [{ fromOz: 1, price: 72.66 }, { fromOz: 17, price: 80.68 }],
+      'FedEx Ground Economy': [{ fromOz: 1, price: 36.73 }, { fromOz: 17, price: 43.41 }],
+      'UPS Ground Saver': null,
+      'UPS Ground': [{ fromOz: 1, price: 33.02 }, { fromOz: 17, price: 36.26 }],
+    },
+  },
+};
+
+/** Quote (USD) for a light package. oz rounded UP to whole oz; null if >32, <=0, or not offered. */
+export function lightPackageOzQuote(destKey: string, service: string, oz: number): number | null {
+  const bps = LIGHT_PACKAGE_OZ_QUOTES.destinations[destKey]?.[service];
+  if (!bps || !Number.isFinite(oz) || oz <= 0) return null;
+  const w = Math.max(1, Math.ceil(oz));
+  if (w > 32) return null;
+  let price: number | null = null;
+  for (const b of bps) { if (w >= b.fromOz) price = b.price; }
+  return price;
+}
+
+
+// ── USPS ZONE 9 (HI / AK / PR / USVI) -- measured Ground Advantage rates ─────────────
+// SOURCE: live eBay calculator API (POST /shp/calc/api/shipping/services), origin 49079,
+// Patrick's real seller account, 2026-10-07. Destination 96813 (HI); cross-checked
+// IDENTICAL at 99501 (AK), 00901 (PR) and 00802 (USVI) for every weight/tier tested.
+// Each value was measured individually, NOT interpolated. Weight-based 1-20 lb values were
+// measured through a 24x4x4in nonstandard-length box and the constant $4.50 nonstandard
+// fee subtracted; that method was independently validated against clean-box quotes at
+// 1-10 lb and 14-20 lb and against the 21/25/30 lb calibration points.
+// OBSERVED STRUCTURE: zone 9 = zone 8 + a step: +0.55 for <1lb..3lb, +1.05 for 4-10 lb,
+// +1.75 for 11-25 lb, +7.70 for 26-70 lb. (Cubic: +0.55 tiers 0.1-0.3, +1.05 tiers
+// 0.4-0.9, +1.75 tier 1.0.)
+// Not a ZoneKey member on purpose (would break Record<ZoneKey,...>); NOT wired into any
+// existing function. Same maxLb semantics as RATE_TABLE: first row with lb <= maxLb.
+
+/** Zone 9 weight rates. Rows maxLb 0.25/0.5/0.75/0.9999 are the sub-1lb steps; then every whole lb 1-70. */
+export const USPS_ZONE9_WEIGHT_RATES: Array<{ maxLb: number; rate: number }> = [
+  { maxLb: 0.25, rate: 8.95 },
+  { maxLb: 0.5, rate: 8.95 },
+  { maxLb: 0.75, rate: 8.95 },
+  { maxLb: 0.9999, rate: 8.95 },
+  { maxLb: 1, rate: 11.22 }, { maxLb: 2, rate: 13.42 }, { maxLb: 3, rate: 16.30 }, { maxLb: 4, rate: 19.06 }, { maxLb: 5, rate: 20.24 },
+  { maxLb: 6, rate: 21.73 }, { maxLb: 7, rate: 22.88 }, { maxLb: 8, rate: 23.95 }, { maxLb: 9, rate: 25.14 }, { maxLb: 10, rate: 26.39 },
+  { maxLb: 11, rate: 29.12 }, { maxLb: 12, rate: 30.48 }, { maxLb: 13, rate: 31.86 }, { maxLb: 14, rate: 33.28 }, { maxLb: 15, rate: 34.66 },
+  { maxLb: 16, rate: 36.04 }, { maxLb: 17, rate: 37.17 }, { maxLb: 18, rate: 38.39 }, { maxLb: 19, rate: 39.59 }, { maxLb: 20, rate: 42.14 },
+  { maxLb: 21, rate: 44.76 }, { maxLb: 22, rate: 51.49 }, { maxLb: 23, rate: 60.16 }, { maxLb: 24, rate: 70.72 }, { maxLb: 25, rate: 79.94 },
+  { maxLb: 26, rate: 90.50 }, { maxLb: 27, rate: 95.16 }, { maxLb: 28, rate: 98.23 }, { maxLb: 29, rate: 101.28 }, { maxLb: 30, rate: 104.30 },
+  { maxLb: 31, rate: 107.27 }, { maxLb: 32, rate: 110.21 }, { maxLb: 33, rate: 113.12 }, { maxLb: 34, rate: 115.99 }, { maxLb: 35, rate: 118.86 },
+  { maxLb: 36, rate: 121.64 }, { maxLb: 37, rate: 124.44 }, { maxLb: 38, rate: 127.21 }, { maxLb: 39, rate: 129.95 }, { maxLb: 40, rate: 132.66 },
+  { maxLb: 41, rate: 135.32 }, { maxLb: 42, rate: 137.98 }, { maxLb: 43, rate: 140.58 }, { maxLb: 44, rate: 143.15 }, { maxLb: 45, rate: 145.71 },
+  { maxLb: 46, rate: 148.22 }, { maxLb: 47, rate: 150.70 }, { maxLb: 48, rate: 153.15 }, { maxLb: 49, rate: 155.58 }, { maxLb: 50, rate: 157.97 },
+  { maxLb: 51, rate: 160.33 }, { maxLb: 52, rate: 162.65 }, { maxLb: 53, rate: 164.95 }, { maxLb: 54, rate: 167.19 }, { maxLb: 55, rate: 169.44 },
+  { maxLb: 56, rate: 171.63 }, { maxLb: 57, rate: 173.80 }, { maxLb: 58, rate: 175.93 }, { maxLb: 59, rate: 178.03 }, { maxLb: 60, rate: 180.09 },
+  { maxLb: 61, rate: 182.14 }, { maxLb: 62, rate: 184.14 }, { maxLb: 63, rate: 186.12 }, { maxLb: 64, rate: 188.06 }, { maxLb: 65, rate: 189.95 },
+  { maxLb: 66, rate: 191.83 }, { maxLb: 67, rate: 193.68 }, { maxLb: 68, rate: 195.49 }, { maxLb: 69, rate: 197.27 }, { maxLb: 70, rate: 199.01 },
+];
+
+/** Zone 9 GA Cubic rates; same tierLabel/maxCuFt as USPS_CUBIC_RATE_TABLE. */
+export const USPS_ZONE9_CUBIC_RATES: Array<{ maxCuFt: number; tierLabel: string; rate: number }> = [
+  { maxCuFt: 0.1, tierLabel: 'GA Cubic 0.1', rate: 10.68 },
+  { maxCuFt: 0.2, tierLabel: 'GA Cubic 0.2', rate: 12.39 },
+  { maxCuFt: 0.3, tierLabel: 'GA Cubic 0.3', rate: 15.22 },
+  { maxCuFt: 0.4, tierLabel: 'GA Cubic 0.4', rate: 18.34 },
+  { maxCuFt: 0.5, tierLabel: 'GA Cubic 0.5', rate: 19.95 },
+  { maxCuFt: 0.6, tierLabel: 'GA Cubic 0.6', rate: 21.41 },
+  { maxCuFt: 0.7, tierLabel: 'GA Cubic 0.7', rate: 22.62 },
+  { maxCuFt: 0.8, tierLabel: 'GA Cubic 0.8', rate: 23.76 },
+  { maxCuFt: 0.9, tierLabel: 'GA Cubic 0.9', rate: 24.94 },
+  { maxCuFt: 1.0, tierLabel: 'GA Cubic 1.0', rate: 27.35 },
+];
+
+/**
+ * Cheaper of the zone 9 weight price and (when cubic-eligible) the zone 9 cubic price, or
+ * null if billable weight exceeds 70 lb. Weight price uses billableLb with
+ * DIM_DIVISOR_USPS and the >1 cu ft dimensional-weight gate, exactly as the zone 1-8 USPS
+ * path. Sub-1lb actual weights use the real oz (billableLb floors at 1 lb) so the 8.95
+ * rows are reachable. Cubic eligibility reuses evaluateUspsCubic (zone arg is only used
+ * to obtain the tier label; the zone 9 price is looked up by that label).
+ */
+export function uspsZone9Rate(
+  dims: PackageDims,
+  weightOz: number,
+  packageType?: string | null
+): number | null {
+  const b = billableLb(weightOz, dims, DIM_DIVISOR_USPS, USPS_CUBIC_MAX_CU_IN);
+  let lb = b.lb;
+  if (b.basis === 'actual' && weightOz > 0 && weightOz < 16) lb = weightOz / 16;
+  let weightPrice: number | null = null;
+  if (lb <= 70) {
+    const row = USPS_ZONE9_WEIGHT_RATES.find((r) => lb <= r.maxLb);
+    weightPrice = row ? row.rate : null;
+  }
+  let cubicPrice: number | null = null;
+  const cubic = evaluateUspsCubic(dims, weightOz, 'z8', packageType);
+  if (cubic) {
+    const crow = USPS_ZONE9_CUBIC_RATES.find((r) => r.tierLabel === cubic.tierLabel);
+    if (crow) cubicPrice = crow.rate;
+  }
+  if (weightPrice == null) return cubicPrice;
+  if (cubicPrice == null) return weightPrice;
+  return Math.min(weightPrice, cubicPrice);
+}

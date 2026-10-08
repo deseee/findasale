@@ -65,7 +65,7 @@ export function classifyPolicy(policyName: string): PolicyClassification {
   if (/\bstd\.?\s*env(elope)?\b|\bstandard\s*envelope\b/i.test(name)) return 'standard-envelope';
 
   if (/\bfree\b.*(ship|domestic|priority)/i.test(name)) return 'free-shipping';
-  if (/calculated|calc\s*w[td]/i.test(name)) return 'calculated';
+  if (/calculated|calc\s*(?:w[td]|hc)/i.test(name)) return 'calculated';
   if (/international|intl|worldwide/i.test(name)) return 'international';
 
   // Category-specific: contains a category keyword (guitar, golf, book, etc.) OR carrier name without weight
@@ -347,7 +347,11 @@ export function parsePriceFromPolicyName(name: string): number | null {
   // Use the LAST dollar amount, not the first -- envelope-tier policy names embed an
   // eligibility disclaimer dollar figure before the real price, e.g.
   // "1oz under $20 Ebay Std Env $1.03" (real price is the trailing $1.03, not $20).
-  const matches = [...name.matchAll(/\$(\d+(?:\.\d{2})?)/g)];
+  // Strip the zone-9 surcharge suffix first: FindA.Sale T1-T3 policy names end with
+  // " | AK/HI/PR +$9.99", and that trailing amount is an ADD-ON for AK/HI/PR buyers, not the
+  // base price (e.g. "3-6 lb | 0.1-0.2 cu ft | Flat $13.99 | AK/HI/PR +$9.99" -> 13.99).
+  const base = name.replace(/\|\s*AK\/HI\/PR\s*\+\s*\$\d+(?:\.\d{1,2})?/gi, '');
+  const matches = [...base.matchAll(/\$(\d+(?:\.\d{2})?)/g)];
   if (matches.length === 0) return null;
   const value = parseFloat(matches[matches.length - 1][1]);
   return Number.isFinite(value) ? value : null;
