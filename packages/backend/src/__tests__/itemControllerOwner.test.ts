@@ -590,12 +590,13 @@ describe('getBids: saleless items are private to the owner (hacker pass fix A6)'
 // ---------------------------------------------------------------------------------------------
 // 2026-10-08: publishItemForUser is the single publish path (per-item endpoint and bulk draftStatus=PUBLISHED).
 describe('publishItemForUser: shared publish path', () => {
-  const arrange = (item: any) => {
+  // saleItem() defaults to draftStatus 'PUBLISHED', so the publish-state under test is passed explicitly (default: a publishable item).
+  const arrange = (item: any, status: string = 'PENDING_REVIEW') => {
     mockPrisma.item.findUnique.mockImplementation(async (args: any) => {
       const sel = args && args.select;
       if (sel && 'rarity' in sel && 'createdAt' in sel) return { rarity: 'COMMON', createdAt: new Date() };
       if (sel && 'userEditedFields' in sel) return { userEditedFields: [] };
-      return { ...item, draftStatus: item.draftStatus ?? 'PENDING_REVIEW' };
+      return { ...item, draftStatus: status };
     });
     mockPrisma.item.update.mockResolvedValue({ id: 'i1', saleId: item.saleId, title: 'Lamp', draftStatus: 'PUBLISHED' });
   };
@@ -618,7 +619,7 @@ describe('publishItemForUser: shared publish path', () => {
   });
 
   it('an already-published item is refused with 400', async () => {
-    arrange(saleItem({ draftStatus: 'PUBLISHED' }));
+    arrange(saleItem(), 'PUBLISHED');
     const r = await publishItemForUser(owner, 'i1', {});
     expect(r).toMatchObject({ ok: false, status: 400, message: 'Item is already published.' });
     expect(mockPrisma.item.update).not.toHaveBeenCalled();
