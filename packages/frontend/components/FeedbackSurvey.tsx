@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import api from '@/lib/api';
 import { useFeedbackContext } from '@/context/FeedbackContext';
@@ -19,7 +19,9 @@ export const FeedbackSurvey: React.FC = () => {
   const { showToast } = useToast();
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
-  const [autoDismissTimer, setAutoDismissTimer] = useState<NodeJS.Timeout | null>(null);
+  // A ref, not state: keeping the timer in state while the effect below depends on it re-ran the effect after every timer it
+  // started, an endless render loop ("Maximum update depth exceeded") for as long as the survey was open.
+  const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const firstButtonRef = useRef<HTMLButtonElement>(null);
   const lastButtonRef = useRef<HTMLButtonElement>(null);
@@ -29,14 +31,13 @@ export const FeedbackSurvey: React.FC = () => {
     if (!isSurveyOpen) return;
 
     const startAutoDismissTimer = () => {
-      const timer = setTimeout(() => {
+      autoDismissTimerRef.current = setTimeout(() => {
         closeSurvey();
       }, 10000);
-      setAutoDismissTimer(timer);
     };
 
     const resetAutoDismissTimer = () => {
-      if (autoDismissTimer) clearTimeout(autoDismissTimer);
+      if (autoDismissTimerRef.current) clearTimeout(autoDismissTimerRef.current);
       startAutoDismissTimer();
     };
 
@@ -50,11 +51,11 @@ export const FeedbackSurvey: React.FC = () => {
     window.addEventListener('keydown', handleInteraction);
 
     return () => {
-      if (autoDismissTimer) clearTimeout(autoDismissTimer);
+      if (autoDismissTimerRef.current) clearTimeout(autoDismissTimerRef.current);
       window.removeEventListener('click', handleInteraction);
       window.removeEventListener('keydown', handleInteraction);
     };
-  }, [isSurveyOpen, autoDismissTimer, closeSurvey]);
+  }, [isSurveyOpen, closeSurvey]);
 
   // Focus trap
   useEffect(() => {
