@@ -15,6 +15,8 @@ const mockPrisma: any = {
   itemCard: { findUnique: jest.fn() },
   organizer: { findUnique: jest.fn(), findFirst: jest.fn() },
   sale: { findUnique: jest.fn() },
+  organizerWorkspace: { findFirst: jest.fn() },
+  consignor: { findFirst: jest.fn() },
   priceOverrideLog: { create: jest.fn() },
   photo: { create: jest.fn() },
   bid: { findMany: jest.fn() },
@@ -92,7 +94,7 @@ jest.mock('../services/marketplace/reverbConnector', () => ({ withdrawReverbList
 
 // Required AFTER the mocks above (imports are hoisted, so a plain import would load the real modules first).
 const {
-  getCompSummary, publishItem, applyOrganizerDiscount, removeOrganizerDiscount, addItemPhoto, updateItem, appendDescription, getBids,
+  getCompSummary, publishItem, publishItemForUser, applyOrganizerDiscount, removeOrganizerDiscount, addItemPhoto, updateItem, appendDescription, getBids,
 } = require('../controllers/itemController');
 
 function makeRes() {
@@ -581,5 +583,86 @@ describe('getBids: saleless items are private to the owner (hacker pass fix A6)'
     const res = await run(null, OWNER_USER);
     expect(res.statusCode).toBe(404);
     expect(res.body).toEqual({ message: 'Item not found' });
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------
+// 2026-10-08: publishItemForUser is the single publish path (per-item endpoint and bulk draftStatus=PUBLISHED).
+describe('publishItemForUser: shared publish path', () => {
+  const arrange = (item: any) => {
+    mockPrisma.item.findUnique.mockImplementation(async (args: any) => {
+      const sel = args && args.select;
+      if (sel && 'rarity' in sel && 'createdAt' in sel) return { rarity: 'COMMON', createdAt: new Date() };
+      if (sel && 'userEditedFields' in sel) return { userEditedFields: [] };
+      return { ...item, draftStatus: item.draftStatus ?? 'PENDING_REVIEW' };
+    });
+    mockPrisma.item.update.mockResolvedValue({ id: 'i1', saleId: item.saleId, title: 'Lamp', draftStatus: 'PUBLISHED' });
+  };
+  const owner = { id: OWNER_USER, organizerId: 'org_of_u1' };
+
+  it('publishes for the owner and returns the updated item', async () => {
+    arrange(saleItem());
+    const r = await publishItemForUser(owner, 'i1', {});
+    await flush();
+    expect(r.ok).toBe(true);
+    expect(mockPrisma.item.update).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.item.update.mock.calls[0][0].data.draftStatus).toBe('PUBLISHED');
+  });
+
+  it('a non-owner gets a 403 result and nothing is written', async () => {
+    arrange(saleItem());
+    const r = await publishItemForUser({ id: OTHER_USER, organizerId: null }, 'i1', {});
+    expect(r).toMatchObject({ ok: false, status: 403 });
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+  });
+
+  it('an already-published item is refused with 400', async () => {
+    arrange(saleItem({ draftStatus: 'PUBLISHED' }));
+    const r = await publishItemForUser(owner, 'i1', {});
+    expect(r).toMatchObject({ ok: false, status: 400, message: 'Item is already published.' });
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+  });
+
+  it('a card with no price is refused with CARD_PRICE_REQUIRED', async () => {
+    arrange(saleItem({ price: null, card: { id: 'card1' } }));
+    const r = await publishItemForUser(owner, 'i1', {});
+    expect(r).toMatchObject({ ok: false, status: 400, code: 'CARD_PRICE_REQUIRED' });
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+  });
+
+  it('dryRun runs every check but writes nothing', async () => {
+    arrange(saleItem());
+    const ok = await publishItemForUser(owner, 'i1', {}, { dryRun: true });
+    expect(ok).toEqual({ ok: true, dryRun: true });
+    arrange(saleItem({ price: null, card: { id: 'card1' } }));
+    const bad = await publishItemForUser(owner, 'i1', {}, { dryRun: true });
+    expect(bad.ok).toBe(false);
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateItem: expanded-row fields (2026-10-08)', () => {
+  const sale = (over: Record<string, unknown> = {}) => saleItem({ draftStatus: 'PUBLISHED', consignorId: null, ...over });
+
+  it('rejects a non-numeric costBasis with 400 before any write', async () => {
+    mockPrisma.item.findUnique.mockResolvedValue(sale());
+    mockPrisma.sale.findUnique.mockResolvedValue({ organizerId: 'org_sale' });
+    const res = makeRes();
+    await updateItem({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { costBasis: 'abc' } }, res);
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a consignor that belongs to another organizer\'s workspace with 404', async () => {
+    mockPrisma.item.findUnique.mockResolvedValue(sale({ sale: { id: 's1', status: 'PUBLISHED', purchaseModel: 'SUBSCRIPTION', organizerId: 'org_sale', zip: '49000', organizer: saleOrganizer({ subscriptionTier: 'TEAMS' }) } }));
+    mockPrisma.sale.findUnique.mockResolvedValue({ organizerId: 'org_sale' });
+    mockPrisma.organizerWorkspace.findFirst.mockResolvedValue({ id: 'ws_mine' });
+    mockPrisma.consignor.findFirst.mockResolvedValue(null); // scoped to ws_mine, so a foreign consignor is not found
+    const res = makeRes();
+    await updateItem({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { consignorId: 'foreign' } }, res);
+    expect(res.statusCode).toBe(404);
+    expect(mockPrisma.consignor.findFirst.mock.calls[0][0].where).toEqual({ id: 'foreign', workspaceId: 'ws_mine' });
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
   });
 });

@@ -80,49 +80,132 @@
   // COUPONS rule in marketplaceEligibilityRules.ts -- narrow compound phrases only (not bare
   // 'certificate'/'voucher'/'coupon'), see that rule's own comment for why.
   const FB_DOCUMENTS_NAME_KEYWORDS = ['stock certificate', 'share certificate', 'diploma', 'professional certificate', 'gift voucher', 'discount coupon'];
+  // Boundary-aware name-keyword matcher. Faithful port of matchesBlocklistKeyword in
+  // packages/backend/src/services/marketplaceEligibilityRules.ts (2026-10-08): whole word/phrase
+  // match after normalization, ordinary inflection tolerated, glued compounds only via the explicit
+  // affix tables below (keep these tables identical to the backend's KW_COMPOUND_* tables).
+  // Replaces plain substring matching, which flagged 'wine' inside "Winelight".
+  const FAS_KW_PREFIXES = {
+    gun: ['shot', 'hand', 'air', 'machine', 'sub', 'pop', 'spear', 'flare', 'tommy', 'bb', 'pellet', 'cap'],
+    knife: ['pocket', 'jack', 'pen', 'bowie', 'hunting', 'throwing', 'butcher'],
+    sword: ['broad', 'long', 'short', 'great', 'back'],
+    bike: ['e', 'motor', 'dirt', 'mini', 'pit', 'mountain', 'road', 'push', 'trail'],
+    food: ['sea', 'pet', 'fast', 'baby', 'junk', 'health', 'soul', 'dog', 'cat'],
+    vitamin: ['multi'],
+    coin: ['bit', 'alt', 'doge', 'lite'],
+    shell: ['tortoise', 'turtle', 'sea'],
+    fur: ['faux', 'real'],
+  };
+  const FAS_KW_SUFFIXES = {
+    gun: [
+      'powder', 'shot', 'shots', 'smith', 'smiths', 'smithing', 'stock', 'fire', 'sight', 'sights',
+      'point', 'boat', 'runner', 'runners', 'slinger', 'belt', 'safe', 'case', 'rack', 'cabinet',
+      'holster', 'oil', 'sling', 'barrel', 'ship',
+    ],
+    sword: ['man', 'men', 'play', 'stick', 'smith'],
+    blade: ['smith', 'smiths'],
+    ammo: ['box', 'boxes', 'can', 'cans', 'pouch', 'belt'],
+    weapon: ['ry'],
+    coin: ['age'],
+    wine: [
+      'glass', 'glasses', 'bottle', 'bottles', 'rack', 'racks', 'cooler', 'cellar', 'barrel', 'opener',
+      'decanter', 'cork', 'stopper', 'tasting', 'maker', 'press', 'fridge', 'bag', 'tote', 'label',
+      'crate', 'box', 'cabinet', 'charm', 'ry', 'ries',
+    ],
+    beer: [
+      'stein', 'steins', 'mug', 'mugs', 'glass', 'glasses', 'bottle', 'bottles', 'can', 'cans', 'tap',
+      'keg', 'kegs', 'cooler', 'sign', 'signs', 'opener', 'coaster', 'coasters', 'tray', 'pong',
+      'fridge', 'maker',
+    ],
+    cigar: ['illo', 'illos'],
+    tobacco: ['nist', 'nists'],
+    alcohol: ['ic', 'ics'],
+    vape: ['r', 'rs', 'juice', 'pen', 'pens'],
+    counterfeit: ['er', 'ers'],
+    'government id': ['entification', 'entity'],
+  };
+  const fasKwCache = new Map();
+  function fasKwEscape(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function fasKwNorm(t) { return String(t || '').toLowerCase().replace(/[^\p{L}\p{N}:]+/gu, ' ').trim(); }
+  function fasKwBuild(keyword) {
+    const n = fasKwNorm(keyword);
+    if (!n) return null;
+    const words = n.split(' ');
+    const first = words[0];
+    const last = words[words.length - 1];
+    const pre = Object.prototype.hasOwnProperty.call(FAS_KW_PREFIXES, n) ? FAS_KW_PREFIXES[n] : null;
+    const preGroup = pre && pre.length ? '(?:' + pre.map(fasKwEscape).join('|') + ')?' : '';
+    const tails = ['e?s', 'e?d', 'ing'];
+    const lastC = last.charAt(last.length - 1);
+    if (lastC && /[a-z]/.test(lastC)) tails.push(fasKwEscape(lastC) + '(?:ed|ing)');
+    const post = Object.prototype.hasOwnProperty.call(FAS_KW_SUFFIXES, n) ? FAS_KW_SUFFIXES[n] : null;
+    if (post) for (let i = 0; i < post.length; i++) tails.push(fasKwEscape(post[i]));
+    const alts = [fasKwEscape(last) + '(?:' + tails.join('|') + ')?'];
+    if (last.endsWith('y') && last.length > 1) alts.push(fasKwEscape(last.slice(0, -1)) + '(?:ies|ied)');
+    if (last.endsWith('e') && last.length > 2) alts.push(fasKwEscape(last.slice(0, -1)) + '(?:ing|ed)');
+    if (last.endsWith('fe') && last.length > 3) alts.push(fasKwEscape(last.slice(0, -2)) + 'ves');
+    else if (last.endsWith('f') && last.length > 3) alts.push(fasKwEscape(last.slice(0, -1)) + 'ves');
+    const lastPart = '(?:' + alts.join('|') + ')';
+    let body;
+    if (words.length === 1) {
+      body = preGroup + lastPart;
+    } else {
+      const mid = words.slice(1, -1).map(fasKwEscape);
+      body = [preGroup + fasKwEscape(first)].concat(mid, [lastPart]).join(' ?');
+    }
+    return new RegExp('(?:^| )' + body + '(?= |$)', 'u');
+  }
+  function fasKeywordMatch(haystack, keyword) {
+    let re = fasKwCache.get(keyword);
+    if (re === undefined) {
+      re = fasKwBuild(keyword) || /(?!)/u;
+      fasKwCache.set(keyword, re);
+    }
+    return re.test(fasKwNorm(haystack));
+  }
   function facebookRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
-    if (FB_COIN_CURRENCY_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)
+    if (FB_COIN_CURRENCY_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))
         && !FB_COIN_CURRENCY_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
       return 'Facebook Marketplace does not allow listing coins or currency (Commerce Policy).';
     }
-    if (FB_WEAPON_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)
+    if (FB_WEAPON_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))
         && !FB_WEAPON_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
       return 'Facebook Marketplace does not allow listing weapons, ammunition, or explosives (Commerce Policy).';
     }
-    if (FB_ALCOHOL_ANIMAL_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+    if (FB_ALCOHOL_ANIMAL_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing alcohol, tobacco, drugs, adult content, or certain animal products (Commerce Policy).';
     }
-    if (FB_SUPPLEMENT_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+    if (FB_SUPPLEMENT_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing unsafe supplements, weight-loss/skin-whitening products, or controlled hormonal products (Commerce Policy).';
     }
-    if (FB_RECALLED_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+    if (FB_RECALLED_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing products subject to a safety recall (Commerce Policy).';
     }
-    if (FB_HAZMAT_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+    if (FB_HAZMAT_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing hazardous materials (Commerce Policy).';
     }
-    if (FB_GAMBLING_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+    if (FB_GAMBLING_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing lottery tickets, raffle entries, or gambling-related items (Commerce Policy).';
     }
-    if (FB_COUNTERFEIT_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+    if (FB_COUNTERFEIT_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing counterfeit, replica, or stolen goods (Commerce Policy).';
     }
-    if (FB_GIFTCARD_DIGITAL_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+    if (FB_GIFTCARD_DIGITAL_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing gift cards, digital goods/accounts, or resold event tickets (Commerce Policy).';
     }
-    if (FB_POLICE_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+    if (FB_POLICE_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing law enforcement, government, or military identification, badges, or uniforms (Commerce Policy, precautionary).';
     }
-    if (FB_ARTIFACT_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+    if (FB_ARTIFACT_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing historical or cultural heritage artifacts (Commerce Policy).';
     }
-    if (FB_HUMAN_REMAINS_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)
+    if (FB_HUMAN_REMAINS_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))
         && !FB_HUMAN_REMAINS_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
       return 'Facebook Marketplace does not allow listing human body parts or remains (Commerce Policy).';
     }
-    if (FB_DOCUMENTS_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+    if (FB_DOCUMENTS_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing financial documents, educational/professional certificates, or vouchers and coupons (Commerce Policy).';
     }
     return null;

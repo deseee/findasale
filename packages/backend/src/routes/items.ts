@@ -27,6 +27,7 @@ import {
   getItemDraftStatus,
   getDraftItemsBySaleId,
   publishItem,
+  publishItemForUser, // 2026-10-08: shared publish path, also used by bulk draftStatus=PUBLISHED
   holdAnalysis,
   releaseAnalysis,
   getInspirationItems,
@@ -269,6 +270,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
       select: {
         id: true,
         status: true,
+        draftStatus: true, // 2026-10-08: oldValues for the bulk draftStatus operation
         price: true,
         category: true,
         tags: true,
@@ -564,12 +566,40 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           if (!value || !allowed.includes(value as string)) {
             return res.status(400).json({ message: `draftStatus value must be one of: ${allowed.join(', ')}` });
           }
+          const dsDryAffected: string[] = [];
+          for (const item of confirmedItems) {
+            if (value === 'PUBLISHED' && item.draftStatus !== 'PUBLISHED') {
+              // Same validation the real publish runs, with nothing written.
+              try {
+                const check = await publishItemForUser(
+                  { id: authReq.user.id, organizerId: authReq.user.organizer?.id ?? null },
+                  item.id,
+                  {},
+                  { dryRun: true }
+                );
+                if (!check.ok) {
+                  failed.push({ itemId: item.id, reason: check.message });
+                  continue;
+                }
+              } catch (err) {
+                console.error(`[bulk draftStatus dry run] publish check failed for item ${item.id}:`, err);
+                failed.push({ itemId: item.id, reason: 'Could not check this item. Try again.' });
+                continue;
+              }
+            }
+            oldValues[item.id] = item.draftStatus;
+            newValues[item.id] = value as string;
+            dsDryAffected.push(item.id);
+          }
           return res.json({
             message: 'Dry run: no changes applied',
-            count: confirmedIds.length,
-            affectedIds: confirmedIds,
-            wouldChange: true,
+            count: dsDryAffected.length,
+            affectedIds: dsDryAffected,
+            wouldChange: dsDryAffected.length > 0,
             operation: 'draftStatus',
+            oldValues,
+            newValues,
+            ...(failed.length > 0 && { failed }),
           });
         }
 
@@ -936,7 +966,65 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         if (!value || !allowed.includes(value as string)) {
           return res.status(400).json({ message: `draftStatus value must be one of: ${allowed.join(', ')}` });
         }
+        if (value === 'PUBLISHED') {
+          // PUBLISHED must go through the SAME validation + side effects as the per-item publish
+          // (POST /items/:itemId/publish -> publishItemForUser): ownership, draftStatus gate, card price guard,
+          // rarity assignment, Legendary early access, webhooks, auto-fanout, eBay comps, marketplace enqueue.
+          // Never a bare updateMany. Per-item failures are reported in `failed`; an item whose own validation
+          // fails is never published. Small parallel chunks keep a large selection from running one-by-one.
+          const publishUser = { id: authReq.user.id, organizerId: authReq.user.organizer?.id ?? null };
+          const PUBLISH_CHUNK = 5;
+          for (let i = 0; i < confirmedItems.length; i += PUBLISH_CHUNK) {
+            const chunk = confirmedItems.slice(i, i + PUBLISH_CHUNK);
+            await Promise.all(
+              chunk.map(async (item) => {
+                if (item.draftStatus === 'PUBLISHED') {
+                  // Already published: nothing to do, not an error.
+                  succeeded.push(item.id);
+                  oldValues[item.id] = item.draftStatus;
+                  newValues[item.id] = 'PUBLISHED';
+                  return;
+                }
+                try {
+                  const result = await publishItemForUser(publishUser, item.id, {});
+                  if (result.ok) {
+                    succeeded.push(item.id);
+                    oldValues[item.id] = item.draftStatus;
+                    newValues[item.id] = 'PUBLISHED';
+                  } else {
+                    failed.push({ itemId: item.id, reason: result.message });
+                  }
+                } catch (err) {
+                  console.error(`[bulk draftStatus] publish failed for item ${item.id}:`, err);
+                  failed.push({ itemId: item.id, reason: 'Publish failed unexpectedly. Try again.' });
+                }
+              })
+            );
+          }
+          if (succeeded.length === 0) {
+            return res.status(400).json({
+              message: 'Cannot publish: none of the selected item(s) passed validation.',
+              succeeded,
+              failed,
+              operation: 'draftStatus',
+            });
+          }
+          return res.status(failed.length > 0 ? 207 : 200).json({
+            message: `Published ${succeeded.length} item(s).`,
+            succeeded,
+            failed,
+            operation: 'draftStatus',
+            oldValues,
+            newValues,
+          });
+        }
+
+        // DRAFT / PENDING_REVIEW: plain state change, no publish side effects.
         succeeded.push(...confirmedIds);
+        for (const item of confirmedItems) {
+          oldValues[item.id] = item.draftStatus;
+          newValues[item.id] = value as string;
+        }
         await prisma.item.updateMany({
           where: { id: { in: confirmedIds } },
           data: { draftStatus: value as string, ...organizerEditStampAlways() },
@@ -947,6 +1035,8 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           succeeded,
           failed,
           operation: 'draftStatus',
+          oldValues,
+          newValues,
         });
       }
 

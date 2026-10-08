@@ -1967,6 +1967,15 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // 2026-10-08: costBasis arrives from the Add Items expanded row as a number or numeric string. parseFloat of a
+    // non-numeric string yields NaN, which Prisma rejects as a 500; refuse it up front as a 400 instead.
+    if (costBasis !== undefined && costBasis !== null && costBasis !== '') {
+      const parsedCostBasis = parseFloat(costBasis);
+      if (!Number.isFinite(parsedCostBasis) || parsedCostBasis < 0) {
+        return res.status(400).json({ message: 'Cost basis must be a number zero or greater.' });
+      }
+    }
+
     // ADR-085 follow-up: Validate ebayShippingOverride if provided via the generic
     // update endpoint (was also silently dropped -- the edit-item page's "Local pickup
     // only" checkbox relies on this endpoint but the field was never in updateData;
@@ -2065,7 +2074,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // with vendorBoothId per the schema's own comment on Item.vendorBoothId ("an item should
     // never have both set") -- enforced here since this is the only place either FK is written
     // from the organizer-facing item forms.
-    if (consignorId !== undefined) {
+    // 2026-10-08: re-sending the item's CURRENT consignorId (the Add Items row echoes every field on Save) is a no-op,
+    // so it is neither tier-gated nor re-validated; only a real change goes through the checks below.
+    if (consignorId !== undefined && !(consignorId !== null && consignorId === item.consignorId)) {
       if (consignorId === null) {
         updateData.consignorId = null;
       } else {
@@ -4279,16 +4290,29 @@ export const getItemDraftStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Phase 2B: Rapidfire Mode — Publish endpoint with optimistic lock and draftStatus gate
-export const publishItem = async (req: AuthRequest, res: Response) => {
-  try {
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    if (!req.user || !hasOrganizerRole) {
-      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
-    }
+// Phase 2B: Rapidfire Mode — Publish logic shared by the single-item endpoint (POST /items/:itemId/publish) and
+// the bulk 'draftStatus' = PUBLISHED operation (POST /items/bulk). One code path: ownership, draftStatus gate, card
+// price guard, optimistic lock, rarity assignment, Legendary early access, webhooks, auto-fanout, eBay comps and
+// marketplace auto-post enqueue all live here. Never publish an item any other way.
+export type PublishItemInput = {
+  title?: any;
+  price?: any;
+  category?: any;
+  condition?: any;
+  optimisticLockVersion?: number;
+};
+export type PublishItemResult =
+  | { ok: true; item: any; dryRun?: false }
+  | { ok: true; dryRun: true; item?: undefined }
+  | { ok: false; status: number; message: string; code?: string };
 
-    const { itemId } = req.params;
-    const { title, price, category, condition, optimisticLockVersion } = req.body;
+export async function publishItemForUser(
+  user: { id: string; organizerId?: string | null },
+  itemId: string,
+  input: PublishItemInput = {},
+  opts: { dryRun?: boolean } = {}
+): Promise<PublishItemResult> {
+    const { title, price, category, condition, optimisticLockVersion } = input;
 
     // Fetch current item state
     const item = await prisma.item.findUnique({
@@ -4314,22 +4338,24 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
     });
 
     if (!item) {
-      return res.status(404).json({ message: 'Item not found' });
+      return { ok: false, status: 404, message: 'Item not found' };
     }
 
     // Auth: only the organizer who owns the item can publish it (sale owner, or inventory owner when there is no sale)
-    const owner = await resolveItemOwnerOrganizer(item, req.user.id);
+    const owner = await resolveItemOwnerOrganizer(item, user.id);
     if (!owner) {
-      return res.status(403).json({ message: item.saleId ? 'Access denied. Not your sale.' : 'Access denied. Not your item.' });
+      return { ok: false, status: 403, message: item.saleId ? 'Access denied. Not your sale.' : 'Access denied. Not your item.' };
     }
 
     // B2 blocker: reject if already published or in an unexpected state
     if (item.draftStatus !== 'PENDING_REVIEW' && item.draftStatus !== 'DRAFT') {
-      return res.status(400).json({
+      return {
+        ok: false,
+        status: 400,
         message: item.draftStatus === 'PUBLISHED'
           ? 'Item is already published.'
-          : 'Item not ready. Smart tagging still in progress.'
-      });
+          : 'Item not ready. Smart tagging still in progress.',
+      };
     }
 
     // ADR-134 D3 FIX (B2, orchestrator decision 2026-10-03): refuse to publish a CARD item (one with an
@@ -4341,18 +4367,18 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
         ? (price !== null && price !== '' ? parseFloat(price) : null)
         : (item.price !== null && item.price !== undefined ? Number(item.price) : null);
       if (effectivePrice === null || Number.isNaN(effectivePrice)) {
-        return res.status(400).json({
-          message: 'Add a price before publishing this card.',
-          code: 'CARD_PRICE_REQUIRED'
-        });
+        return { ok: false, status: 400, message: 'Add a price before publishing this card.', code: 'CARD_PRICE_REQUIRED' };
       }
     }
 
     // B5 blocker: optimistic lock check — prevent concurrent edits
     if (optimisticLockVersion !== undefined && optimisticLockVersion !== item.optimisticLockVersion) {
-      return res.status(409).json({
-        message: 'Item was updated. Refresh and try again.'
-      });
+      return { ok: false, status: 409, message: 'Item was updated. Refresh and try again.' };
+    }
+
+    // Bulk dry run: every validation above passed, nothing is written.
+    if (opts.dryRun) {
+      return { ok: true, dryRun: true };
     }
 
     // Prepare update data with optional organizer edits
@@ -4433,7 +4459,7 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
     });
 
     // Fire webhooks for published item (X1: Zapier integration)
-    fireWebhooks(req.user.id, 'item.published', {
+    fireWebhooks(user.id, 'item.published', {
       itemId: updatedItem.id,
       saleId: updatedItem.saleId,
       title: updatedItem.title,
@@ -4467,12 +4493,33 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
     // ADR-083: Queue Marketplace auto-post job if the organizer opted in (non-blocking)
     enqueueMarketplacePostJob(updatedItem.id).catch((err) => console.warn('Marketplace poster enqueue error:', err));
 
-    res.json(updatedItem);
-
     // P2-3: Invalidate command center cache after item publish (status change)
-    invalidateCommandCenterCache(req.user.organizer!.id).catch((err) =>
-      console.warn('Failed to invalidate command center cache:', err)
+    if (user.organizerId) {
+      invalidateCommandCenterCache(user.organizerId).catch((err) =>
+        console.warn('Failed to invalidate command center cache:', err)
+      );
+    }
+
+    return { ok: true, item: updatedItem };
+}
+
+export const publishItem = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { itemId } = req.params;
+    const result = await publishItemForUser(
+      { id: req.user.id, organizerId: req.user.organizer?.id ?? null },
+      itemId,
+      req.body || {}
     );
+    if (!result.ok) {
+      return res.status(result.status).json(result.code ? { message: result.message, code: result.code } : { message: result.message });
+    }
+    res.json(result.item);
   } catch (error) {
     console.error('Error publishing item:', error);
     res.status(500).json({ message: 'Server error while publishing item' });
@@ -4647,6 +4694,17 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         // Feature #91: Auto-Markdown (P3: Fix 2)
         priceBeforeMarkdown: true,
         markdownApplied: true,
+        // 2026-10-08: Add Items expanded row must round-trip these. Without them the row defaulted
+        // 'Units available' to 1 and a Save wrote stockTotal=1 back over the real value. All are
+        // Int/Float/Boolean/String columns (no Prisma Decimal), so they are JSON-safe as selected.
+        stockTotal: true,
+        stockSold: true, // server-owned; display only (stockTotal can never be saved below it)
+        costBasis: true,
+        consignorId: true,
+        consignor: { select: { id: true, name: true } }, // display name for the row; Consignor has no displayName column
+        excludeFromMarkdown: true, // organizer opt-out from both markdown crons
+        originalPrice: true, // price anchor markdown/discretion logic uses (read-only display)
+        markdownTierApplied: true, // 0 none, 1 Day-2 tier, 2 Day-3+ tier (read-only display)
         // Phase 2b: Legendary early access (P2: Fix 1)
         isLegendary: true,
         legendaryPublishedAt: true,

@@ -832,3 +832,57 @@ describe('hacker pass: publishItem coerces the condition (no arbitrary string re
     expect(writtenCondition().condition).toBeNull();
   });
 });
+
+
+// ---------------------------------------------------------------------------------------------
+// 2026-10-08: Add Items expanded row needs stock / cost / consignor / markdown fields from GET /items/drafts.
+describe('getDraftItemsBySaleId: stock, cost basis, consignor and markdown fields (2026-10-08)', () => {
+  const FIELDS = ['stockTotal', 'stockSold', 'costBasis', 'consignorId', 'excludeFromMarkdown', 'originalPrice', 'markdownTierApplied'];
+
+  const arrange = (rows: any[]) => {
+    mockPrisma.sale.findUnique.mockResolvedValue({ id: 's1', organizerId: 'org_sale', organizer: { userId: OWNER_USER } });
+    mockPrisma.item.findMany.mockResolvedValue(rows);
+    mockPrisma.organizerWorkspace.findFirst.mockResolvedValue(null);
+    mockPrisma.organizer.findUnique.mockResolvedValue({ ebayConnection: null, shopifyEnabled: false, subscriptionTier: 'PRO', marketplaceAccounts: [] });
+    mockPrisma.marketplaceListingJob.findMany.mockResolvedValue([]);
+    mockPrisma.itemMarketplacePush.groupBy.mockResolvedValue([]);
+  };
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: 'a', saleId: 's1', title: 'Lamp', description: '', category: null, ebayCategoryId: null, ebayCategoryName: null, condition: 'USED',
+    conditionGrade: null, price: 5, photoUrls: [], draftStatus: 'PUBLISHED', tags: [], status: 'AVAILABLE', ebayListingId: null,
+    ebayOfferId: null, discogsListingId: null, reverbListingId: null, shopifyListing: null, tagColor: null, createdAt: new Date(), updatedAt: new Date(),
+    ...over,
+  });
+
+  it('selects every field the expanded row round-trips, including the consignor id and name', async () => {
+    arrange([row()]);
+    const res = makeRes();
+    await getDraftItemsBySaleId({ user: asUser(OWNER_USER), query: { saleId: 's1' } }, res);
+    expect(res.statusCode).toBe(200);
+    const select = mockPrisma.item.findMany.mock.calls[0][0].select;
+    for (const f of FIELDS) expect(select[f]).toBe(true);
+    expect(select.consignor).toEqual({ select: { id: true, name: true } });
+  });
+
+  it('passes the real stock, cost and consignor values through in the JSON response', async () => {
+    arrange([row({
+      stockTotal: 12, stockSold: 3, costBasis: 4.5, consignorId: 'c1', consignor: { id: 'c1', name: 'Pat' },
+      excludeFromMarkdown: true, originalPrice: 9, markdownTierApplied: 1,
+    })]);
+    const res = makeRes();
+    await getDraftItemsBySaleId({ user: asUser(OWNER_USER), query: { saleId: 's1' } }, res);
+    expect(res.body[0]).toMatchObject({
+      stockTotal: 12, stockSold: 3, costBasis: 4.5, consignorId: 'c1', consignor: { id: 'c1', name: 'Pat' },
+      excludeFromMarkdown: true, originalPrice: 9, markdownTierApplied: 1,
+    });
+  });
+
+  it('a row with no consignor is returned with consignorId and consignor null', async () => {
+    arrange([row({ stockTotal: 1, stockSold: 0, costBasis: null, consignorId: null, consignor: null, excludeFromMarkdown: false })]);
+    const res = makeRes();
+    await getDraftItemsBySaleId({ user: asUser(OWNER_USER), query: { saleId: 's1' } }, res);
+    expect(res.body[0].consignorId).toBeNull();
+    expect(res.body[0].consignor).toBeNull();
+    expect(res.body[0].costBasis).toBeNull();
+  });
+});

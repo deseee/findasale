@@ -435,11 +435,94 @@
       reason: 'Poshmark prohibits hate symbols/violent extremist items and goods originating from sanctioned countries (Prohibited Items Policy).',
     },
   ];
+  // Boundary-aware name-keyword matcher. Faithful port of matchesBlocklistKeyword in
+  // packages/backend/src/services/marketplaceEligibilityRules.ts (2026-10-08): whole word/phrase
+  // match after normalization, ordinary inflection tolerated, glued compounds only via the explicit
+  // affix tables below (keep these tables identical to the backend's KW_COMPOUND_* tables).
+  // Replaces plain substring matching, which flagged 'wine' inside "Winelight".
+  const FAS_KW_PREFIXES = {
+    gun: ['shot', 'hand', 'air', 'machine', 'sub', 'pop', 'spear', 'flare', 'tommy', 'bb', 'pellet', 'cap'],
+    knife: ['pocket', 'jack', 'pen', 'bowie', 'hunting', 'throwing', 'butcher'],
+    sword: ['broad', 'long', 'short', 'great', 'back'],
+    bike: ['e', 'motor', 'dirt', 'mini', 'pit', 'mountain', 'road', 'push', 'trail'],
+    food: ['sea', 'pet', 'fast', 'baby', 'junk', 'health', 'soul', 'dog', 'cat'],
+    vitamin: ['multi'],
+    coin: ['bit', 'alt', 'doge', 'lite'],
+    shell: ['tortoise', 'turtle', 'sea'],
+    fur: ['faux', 'real'],
+  };
+  const FAS_KW_SUFFIXES = {
+    gun: [
+      'powder', 'shot', 'shots', 'smith', 'smiths', 'smithing', 'stock', 'fire', 'sight', 'sights',
+      'point', 'boat', 'runner', 'runners', 'slinger', 'belt', 'safe', 'case', 'rack', 'cabinet',
+      'holster', 'oil', 'sling', 'barrel', 'ship',
+    ],
+    sword: ['man', 'men', 'play', 'stick', 'smith'],
+    blade: ['smith', 'smiths'],
+    ammo: ['box', 'boxes', 'can', 'cans', 'pouch', 'belt'],
+    weapon: ['ry'],
+    coin: ['age'],
+    wine: [
+      'glass', 'glasses', 'bottle', 'bottles', 'rack', 'racks', 'cooler', 'cellar', 'barrel', 'opener',
+      'decanter', 'cork', 'stopper', 'tasting', 'maker', 'press', 'fridge', 'bag', 'tote', 'label',
+      'crate', 'box', 'cabinet', 'charm', 'ry', 'ries',
+    ],
+    beer: [
+      'stein', 'steins', 'mug', 'mugs', 'glass', 'glasses', 'bottle', 'bottles', 'can', 'cans', 'tap',
+      'keg', 'kegs', 'cooler', 'sign', 'signs', 'opener', 'coaster', 'coasters', 'tray', 'pong',
+      'fridge', 'maker',
+    ],
+    cigar: ['illo', 'illos'],
+    tobacco: ['nist', 'nists'],
+    alcohol: ['ic', 'ics'],
+    vape: ['r', 'rs', 'juice', 'pen', 'pens'],
+    counterfeit: ['er', 'ers'],
+    'government id': ['entification', 'entity'],
+  };
+  const fasKwCache = new Map();
+  function fasKwEscape(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function fasKwNorm(t) { return String(t || '').toLowerCase().replace(/[^\p{L}\p{N}:]+/gu, ' ').trim(); }
+  function fasKwBuild(keyword) {
+    const n = fasKwNorm(keyword);
+    if (!n) return null;
+    const words = n.split(' ');
+    const first = words[0];
+    const last = words[words.length - 1];
+    const pre = Object.prototype.hasOwnProperty.call(FAS_KW_PREFIXES, n) ? FAS_KW_PREFIXES[n] : null;
+    const preGroup = pre && pre.length ? '(?:' + pre.map(fasKwEscape).join('|') + ')?' : '';
+    const tails = ['e?s', 'e?d', 'ing'];
+    const lastC = last.charAt(last.length - 1);
+    if (lastC && /[a-z]/.test(lastC)) tails.push(fasKwEscape(lastC) + '(?:ed|ing)');
+    const post = Object.prototype.hasOwnProperty.call(FAS_KW_SUFFIXES, n) ? FAS_KW_SUFFIXES[n] : null;
+    if (post) for (let i = 0; i < post.length; i++) tails.push(fasKwEscape(post[i]));
+    const alts = [fasKwEscape(last) + '(?:' + tails.join('|') + ')?'];
+    if (last.endsWith('y') && last.length > 1) alts.push(fasKwEscape(last.slice(0, -1)) + '(?:ies|ied)');
+    if (last.endsWith('e') && last.length > 2) alts.push(fasKwEscape(last.slice(0, -1)) + '(?:ing|ed)');
+    if (last.endsWith('fe') && last.length > 3) alts.push(fasKwEscape(last.slice(0, -2)) + 'ves');
+    else if (last.endsWith('f') && last.length > 3) alts.push(fasKwEscape(last.slice(0, -1)) + 'ves');
+    const lastPart = '(?:' + alts.join('|') + ')';
+    let body;
+    if (words.length === 1) {
+      body = preGroup + lastPart;
+    } else {
+      const mid = words.slice(1, -1).map(fasKwEscape);
+      body = [preGroup + fasKwEscape(first)].concat(mid, [lastPart]).join(' ?');
+    }
+    return new RegExp('(?:^| )' + body + '(?= |$)', 'u');
+  }
+  function fasKeywordMatch(haystack, keyword) {
+    let re = fasKwCache.get(keyword);
+    if (re === undefined) {
+      re = fasKwBuild(keyword) || /(?!)/u;
+      fasKwCache.set(keyword, re);
+    }
+    return re.test(fasKwNorm(haystack));
+  }
   function poshmarkRestrictionReason(category, title) {
     const haystack = norm(String(category || '') + ' ' + String(title || ''));
     if (!haystack.trim()) return null;
     for (const rule of POSHMARK_PROHIBITED_RULES) {
-      const isBlocked = rule.nameKeywords.some((kw) => haystack.indexOf(kw) !== -1);
+      const isBlocked = rule.nameKeywords.some((kw) => fasKeywordMatch(haystack, kw));
       if (!isBlocked) continue;
       const isExcluded = rule.excludeKeywords.some((kw) => haystack.indexOf(kw) !== -1);
       if (isExcluded) continue;

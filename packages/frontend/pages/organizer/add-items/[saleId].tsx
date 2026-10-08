@@ -56,6 +56,8 @@ import BulkTagModal from '../../../components/BulkTagModal';
 import BulkActionDropdown from '../../../components/BulkActionDropdown';
 import BulkCategoryModal from '../../../components/BulkCategoryModal';
 import BulkConsignorModal from '../../../components/BulkConsignorModal';
+import BulkPublishConfirmModal from '../../../components/BulkPublishConfirmModal';
+import ConsignorSearchSelect from '../../../components/ConsignorSearchSelect';
 import BulkStatusModal, { OffPlatformFields } from '../../../components/BulkStatusModal';
 import { useOffPlatformUsage, markItemSoldOffPlatform, MarkSoldOffPlatformPayload } from '../../../hooks/useOffPlatformSales';
 import BulkPriceModal from '../../../components/BulkPriceModal';
@@ -468,6 +470,26 @@ const computeDraftStatus = (item: any): 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED'
   return 'DRAFT';
 };
 
+// Quick-edit row: units / cost basis / consignor / markdown opt-out. Each value is stored together with
+// the value it was LOADED with (the *Initial twin) so Save can send only what the organizer changed,
+// and never writes a default or stale value back over the real one.
+const buildRowCommerceState = (item: any) => {
+  const stockTotal = item.stockTotal != null ? String(item.stockTotal) : '1';
+  const costBasis = item.costBasis != null && item.costBasis !== '' ? String(item.costBasis) : '';
+  const consignorId: string = item.consignorId || item.consignor?.id || '';
+  const excludeFromMarkdown = item.excludeFromMarkdown === true;
+  return {
+    stockTotal,
+    stockTotalInitial: stockTotal,
+    costBasis,
+    costBasisInitial: costBasis,
+    consignorId,
+    consignorIdInitial: consignorId,
+    excludeFromMarkdown,
+    excludeFromMarkdownInitial: excludeFromMarkdown,
+  };
+};
+
 const emptyForm = {
   title: '',
   description: '',
@@ -694,7 +716,7 @@ const AddItemsDetailPage = () => {
 
   // Expandable item cards (like review & publish page)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
-  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; conditionGrade: string; conditionInitial: string; conditionGradeInitial: string; description: string; lotNumber: string; stockTotal: string; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string; packageLengthIn: string; packageWidthIn: string; packageHeightIn: string }>>({});
+  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; conditionGrade: string; conditionInitial: string; conditionGradeInitial: string; description: string; lotNumber: string; stockTotal: string; stockTotalInitial: string; costBasis: string; costBasisInitial: string; consignorId: string; consignorIdInitial: string; excludeFromMarkdown: boolean; excludeFromMarkdownInitial: boolean; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string; packageLengthIn: string; packageWidthIn: string; packageHeightIn: string }>>({});
   // Tracks which items had their Weight (oz) field directly edited in this card's inline
   // eBay & Shipping panel, so handleInlineItemSave knows to send packageConfirmedByOrganizer.
   // Mirrors review.tsx's weightTouched pattern exactly (scoped per-item id, only the weight
@@ -713,7 +735,7 @@ const AddItemsDetailPage = () => {
       ...buildRowConditionState(item),
       description: item.description || '',
       lotNumber: item.lotNumber || '',
-      stockTotal: item.stockTotal != null ? item.stockTotal.toString() : '1',
+      ...buildRowCommerceState(item),
       ebayCategoryId: item.ebayCategoryId || '',
       ebayCategoryName: item.ebayCategoryName || '',
       packageWeightOz: item.packageWeightOz != null ? item.packageWeightOz.toString() : '',
@@ -723,9 +745,36 @@ const AddItemsDetailPage = () => {
     };
   }, [itemEditState]);
 
-  const handleInlineItemSave = useCallback(async (itemId: string) => {
+  // Saves the quick-edit card. Resolves true when the PUT succeeded (or there was nothing to save).
+  // stockTotal / costBasis / consignorId / excludeFromMarkdown are sent ONLY when the organizer changed
+  // them from the loaded value, so an unknown or stale value is never written over the real one.
+  const saveInlineItem = useCallback(async (itemId: string): Promise<boolean> => {
     const state = itemEditState[itemId];
-    if (!state) return;
+    if (!state) return true;
+    const changed: Record<string, any> = {};
+    if (state.stockTotal !== state.stockTotalInitial) {
+      const parsedStock = parseInt(state.stockTotal, 10);
+      changed.stockTotal = Math.max(1, isNaN(parsedStock) ? 1 : parsedStock);
+    }
+    if (state.costBasis !== state.costBasisInitial) {
+      const trimmedCost = state.costBasis.trim();
+      if (trimmedCost === '') {
+        changed.costBasis = null;
+      } else {
+        const parsedCost = parseFloat(trimmedCost);
+        if (isNaN(parsedCost) || parsedCost < 0) {
+          showToast('Cost basis must be a number, 0 or higher', 'error');
+          return false;
+        }
+        changed.costBasis = parsedCost;
+      }
+    }
+    if (state.consignorId !== state.consignorIdInitial) {
+      changed.consignorId = state.consignorId || null;
+    }
+    if (state.excludeFromMarkdown !== state.excludeFromMarkdownInitial) {
+      changed.excludeFromMarkdown = state.excludeFromMarkdown;
+    }
     try {
       await api.put(`/items/${itemId}`, {
         title: state.title,
@@ -735,7 +784,7 @@ const AddItemsDetailPage = () => {
         ...buildConditionPutFields(state),
         description: state.description,
         lotNumber: state.lotNumber || null,
-        stockTotal: Math.max(1, parseInt(state.stockTotal, 10) || 1),
+        ...changed,
         ebayCategoryId: state.ebayCategoryId || null,
         ebayCategoryName: state.ebayCategoryName || null,
         packageWeightOz: state.packageWeightOz ? parseInt(state.packageWeightOz, 10) : undefined,
@@ -749,13 +798,33 @@ const AddItemsDetailPage = () => {
           ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
           : {}),
       });
-      showToast('Item saved', 'success');
+      // What is on screen is now what is saved: reset the "loaded value" baselines so a second Save
+      // (or Publish) from this same open card does not resend values that already went through.
+      setItemEditState((prev) => {
+        const cur = prev[itemId];
+        if (!cur) return prev;
+        return { ...prev, [itemId]: {
+          ...cur,
+          stockTotalInitial: cur.stockTotal,
+          costBasisInitial: cur.costBasis,
+          consignorIdInitial: cur.consignorId,
+          excludeFromMarkdownInitial: cur.excludeFromMarkdown,
+        } };
+      });
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
-      setExpandedItemId(null);
-    } catch {
-      showToast('Failed to save item', 'error');
+      return true;
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Failed to save item', 'error');
+      return false;
     }
   }, [itemEditState, saleId, queryClient, showToast, inlineWeightTouched]);
+
+  const handleInlineItemSave = useCallback(async (itemId: string) => {
+    const ok = await saveInlineItem(itemId);
+    if (!ok) return;
+    showToast('Item saved', 'success');
+    setExpandedItemId(null);
+  }, [saveInlineItem, showToast]);
 
   // Sort items based on current sort state
   const getSortedItems = useCallback((itemsToSort: any[]) => {
@@ -802,6 +871,9 @@ const AddItemsDetailPage = () => {
   const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false);
   const [bulkPriceModalOpen, setBulkPriceModalOpen] = useState(false);
   const [bulkErrorModalOpen, setBulkErrorModalOpen] = useState(false);
+  const [bulkPublishConfirmOpen, setBulkPublishConfirmOpen] = useState(false);
+  // Item id whose row-level Publish (save, then publish) is in flight; blocks double clicks.
+  const [publishingItemId, setPublishingItemId] = useState<string | null>(null);
   const [bulkErrorData, setBulkErrorData] = useState<{
     title: string;
     message: string;
@@ -906,7 +978,7 @@ const AddItemsDetailPage = () => {
           ...buildRowConditionState(item),
           description: item.description || '',
           lotNumber: item.lotNumber || '',
-          stockTotal: item.stockTotal != null ? item.stockTotal.toString() : '1',
+          ...buildRowCommerceState(item),
           ebayCategoryId: item.ebayCategoryId || '',
           ebayCategoryName: item.ebayCategoryName || '',
           packageWeightOz: item.packageWeightOz != null ? item.packageWeightOz.toString() : '',
@@ -1279,23 +1351,35 @@ const AddItemsDetailPage = () => {
     onSettled: () => { inMutationFlight.current = false; },
   });
 
+  // Backend failure rows are { id, reason | error }; the error modal wants { itemId, reason }.
+  // Show the item title instead of a raw id when we have it.
+  const normalizeBulkFailures = (list: any[]): Array<{ itemId: string; reason: string }> =>
+    (list || []).map((f: any) => {
+      const id = f?.itemId ?? f?.id ?? '';
+      const title = (items as any[]).find((it: any) => it?.id === id)?.title;
+      return { itemId: title || id || 'Item', reason: f?.reason || f?.error || f?.message || 'Could not be updated' };
+    });
+
   const bulkUpdateMutation = useMutation({
-    mutationFn: async (payload: { itemIds: string[]; operation: string; value?: any; priceType?: string }) => {
-      return await api.post(`/items/bulk`, payload);
+    mutationFn: async (payload: { itemIds: string[]; operation: string; value?: any; priceType?: string; keepSelection?: boolean }) => {
+      // keepSelection is a UI-only flag (row-level Publish keeps the toolbar selection); never sent to the API.
+      const body = { itemIds: payload.itemIds, operation: payload.operation, value: payload.value, priceType: payload.priceType };
+      return await api.post(`/items/bulk`, body);
     },
     onMutate: () => { inMutationFlight.current = true; },
-    onSuccess: (response: any) => {
+    onSuccess: (response: any, variables: { itemIds: string[]; operation: string; value?: any; keepSelection?: boolean }) => {
       const succeeded = response.data.succeeded || [];
       const failed = response.data.failed || [];
       const skipped = response.data.skipped || []; // P1-B: Handle skipped items from backend
       const count = response.data.count || succeeded.length || selectedItems.size;
-      const operation = bulkConfirmData?.operation || 'update';
+      const operation = variables?.operation || bulkConfirmData?.operation || 'update';
       const operationLabel = {
         delete: 'Deleted',
         isActive: 'Updated visibility for',
         price: 'Updated price for',
         category: 'Updated category for',
         status: 'Updated status for',
+        draftStatus: variables?.value === 'PUBLISHED' ? 'Published' : 'Updated status for',
         tags: 'Updated tags for',
         consignor: 'Attached consignor to',
       }[operation] || 'Updated';
@@ -1315,7 +1399,7 @@ const AddItemsDetailPage = () => {
         setBulkErrorData({
           title: 'Partial Success',
           message: `${succeeded.length} item(s) updated successfully, ${failed.length} could not be updated.`,
-          errors: failed,
+          errors: normalizeBulkFailures(failed),
           itemCount: failed.length,
         });
         setBulkErrorModalOpen(true);
@@ -1325,7 +1409,7 @@ const AddItemsDetailPage = () => {
       }
 
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
-      setSelectedItems(new Set());
+      if (!variables?.keepSelection) setSelectedItems(new Set());
       setBulkPrice('');
       setBulkConfirmOpen(false);
       setBulkConfirmData(null);
@@ -1355,7 +1439,7 @@ const AddItemsDetailPage = () => {
         setBulkErrorData({
           title: 'Operation Failed',
           message,
-          errors: detailErrors,
+          errors: normalizeBulkFailures(detailErrors),
           itemCount: detailErrors.length,
         });
         setBulkErrorModalOpen(true);
@@ -1397,6 +1481,8 @@ const AddItemsDetailPage = () => {
   const publishedCount = items.filter((i: any) => computeDraftStatus(i) === 'PUBLISHED').length;
   const unpublishedCount = items.filter((i: any) => computeDraftStatus(i) !== 'PUBLISHED').length;
   const draftCount = items.filter((i: any) => computeDraftStatus(i) === 'DRAFT').length;
+  const selectedItemsList = items.filter((i: any) => selectedItems.has(i.id));
+  const selectedPublishable = selectedItemsList.filter((i: any) => computeDraftStatus(i) !== 'PUBLISHED');
   // Sold vs Active counts for the status filter pill row (Patrick feedback 2026-08-02)
   const soldItemCount = items.filter((i: any) => i.status === 'SOLD').length;
   const activeItemCount = items.length - soldItemCount;
@@ -1480,11 +1566,53 @@ const AddItemsDetailPage = () => {
   };
 
   const handleBulkStatus = async (status: string) => {
+    // DRAFT / PENDING_REVIEW / PUBLISHED live on Item.draftStatus; AVAILABLE / SOLD / RESERVED on Item.status.
+    // The backend 'status' op only accepts the latter three, so route the publish-state values to 'draftStatus'.
+    const isDraftStatusValue = status === 'DRAFT' || status === 'PENDING_REVIEW' || status === 'PUBLISHED';
     bulkUpdateMutation.mutate({
       itemIds: Array.from(selectedItems),
-      operation: 'status',
+      operation: isDraftStatusValue ? 'draftStatus' : 'status',
       value: status,
     });
+  };
+
+  // Toolbar Publish: confirm first (shows the count and how many are already live), then publish
+  // every selected item that is not already PUBLISHED through the same bulk endpoint as the other ops.
+  const handleBulkPublishClick = () => {
+    if (selectedPublishable.length === 0) {
+      showToast('The selected items are already published', 'info');
+      return;
+    }
+    setBulkPublishConfirmOpen(true);
+  };
+
+  const handleConfirmBulkPublish = () => {
+    const ids = selectedPublishable.map((i: any) => i.id);
+    setBulkPublishConfirmOpen(false);
+    if (ids.length === 0) return;
+    bulkUpdateMutation.mutate({ itemIds: ids, operation: 'draftStatus', value: 'PUBLISHED' });
+  };
+
+  // Row Publish: save pending edits first, then publish this one item. A failed save stops here
+  // (saveInlineItem already told the organizer why); per-item publish failures use the bulk error modal.
+  const handlePublishItem = async (item: any) => {
+    if (publishingItemId || bulkUpdateMutation.isPending) return;
+    setPublishingItemId(item.id);
+    try {
+      const saved = await saveInlineItem(item.id);
+      if (!saved) return;
+      const res: any = await bulkUpdateMutation.mutateAsync({
+        itemIds: [item.id],
+        operation: 'draftStatus',
+        value: 'PUBLISHED',
+        keepSelection: true,
+      });
+      if (!(res?.data?.failed?.length > 0)) setExpandedItemId(null);
+    } catch {
+      // bulkUpdateMutation.onError already surfaced the toast / error modal
+    } finally {
+      setPublishingItemId(null);
+    }
   };
 
   // BYOR (2026-09-06): "Sold -- outside FindA.Sale" doesn't go through the generic bulk
@@ -3165,8 +3293,8 @@ const AddItemsDetailPage = () => {
               {/* Sticky Top Toolbar: positioned ABOVE table for proper sticky behavior */}
               {selectedItems.size > 0 && (
                 <div className="sticky top-24 lg:top-16 z-30 before:content-[''] before:absolute before:inset-x-0 before:-top-0.5 before:h-0.5 before:bg-warm-50 dark:before:bg-gray-900 lg:before:hidden bg-amber-600 dark:bg-amber-800 text-white border-b border-amber-700 dark:border-amber-900 px-4 py-3 shadow-md space-y-2">
-                  {/* Row 1: select-all + count + Hide + Show + Delete */}
-                  <div className="flex items-center gap-2">
+                  {/* Row 1: select-all + count + Hide + Show + Publish + Delete */}
+                  <div className="flex flex-wrap items-center gap-2">
                     <input
                       type="checkbox"
                       checked={selectedItems.size === items.length && items.length > 0}
@@ -3195,6 +3323,14 @@ const AddItemsDetailPage = () => {
                       className="text-xs font-semibold bg-amber-700 dark:bg-amber-900 hover:bg-amber-800 disabled:opacity-50 px-3 py-1 rounded transition-colors"
                     >
                       Show
+                    </button>
+                    <button
+                      onClick={handleBulkPublishClick}
+                      disabled={bulkUpdateMutation.isPending}
+                      title="Publish the selected items"
+                      className="text-xs font-semibold bg-white dark:bg-warm-800 text-amber-800 dark:text-amber-200 hover:bg-amber-50 dark:hover:bg-warm-700 disabled:opacity-50 px-3 py-1 rounded transition-colors"
+                    >
+                      Publish
                     </button>
                     <button
                       onClick={() => handleBulkOperation('delete')}
@@ -3304,6 +3440,8 @@ const AddItemsDetailPage = () => {
                   const draftStatus = computeDraftStatus(item);
                   const isExpanded = expandedItemId === item.id;
                   const editState = getItemEditState(item);
+                  const unitsSold = Number(item.stockSold) > 0 ? Number(item.stockSold) : 0;
+                  const minUnits = Math.max(1, unitsSold);
                   return (
                     <div key={item.id} className="bg-white dark:bg-gray-800">
                       {/* Collapsed row */}
@@ -3319,7 +3457,7 @@ const AddItemsDetailPage = () => {
                               ...buildRowConditionState(item),
                               description: item.description || '',
                               lotNumber: item.lotNumber || '',
-                              stockTotal: item.stockTotal != null ? item.stockTotal.toString() : '1',
+                              ...buildRowCommerceState(item),
                               ebayCategoryId: item.ebayCategoryId || '',
                               ebayCategoryName: item.ebayCategoryName || '',
                               packageWeightOz: item.packageWeightOz != null ? item.packageWeightOz.toString() : '',
@@ -3458,19 +3596,27 @@ const AddItemsDetailPage = () => {
                                aria-label="0.00" />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Units available</label>
+                              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">
+                                Units available
+                                {unitsSold > 0 && (
+                                  <span className="ml-1 font-normal text-warm-500 dark:text-warm-400">({unitsSold} sold)</span>
+                                )}
+                              </label>
                               <input
                                 type="number"
-                                min={1}
+                                min={minUnits}
                                 step="1"
                                 value={editState.stockTotal}
                                 onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, stockTotal: e.target.value } }))}
                                 onBlur={() => {
-                                  const parsed = Math.max(1, parseInt(editState.stockTotal, 10) || 1);
+                                  const parsed = Math.max(minUnits, parseInt(editState.stockTotal, 10) || minUnits);
                                   setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, stockTotal: String(parsed) } }));
                                 }}
                                 className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
                               />
+                              {unitsSold > 0 && (
+                                <p className="mt-1 text-[11px] text-warm-500 dark:text-warm-400">Cannot go below the {unitsSold} already sold.</p>
+                              )}
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Condition</label>
@@ -3505,6 +3651,72 @@ const AddItemsDetailPage = () => {
                               )}
                             </div>
                           </div>
+                          {/* Pricing details (2026-10-08): cost basis, consignor and markdown opt-out, so these no
+                              longer need a trip to Full Edit. Same labels / gating as the full item form. Each one is
+                              sent on Save only when changed (see saveInlineItem). */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label htmlFor={`cost-basis-${item.id}`} className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">
+                                Cost basis <span className="font-normal text-warm-400 dark:text-warm-500">(optional)</span>
+                              </label>
+                              <input
+                                id={`cost-basis-${item.id}`}
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                value={editState.costBasis}
+                                onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, costBasis: e.target.value } }))}
+                                className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                              />
+                              <p className="mt-1 text-[11px] text-warm-500 dark:text-warm-400">What did you pay for this? Used to calculate ROI in Flip Report.</p>
+                            </div>
+                            {orgTier === 'TEAMS' && (
+                              <div>
+                                <label htmlFor={`consignor-${item.id}`} className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">
+                                  Consignor <span className="font-normal text-warm-400 dark:text-warm-500">(optional)</span>
+                                </label>
+                                <ConsignorSearchSelect
+                                  inputId={`consignor-${item.id}`}
+                                  value={editState.consignorId}
+                                  onChange={(id) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, consignorId: id } }))}
+                                  options={consignorOptions}
+                                  loading={consignorsLoading}
+                                  error={consignorsError}
+                                  onRetry={() => refetchConsignors()}
+                                  fallbackName={item.consignor?.name ?? null}
+                                />
+                                {!!editState.consignorId &&
+                                  editState.price !== '' &&
+                                  !isNaN(parseFloat(editState.price)) &&
+                                  Math.round(parseFloat(editState.price) * 100) < consignmentMinimumCents && (
+                                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                                      Below your consignment minimum of ${(consignmentMinimumCents / 100).toFixed(2)}. You can still save.
+                                    </p>
+                                  )}
+                              </div>
+                            )}
+                          </div>
+                          {(orgTier || 'SIMPLE') !== 'SIMPLE' && (
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id={`exclude-markdown-${item.id}`}
+                                  checked={editState.excludeFromMarkdown}
+                                  onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, excludeFromMarkdown: e.target.checked } }))}
+                                  className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                                />
+                                <label htmlFor={`exclude-markdown-${item.id}`} className="text-xs font-medium text-warm-700 dark:text-warm-300 cursor-pointer">
+                                  Keep out of automatic markdowns
+                                </label>
+                              </div>
+                              <p className="mt-1 ml-6 text-[11px] text-warm-500 dark:text-warm-400">
+                                The price of this item will never be automatically reduced, even if the sale or a markdown cycle would otherwise mark it down.
+                              </p>
+                            </div>
+                          )}
                           <div>
                             <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Description</label>
                             <textarea
@@ -3643,10 +3855,24 @@ const AddItemsDetailPage = () => {
                             <button
                               type="button"
                               onClick={() => handleInlineItemSave(item.id)}
-                              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded transition-colors"
+                              disabled={publishingItemId === item.id}
+                              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded transition-colors disabled:opacity-50"
                             >
                               Save
                             </button>
+                            {draftStatus === 'PUBLISHED' ? (
+                              <span className="px-2 py-1.5 text-sm font-semibold text-green-700 dark:text-green-400 self-center">Published</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handlePublishItem(item)}
+                                disabled={publishingItemId !== null || bulkUpdateMutation.isPending}
+                                title="Saves your changes, then publishes this item"
+                                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white text-sm font-semibold rounded transition-colors disabled:opacity-50"
+                              >
+                                {publishingItemId === item.id ? 'Publishing...' : 'Publish'}
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -4021,6 +4247,16 @@ const AddItemsDetailPage = () => {
           setBulkConfirmData(null);
         }}
         onApply={handleApplyBulkOperation}
+        loading={bulkUpdateMutation.isPending}
+      />
+
+      <BulkPublishConfirmModal
+        isOpen={bulkPublishConfirmOpen}
+        publishCount={selectedPublishable.length}
+        alreadyPublishedCount={selectedItemsList.length - selectedPublishable.length}
+        sampleTitles={selectedPublishable.slice(0, 3).map((i: any) => i.title || 'Untitled item')}
+        onCancel={() => setBulkPublishConfirmOpen(false)}
+        onConfirm={handleConfirmBulkPublish}
         loading={bulkUpdateMutation.isPending}
       />
 

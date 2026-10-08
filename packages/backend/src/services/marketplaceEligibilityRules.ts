@@ -109,7 +109,7 @@ export interface EligibilityResult {
 interface CategoryBlocklistRule {
   type: 'CATEGORY_BLOCKLIST';
   platform: EligibilityPlatform;
-  /** Case-insensitive substring match against Item.category. Any match -> ineligible (unless excludeKeywords also matches). */
+  /** Case-insensitive, boundary-aware match against Item.category + title (see matchesBlocklistKeyword). Any match -> ineligible (unless excludeKeywords also matches). */
   nameKeywords: readonly string[];
   /** If a nameKeywords match ALSO matches one of these, treat as eligible (accessory/carve-out pattern, same idea as the original FB_COIN_ACCESSORY_EXCLUDE_KEYWORDS). */
   excludeKeywords?: readonly string[];
@@ -1178,10 +1178,11 @@ function effectiveLongestSideIn(item: EligibilityCheckItem): number | null {
 // 'cap' matched inside "CAPitol Records" (two separate vinyl LPs); 'hat' matched inside "THAT Latin
 // Feeling" (a third vinyl LP); 'bag' matched inside "Poly BAGged" (a sealed comic book) -- none of
 // these five items have anything to do with fashion. Scoped to CATEGORY_ALLOWLIST only (Grailed) --
-// CATEGORY_BLOCKLIST's existing plain-substring behavior is intentionally left untouched, since the
-// FACEBOOK/CRAIGSLIST/GUMTREE_AU/VINTED weapons rules above deliberately rely on 'gun' matching
-// INSIDE compound words like "shotgun"/"handgun"/"airgun" (see that rule's own comment) -- a
-// blanket word-boundary rewrite would silently stop catching those.
+// CATEGORY_BLOCKLIST was originally left on plain substring matching for exactly that reason (the
+// weapons rules rely on 'gun' matching INSIDE compound words like "shotgun"/"handgun"/"airgun");
+// that left the same bug class live there ('wine' inside "WINElight", found 2026-10-08) and it is now
+// fixed at the root by matchesBlocklistKeyword below, which is boundary-aware but keeps those
+// compounds via an explicit, documented affix table instead of blind substring matching.
 function hasWholeWordMatch(haystack: string, keyword: string): boolean {
   const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Tolerate a common plural suffix (s/es) after the keyword -- e.g. 'shoe' must still match
@@ -1191,6 +1192,147 @@ function hasWholeWordMatch(haystack: string, keyword: string): boolean {
   // irregular plural in this file, 'scarf' -> 'scarves' (f -> v); 'scarves' is listed as its own
   // separate keyword below instead.
   return new RegExp(`\\b${escaped}(e?s)?\\b`, 'i').test(haystack);
+}
+
+// ---------------------------------------------------------------------------------------------
+// S-ELIGIBILITY-BOUNDARY-MATCH-2026-10-08: boundary-aware CATEGORY_BLOCKLIST keyword matching.
+//
+// Root cause (evidence-confirmed 2026-10-08): checkEligibility's CATEGORY_BLOCKLIST branch used
+// plain `haystack.includes(kw)`. The vinyl LP "Grover Washington, Jr. Winelight ... 1980" (category
+// "Music") was ruled ineligible on FACEBOOK/CRAIGSLIST/POSHMARK/MERCARI because the alcohol keyword
+// 'wine' substring-matched inside "Winelight". Every earlier fix for this bug class was piecemeal
+// (add a word to excludeKeywords, or switch ONE rule shape -- the Grailed allowlist -- to
+// hasWholeWordMatch). This replaces the substring test for ALL blocklist nameKeywords.
+//
+// Rules, applied identically to every keyword on every platform:
+//  1. Both haystack and keyword are lower-cased and every run of non-letter/non-digit characters
+//     (spaces, hyphens, slashes, commas, apostrophes, ampersands...) collapses to one space. The
+//     one deliberate exception is ':' which is kept (the Vinted 'tobacciana:lighter' category-key
+//     style keywords contain it). So 'e-cigarette' matches "E-Cigarette", "e cigarette",
+//     "ecigarette", and 'sex toy' matches "Sex-Toys" / "sextoy".
+//  2. The keyword must START at a token start and END at a token end (whole word / phrase).
+//     "Winelight", "Beerbohm", "Swinelike", "CAPitol", "Ammonite", "Coincidence" no longer match
+//     'wine'/'beer'/'cap'/'ammo'/'coin'.
+//  3. The LAST word tolerates ordinary inflection: s/es, d/ed, ing, y->ies/ied, silent-e drop
+//     (vape->vaping), doubled final consonant (gun->gunned/gunning, drug->drugged), and f/fe->ves
+//     (knife->knives).
+//  4. Compounds that real data uses glued together are NOT lost: KW_COMPOUND_PREFIXES /
+//     KW_COMPOUND_SUFFIXES below list them per keyword ('gun' -> shotgun, handgun, airgun,
+//     gunpowder, gunshot...; 'knife' -> pocketknife, jackknife; 'wine' -> wineglass, winery...).
+//     These are the ONLY places where a keyword may match inside a longer word, and each entry is a
+//     deliberate stem the old substring behaviour relied on. To block a new glued compound, add it
+//     here rather than loosening the matcher.
+//  Keywords in multi-word phrases may also appear glued ("giftcard", "stungun").
+//
+// excludeKeywords were deliberately NOT converted: an exclude only ever turns a block into
+// "eligible", so making it stricter (boundary-aware) would make MORE items blocked, and several
+// entries are intentional stems/fragments ('mount', 'case', 'display', 'gunmetal', 'seashell').
+// Left as plain substring; revisit per-rule if a real false-NEGATIVE-by-carve-out shows up.
+// ---------------------------------------------------------------------------------------------
+const KW_COMPOUND_PREFIXES: Readonly<Record<string, readonly string[]>> = {
+  gun: ['shot', 'hand', 'air', 'machine', 'sub', 'pop', 'spear', 'flare', 'tommy', 'bb', 'pellet', 'cap'],
+  knife: ['pocket', 'jack', 'pen', 'bowie', 'hunting', 'throwing', 'butcher'],
+  sword: ['broad', 'long', 'short', 'great', 'back'],
+  bike: ['e', 'motor', 'dirt', 'mini', 'pit', 'mountain', 'road', 'push', 'trail'],
+  food: ['sea', 'pet', 'fast', 'baby', 'junk', 'health', 'soul', 'dog', 'cat'],
+  vitamin: ['multi'],
+  coin: ['bit', 'alt', 'doge', 'lite'],
+  shell: ['tortoise', 'turtle', 'sea'],
+  fur: ['faux', 'real'],
+};
+const KW_COMPOUND_SUFFIXES: Readonly<Record<string, readonly string[]>> = {
+  gun: [
+    'powder', 'shot', 'shots', 'smith', 'smiths', 'smithing', 'stock', 'fire', 'sight', 'sights',
+    'point', 'boat', 'runner', 'runners', 'slinger', 'belt', 'safe', 'case', 'rack', 'cabinet',
+    'holster', 'oil', 'sling', 'barrel', 'ship',
+  ],
+  sword: ['man', 'men', 'play', 'stick', 'smith'],
+  blade: ['smith', 'smiths'],
+  ammo: ['box', 'boxes', 'can', 'cans', 'pouch', 'belt'],
+  weapon: ['ry'],
+  coin: ['age'],
+  wine: [
+    'glass', 'glasses', 'bottle', 'bottles', 'rack', 'racks', 'cooler', 'cellar', 'barrel', 'opener',
+    'decanter', 'cork', 'stopper', 'tasting', 'maker', 'press', 'fridge', 'bag', 'tote', 'label',
+    'crate', 'box', 'cabinet', 'charm', 'ry', 'ries',
+  ],
+  beer: [
+    'stein', 'steins', 'mug', 'mugs', 'glass', 'glasses', 'bottle', 'bottles', 'can', 'cans', 'tap',
+    'keg', 'kegs', 'cooler', 'sign', 'signs', 'opener', 'coaster', 'coasters', 'tray', 'pong',
+    'fridge', 'maker',
+  ],
+  cigar: ['illo', 'illos'],
+  tobacco: ['nist', 'nists'],
+  alcohol: ['ic', 'ics'],
+  vape: ['r', 'rs', 'juice', 'pen', 'pens'],
+  counterfeit: ['er', 'ers'],
+  'government id': ['entification', 'entity'],
+};
+
+const keywordRegexCache = new Map<string, RegExp>();
+
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Lower-case; every run of non-letter/non-digit characters (except ':') becomes one space. */
+function normForKeywordMatch(text: string | null | undefined): string {
+  return (text || '').toLowerCase().replace(/[^\p{L}\p{N}:]+/gu, ' ').trim();
+}
+
+function buildKeywordRegex(keyword: string): RegExp | null {
+  const norm = normForKeywordMatch(keyword);
+  if (!norm) return null;
+  const words = norm.split(' ');
+  const first = words[0];
+  const last = words[words.length - 1];
+
+  const pre = KW_COMPOUND_PREFIXES[norm];
+  const preGroup = pre && pre.length ? `(?:${pre.map(escapeRegex).join('|')})?` : '';
+
+  // Tail alternatives appended directly to the LAST word (all optional).
+  const tails: string[] = ['e?s', 'e?d', 'ing'];
+  const lastC = last.charAt(last.length - 1);
+  if (lastC && /[a-z]/.test(lastC)) tails.push(`${escapeRegex(lastC)}(?:ed|ing)`); // gun->gunned, drug->drugged
+  const post = KW_COMPOUND_SUFFIXES[norm];
+  if (post) for (const t of post) tails.push(escapeRegex(t));
+  const alts: string[] = [`${escapeRegex(last)}(?:${tails.join('|')})?`];
+  if (last.endsWith('y') && last.length > 1) alts.push(`${escapeRegex(last.slice(0, -1))}(?:ies|ied)`); // currency->currencies
+  if (last.endsWith('e') && last.length > 2) alts.push(`${escapeRegex(last.slice(0, -1))}(?:ing|ed)`); // vape->vaping
+  if (last.endsWith('fe') && last.length > 3) alts.push(`${escapeRegex(last.slice(0, -2))}ves`); // knife->knives
+  else if (last.endsWith('f') && last.length > 3) alts.push(`${escapeRegex(last.slice(0, -1))}ves`); // scarf->scarves
+  const lastPart = `(?:${alts.join('|')})`;
+
+  let body: string;
+  if (words.length === 1) {
+    body = `${preGroup}${lastPart}`;
+  } else {
+    const mid = words.slice(1, -1).map(escapeRegex);
+    body = [`${preGroup}${escapeRegex(first)}`, ...mid, lastPart].join(' ?');
+  }
+  return new RegExp(`(?:^| )${body}(?= |$)`, 'u');
+}
+
+/**
+ * Boundary-aware CATEGORY_BLOCKLIST keyword test (see the block comment above). `haystack` may be
+ * raw text (it is normalized here). Exported so the regression suite can pin the behaviour.
+ */
+export function matchesBlocklistKeyword(haystack: string, keyword: string): boolean {
+  let re = keywordRegexCache.get(keyword);
+  if (re === undefined) {
+    re = buildKeywordRegex(keyword) || /(?!)/u;
+    keywordRegexCache.set(keyword, re);
+  }
+  return re.test(normForKeywordMatch(haystack));
+}
+
+/** Read-only view of every CATEGORY_BLOCKLIST rule's keywords, for regression tests / audits. */
+export function listBlocklistKeywords(): { platform: EligibilityPlatform; keywords: readonly string[]; excludeKeywords: readonly string[] }[] {
+  return RULES.filter((r): r is CategoryBlocklistRule => r.type === 'CATEGORY_BLOCKLIST').map((r) => ({
+    platform: r.platform,
+    keywords: r.nameKeywords,
+    excludeKeywords: r.excludeKeywords || [],
+  }));
 }
 
 /**
@@ -1228,7 +1370,9 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
       }
       const haystack = buildHaystack(item);
       if (!haystack) continue; // no data -> no reason to block on this rule, see file header
-      const isBlocked = rule.nameKeywords.some((kw) => haystack.includes(kw));
+      // S-ELIGIBILITY-BOUNDARY-MATCH-2026-10-08: boundary-aware (was haystack.includes(kw), which
+      // matched 'wine' inside "Winelight") -- see matchesBlocklistKeyword.
+      const isBlocked = rule.nameKeywords.some((kw) => matchesBlocklistKeyword(haystack, kw));
       if (!isBlocked) continue;
       const isExcluded = (rule.excludeKeywords || []).some((kw) => haystack.includes(kw));
       if (isExcluded) continue;

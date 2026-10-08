@@ -641,3 +641,142 @@ describe('POST /bulk/photos', () => {
     noWrites();
   });
 });
+
+
+// ---------------------------------------------------------------------------------------------
+// 2026-10-08: bulk 'draftStatus' (DRAFT | PENDING_REVIEW | PUBLISHED). PUBLISHED reuses the per-item publish path
+// (publishItemForUser) instead of a bare updateMany. itemController is a jest.fn proxy in this file, so the shared
+// publish function is a mock whose per-item result each test arranges.
+describe('POST /bulk: draftStatus', () => {
+  const publishMock = (): jest.Mock => require('../controllers/itemController').publishItemForUser;
+
+  beforeEach(() => {
+    publishMock().mockReset();
+  });
+
+  it('rejects a value outside DRAFT | PENDING_REVIEW | PUBLISHED with 400 (real and dry run)', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('a')]);
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['a'], operation: 'draftStatus', value: 'AVAILABLE' }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.message).toBe('draftStatus value must be one of: DRAFT, PENDING_REVIEW, PUBLISHED');
+    const dry = makeRes();
+    await bulk(makeReq({ itemIds: ['a'], operation: 'draftStatus', value: 'nope', dryRun: true }), dry);
+    expect(dry.statusCode).toBe(400);
+    noWrites();
+    expect(publishMock()).not.toHaveBeenCalled();
+  });
+
+  it('the status operation is NOT widened: PUBLISHED is still rejected there', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('a')]);
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['a'], operation: 'status', value: 'PUBLISHED' }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.message).toBe('status value must be one of: AVAILABLE, SOLD, RESERVED');
+  });
+
+  it('PENDING_REVIEW / DRAFT is a plain stamped updateMany with old and new values, no publish call', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'PUBLISHED' }), saleItem('b', { draftStatus: 'DRAFT' })]);
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['a', 'b'], operation: 'draftStatus', value: 'PENDING_REVIEW' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.operation).toBe('draftStatus');
+    expect(res.body.succeeded).toEqual(['a', 'b']);
+    expect(res.body.oldValues).toEqual({ a: 'PUBLISHED', b: 'DRAFT' });
+    expect(res.body.newValues).toEqual({ a: 'PENDING_REVIEW', b: 'PENDING_REVIEW' });
+    expect(updateManyCalls()).toHaveLength(1);
+    expect(updateManyCalls()[0].data).toEqual({ draftStatus: 'PENDING_REVIEW', lastEditedAt: expect.any(Date) });
+    expect(publishMock()).not.toHaveBeenCalled();
+  });
+
+  it('PUBLISHED goes through publishItemForUser per item and never a bare updateMany', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'PENDING_REVIEW' }), saleItem('b', { draftStatus: 'DRAFT' })]);
+    publishMock().mockResolvedValue({ ok: true, item: {} });
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['a', 'b'], operation: 'draftStatus', value: 'PUBLISHED' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.succeeded.sort()).toEqual(['a', 'b']);
+    expect(res.body.failed).toEqual([]);
+    expect(publishMock()).toHaveBeenCalledTimes(2);
+    expect(publishMock().mock.calls.map((c: any[]) => c[1]).sort()).toEqual(['a', 'b']);
+    expect(publishMock().mock.calls[0][0]).toMatchObject({ id: CALLER });
+    expect(updateManyCalls()).toHaveLength(0);
+  });
+
+  it('a per-item publish failure lands in failed with its reason and the response is 207', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'DRAFT' }), saleItem('b', { draftStatus: 'DRAFT' })]);
+    publishMock().mockImplementation(async (_u: unknown, id: string) =>
+      id === 'b' ? { ok: false, status: 400, message: 'Add a price before publishing this card.', code: 'CARD_PRICE_REQUIRED' } : { ok: true, item: {} });
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['a', 'b'], operation: 'draftStatus', value: 'PUBLISHED' }), res);
+    expect(res.statusCode).toBe(207);
+    expect(res.body.succeeded).toEqual(['a']);
+    expect(res.body.failed).toEqual([{ itemId: 'b', reason: 'Add a price before publishing this card.' }]);
+    expect(res.body.operation).toBe('draftStatus');
+  });
+
+  it('a thrown error for one item is reported as a failure, not a 500', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'DRAFT' }), saleItem('b', { draftStatus: 'DRAFT' })]);
+    publishMock().mockImplementation(async (_u: unknown, id: string) => {
+      if (id === 'a') throw new Error('boom');
+      return { ok: true, item: {} };
+    });
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['a', 'b'], operation: 'draftStatus', value: 'PUBLISHED' }), res);
+    expect(res.statusCode).toBe(207);
+    expect(res.body.succeeded).toEqual(['b']);
+    expect(res.body.failed).toHaveLength(1);
+    expect(res.body.failed[0].itemId).toBe('a');
+  });
+
+  it('when every item fails validation nothing is published and the response is 400 with the reasons', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'DRAFT' })]);
+    publishMock().mockResolvedValue({ ok: false, status: 400, message: 'Item not ready. Smart tagging still in progress.' });
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['a'], operation: 'draftStatus', value: 'PUBLISHED' }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.succeeded).toEqual([]);
+    expect(res.body.failed).toEqual([{ itemId: 'a', reason: 'Item not ready. Smart tagging still in progress.' }]);
+    expect(updateManyCalls()).toHaveLength(0);
+  });
+
+  it('an already-published item is a no-op success and does not re-run the publish side effects', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'PUBLISHED' })]);
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['a'], operation: 'draftStatus', value: 'PUBLISHED' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.succeeded).toEqual(['a']);
+    expect(publishMock()).not.toHaveBeenCalled();
+  });
+
+  it('a one-element itemIds array works as the single-item publish', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('solo', { draftStatus: 'PENDING_REVIEW' })]);
+    publishMock().mockResolvedValue({ ok: true, item: {} });
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['solo'], operation: 'draftStatus', value: 'PUBLISHED' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.succeeded).toEqual(['solo']);
+  });
+
+  it('ownership: another organizer\'s item is a 404 and nothing is published or written', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('mine', { draftStatus: 'DRAFT' }), foreignSaleItem('theirs', { draftStatus: 'DRAFT' })]);
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['mine', 'theirs'], operation: 'draftStatus', value: 'PUBLISHED' }), res);
+    expect(res.statusCode).toBe(404);
+    expect(publishMock()).not.toHaveBeenCalled();
+    noWrites();
+  });
+
+  it('dry run PUBLISHED validates through the shared path with dryRun set and writes nothing', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'DRAFT' }), saleItem('b', { draftStatus: 'DRAFT' })]);
+    publishMock().mockImplementation(async (_u: unknown, id: string) =>
+      id === 'b' ? { ok: false, status: 400, message: 'Add a price before publishing this card.' } : { ok: true, dryRun: true });
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['a', 'b'], operation: 'draftStatus', value: 'PUBLISHED', dryRun: true }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.affectedIds).toEqual(['a']);
+    expect(res.body.failed).toEqual([{ itemId: 'b', reason: 'Add a price before publishing this card.' }]);
+    expect(publishMock().mock.calls.every((c: any[]) => c[3] && c[3].dryRun === true)).toBe(true);
+    noWrites();
+  });
+});
