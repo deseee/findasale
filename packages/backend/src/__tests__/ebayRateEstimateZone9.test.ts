@@ -68,8 +68,10 @@ describe('uspsZone9Rate', () => {
   it('returns the cheaper of weight and cubic', () => {
     // 6x6x6 -> Cubic 0.2 (12.39) vs 1lb weight (11.22): weight cheaper
     expect(uspsZone9Rate({ length: 6, width: 6, height: 6 }, 16)).toBe(11.22);
-    // 8lb, 12x12x10 (0.833 cu ft -> Cubic 0.9 = 24.94) vs 8lb weight 25.14: cubic cheaper
-    expect(uspsZone9Rate({ length: 12, width: 12, height: 10 }, 128)).toBe(24.94);
+    // 9lb, 12x12x10 (0.833 cu ft -> Cubic 0.9 = 24.94) vs 9lb weight 25.14: cubic cheaper
+    expect(uspsZone9Rate({ length: 12, width: 12, height: 10 }, 144)).toBe(24.94);
+    // 8lb weight (23.95) beats the same cubic tier (24.94)
+    expect(uspsZone9Rate({ length: 12, width: 12, height: 10 }, 128)).toBe(23.95);
   });
 
   it('sub-1lb light package prices at 8.95', () => {
