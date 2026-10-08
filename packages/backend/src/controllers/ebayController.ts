@@ -5427,6 +5427,39 @@ export async function applyFulfillmentPolicyToOffer(
 }
 
 /**
+ * Organizer for a live eBay listing when the item has NO sale (2026-10-08).
+ *
+ * Item.saleId is nullable ("Feature #300: inventory items have no sale"); for those rows the
+ * owner is Item.organizerId. resyncItemShippingPolicy / reviseNativeListingShippingPolicy used
+ * to read ONLY item.sale?.organizer, so every inventory-only (saleId NULL) listing returned
+ * 'no-organizer' -- silently, with no log line -- and was never re-pinned by the backfill
+ * (the two Cyberforce #1 / Spawn #4 comic listings). Sale items whose organizer failed to load
+ * still return null here (we never guess an owner other than the sale's organizer). This is a
+ * server-side job with no caller identity, so ownership is item.organizerId itself.
+ */
+async function loadInventoryItemOrganizer(item: { saleId?: string | null; organizerId?: string | null }) {
+  if (item.saleId || !item.organizerId) return null;
+  return prisma.organizer.findUnique({
+    where: { id: item.organizerId },
+    select: {
+      id: true,
+      lat: true,
+      lng: true,
+      ebayPolicyMapping: {
+        select: {
+          shippingMode: true,
+          freeShippingOptIn: true,
+          categoryOverrides: true,
+          heavyOversizedPolicyId: true,
+          fragilePolicyId: true,
+          unknownPolicyId: true,
+        },
+      },
+    },
+  });
+}
+
+/**
  * Re-resolve and (if changed) re-apply the shipping policy for a LIVE item.
  *
  * Used by (a) the edit-save path when package dims/weight/type change, and
@@ -5461,6 +5494,8 @@ export async function resyncItemShippingPolicy(
         ebayShippingOverride: true,
         ebayFulfillmentPolicyOverrideId: true,
         price: true,
+        saleId: true,
+        organizerId: true,
         sale: {
           select: {
             zip: true,
@@ -5498,7 +5533,7 @@ export async function resyncItemShippingPolicy(
     if (!item) return { changed: false, reason: 'not-found' };
     if (!item.ebayListingId || !item.ebayOfferId) return { changed: false, reason: 'not-live' };
 
-    const organizer = item.sale?.organizer;
+    const organizer = item.sale?.organizer ?? (await loadInventoryItemOrganizer(item));
     if (!organizer) return { changed: false, reason: 'no-organizer' };
 
     // Safety: never auto-price an item with no weight, and never convert a
@@ -5683,6 +5718,8 @@ export async function reviseNativeListingShippingPolicy(
         ebayShippingOverride: true,
         ebayFulfillmentPolicyOverrideId: true,
         price: true,
+        saleId: true,
+        organizerId: true,
         sale: {
           select: {
             zip: true,
@@ -5715,7 +5752,7 @@ export async function reviseNativeListingShippingPolicy(
     // is deliberately NOT required here (that's resyncItemShippingPolicy's job).
     if (!item.ebayListingId) return { changed: false, reason: 'no-listing-id' };
 
-    const organizer = item.sale?.organizer;
+    const organizer = item.sale?.organizer ?? (await loadInventoryItemOrganizer(item));
     if (!organizer) return { changed: false, reason: 'no-organizer' };
 
     // Same safety gates as resyncItemShippingPolicy: never auto-price an item

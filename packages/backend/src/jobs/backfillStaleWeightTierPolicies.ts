@@ -104,6 +104,8 @@ export interface BackfillStaleWeightTierExample {
   title: string;
   oldPolicyId: string | null;
   repinned: boolean;
+  /** Reason string returned by the revise/resync call for a NON-repinned item (e.g. 'no-organizer', 'already-current'); absent when repinned or in a dry run. */
+  reason?: string;
   /** Which population this item came from -- 'offer' (Inventory API) or 'native' (Trading API ReviseItem). */
   kind: 'offer' | 'native';
 }
@@ -139,7 +141,9 @@ export interface BackfillStaleWeightTierResult {
   rateLimited: boolean;
   /** True if no eBay calls or writes were performed (preview only -- counts come from a DB read alone). */
   dryRun: boolean;
-  /** Up to 15 example item results per population for handoff reporting. */
+  /** Histogram of the `reason` strings from the revise/resync calls for every non-repinned item (thrown errors count as 'exception'). Empty in a dry run. */
+  skippedReasons: Record<string, number>;
+  /** Up to 15 example item results per population for handoff reporting (repinned AND non-repinned, the latter carrying `reason`). */
   examples: BackfillStaleWeightTierExample[];
 }
 
@@ -186,17 +190,21 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
   const baseWhere = {
     status: 'AVAILABLE' as const,
     packageWeightOz: { gt: 0 },
-    OR: [{ ebayShippingOverride: null }, { ebayShippingOverride: { not: 'LOCAL_PICKUP_ONLY' } }],
-    // Sale.organizerId is a required (non-nullable) scalar -- "any sale" needs no
-    // filter at all here; items with no sale are excluded downstream (organizer
-    // relation missing -> resync/revise both return 'no-organizer').
-    ...(opts?.organizerId ? { sale: { organizerId: opts.organizerId } } : {}),
+    AND: [
+      { OR: [{ ebayShippingOverride: null }, { ebayShippingOverride: { not: 'LOCAL_PICKUP_ONLY' } }] },
+      // Sale items are scoped by sale.organizerId; inventory items (saleId NULL, Feature #300)
+      // by the denormalized Item.organizerId. Resync/revise resolve the inventory owner the same way.
+      ...(opts?.organizerId
+        ? [{ OR: [{ sale: { organizerId: opts.organizerId } }, { saleId: null, organizerId: opts.organizerId }] }]
+        : []),
+    ],
   };
 
   const selectShape = {
     id: true,
     title: true,
     ebayFulfillmentPolicyId: true,
+    organizerId: true,
     sale: { select: { organizerId: true } },
   } as const;
 
@@ -222,7 +230,8 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
 
   const organizerIds = new Set<string>();
   for (const item of [...offerBasedItems, ...nativeItems]) {
-    if (item.sale?.organizerId) organizerIds.add(item.sale.organizerId);
+    const oid = item.sale?.organizerId ?? item.organizerId;
+    if (oid) organizerIds.add(oid);
   }
   const organizersExamined = organizerIds.size;
 
@@ -251,6 +260,7 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
       skipped: 0,
       rateLimited: false,
       dryRun: true,
+      skippedReasons: {},
       examples,
     };
   }
@@ -259,6 +269,14 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
   let nativeRepinned = 0;
   let skipped = 0;
   let rateLimited = false;
+  const skippedReasons: Record<string, number> = {};
+  const noteSkip = (kind: 'offer' | 'native', item: { id: string; title: string; ebayFulfillmentPolicyId: string | null }, reason: string) => {
+    skipped++;
+    skippedReasons[reason] = (skippedReasons[reason] ?? 0) + 1;
+    if (examples.filter(e => e.kind === kind).length < EXAMPLES_PER_KIND) {
+      examples.push({ itemId: item.id, title: item.title, oldPolicyId: item.ebayFulfillmentPolicyId, repinned: false, reason, kind });
+    }
+  };
 
   for (const item of offerBasedItems) {
     if (isEbayRateLimited()) {
@@ -273,11 +291,11 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
           examples.push({ itemId: item.id, title: item.title, oldPolicyId: item.ebayFulfillmentPolicyId, repinned: true, kind: 'offer' });
         }
       } else {
-        skipped++;
+        noteSkip('offer', item, res.reason || 'unknown');
       }
     } catch (err) {
       console.warn(`[BackfillStaleWeightTier] offer-based item ${item.id} failed (non-fatal): ${(err as Error).message}`);
-      skipped++;
+      noteSkip('offer', item, 'exception');
     }
   }
 
@@ -295,11 +313,11 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
             examples.push({ itemId: item.id, title: item.title, oldPolicyId: item.ebayFulfillmentPolicyId, repinned: true, kind: 'native' });
           }
         } else {
-          skipped++;
+          noteSkip('native', item, res.reason || 'unknown');
         }
       } catch (err) {
         console.warn(`[BackfillStaleWeightTier] native item ${item.id} failed (non-fatal): ${(err as Error).message}`);
-        skipped++;
+        noteSkip('native', item, 'exception');
       }
     }
   }
@@ -316,6 +334,7 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
     skipped,
     rateLimited,
     dryRun: false,
+    skippedReasons,
     examples,
   };
 }
