@@ -46,6 +46,7 @@ import {
   clearZone9RateTableCache,
 } from '../services/ebayFlatRatePolicyService';
 import type { PriceBasis } from '../services/ebayFlatRatePolicyService';
+import { parseDuplicatePolicyId } from '../services/ebayFlatRatePolicyService';
 import { ensureCalculatedPolicyWithHandling } from '../services/ebayCalculatedPolicyService';
 import { parsePriceFromPolicyName, classifyPolicy } from '../utils/ebayPolicyParser';
 
@@ -195,6 +196,9 @@ describe('ensureFvfFlatRatePolicy / ensureCalculatedPolicyWithHandling (rate tab
   let existingPolicies: any[];
   let rateTables: any[] | 'FAIL';
   let rateTableGets: number;
+  let postFail: { status: number; body: string } | null;
+  let policyById: Record<string, any>;
+  let gotIds: string[];
 
   const allTables = () => [
     { rateTableId: 'rt-t1', name: ZONE9_RATE_TABLES.T1.tableName, locality: 'DOMESTIC', countryCode: 'US' },
@@ -209,13 +213,26 @@ describe('ensureFvfFlatRatePolicy / ensureCalculatedPolicyWithHandling (rate tab
     existingPolicies = [];
     rateTables = allTables();
     rateTableGets = 0;
+    postFail = null;
+    policyById = {};
+    gotIds = [];
     clearZone9RateTableCache();
     mockFindUnique.mockReset().mockResolvedValue({ lat: 1, lng: 2, ebayConnection: { accessToken: 't', handlingTimeDays: 3 } });
     mockCheapest.mockReset().mockResolvedValue(cubicCheapest);
     (global as any).fetch = jest.fn(async (url: string, init?: any) => {
       if (init?.method === 'POST') {
         posted.push(JSON.parse(init.body));
+        if (postFail) {
+          const f = postFail;
+          return { ok: false, status: f.status, json: async () => JSON.parse(f.body), clone: () => ({ text: async () => f.body }), text: async () => f.body };
+        }
         return { ok: true, status: 200, json: async () => ({ fulfillmentPolicyId: 'new-' + posted.length }), clone: () => ({ text: async () => '' }), text: async () => '' };
+      }
+      const one = /\/fulfillment_policy\/([^/?]+)$/.exec(String(url));
+      if (one) {
+        gotIds.push(one[1]);
+        const p = policyById[one[1]];
+        return p ? { ok: true, status: 200, json: async () => p } : { ok: false, status: 404, json: async () => ({}), text: async () => 'nf' };
       }
       if (String(url).includes('rate_table')) {
         rateTableGets++;
@@ -375,35 +392,137 @@ describe('ensureFvfFlatRatePolicy / ensureCalculatedPolicyWithHandling (rate tab
     });
   });
 
-  describe('ensureCalculatedPolicyWithHandling', () => {
-    it('T1 table found -> basis name, rateTableId on the option, light exclusions', async () => {
+  describe('ensureCalculatedPolicyWithHandling (no rate tables on calculated policies)', () => {
+    it('T1-T3 package resolves to T4 shape: legacy name, full exclusions, NO rateTableId, no table lookup', async () => {
       const r = await ensureCalculatedPolicyWithHandling('org-calc', 16, dims, '49079');
       expect(r?.policyId).toBe('new-1');
-      expect(posted[0].name).toMatch(/^Up to 2 lb \| 0\.1-0\.2 cu ft \| Calc HC\$\d+\.\d\d \| AK\/HI\/PR \+\$4\.99$/);
-      expect(posted[0].name.length).toBeLessThanOrEqual(64);
-      expect(posted[0].shippingOptions[0].rateTableId).toBe('rt-t1');
-      expect(posted[0].shipToLocations.regionExcluded).toEqual([{ regionName: 'APO/FPO' }]);
-    });
-    it('lookup fails -> legacy T4 name, full exclusions, no rateTableId', async () => {
-      rateTables = 'FAIL';
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
-      await ensureCalculatedPolicyWithHandling('org-calc-fail', 16, dims, '49079');
-      expect(posted[0].name).toMatch(/^FindA\.Sale Calculated HC\$/);
+      expect(posted).toHaveLength(1);
+      expect(posted[0].name).toMatch(/^FindA\.Sale Calculated HC\$\d+\.\d\d$/);
       expect(posted[0].shipToLocations).toEqual(DEFAULT_EXCLUDED_SHIP_TO);
+      expect(posted[0].shippingOptions[0].costType).toBe('CALCULATED');
       expect(posted[0].shippingOptions[0].rateTableId).toBeUndefined();
+      expect(rateTableGets).toBe(0);
     });
-    it('does not adopt an existing T1-T3 calculated policy without the rate table', async () => {
+    it('never sends rateTableId for any tier (T1/T2/T3/T4 inputs)', async () => {
+      for (const [i, oz] of [16, 40, 120, 500].entries()) {
+        await ensureCalculatedPolicyWithHandling(`org-calc-all-${i}`, oz, dims, '49079');
+      }
+      for (const b of posted) {
+        expect(b.shippingOptions[0].rateTableId).toBeUndefined();
+        expect(b.shipToLocations).toEqual(DEFAULT_EXCLUDED_SHIP_TO);
+        expect(b.name).toMatch(/^FindA\.Sale Calculated HC\$/);
+      }
+      expect(rateTableGets).toBe(0);
+    });
+    it('a failed create (no 20400) is NOT retried without shipToLocations -> null, single POST', async () => {
+      postFail = { status: 400, body: JSON.stringify({ errors: [{ errorId: 20403, message: 'LSAS validation failed' }] }) };
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const r = await ensureCalculatedPolicyWithHandling('org-calc-nofallback', 16, dims, '49079');
+      expect(r).toBeNull();
+      expect(posted).toHaveLength(1);
+      expect(posted[0].shipToLocations).toEqual(DEFAULT_EXCLUDED_SHIP_TO);
+    });
+    it('Duplicate Policy -> adopts a CALCULATED duplicate with full exclusions', async () => {
+      postFail = { status: 400, body: JSON.stringify({ errors: [{ errorId: 20400, message: 'Duplicate Policy', parameters: [{ name: 'duplicatePolicyId', value: '9001' }] }] }) };
+      policyById['9001'] = {
+        fulfillmentPolicyId: '9001', name: 'hand renamed',
+        shipToLocations: DEFAULT_EXCLUDED_SHIP_TO,
+        shippingOptions: [{ optionType: 'DOMESTIC', costType: 'CALCULATED' }],
+      };
+      const r = await ensureCalculatedPolicyWithHandling('org-calc-dup', 16, dims, '49079');
+      expect(r?.policyId).toBe('9001');
+      expect(posted).toHaveLength(1);
+      expect(gotIds).toEqual(['9001']);
+    });
+    it('Duplicate Policy with weak exclusions is NOT adopted -> null', async () => {
+      postFail = { status: 400, body: JSON.stringify({ errors: [{ errorId: 20400, parameters: [{ name: 'duplicatePolicyId', value: '9002' }] }] }) };
+      policyById['9002'] = { fulfillmentPolicyId: '9002', name: 'x', shipToLocations: { regionExcluded: [{ regionName: 'APO/FPO' }] }, shippingOptions: [{ optionType: 'DOMESTIC', costType: 'CALCULATED' }] };
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(await ensureCalculatedPolicyWithHandling('org-calc-dup-weak', 16, dims, '49079')).toBeNull();
+    });
+    it('adopts an existing same-name calculated policy as before', async () => {
       await ensureCalculatedPolicyWithHandling('org-calc-probe', 16, dims, '49079');
       const name = posted[0].name;
       posted = [];
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
       existingPolicies = [{ fulfillmentPolicyId: 'c-1', name, shippingOptions: [{ optionType: 'DOMESTIC', costType: 'CALCULATED' }] }];
       const r = await ensureCalculatedPolicyWithHandling('org-calc-adopt', 16, dims, '49079');
-      expect(r?.policyId).toBe('new-1');
-      existingPolicies = [{ fulfillmentPolicyId: 'c-2', name, shippingOptions: [{ optionType: 'DOMESTIC', costType: 'CALCULATED', rateTableId: 'rt-t1' }] }];
-      const r2 = await ensureCalculatedPolicyWithHandling('org-calc-adopt2', 16, dims, '49079');
-      expect(r2?.policyId).toBe('c-2');
+      expect(r?.policyId).toBe('c-1');
+      expect(posted).toHaveLength(0);
     });
+  });
+
+  describe('flat policy 20400 Duplicate Policy handling', () => {
+    const dupBody = (id: string) => JSON.stringify({ errors: [{ errorId: 20400, domain: 'API_ACCOUNT', message: 'Duplicate Policy', parameters: [{ name: 'duplicatePolicyId', value: id }] }] });
+    const t1Policy = (over: Record<string, any> = {}) => ({
+      fulfillmentPolicyId: '7001', name: 'renamed by hand',
+      shipToLocations: { regionExcluded: [{ regionName: 'APO/FPO' }] },
+      shippingOptions: [{ optionType: 'DOMESTIC', costType: 'FLAT_RATE', rateTableId: 'rt-t1' }],
+      ...over,
+    });
+
+    it('T1: adopts the duplicate when light + rate table matches; no fallback POST', async () => {
+      postFail = { status: 400, body: dupBody('7001') };
+      policyById['7001'] = t1Policy();
+      const r = await ensureFvfFlatRatePolicy('org-dup-t1', 16, dims, '49079');
+      expect(r?.policyId).toBe('7001');
+      expect(posted).toHaveLength(1);
+      expect(posted[0].shipToLocations).toBeDefined();
+    });
+    it('T1: duplicate is cached under the key (second call does not POST again)', async () => {
+      postFail = { status: 400, body: dupBody('7001') };
+      policyById['7001'] = t1Policy();
+      await ensureFvfFlatRatePolicy('org-dup-cache', 16, dims, '49079');
+      await ensureFvfFlatRatePolicy('org-dup-cache', 16, dims, '49079');
+      expect(posted).toHaveLength(1);
+    });
+    it('T1: duplicate with wrong/missing rate table or heavy exclusions -> null, never adopted', async () => {
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      postFail = { status: 400, body: dupBody('7001') };
+      policyById['7001'] = t1Policy({ shippingOptions: [{ optionType: 'DOMESTIC', costType: 'FLAT_RATE' }] });
+      expect(await ensureFvfFlatRatePolicy('org-dup-norate', 16, dims, '49079')).toBeNull();
+      policyById['7001'] = t1Policy({ shippingOptions: [{ optionType: 'DOMESTIC', rateTableId: 'rt-other' }] });
+      expect(await ensureFvfFlatRatePolicy('org-dup-wrongrate', 16, dims, '49079')).toBeNull();
+      policyById['7001'] = t1Policy({ shipToLocations: DEFAULT_EXCLUDED_SHIP_TO });
+      expect(await ensureFvfFlatRatePolicy('org-dup-heavy', 16, dims, '49079')).toBeNull();
+    });
+    it('T4: adopts only a fully-excluded duplicate (AK/HI + Protectorates + APO/FPO)', async () => {
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      postFail = { status: 400, body: dupBody('7002') };
+      policyById['7002'] = { fulfillmentPolicyId: '7002', name: 'x', shipToLocations: DEFAULT_EXCLUDED_SHIP_TO, shippingOptions: [{ optionType: 'DOMESTIC', costType: 'FLAT_RATE' }] };
+      expect((await ensureFvfFlatRatePolicy('org-dup-t4', 16, null, '49079'))?.policyId).toBe('7002');
+      policyById['7002'].shipToLocations = { regionExcluded: [{ regionName: 'Alaska/Hawaii' }, { regionName: 'APO/FPO' }] };
+      expect(await ensureFvfFlatRatePolicy('org-dup-t4-weak', 16, null, '49079')).toBeNull();
+      policyById['7002'].shipToLocations = DEFAULT_EXCLUDED_SHIP_TO;
+      policyById['7002'].shippingOptions = [{ optionType: 'DOMESTIC', costType: 'CALCULATED' }];
+      expect(await ensureFvfFlatRatePolicy('org-dup-t4-cost', 16, null, '49079')).toBeNull();
+    });
+    it('duplicate GET failing -> null and no unrestricted retry', async () => {
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      postFail = { status: 400, body: dupBody('7404') };
+      expect(await ensureFvfFlatRatePolicy('org-dup-404', 16, dims, '49079')).toBeNull();
+      expect(posted).toHaveLength(1);
+    });
+    it('non-duplicate 400 on a zone9 flat create never retries without shipToLocations', async () => {
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      postFail = { status: 400, body: JSON.stringify({ errors: [{ errorId: 20403, message: 'bad region' }] }) };
+      expect(await ensureFvfFlatRatePolicy('org-nofb', 16, dims, '49079')).toBeNull();
+      expect(posted).toHaveLength(1);
+    });
+  });
+});
+
+describe('parseDuplicatePolicyId', () => {
+  it('reads JSON body, nested wrappers, and stringified/log-style text', () => {
+    const j = JSON.stringify({ errors: [{ errorId: 20400, parameters: [{ name: 'duplicatePolicyId', value: '6313456789' }] }] });
+    expect(parseDuplicatePolicyId(j)).toBe('6313456789');
+    expect(parseDuplicatePolicyId(JSON.stringify({ status: 400, body: j }))).toBe('6313456789');
+    expect(parseDuplicatePolicyId("[{name:'duplicatePolicyId', value:'6313456789'}]")).toBe('6313456789');
+    expect(parseDuplicatePolicyId('prefix ' + JSON.stringify(j))).toBe('6313456789');
+  });
+  it('null when absent', () => {
+    expect(parseDuplicatePolicyId('')).toBeNull();
+    expect(parseDuplicatePolicyId(null)).toBeNull();
+    expect(parseDuplicatePolicyId('{"errors":[{"errorId":20400,"message":"already exists"}]}')).toBeNull();
   });
 });
 

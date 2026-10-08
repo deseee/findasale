@@ -433,7 +433,14 @@ export function shipToLocationsForTier(tier: Zone9Tier) {
 export async function postFulfillmentPolicyWithFallback(
   accessToken: string,
   body: Record<string, any>,
-  tag: string
+  tag: string,
+  /**
+   * Zone-9 paths (FvfFlat, CalcHandling) pass { allowUnrestrictedFallback: false }: if the
+   * attempt WITH shipToLocations fails, the failed response is returned as-is and NO policy
+   * is ever created without its AK/HI/protectorate exclusions. Default (true) keeps the
+   * legacy retry-without-shipToLocations behaviour for the older paths.
+   */
+  opts: { allowUnrestrictedFallback?: boolean } = {}
 ): Promise<Response> {
   const post = (b: Record<string, any>) =>
     fetch(ebayProxyUrl('/sell/account/v1/fulfillment_policy'), {
@@ -443,6 +450,7 @@ export async function postFulfillmentPolicyWithFallback(
     });
   const res = await post(body);
   if (res.ok || !body.shipToLocations) return res;
+  if (opts.allowUnrestrictedFallback === false) return res;
   let errText = '';
   try { errText = await res.clone().text(); } catch { /* ignore */ }
   if (errText.includes('20400') || /already exists/i.test(errText)) return res;
@@ -454,6 +462,101 @@ export async function postFulfillmentPolicyWithFallback(
     return post(rest);
   }
   return res;
+}
+
+/**
+ * Pull the existing policy id out of an eBay 400 / errorId 20400 "Duplicate Policy" body.
+ * eBay refuses to create a fulfillment policy whose content equals an existing one (even
+ * under a different name) and reports it as errors[].parameters[{name:'duplicatePolicyId',
+ * value:'<id>'}]. Parses JSON first, then falls back to a regex over the raw text (the proxy
+ * may wrap/stringify the body). Returns null when this is not a duplicate-policy error.
+ */
+export function parseDuplicatePolicyId(errText: string | null | undefined): string | null {
+  if (!errText) return null;
+  try {
+    const j = JSON.parse(errText);
+    const stack: any[] = [j];
+    while (stack.length) {
+      const n = stack.pop();
+      if (Array.isArray(n)) { stack.push(...n); continue; }
+      if (n && typeof n === 'object') {
+        if (n.name === 'duplicatePolicyId' && n.value != null && String(n.value).trim()) return String(n.value).trim();
+        stack.push(...Object.values(n));
+      }
+    }
+  } catch { /* not JSON -- fall through to regex */ }
+  const m = /duplicatePolicyId\\?["']?\s*[,:]?\s*\\?["']?\s*(?:value\\?["']?\s*:\s*\\?["']?)?(\d{6,})/i.exec(errText);
+  return m ? m[1] : null;
+}
+
+/**
+ * Adoption guard for an existing T4 (Lower 48 only) or legacy policy: must exclude
+ * Alaska/Hawaii, US Protectorates and APO/FPO, and (when given) have the expected costType.
+ */
+export function isFullyExcludedPolicyAdoptable(policy: any, tag: string, expectedCostType?: string): boolean {
+  const excluded: string[] = (policy?.shipToLocations?.regionExcluded ?? [])
+    .map((r: any) => String(r?.regionName ?? ''))
+    .filter(Boolean);
+  const ok =
+    excluded.some((n) => /alaska|hawaii/i.test(n)) &&
+    excluded.some((n) => /protectorate/i.test(n)) &&
+    excluded.some((n) => /apo|fpo/i.test(n));
+  if (!ok) {
+    console.warn(`[eBay ${tag}] not adopting "${policy?.name}": exclusions lack AK/HI + Protectorates + APO/FPO (${JSON.stringify(excluded)})`);
+    return false;
+  }
+  if (expectedCostType) {
+    const opts: any[] = Array.isArray(policy?.shippingOptions) ? policy.shippingOptions : [];
+    const dom = opts.find((o) => o?.optionType === 'DOMESTIC') ?? opts[0];
+    if (dom?.costType && dom.costType !== expectedCostType) {
+      console.warn(`[eBay ${tag}] not adopting "${policy?.name}": costType ${dom.costType} != ${expectedCostType}`);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Handle eBay's 400/20400 "Duplicate Policy" on create: GET the duplicate, validate it, and
+ * return its id, or null (with a clear log) when it is absent / not adoptable. NEVER adopts a
+ * policy lacking the right exclusions or rate table:
+ *   - T1-T3 (expectedRateTableId set): isZone9PolicyAdoptable (light exclusions + rate table)
+ *   - otherwise: isFullyExcludedPolicyAdoptable (AK/HI + Protectorates + APO/FPO)
+ * Returns { handled:false } when errText is not a duplicate-policy error so the caller can
+ * continue with its by-name adoption. Never throws.
+ */
+export async function adoptDuplicateFulfillmentPolicy(
+  accessToken: string,
+  errText: string,
+  tag: string,
+  opts: { expectedRateTableId?: string | null; expectedCostType?: string } = {}
+): Promise<{ handled: boolean; policyId: string | null }> {
+  const dupId = parseDuplicatePolicyId(errText);
+  if (!dupId) return { handled: false, policyId: null };
+  try {
+    const res = await fetch(
+      ebayProxyUrl(`/sell/account/v1/fulfillment_policy/${encodeURIComponent(dupId)}`),
+      { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } }
+    );
+    if (!res.ok) {
+      console.warn(`[eBay ${tag}] duplicate policy=${dupId}: GET failed status=${res.status} -- not adopting`);
+      return { handled: true, policyId: null };
+    }
+    const policy = (await res.json()) as any;
+    const adoptable = opts.expectedRateTableId
+      ? isZone9PolicyAdoptable(policy, opts.expectedRateTableId, tag)
+      : isFullyExcludedPolicyAdoptable(policy, tag, opts.expectedCostType);
+    if (!adoptable) {
+      console.warn(`[eBay ${tag}] duplicate policy=${dupId} ("${policy?.name}") is NOT adoptable -- skipping (no policy created)`);
+      return { handled: true, policyId: null };
+    }
+    const id = String(policy?.fulfillmentPolicyId || dupId);
+    console.log(`[eBay ${tag}] adopted duplicate policy=${id} ("${policy?.name}") on 20400 Duplicate Policy`);
+    return { handled: true, policyId: id };
+  } catch (err) {
+    console.warn(`[eBay ${tag}] duplicate policy=${dupId}: adoption error -- not adopting`, err);
+    return { handled: true, policyId: null };
+  }
 }
 
 /** Best-effort: GET the created policy and log whether regionExcluded came back. Never throws. */
@@ -621,7 +724,7 @@ export async function ensureFvfFlatRatePolicy(
   };
 
   try {
-    const res = await postFulfillmentPolicyWithFallback(accessToken, body, 'FvfFlat');
+    const res = await postFulfillmentPolicyWithFallback(accessToken, body, 'FvfFlat', { allowUnrestrictedFallback: false });
 
     if (res.ok) {
       const data = (await res.json()) as any;
@@ -635,6 +738,19 @@ export async function ensureFvfFlatRatePolicy(
     }
 
     const errText = await res.text();
+    // 20400 "Duplicate Policy": same CONTENT as an existing policy (any name) -> adopt it if safe.
+    const dup = await adoptDuplicateFulfillmentPolicy(accessToken, errText, 'FvfFlat', {
+      expectedRateTableId: rateTableId,
+      expectedCostType: 'FLAT_RATE',
+    });
+    if (dup.handled) {
+      if (dup.policyId) {
+        policyCache.set(cacheKey, dup.policyId);
+        return { policyId: dup.policyId, flatRate };
+      }
+      console.warn(`[eBay FvfFlat] organizer=${organizerId} tier=${tier} duplicate policy not adoptable -- returning null. err=${errText.slice(0, 500)}`);
+      return null;
+    }
     // 20400 = policy name already exists — adopt it
     if (errText.includes('20400') || /already exists/i.test(errText)) {
       const adopted = await findExistingFlatRatePolicy(accessToken, policyNames, rateTableId);
@@ -825,6 +941,13 @@ export async function ensureNamedWeightTierPolicy(
     }
 
     const errText = await res.text();
+    // 20400 "Duplicate Policy": same content as an existing policy (any name) -> adopt if fully excluded.
+    const dup = await adoptDuplicateFulfillmentPolicy(accessToken, errText, 'NamedTier', { expectedCostType: 'FLAT_RATE' });
+    if (dup.handled) {
+      if (dup.policyId) return { maxOz, policyId: dup.policyId, policyName, flatRate };
+      console.warn(`[eBay NamedTier] organizer=${organizerId} bucket=${bucketMaxLb}lb duplicate policy not adoptable -- returning null. err=${errText.slice(0, 500)}`);
+      return null;
+    }
     // 20400 = policy name already exists — adopt it
     if (errText.includes('20400') || /already exists/i.test(errText)) {
       const adopted = await findExistingFlatRatePolicy(accessToken, policyName);

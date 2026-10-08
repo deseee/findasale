@@ -36,12 +36,7 @@ import {
   computeFvfFlatRate,
   roundUpToBucket,
   DEFAULT_EXCLUDED_SHIP_TO,
-  resolveZone9TierWithRateTable,
-  priceBasisFromCheapest,
-  priceBasisKey,
-  composeTieredPolicyName,
-  isZone9PolicyAdoptable,
-  shipToLocationsForTier,
+  adoptDuplicateFulfillmentPolicy,
   postFulfillmentPolicyWithFallback,
   logPolicyShipToLocations,
 } from './ebayFlatRatePolicyService';
@@ -189,6 +184,11 @@ export async function ensureCalculatedFulfillmentPolicy(organizerId: string): Pr
       console.log(`[eBay CalcPolicy] organizer=${organizerId} created policy=${policyId}`);
     } else {
       const errText = await res.text();
+      // 20400 "Duplicate Policy" (same content, other name): adopt only if fully excluded + CALCULATED.
+      const dup = await adoptDuplicateFulfillmentPolicy(accessToken, errText, 'CalcPolicy', { expectedCostType: 'CALCULATED' });
+      if (dup.handled) {
+        policyId = dup.policyId;
+      } else
       // 20400 = a policy with this name already exists -> adopt it.
       if (errText.includes('20400') || /already exists/i.test(errText)) {
         console.log(`[eBay CalcPolicy] organizer=${organizerId} policy exists (20400) — adopting existing`);
@@ -276,19 +276,14 @@ export async function ensureCalculatedPolicyWithHandling(
   const { bucketedRate, handlingCost } = computeCalculatedWithHandling(cheapest.rate);
   const handlingCostStr = handlingCost.toFixed(2);
   const bucketedRateStr = bucketedRate.toFixed(2);
-  // Zone-9 tier: T4 (heavy/big/unmeasured, OR a T1-T3 package whose AK/HI/PR surcharge
-  // rate table could not be resolved -- fail safe) keeps the legacy name + full
-  // exclusions, so existing policies are still adopted; T1-T3 get a tiered name with the
-  // price-basis segment, only exclude APO/FPO, and carry the surcharge rateTableId.
+  // Calculated-shipping policies CANNOT carry a shipping rate table (eBay rejects with
+  // 20403 LSAS RATE_TABLE_NOT_ALLOWED), so an AK/HI/PR surcharge cannot be expressed here.
+  // Every package therefore resolves to the T4 shape: Lower 48 only, AK/HI + US Protectorates
+  // + APO/FPO excluded, legacy name "FindA.Sale Calculated HC$X". No rateTableId, ever.
   const accessToken = conn.accessToken;
-  const { tier, rateTableId } = await resolveZone9TierWithRateTable(accessToken, organizerId, weightOz, dims, 'CalcHandling');
-  const basis = priceBasisFromCheapest(cheapest, weightOz, dims);
-  const policyName =
-    tier === 'T4'
-      ? `${CALCULATED_HANDLING_POLICY_NAME_PREFIX}${handlingCostStr}`
-      : composeTieredPolicyName(tier, basis, `Calc HC$${handlingCostStr}`);
+  const policyName = `${CALCULATED_HANDLING_POLICY_NAME_PREFIX}${handlingCostStr}`;
 
-  const cacheKey = `${organizerId}:${tier}:${priceBasisKey(tier, basis)}:${bucketedRateStr}`;
+  const cacheKey = `${organizerId}:calc:${bucketedRateStr}:${handlingCostStr}`;
   const cached = handlingPolicyCache.get(cacheKey);
   if (cached) {
     console.log(
@@ -299,9 +294,8 @@ export async function ensureCalculatedPolicyWithHandling(
 
   const handlingTimeDays = conn.handlingTimeDays ?? 3;
 
-  // Check if a policy with this exact name already exists before creating (T1-T3: only
-  // if it is light AND carries the expected rate table).
-  const existing = await findExistingCalculatedHandlingPolicy(accessToken, policyName, rateTableId);
+  // Check if a policy with this exact name already exists before creating.
+  const existing = await findExistingCalculatedHandlingPolicy(accessToken, policyName);
   if (existing) {
     handlingPolicyCache.set(cacheKey, existing);
     console.log(
@@ -324,8 +318,6 @@ export async function ensureCalculatedPolicyWithHandling(
         optionType: 'DOMESTIC',
         costType: 'CALCULATED',
         packageHandlingCost: { value: handlingCostStr, currency: 'USD' },
-        // AK/HI/PR surcharge table (T1-T3 only; absent for T4).
-        ...(rateTableId ? { rateTableId } : {}),
         shippingServices: [
           {
             shippingServiceCode: 'USPSParcel',
@@ -342,17 +334,17 @@ export async function ensureCalculatedPolicyWithHandling(
         ],
       },
     ],
-    shipToLocations: shipToLocationsForTier(tier),
+    shipToLocations: DEFAULT_EXCLUDED_SHIP_TO,
   };
 
   try {
-    const res = await postFulfillmentPolicyWithFallback(accessToken, body, 'CalcHandling');
+    const res = await postFulfillmentPolicyWithFallback(accessToken, body, 'CalcHandling', { allowUnrestrictedFallback: false });
 
     if (res.ok) {
       const data = (await res.json()) as any;
       const policyId: string = data.fulfillmentPolicyId;
       handlingPolicyCache.set(cacheKey, policyId);
-      void logPolicyShipToLocations(accessToken, policyId, 'CalcHandling', rateTableId);
+      void logPolicyShipToLocations(accessToken, policyId, 'CalcHandling');
       console.log(
         `[eBay CalcHandling] created organizer=${organizerId} bucketedRate=${bucketedRateStr} handlingCost=${handlingCostStr} policy=${policyId} estimatedRate=${cheapest.rate}`
       );
@@ -360,9 +352,19 @@ export async function ensureCalculatedPolicyWithHandling(
     }
 
     const errText = await res.text();
+    // 20400 "Duplicate Policy": same content as an existing policy (any name) -> adopt if safe.
+    const dup = await adoptDuplicateFulfillmentPolicy(accessToken, errText, 'CalcHandling', { expectedCostType: 'CALCULATED' });
+    if (dup.handled) {
+      if (dup.policyId) {
+        handlingPolicyCache.set(cacheKey, dup.policyId);
+        return { policyId: dup.policyId, handlingCost, bucketedRate };
+      }
+      console.warn(`[eBay CalcHandling] organizer=${organizerId} duplicate policy not adoptable -- returning null. err=${errText.slice(0, 500)}`);
+      return null;
+    }
     // 20400 = policy name already exists — adopt it
     if (errText.includes('20400') || /already exists/i.test(errText)) {
-      const adopted = await findExistingCalculatedHandlingPolicy(accessToken, policyName, rateTableId);
+      const adopted = await findExistingCalculatedHandlingPolicy(accessToken, policyName);
       if (adopted) {
         handlingPolicyCache.set(cacheKey, adopted);
         console.log(
@@ -388,9 +390,7 @@ export async function ensureCalculatedPolicyWithHandling(
  */
 async function findExistingCalculatedHandlingPolicy(
   accessToken: string,
-  policyName: string,
-  /** T1-T3 only: required rateTableId (see isZone9PolicyAdoptable). */
-  expectedRateTableId?: string | null
+  policyName: string
 ): Promise<string | null> {
   try {
     const res = await fetch(
@@ -402,7 +402,6 @@ async function findExistingCalculatedHandlingPolicy(
     const policies: any[] = data.fulfillmentPolicies || [];
     const match = policies.find((p) => p.name === policyName);
     if (!match?.fulfillmentPolicyId) return null;
-    if (expectedRateTableId && !isZone9PolicyAdoptable(match, expectedRateTableId, 'CalcHandling')) return null;
     return match.fulfillmentPolicyId;
   } catch (err) {
     console.warn('[eBay CalcHandling] findExisting failed', err);
