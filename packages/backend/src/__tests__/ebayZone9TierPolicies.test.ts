@@ -228,7 +228,7 @@ describe('ensureFvfFlatRatePolicy / ensureCalculatedPolicyWithHandling (rate tab
         }
         return { ok: true, status: 200, json: async () => ({ fulfillmentPolicyId: 'new-' + posted.length }), clone: () => ({ text: async () => '' }), text: async () => '' };
       }
-      const one = /\/fulfillment_policy\/([^/?]+)$/.exec(String(url));
+      const one = /\/fulfillment_policy\/([^/?]+)$/.exec(decodeURIComponent(String(url)));
       if (one) {
         gotIds.push(one[1]);
         const p = policyById[one[1]];
