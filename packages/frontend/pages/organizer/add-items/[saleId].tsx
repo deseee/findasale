@@ -1367,7 +1367,7 @@ const AddItemsDetailPage = () => {
       return await api.post(`/items/bulk`, body);
     },
     onMutate: () => { inMutationFlight.current = true; },
-    onSuccess: (response: any, variables: { itemIds: string[]; operation: string; value?: any; keepSelection?: boolean }) => {
+    onSuccess: (response: any, variables: { itemIds: string[]; operation: string; value?: any; priceType?: string; keepSelection?: boolean }) => {
       const succeeded = response.data.succeeded || [];
       const failed = response.data.failed || [];
       const skipped = response.data.skipped || []; // P1-B: Handle skipped items from backend
