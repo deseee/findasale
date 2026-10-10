@@ -717,6 +717,33 @@
   // a click read as human input to bot detection, which is not something this extension tries to do, and
   // it required the browser's debugger permission. Language is now chosen with a normal click.
 
+  // FIX 2026-10-10 (Patrick live log: 'Stray panel from an earlier field did not confirm closed before
+  // opening "Language"/"Condition"', then "Condition"/"Color" panel did not open on attempt 1/3..3/3).
+  // The old stray dismissal was ONE realOutsideClick + a fixed 250ms look, so a slow-closing (or
+  // Escape/close-button-only) panel was still up when the opener was clicked, and the click was
+  // swallowed. This dismisses in escalating steps -- Escape, outside click, the panel's own close/back
+  // control -- polling up to ~700ms after each, and returns whether the stray is gone. Never throws.
+  function describeEl(el) {
+    if (!el) return 'null';
+    return '<' + String(el.tagName || '').toLowerCase() + ' id="' + (el.id || '') + '" testid="' + (el.getAttribute && el.getAttribute('data-testid') || '') + '" role="' + (el.getAttribute && el.getAttribute('role') || '') + '" class="' + String(el.className || '').toString().slice(0, 60) + '">';
+  }
+  async function dismissStrayPanel(fieldId) {
+    const gone = async () => !!(await waitFor(() => !findOpenPanel(fieldId, false), 700));
+    try {
+      const stray = findOpenPanel(fieldId, false);
+      if (!stray) return true;
+      const keyOpts = { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, cancelable: true };
+      [document.activeElement, document.body].forEach((t) => { try { if (t) t.dispatchEvent(new KeyboardEvent('keydown', keyOpts)); } catch (e) { /* ignore */ } });
+      if (await gone()) return true;
+      realOutsideClick(document.body);
+      if (await gone()) return true;
+      const again = findOpenPanel(fieldId, false);
+      const closer = again && again.querySelector('button[aria-label*="close" i], button[aria-label*="back" i], [data-testid*="close" i], [data-testid*="back" i]');
+      if (closer) { closer.click(); if (await gone()) return true; }
+      console.warn('[FAS Vinted DIAG] stray panel survived Escape + outside click + close control; element: ' + describeEl(findOpenPanel(fieldId, false)));
+      return false;
+    } catch (e) { return false; }
+  }
   // Set true by pickFromPanel's generic-blend Material fallback below; read once, right after the
   // Material tryFill() call in fillListing(), to surface a visible review-overlay warning (not just
   // a console.warn) whenever the "Cotton" default was actually used for this run.
@@ -731,7 +758,8 @@
     // and can fall through to some other element that merely contains the word. Live-confirmed the
     // real control is the readonly <input id="color" data-testid="color-select-dropdown-input">, and a
     // plain click on it opens color-select-dropdown-content. Use it directly for Color.
-    const opener = (fieldId === 'color' && document.getElementById('color')) || openerByLabel(labelText) || document.getElementById(fieldId);
+    const resolveOpener = () => (fieldId === 'color' && document.getElementById('color')) || openerByLabel(labelText) || document.getElementById(fieldId);
+    let opener = resolveOpener();
     console.log('[FAS Vinted DIAG] ' + fieldId + ': opener resolved to tag=' + (opener ? opener.tagName : null) + ' id=' + (opener ? opener.id : null) + ' testid=' + (opener ? opener.getAttribute('data-testid') : null) + ' text="' + (opener ? opener.textContent.trim().slice(0, 40) : '') + '"');
     if (!opener) return false;
     // BUG FIX 2026-08-19 (S-EXT-BATCH-6, P0, live-Chrome-confirmed): pickCategory() calls
@@ -779,17 +807,21 @@
           // never opening its own panel in a fast, fully-automated run -- switched to the same
           // realOutsideClick() this file already trusts everywhere else, plus an explicit re-check so
           // a genuine miss is at least loud instead of silently proceeding into a still-blocked opener.
-          realOutsideClick(document.body);
-          await sleep(250);
-          if (findOpenPanel(fieldId, false)) console.warn('[FAS Vinted] Stray panel from an earlier field did not confirm closed before opening "' + labelText + '" -- this field may fail to open as a result.');
+          // FIX 2026-10-10: escalating, polled dismissal (see dismissStrayPanel) instead of one outside click.
+          if (!(await dismissStrayPanel(fieldId))) console.warn('[FAS Vinted] Stray panel from an earlier field did not confirm closed before opening "' + labelText + '" -- this field may fail to open as a result. Stray: ' + describeEl(findOpenPanel(fieldId, false)));
         }
+        // FIX 2026-10-10: a re-render right after the previous field's change can replace the opener node
+        // (a click on a detached node does nothing, which matches "did not open on attempt 1/3, 2/3, 3/3").
+        // Re-resolve it whenever the cached one is detached or missing.
+        if (!opener || !opener.isConnected) { const fresh = resolveOpener(); if (fresh) opener = fresh; }
         opener.click();
-        await sleep(400 + attempt * 200); // give a category-driven remount progressively more room on each retry
+        // Poll for the panel instead of a fixed guess; the window grows with each attempt.
+        await waitFor(() => findOpenPanel(fieldId, true), 1000 + attempt * 700);
       }
       panel = findOpenPanel(fieldId);
       if (panel) break;
-      console.warn('[FAS Vinted] "' + labelText + '" panel did not open on attempt ' + attempt + '/3 -- retrying (possible re-render race right after an earlier field change).');
-      await sleep(300);
+      console.warn('[FAS Vinted] "' + labelText + '" panel did not open on attempt ' + attempt + '/3 -- retrying (possible re-render race right after an earlier field change). opener: ' + describeEl(opener) + ' connected=' + !!(opener && opener.isConnected) + ' aria-expanded=' + (opener && opener.getAttribute ? opener.getAttribute('aria-expanded') : null));
+      await sleep(300 + attempt * 400);
     }
     // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): the search input MUST be looked
     // up scoped to the just-opened panel, not page-wide. Vinted's site nav bar has its own unrelated
@@ -1581,19 +1613,46 @@
       // Strip the leaf title itself from the row text before looking for parent names: the parent often
       // shares words with the leaf ("Baseball & softball" inside "Baseball & softball gloves").
       const rows = cands.map((el) => { const full = rowTextOf(el); return { el, text: full, crumb: full.split(leafTitle).join(' ') }; });
+      // FIX 2026-10-10 (Patrick live log: "keyboards" / "pedals" / "lanterns" / "games" all reported
+      // "only present under a different parent" although the legit row was on screen). Root cause: the
+      // crumb is the row text with the leaf title removed (split(leafTitle).join(' ')), so any ancestor
+      // whose OWN name contains the leaf title was mangled before the comparison -- tree parent
+      // "Keyboards & accessories" became "& accessories", "Amps & pedals" became "amps &", "Flashlights,
+      // headlamps & lanterns" and "Video games & consoles" likewise -- and could never match. Ancestors
+      // that contain the leaf title are therefore searched in the FULL row text instead (safe: the leaf
+      // alone is shorter than such an ancestor, so it cannot produce a false hit); all others keep using
+      // the stripped crumb (needed for e.g. leaf "Other accessories" under parent "Accessories").
+      // Ancestors = EVERY name on the mapped path above the leaf, not just the immediate parent/root.
+      const ancestors = parts.slice(0, -1).map(norm).filter(Boolean);
+      const hasCrumb = (r) => r.crumb.indexOf('>') !== -1;
+      const found = (r, a) => (a.indexOf(leafTitle) !== -1 ? r.text.indexOf(a) !== -1 : r.crumb.indexOf(a) !== -1);
       // A row that shows a breadcrumb which does not contain our parent is a DIFFERENT leaf with the
       // same title -- reject it. A row with no breadcrumb at all cannot be told apart, so it is kept.
-      let kept = rows.filter((r) => r.crumb.indexOf('>') === -1 || !parentTitle || r.crumb.indexOf(parentTitle) !== -1);
+      let kept = rows.filter((r) => !hasCrumb(r) || !parentTitle || found(r, parentTitle));
+      // Immediate parent not shown (Vinted may show only some ancestors): accept a row that names ANY
+      // ancestor from the full path.
+      if (!kept.length && ancestors.length) kept = rows.filter((r) => !hasCrumb(r) || ancestors.some((a) => found(r, a)));
       if (kept.length > 1 && rootTitle) {
-        const strict = kept.filter((r) => r.crumb.indexOf('>') === -1 || r.crumb.indexOf(rootTitle) !== -1);
+        const strict = kept.filter((r) => !hasCrumb(r) || found(r, rootTitle));
         if (strict.length) kept = strict;
+      }
+      // Still nothing: a row whose crumb names none of our ancestors is only a contradiction if it
+      // names a DIFFERENT top-level section (Vinted's 9 roots). If it does not, and exactly one distinct
+      // row has this exact title, keep it. Two distinct rows are never guessed between (below).
+      let lenient = false;
+      if (!kept.length && rootTitle) {
+        const OTHER_ROOTS = ['women', 'men', 'designer', 'kids', 'home', 'electronics', 'books & media', 'hobbies & collectibles', 'sports'].filter((x) => x !== rootTitle);
+        const contradicts = (r) => OTHER_ROOTS.some((x) => new RegExp('(^|[^a-z])' + x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z]|$)').test(r.crumb));
+        const noContra = rows.filter((r) => !contradicts(r));
+        if (noContra.length) { kept = noContra; lenient = true; }
       }
       const distinct = [];
       kept.forEach((r) => { if (distinct.indexOf(r.text) === -1) distinct.push(r.text); });
       if (distinct.length !== 1) {
-        console.warn('[FAS Vinted] Mapped category: "' + leafTitle + '" is ' + (kept.length ? 'ambiguous (' + distinct.length + ' different rows)' : 'only present under a different parent') + ' -- not guessing, falling back to the search logic.');
+        console.warn('[FAS Vinted] Mapped category: "' + leafTitle + '" is ' + (kept.length ? 'ambiguous (' + distinct.length + ' different rows)' : 'only present under a different parent') + ' -- not guessing, falling back to the search logic. Mapped path: "' + parts.join(' > ') + '". Row crumbs seen: ' + rows.slice(0, 8).map((r) => '[' + r.text.slice(0, 120) + ']').join(' '));
         return null;
       }
+      if (lenient) console.warn('[FAS Vinted] Mapped category: "' + leafTitle + '" -- the single exact-title row [' + kept[0].text.slice(0, 120) + '] names none of "' + parts.join(' > ') + '" but does not contradict it either -- accepting.');
       return kept[0].el;
     };
   }
@@ -1904,7 +1963,27 @@
     // Try that authoritative ID first -- it can't be defeated by category-specific wording -- before
     // falling back to the widened text scan for the (unlikely, but not impossible) case a future
     // Vinted layout drops the id.
-    const emptyBrandControl = document.getElementById('empty-brand');
+    // FIX 2026-10-10 (Patrick live log: two runs ended with "no matching suggestion and no List without
+    // Brand found" while a third run succeeded via #empty-brand). The comment above on "Use as brand"
+    // records that #empty-brand exists ONLY in the panel's default (un-searched) view; by this point
+    // pickFromPanel has typed the brand into the search box (and the panel may even have been closed),
+    // so a one-shot getElementById is a timing/state miss, not proof the control is absent. Bounded
+    // recovery: (1) reopen the Brand panel if it is gone, (2) clear the typed search text so the panel
+    // returns to its default view, (3) wait up to ~2.5s for #empty-brand. Diagnostics say which branch ran.
+    let emptyBrandControl = document.getElementById('empty-brand');
+    if (!emptyBrandControl) {
+      try {
+        let bp = findOpenPanel('brand', true);
+        if (!bp) {
+          const brandOpener = document.getElementById('brand') || openerByLabel(labelText);
+          if (brandOpener) { brandOpener.click(); bp = await waitFor(() => findOpenPanel('brand', true), 2500); }
+        }
+        const bpSearch = bp && Array.from(bp.querySelectorAll('input[data-testid*="search" i], input[type="text"], input:not([type])')).find((el) => el.offsetParent !== null && el.id !== 'brand');
+        if (bpSearch && bpSearch.value) { bpSearch.focus(); setNativeValue(bpSearch, ''); }
+        emptyBrandControl = await waitFor(() => document.getElementById('empty-brand'), 2500);
+        console.log('[FAS Vinted DIAG] brand: #empty-brand recovery -- panelOpen=' + !!bp + ' searchCleared=' + !!(bpSearch) + ' found=' + !!emptyBrandControl);
+      } catch (e) { console.warn('[FAS Vinted] brand #empty-brand recovery threw (non-fatal):', e && e.message); }
+    }
     if (emptyBrandControl) {
       emptyBrandControl.click();
       await sleep(200);
@@ -1924,6 +2003,10 @@
       console.warn('[FAS Vinted] Brand "' + value + '" had no matching suggestion -- selected Vinted\'s own "No brand" fallback instead.');
       return true;
     }
+    try {
+      const dp = findOpenPanel('brand', true);
+      console.warn('[FAS Vinted DIAG] brand: no-brand fallback missed; panelOpen=' + !!dp + ' panel options: ' + (dp ? Array.from(dp.querySelectorAll('[role="option"], [role="radio"], li, button')).slice(0, 12).map((n) => (n.id ? '#' + n.id + ' ' : '') + norm(n.textContent).slice(0, 40)).join(' | ') : 'n/a'));
+    } catch (e) { /* diagnostic only */ }
     await closePanel('brand');
     console.warn('[FAS Vinted] Brand "' + value + '" had no matching suggestion and no "No brand"/"List without Brand" option was found (UNVERIFIED) -- left unset.');
     return false;
@@ -2788,6 +2871,21 @@
     return /\b(book|hardcover|paperback|novel|isbn|comic|comics|manga|tpb|trade paperback|graphic novel)\b/.test(text);
   }
 
+  // FIX 2026-10-10: looksLikeVintedBookOrComicItem() reads only the eBay category/title text, so a non-book
+  // item whose title or eBay category merely contains "book"/"comic" was still sent through the ISBN +
+  // Language steps and ended with a false 'Language is still empty ... field NOT in the DOM' warning.
+  // Those two fields exist only on Books & Media forms. Require the book text signal AND evidence the
+  // Vinted form needs them: the ISBN / Language control is actually on the form, or the mapped Vinted
+  // category path is under Books & Media. With no mapped path and no control present, keep the old
+  // behaviour (text signal alone), since the form cannot tell us either way.
+  function vintedFormNeedsBookFields(item) {
+    if (!looksLikeVintedBookOrComicItem(item)) return false;
+    if (document.getElementById('language_book') || fieldByLabel('ISBN')) return true;
+    const root = norm(vintedMappedPathParts(item)[0] || '');
+    if (root) return root === 'books & media';
+    return true;
+  }
+
   async function fillListing(item) {
     fasCurrentDiagItem = item;
     fasVintedDeferredToken++; // cancels any deferred category watch left over from an earlier fill
@@ -3007,7 +3105,7 @@
     // leaving the field empty. STILL never invents a value: only ever a real isbn/upc/ean already
     // on file for the item (see productEnrichment.ts's own "evidence-only, never invented" rule
     // for how upc/isbn get there in the first place).
-    if (looksLikeVintedBookOrComicItem(item) && !fasSkipIfSet('isbn', 'ISBN')) {
+    if (vintedFormNeedsBookFields(item) && !fasSkipIfSet('isbn', 'ISBN')) {
       // BUG FIX 2026-09-03 (Patrick live-reported: the "filled placeholder 0000000000000" warning
       // showed on the review screen but the ISBN field itself was left empty): ISBN runs live,
       // per-keystroke validation the same way Price does (Vinted shows a "checking.../this ISBN is
@@ -3250,7 +3348,7 @@
     // earlier-in-the-run snapshot for a field proven to get reset by later interactions.
     const fasPreLangSnap = fasSnapshotVintedFields();
     let languageStepRan = false;
-    if (looksLikeVintedBookOrComicItem(item)) {
+    if (vintedFormNeedsBookFields(item)) {
       await sleep(300);
       const languageInput = document.getElementById('language_book');
       const existingLangText = languageInput ? norm(languageInput.value) : '';
@@ -3375,7 +3473,7 @@
     // fillText -- ISBN needs the real per-keystroke validation path, see that block's own comment).
     fasMarkStep('postLanguage:isbnCheckStart');
     await sleep(250 + Math.floor(Math.random() * 450));
-    if (looksLikeVintedBookOrComicItem(item)) {
+    if (vintedFormNeedsBookFields(item)) {
       const isbnFieldAfterLanguage = fieldByLabel('ISBN');
       const isbnStillSet = isbnFieldAfterLanguage && String(isbnFieldAfterLanguage.value || '').trim();
       if (!isbnStillSet) {
@@ -3510,7 +3608,7 @@
     // one last time, log it, and surface a persistent review-screen warning if it is empty. Deliberately
     // NOT re-opening the Language modal here: each Language save is what triggers Vinted's field reset,
     // so a blind retry would just restart the whole sweep.
-    if (looksLikeVintedBookOrComicItem(item)) {
+    if (vintedFormNeedsBookFields(item)) {
       const finalLang = document.getElementById('language_book');
       const finalLangText = finalLang ? norm(finalLang.value) : '';
       const finalLangSet = finalLangText && finalLangText !== norm('Select a language');
