@@ -20,7 +20,7 @@ import { searchPriceCharting, PriceChartingResult } from '../services/priceChart
  * - If both have results, blend: 60% eBay + 40% PriceCharting
  *
  * D-005 Locked Rule: Never modify item.price (organizer-set). Only item.aiSuggestedPrice
- * may be updated, and only when item.price is null.
+ * may be updated, and only when the organizer has not set the price (userEditedFields lacks 'price').
  *
  * Non-throwing wrapper ensures this background job doesn't block the item publish flow.
  */
@@ -117,6 +117,7 @@ export async function fetchEbayCompsForItem(itemId: string): Promise<void> {
         conditionGrade: true,
         price: true,
         aiSuggestedPrice: true,
+        userEditedFields: true,
       },
     });
 
@@ -239,9 +240,12 @@ export async function fetchEbayCompsForItem(itemId: string): Promise<void> {
         },
       });
 
-      // D-005 Locked Rule: Only update aiSuggestedPrice if organizer hasn't set an explicit price
+      // D-005 Locked Rule: Only update aiSuggestedPrice if organizer hasn't set an explicit price.
+      // "Organizer-set" means item.userEditedFields includes 'price' (D-006). A non-null item.price alone is NOT
+      // the signal: the rapid-draft pipeline itself writes item.price, and this job never writes item.price.
+      const organizerSetPrice = Array.isArray(item.userEditedFields) && item.userEditedFields.includes('price');
       const finalPrice = blendedPrice !== null ? blendedPrice : comps.median;
-      if (item.price === null && finalPrice && finalPrice > 0) {
+      if (!organizerSetPrice && finalPrice && finalPrice > 0) {
         // Compare: if final price > current AI suggestion, update
         const currentSuggested = item.aiSuggestedPrice ? parseFloat(item.aiSuggestedPrice.toString()) : 0;
         if (finalPrice > currentSuggested) {
@@ -253,8 +257,8 @@ export async function fetchEbayCompsForItem(itemId: string): Promise<void> {
         } else {
           console.log(`[fetchEbayComps] Final price $${finalPrice.toFixed(2)} not higher than current $${currentSuggested}; no price update`);
         }
-      } else if (item.price !== null) {
-        console.log(`[fetchEbayComps] Item ${itemId} has organizer-set price ($${item.price}); not updating aiSuggestedPrice`);
+      } else if (organizerSetPrice) {
+        console.log(`[fetchEbayComps] Item ${itemId} has organizer-set price (userEditedFields includes 'price'); not updating aiSuggestedPrice`);
       }
     }
 

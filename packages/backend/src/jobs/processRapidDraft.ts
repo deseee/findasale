@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { analyzeItemImage, analyzeItemImages, suggestPrice, AITagResult } from '../services/cloudAIService';
 import { applyCharmPricing } from '../utils/charmPricing';
+import { isRelevantComp } from '../utils/compRelevance';
 import { checkAITagLimit } from '../lib/tierEnforcement';
 import { checkAiTagQuota, reserveAiTags, refundAiTags } from '../lib/aiTagsQuotaTracker'; // shared monthly Smart-tag counter (same one analyze-photo / batch-analyze use); atomic reserve-then-refund
 import { TIER_LIMITS, SubscriptionTier } from '../constants/tierLimits';
@@ -327,7 +328,11 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       // Comp-based price refinement: use detected category to fetch recent sold comps
       // and override the raw AI price with a market-grounded suggestion
       let refinedPrice = aiResult.suggestedPrice;
-      if (aiResult.category) {
+      // A real comp-backed engine price (finalizePricing priceSource 'engine') must never be clobbered by a
+      // category-only average of unrelated sold items (Sweet Maya LP incident, 2026-10-05).
+      if (aiResult.priceSource === 'engine') {
+        console.log(`[pricing] refinement skipped item=${itemId} source=engine price=${refinedPrice}`);
+      } else if (aiResult.category) {
         try {
           const recentComps = await prisma.item.findMany({
             where: {
@@ -340,8 +345,14 @@ export async function processRapidDraft(itemId: string): Promise<void> {
             select: { title: true, price: true, updatedAt: true },
           });
 
-          if (recentComps.length >= 2) {
-            const compData = recentComps.map((c: { title: string; price: number | null; updatedAt: Date }) => ({
+          // Only count comps whose title shares meaningful tokens with the new item's title or artist.
+          const relevantComps = recentComps.filter((c: { title: string }) =>
+            isRelevantComp(c.title, aiResult.title, aiResult.recordIdentity?.artist ?? aiResult.brand)
+          );
+          console.log(`[pricing] refinement item=${itemId} candidateComps=${recentComps.length} qualifiedComps=${relevantComps.length}`);
+
+          if (relevantComps.length >= 2) {
+            const compData = relevantComps.map((c: { title: string; price: number | null; updatedAt: Date }) => ({
               title: c.title,
               price: c.price!,
               soldAt: c.updatedAt.toISOString().split('T')[0],
@@ -360,6 +371,9 @@ export async function processRapidDraft(itemId: string): Promise<void> {
             // record in a Music-category rapidfire batch landed flat because his own prior
             // sold vinyl comps triggered this branch every time).
             refinedPrice = applyCharmPricing(priceSuggestion.suggested);
+            console.log(`[pricing] refinement item=${itemId} source=comp-refinement rawSuggested=${priceSuggestion.suggested} written=${refinedPrice} previous=${aiResult.suggestedPrice}`);
+          } else {
+            console.log(`[pricing] refinement item=${itemId} source=${aiResult.priceSource ?? 'ai-guess'} kept=${refinedPrice} (fewer than 2 relevant comps)`);
           }
         } catch (priceErr) {
           // Price refinement is best-effort — fall back to raw AI price on error

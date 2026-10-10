@@ -597,14 +597,15 @@ function generateEbayCsv(
       .trim()
       .substring(0, 500);
 
-    // Determine price: use aiSuggestedPrice > estimatedValue > price > default
+    // Determine price: the item's own price wins; aiSuggestedPrice and estimatedValue are fallbacks only
+    // (same precedence as the live push paths, see the 2026-04-14 fix in pushSaleToEbay).
     let price = 0.99;
-    if (item.aiSuggestedPrice) {
+    if (item.price && Number(item.price) > 0) {
+      price = Number(item.price);
+    } else if (item.aiSuggestedPrice) {
       price = Number(item.aiSuggestedPrice);
     } else if (item.estimatedValue) {
       price = Number(item.estimatedValue);
-    } else if (item.price) {
-      price = item.price;
     }
 
     // Get condition ID mapping
@@ -1900,14 +1901,15 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Determine price
+    // Determine price: the item's own price wins (matches what the live push sends); AI suggestion and
+    // estimated value are fallbacks only.
     let price = 0.99;
-    if (item.aiSuggestedPrice) {
+    if (item.price && Number(item.price) > 0) {
+      price = Number(item.price);
+    } else if (item.aiSuggestedPrice) {
       price = Number(item.aiSuggestedPrice);
     } else if (item.estimatedValue) {
       price = Number(item.estimatedValue);
-    } else if (item.price) {
-      price = item.price;
     }
 
     // Apply watermark/clean to photos

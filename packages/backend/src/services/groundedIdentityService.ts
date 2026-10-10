@@ -236,7 +236,7 @@ async function orchestrate(input: GroundedIdentityInput): Promise<GroundedIdenti
     }
     const tier1 = (await Promise.all(tier1Tasks)).filter((c): c is GroundedCandidate => !!c);
 
-    let winner = pickWinner(tier1);
+    let winner = pickWinner(dropConflictingTextCandidates(tier1, input.baseResult.category));
 
     // Tier 2 (PREMIUM): ONLY if Tier 1 produced no gated candidate.
     if (!winner) {
@@ -263,7 +263,7 @@ async function orchestrate(input: GroundedIdentityInput): Promise<GroundedIdenti
         );
       }
       const tier2 = (await Promise.all(tier2Tasks)).filter((c): c is GroundedCandidate => !!c);
-      winner = pickWinner(tier2);
+      winner = pickWinner(dropConflictingTextCandidates(tier2, input.baseResult.category));
     }
 
     if (!winner) {
@@ -286,6 +286,54 @@ async function orchestrate(input: GroundedIdentityInput): Promise<GroundedIdenti
     console.log(`[grounding] item=${itemId} ORCHESTRATOR ERROR (non-fatal): ${err?.message || err}`);
     return { ran: false, reason: 'orchestrator error' };
   }
+}
+
+// Tiny deterministic product-family check (Sweet Maya LP incident, 2026-10-05: a Music item was re-titled
+// "Sweet Maia apples" by the text resolver, which tied a correct 0.9 visual candidate and won the tie).
+const FAMILY_WORDS: Record<string, string[]> = {
+  audio: ['music', 'vinyl', 'record', 'records', 'lp', 'lps', 'cd', 'cds', 'album', 'albums', 'cassette', 'cassettes', 'audio', 'single', 'ep'],
+  book: ['book', 'books', 'novel', 'novels', 'paperback', 'hardcover', 'textbook', 'magazine', 'comic', 'comics'],
+};
+const VISUAL_KEEP_CONF = 0.8;
+
+function familyWords(text: string | undefined | null): Set<string> {
+  return new Set((String(text ?? '').toLowerCase().match(/[a-z]+/g) ?? []));
+}
+
+function hitsFamily(words: Set<string>, family: string): boolean {
+  return FAMILY_WORDS[family].some((w) => words.has(w));
+}
+
+/**
+ * Guard: when the item's category belongs to a known media family and a high-confidence (>= 0.8) VISUAL
+ * candidate agrees with that family, drop any text-grounded candidate whose declared type (the part after
+ * " — ") does not mention that family. Otherwise returns the input untouched, so every non-media item and
+ * every text identity without a " — type" suffix behaves exactly as before.
+ */
+export function dropConflictingTextCandidates(
+  candidates: GroundedCandidate[],
+  category: string | undefined | null,
+): GroundedCandidate[] {
+  const catWords = familyWords(category);
+  for (const family of Object.keys(FAMILY_WORDS)) {
+    if (!hitsFamily(catWords, family)) continue;
+    const visualAgrees = candidates.some(
+      (c) => c.source !== 'text-grounded' && c.confidence >= VISUAL_KEEP_CONF && hitsFamily(familyWords(c.identity), family),
+    );
+    if (!visualAgrees) continue;
+    const kept = candidates.filter((c) => {
+      if (c.source !== 'text-grounded') return true;
+      const parts = c.identity.split(' — ');
+      if (parts.length < 2) return true; // no declared type: cannot judge, leave as before
+      const conflicts = !hitsFamily(familyWords(parts.slice(1).join(' ')), family);
+      if (conflicts) {
+        console.log(`[grounding] text candidate "${c.identity}" conflicts with ${family} category "${category}" and a high-confidence visual candidate; dropped`);
+      }
+      return !conflicts;
+    });
+    return kept;
+  }
+  return candidates;
 }
 
 /** Winner = highest-confidence gated candidate; text-grounded wins ties (marks beat pixels). */

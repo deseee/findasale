@@ -294,6 +294,11 @@ export interface AITagResult {
   category?: string; // Task #339: Optional if confidence < 0.6
   condition: string;
   suggestedPrice: number;
+  // Set by finalizePricing(): where suggestedPrice came from. 'engine' = blended pricing engine produced a
+  // real comp-backed price; 'ai-guess' = the model's own guess (non-audio item, FLOOR, timeout or error).
+  priceSource?: 'engine' | 'ai-guess';
+  priceEngineConfidence?: string; // engine confidence label (HIGH/MEDIUM/LOW/...) when priceSource === 'engine'
+  priceEngineTier?: number; // engine tier used when priceSource === 'engine'
   tags: string[];
   confidence?: number; // Camera Workflow v2: AI confidence score (0.0–1.0), defaults to 0.5
   suggestedTags?: string[]; // Sprint 1: Curated tags suggested by Haiku from Vision labels
@@ -363,6 +368,9 @@ async function finalizePricing(parsed: AITagResult): Promise<void> {
   }
 
   const PRICING_ENGINE_TIMEOUT_MS = 6000;
+  const rawAiGuess = parsed.suggestedPrice;
+  parsed.priceSource = 'ai-guess';
+  let skipReason = 'not-audio';
 
   if (isAudioFormatMatch({ title: parsed.title, category: parsed.category || '' })) {
     try {
@@ -380,12 +388,26 @@ async function finalizePricing(parsed: AITagResult): Promise<void> {
       // (same treatment pricingController.ts already gives FLOOR results).
       if (result && result.confidence !== 'FLOOR' && result.estimatedPrice > 0) {
         parsed.suggestedPrice = result.estimatedPrice / 100; // orchestrator returns cents
+        parsed.priceSource = 'engine';
+        parsed.priceEngineConfidence = String(result.confidence);
+        parsed.priceEngineTier = result.tier;
+        console.log(`[pricing] finalizePricing engine won: aiGuess=${rawAiGuess} enginePrice=${parsed.suggestedPrice} confidence=${result.confidence} tier=${result.tier} compsFound=${result.compsFound}`);
+      } else if (!result) {
+        skipReason = 'timeout';
+      } else if (result.confidence === 'FLOOR') {
+        skipReason = 'FLOOR';
+      } else {
+        skipReason = 'engine-price-not-positive';
       }
     } catch (err) {
+      skipReason = 'exception';
       console.error('[finalizePricing] Pricing engine lookup failed, keeping AI guess:', err);
     }
   }
 
+  if (parsed.priceSource !== 'engine') {
+    console.log(`[pricing] finalizePricing keeping ai-guess: aiGuess=${rawAiGuess} reason=${skipReason}`);
+  }
   parsed.suggestedPrice = applyCharmPricing(parsed.suggestedPrice);
 }
 
