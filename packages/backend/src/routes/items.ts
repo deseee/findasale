@@ -67,6 +67,7 @@ import { accountAgeGate } from '../middleware/accountAgeGate'; // #93: Account a
 import { bidRateLimiter } from '../middleware/bidRateLimiter'; // #95: Bidding velocity limits
 import { itemEndpointLimiter, bulkItemsLimiter, ebayRepushLimiter } from '../middleware/rateLimiter'; // #111: Bot rate limiting, P0-S3: Bulk operations rate limiting
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
+import { reopenItemSale } from '../controllers/saleReopenController'; // reopen-sale (2026-10-10): generic "marketplace sale was cancelled, mark available again"
 import { reanalyzeItemForOrganizer } from '../controllers/reanalyzeController'; // Re-analyze: re-run Smart tagging on stored photos
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
@@ -338,7 +339,11 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
     if (safeStatuses) {
       for (const item of items) {
         if (!safeStatuses.includes(item.status)) {
-          const friendlyMsg = statusFriendlyNames[item.status] || `Status is ${item.status}`;
+          // reopen-sale (2026-10-10): the generic SOLD message was a dead end for a cancelled marketplace sale.
+          const friendlyMsg =
+            operation === 'status' && value === 'AVAILABLE' && item.status === 'SOLD'
+              ? 'Item is marked sold. Open the item and choose "Mark available again" to reopen it after a cancelled sale. Sales paid through FindA.Sale checkout or the register are reopened by refunding them.'
+              : statusFriendlyNames[item.status] || `Status is ${item.status}`;
           failed.push({
             itemId: item.id,
             reason: friendlyMsg,
@@ -1282,6 +1287,7 @@ router.put('/:id', authenticate, updateItem);
 router.post('/:id/mark-sold-off-platform', authenticate, markItemSoldOffPlatform); // BYOR (2026-09-06): mark a plain AVAILABLE item sold using the organizer's own payment method
 router.post('/:id/reopen-ebay-cancelled-sale', authenticate, reopenEbayCancelledSale); // eBay sync hardening (2026-10-01): reopen an item whose eBay sale was cancelled/refunded (verified against eBay; 409 otherwise)
 router.post('/:id/undo-sold-off-platform', authenticate, undoItemSoldOffPlatform); // BYOR (2026-09-07): undo a mark-sold-off-platform action, scoped to un-invoiced OFF_PLATFORM_MANUAL items only
+router.post('/:id/reopen-sale', authenticate, reopenItemSale); // reopen-sale (2026-10-10): dispatches on lastSoldVia (eBay verified, off-platform undo, other marketplaces organizer-confirmed); 409 with reason for STRIPE/POS/paid/multi-qty/bulk lot
 // Item Description Authoring Contract (2026-05-12): voice + auto append with merge
 router.post('/:id/description/append', authenticate, appendDescription);
 router.delete('/:id', authenticate, deleteItem);

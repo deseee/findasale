@@ -49,6 +49,7 @@ import { sellItemUnits } from './itemStockService';
 import { syncMarketplaceStock } from './marketplaceStockSyncService';
 import { lotChannelRefusal } from './bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a bulk lot is never marked SOLD by a sale seen elsewhere
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
+import { isReportOfCancelledReopenedSale } from './saleReopenGuard'; // reopen-sale (2026-10-10): a sold signal for a sale the organizer reopened must not re-sell it
 
 export interface CommitFacebookNativeSaleResult {
   ok: true;
@@ -232,6 +233,12 @@ export async function commitFacebookNativeSale(
     if (lotRefusal.code === 'BULK_CHECK_FAILED') throw new Error('BULK_CHECK_FAILED');
     console.warn(`[commitFacebookNativeSale] item ${itemId} is a bulk lot, ignoring sold signal (${soldVia})`);
     return { ok: true, alreadyCommitted: true, bulkLotIgnored: true };
+  }
+  // reopen-sale (2026-10-10): the organizer reopened this item after the sale was cancelled on the marketplace. The
+  // marketplace can keep reporting that cancelled listing as sold; ignore a report that names it (see saleReopenGuard).
+  if (await isReportOfCancelledReopenedSale(itemId, soldVia, options.soldOnPlatform?.remoteListingId)) {
+    console.warn(`[commitFacebookNativeSale] item ${itemId} was reopened after a cancelled sale, ignoring sold signal (${soldVia})`);
+    return { ok: true, alreadyCommitted: true };
   }
   const skip = new Set<string>(options.skipWithdraw ?? []);
   if (options.soldOnPlatform) {

@@ -73,6 +73,8 @@ import {
   showRowGradePicker,
 } from '../../../lib/addItemsRow';
 import BulkOperationErrorModal from '../../../components/BulkOperationErrorModal';
+import ReopenSaleDialog from '../../../components/ReopenSaleDialog'; // reopen-sale (2026-10-10): "Mark available again" for a cancelled marketplace sale
+import { canOfferReopen } from '../../../hooks/useReopenSale';
 import ValuationWidget from '../../../components/ValuationWidget';
 import { decodeHtmlEntities } from '../../../utils/textUtils';
 import VoiceTagButton from '../../../components/VoiceTagButton'; // Feature #42: Voice-to-Tag
@@ -541,6 +543,7 @@ const AddItemsDetailPage = () => {
   // don't clutter the add-items list; organizer can still switch to All or Sold via the tabs.
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'sold'>('active');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [reopenTarget, setReopenTarget] = useState<{ id: string; title: string; lastSoldVia: string | null } | null>(null); // reopen-sale dialog
   const [deleteConfirmTitle, setDeleteConfirmTitle] = useState<string>('');
   const [bulkPrice, setBulkPrice] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -3555,6 +3558,18 @@ const AddItemsDetailPage = () => {
                             )}
                           </div>
                           <ChannelStatusDots channelStatus={item.channelStatus} pausedKeys={pausedDotKeys} />
+                          {canOfferReopen(item) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReopenTarget({ id: item.id, title: item.title || 'this item', lastSoldVia: item.lastSoldVia ?? null });
+                              }}
+                              className="text-[11px] font-semibold text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200 underline underline-offset-2 whitespace-nowrap"
+                            >
+                              Mark available again
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -4310,6 +4325,15 @@ const AddItemsDetailPage = () => {
         onClose={() => setBulkPriceModalOpen(false)}
         onConfirm={handleBulkPrice}
         loading={bulkUpdateMutation.isPending}
+      />
+
+      <ReopenSaleDialog
+        isOpen={!!reopenTarget}
+        itemId={reopenTarget?.id || ''}
+        itemTitle={reopenTarget?.title}
+        lastSoldVia={reopenTarget?.lastSoldVia}
+        onClose={() => setReopenTarget(null)}
+        onReopened={() => queryClient.invalidateQueries({ queryKey: ['items', saleId] })}
       />
 
       <BulkOperationErrorModal

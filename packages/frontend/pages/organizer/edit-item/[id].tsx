@@ -20,12 +20,15 @@ import { useToast } from '../../../components/ToastContext';
 import Skeleton from '../../../components/Skeleton';
 import ItemFormBody from '../../../components/itemForm/ItemFormBody';
 import { useItemForEdit } from '../../../components/itemForm/useItemForEdit';
+import ReopenSaleDialog from '../../../components/ReopenSaleDialog'; // reopen-sale (2026-10-10)
+import { canOfferReopen } from '../../../hooks/useReopenSale';
 
 const EditItemPage = () => {
   const router = useRouter();
   const { id } = router.query;
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const [reopenOpen, setReopenOpen] = React.useState(false);
   // Same query (and cache key) as the form body, so this is not a second request.
   const { data: item, isLoading } = useItemForEdit(id);
 
@@ -134,6 +137,15 @@ const EditItemPage = () => {
                   🏷️ Label Sheets
                 </Link>
               )}
+              {id && canOfferReopen(item) && (
+                <button
+                  type="button"
+                  onClick={() => setReopenOpen(true)}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                >
+                  Mark available again
+                </button>
+              )}
               {id && (
                 <button
                   type="button"
@@ -147,6 +159,14 @@ const EditItemPage = () => {
           </div>
 
           <ItemFormBody itemId={itemId} variant="page" />
+
+          <ReopenSaleDialog
+            isOpen={reopenOpen}
+            itemId={itemId}
+            itemTitle={item?.title}
+            lastSoldVia={item?.lastSoldVia ?? null}
+            onClose={() => setReopenOpen(false)}
+          />
         </div>
       </div>
     </>
