@@ -109,6 +109,7 @@ function baseForm(over: Partial<ItemFormData> = {}): ItemFormData {
     upc: '',
     mpn: '',
     isbn: '',
+    fccId: '',
     allowBestOffer: false,
     excludeFromMarkdown: false,
     bestOfferAcceptPct: '',
@@ -394,6 +395,7 @@ test('golden: fully populated form with every gate touched', () => {
     upc: '',
     mpn: '',
     isbn: '',
+    fccId: '',
     allowBestOffer: true,
     excludeFromMarkdown: true,
     ebayShippingOverride: 'FREE',
@@ -412,7 +414,7 @@ test('golden: default form with nothing touched sends this exact set of keys', (
     'title', 'description', 'price', 'quantity', 'stockTotal', 'category', 'ebayCategoryId', 'ebayCategoryName',
     'condition', 'conditionGrade', 'tags', 'status', 'listingType', 'auctionEndTime', 'qrEmbedEnabled', 'isLegendary',
     'tagColor', 'locationId', 'costBasis', 'roomTag', 'packageType', 'crosslisterFreeShipping', 'brand', 'size',
-    'color', 'material', 'upc', 'mpn', 'isbn', 'allowBestOffer', 'excludeFromMarkdown', 'ebayShippingOverride',
+    'color', 'material', 'upc', 'mpn', 'isbn', 'fccId', 'allowBestOffer', 'excludeFromMarkdown', 'ebayShippingOverride',
     'ebayFulfillmentPolicyOverrideId', 'bestOfferAutoAcceptAmt', 'bestOfferMinimumAmt',
   ]);
   assert.equal(body.auctionEndTime, null);
@@ -445,7 +447,7 @@ test('parity: byte-identical JSON and identical object shape versus the old clos
     baseForm({ auctionEndTime: '2026-10-05T14:30:00Z', listingType: 'AUCTION' }),
     baseForm({ auctionEndTime: '2026-10-05T14:30', listingType: 'AUCTION' }),
     baseForm({ tags: [], locationId: 'loc_3', costBasis: '12', roomTag: 'Den', excludeFromMarkdown: true }),
-    baseForm({ condition: '', conditionGrade: '', category: '', brand: 'Acme', size: 'M', color: 'Blue', material: 'Oak', upc: '012345678905', mpn: 'M-1', isbn: '9780306406157' }),
+    baseForm({ condition: '', conditionGrade: '', category: '', brand: 'Acme', size: 'M', color: 'Blue', material: 'Oak', upc: '012345678905', mpn: 'M-1', isbn: '9780306406157', fccId: 'A3LSMG991U' }),
     { ...baseForm(), futureField: 'x' } as ItemFormData,
   ];
 

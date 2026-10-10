@@ -47,6 +47,15 @@ const PRODUCT_ID_KEYWORDS: KeywordSet = {
   whole: ['tool', 'video game'],
 };
 
+/** Radio-emitting consumer electronics: the devices that carry an FCC ID label. */
+const FCC_ID_KEYWORDS: KeywordSet = {
+  prefix: [
+    'electronic', 'computer', 'phone', 'cell', 'audio', 'video', 'gaming', 'console', 'camera',
+    'tablet', 'wireless', 'radio', 'speaker', 'headphone', 'televis', 'router', 'drone', 'walkie',
+  ],
+  whole: ['tv', 'gps', 'modem', 'game'],
+};
+
 /** Lowercase, collapse whitespace, decode the one HTML entity category strings carry. */
 export function normalizeCategoryText(
   category?: string | null,
@@ -91,6 +100,11 @@ export function isMpnUpcRelevant(category?: string | null, ebayCategoryName?: st
   return matchesAnyKeyword(normalizeCategoryText(category, ebayCategoryName), PRODUCT_ID_KEYWORDS);
 }
 
+/** FCC ID is relevant for electronics, computers, phones, audio, video, gaming and similar radio devices. */
+export function isFccIdRelevant(category?: string | null, ebayCategoryName?: string | null): boolean {
+  return matchesAnyKeyword(normalizeCategoryText(category, ebayCategoryName), FCC_ID_KEYWORDS);
+}
+
 /** True when a value is present (non-empty after trimming; numbers count, including 0). */
 export function hasValue(v: MaybeValue): boolean {
   if (v === null || v === undefined) return false;
@@ -113,7 +127,7 @@ export interface DisclosureState {
 }
 
 /**
- * Product IDs group (MPN, UPC, ISBN). Open when the category makes any of the three
+ * Product IDs group (MPN, UPC, ISBN, FCC ID). Open when the category makes any of the three
  * relevant, when any of them already has a value, or when the organizer asked to see all fields.
  */
 export function getProductIdsDisclosure(opts: {
@@ -122,12 +136,14 @@ export function getProductIdsDisclosure(opts: {
   mpn?: MaybeValue;
   upc?: MaybeValue;
   isbn?: MaybeValue;
+  fccId?: MaybeValue;
   showAll?: boolean;
 }): DisclosureState {
   const relevant =
     isMpnUpcRelevant(opts.category, opts.ebayCategoryName) ||
-    isIsbnRelevant(opts.category, opts.ebayCategoryName);
-  const filled = hasAnyValue(opts.mpn, opts.upc, opts.isbn);
+    isIsbnRelevant(opts.category, opts.ebayCategoryName) ||
+    isFccIdRelevant(opts.category, opts.ebayCategoryName);
+  const filled = hasAnyValue(opts.mpn, opts.upc, opts.isbn, opts.fccId);
   return { relevant, hasValue: filled, open: relevant || filled || !!opts.showAll };
 }
 

@@ -313,6 +313,16 @@ const OWNER_ORGANIZER_SELECT = { id: true, userId: true, subscriptionTier: true,
 // U7 (2026-10-04): true only when a submitted field value really differs from the stored one. Blank values
 // (undefined, null, empty string) all mean "no value"; numbers compare numerically; arrays compare element by
 // element; dates compare as instants. Used so userEditedFields (D-006) only records fields that actually changed.
+/**
+ * FCC ID normalizer: trim, uppercase, keep only letters, digits and hyphens, max 20 chars.
+ * Empty or non-string input becomes null.
+ */
+export const normalizeFccId = (v: unknown): string | null => {
+  if (typeof v !== 'string') return null;
+  const cleaned = v.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 20);
+  return cleaned.length > 0 ? cleaned : null;
+};
+
 const fieldValueChanged = (existing: unknown, next: unknown): boolean => {
   const norm = (v: unknown): unknown => (v === undefined || v === '' ? null : v);
   const a = norm(existing);
@@ -776,6 +786,7 @@ const ITEM_DETAIL_SELECT = {
         color: true,
         material: true,
         mpn: true,
+        fccId: true,
         upc: true,
         // BUG FIX 2026-09-03 (ADR-090 follow-up, Patrick-reported "still don't see the isbn on
         // the edit item page"): isbn was never in this shared select at all -- mpn/upc (same
@@ -1896,7 +1907,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // "true", 1 and every other truthy value are ignored. The hold columns (ebaySyncHeldAt, ebayHeldFields,
     // ebayContentDirtyAt) are never read from the request body at all: this handler picks its fields explicitly.
     const skipMarketplaceSyncRequested = (req.body as { skipMarketplaceSync?: unknown } | undefined)?.skipMarketplaceSync === true;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown, card } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, fccId, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown, card } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -2392,6 +2403,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (ean !== undefined) updateData.ean = ean || null;
     if (isbn !== undefined) updateData.isbn = isbn || null;
     if (mpn !== undefined) updateData.mpn = mpn || null;
+    if (fccId !== undefined) updateData.fccId = normalizeFccId(fccId);
     if (brand !== undefined) updateData.brand = brand || null;
     if (size !== undefined) updateData.size = size || null;
     if (color !== undefined) updateData.color = color || null;
@@ -4726,6 +4738,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         // eBay product identifiers — required for review page Brand/MPN/UPC inputs
         brand: true,
         mpn: true,
+        fccId: true,
         upc: true,
         // editState fields for auction/reverse-auction display
         quantity: true,

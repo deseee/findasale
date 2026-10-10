@@ -30,6 +30,7 @@ export const ORGANIZER_VISIBLE_ITEM_FIELDS = [
   'color',
   'material',
   'mpn',
+  'fccId',
   'upc',
   'ean',
   'isbn',

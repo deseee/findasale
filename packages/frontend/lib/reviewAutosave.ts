@@ -339,6 +339,7 @@ export const AUTOSAVE_FIELDS: readonly string[] = [
   'reverseFloorPrice',
   'brand',
   'mpn',
+  'fccId',
   'upc',
   'ebayShippingOverride',
   'packageWeightOz',
@@ -369,6 +370,7 @@ export interface AutosaveEditState {
   reverseFloorPrice?: number;
   brand?: string;
   mpn?: string;
+  fccId?: string;
   upc?: string;
   ebayShippingOverride?: string | null;
   packageWeightOz?: number;
@@ -382,7 +384,7 @@ const trimOrNull = (v: string | undefined): string | null => (v && v.trim() ? v.
 /**
  * PUT /items/:id body for an autosave of the given dirty keys, built from the card's CURRENT edit state.
  *  - A blank title or blank condition is never sent (it would clear the field on the server).
- *  - brand, mpn, upc: trimmed, blank becomes null (same as the old save handler).
+ *  - brand, mpn, fccId, upc: trimmed, blank becomes null (same as the old save handler).
  *  - Package weight and dimensions go together and only when the organizer edited the weight field
  *    (weightTouched), exactly like Approve; then the weight counts as organizer-confirmed.
  *  - price, draftStatus, status and skipMarketplaceSync are never included, whatever keys are passed.
@@ -434,6 +436,9 @@ export function buildAutosavePayload(
         break;
       case 'mpn':
         out.mpn = trimOrNull(state.mpn);
+        break;
+      case 'fccId':
+        out.fccId = trimOrNull(state.fccId);
         break;
       case 'upc':
         out.upc = trimOrNull(state.upc);

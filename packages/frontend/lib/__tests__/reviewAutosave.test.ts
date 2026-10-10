@@ -318,6 +318,7 @@ const state = {
   reverseFloorPrice: 500,
   brand: ' Acme ',
   mpn: '',
+  fccId: ' a3l-smg991u ',
   upc: '  ',
   ebayShippingOverride: null,
   packageWeightOz: 16,
@@ -384,4 +385,10 @@ test('payload: listing type and reverse auction values', () => {
   assert.deepEqual(buildAutosavePayload({ ...state, ebayShippingOverride: 'LOCAL_PICKUP_ONLY' }, ['ebayShippingOverride'], false), {
     ebayShippingOverride: 'LOCAL_PICKUP_ONLY',
   });
+});
+
+test('payload: fccId is trimmed and blank becomes null', () => {
+  assert.deepEqual(buildAutosavePayload(state, ['fccId'], false), { fccId: 'a3l-smg991u' });
+  assert.deepEqual(buildAutosavePayload({ ...state, fccId: '  ' }, ['fccId'], false), { fccId: null });
+  assert.deepEqual(buildAutosavePayload({ ...state, fccId: undefined }, ['fccId'], false), { fccId: null });
 });

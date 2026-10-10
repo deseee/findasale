@@ -100,6 +100,7 @@ function baseForm(over: Partial<ItemFormData> = {}): ItemFormData {
     upc: '',
     mpn: '',
     isbn: '',
+    fccId: '',
     allowBestOffer: false,
     excludeFromMarkdown: false,
     bestOfferAcceptPct: '',
@@ -147,6 +148,7 @@ const forms: ItemFormData[] = [
     upc: '123',
     mpn: 'abc',
     isbn: '978',
+    fccId: 'A3LSMG991U',
   }),
   baseForm({ price: '', packageWeightOz: 'abc', shippingPrice: '', allowBestOffer: true, bestOfferAcceptPct: 5 }),
 ];

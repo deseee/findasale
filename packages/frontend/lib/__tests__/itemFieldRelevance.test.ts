@@ -9,6 +9,7 @@ import {
   getProductIdsDisclosure,
   hasAnyValue,
   isApparelDetailsRelevant,
+  isFccIdRelevant,
   isIsbnRelevant,
   isMpnUpcRelevant,
   normalizeCategoryText,
@@ -76,4 +77,24 @@ test('relevant groups are open by default', () => {
 test('hasAnyValue counts zero but not blank strings', () => {
   assert.equal(hasAnyValue('', '  ', null, undefined), false);
   assert.equal(hasAnyValue('', 0), true);
+});
+
+test('FCC ID is relevant for electronics, computers, phones, audio, video and gaming categories', () => {
+  assert.equal(isFccIdRelevant('Consumer Electronics'), true);
+  assert.equal(isFccIdRelevant('Computers/Tablets & Networking'), true);
+  assert.equal(isFccIdRelevant('Cell Phones & Accessories'), true);
+  assert.equal(isFccIdRelevant('Electronics', 'Headphones'), true);
+  assert.equal(isFccIdRelevant('Video Games & Consoles'), true);
+  assert.equal(isFccIdRelevant('Cameras & Photo'), true);
+  assert.equal(isFccIdRelevant('Home & Garden', 'Bar Stools'), false);
+  assert.equal(isFccIdRelevant('Clothing, Shoes & Accessories'), false);
+  assert.equal(isFccIdRelevant('Books & Magazines'), false);
+  assert.equal(isFccIdRelevant(null, null), false);
+});
+
+test('an FCC ID value opens the Product IDs group even for an irrelevant category', () => {
+  const d = getProductIdsDisclosure({ category: 'Home & Garden', fccId: 'A3LSMG991U' });
+  assert.equal(d.hasValue, true);
+  assert.equal(d.open, true);
+  assert.equal(getProductIdsDisclosure({ category: 'Consumer Electronics' }).relevant, true);
 });

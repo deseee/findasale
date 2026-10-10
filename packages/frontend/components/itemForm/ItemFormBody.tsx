@@ -53,6 +53,7 @@ import { useEtsyConnection } from '../../lib/useEtsyConnection';
 import {
   getApparelDetailsDisclosure,
   getProductIdsDisclosure,
+  isFccIdRelevant,
   hasAnyValue,
 } from '../../lib/itemFieldRelevance';
 import { buildEditSavePayload } from '../../lib/itemFormSave';
@@ -176,6 +177,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
     material: '',
     upc: '',
     mpn: '',
+    fccId: '',
     // BUG FIX 2026-09-03 (ADR-090 follow-up, Patrick-reported "still don't see the isbn on
     // the edit item page"): isbn existed on Item and in PostSaleEbayPanel.tsx (the separate
     // post-sale eBay push panel), but was never in this form at all -- Vinted (and eBay Books)
@@ -1051,6 +1053,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
         material: item.material || '',
         upc: item.upc || '',
         mpn: item.mpn || '',
+        fccId: item.fccId || '',
         isbn: item.isbn || '',
         // eBay Best Offers: reverse-compute percentages from stored dollar amounts
         allowBestOffer: item.allowBestOffer === true,
@@ -1450,8 +1453,11 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
     mpn: formData.mpn,
     upc: formData.upc,
     isbn: formData.isbn,
+    fccId: formData.fccId,
     showAll: showAllFields,
   });
+  const showFccId =
+    isFccIdRelevant(formData.category, formData.ebayCategoryName) || !!formData.fccId || showAllFields;
   const apparelDisclosure = getApparelDetailsDisclosure({
     category: formData.category,
     ebayCategoryName: formData.ebayCategoryName,
@@ -1979,6 +1985,25 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                       <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">ISBN is typically 10 or 13 characters</p>
                     )}
                   </div>
+                  {showFccId && (
+                    <div>
+                      <label htmlFor="item-fcc-id" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                        FCC ID <span className="text-warm-400 font-normal">(optional)</span>
+                      </label>
+                      <input
+                        id="item-fcc-id"
+                        type="text"
+                        maxLength={20}
+                        value={formData.fccId}
+                        onChange={(e) => setFormData({ ...formData, fccId: e.target.value })}
+                        placeholder="A3LSMG991U"
+                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      />
+                      <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5">
+                        Found on the device label or battery compartment (e.g. A3LSMG991U)
+                      </p>
+                    </div>
+                  )}
                 </div>
               </ItemFormSection>
 

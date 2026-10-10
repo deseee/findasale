@@ -53,6 +53,7 @@ import {
   typedPriceDiffersFromSaved,
 } from '../../../../lib/reviewSheetSync';
 import { gradePickerFor } from '../../../../lib/reviewGradePicker';
+import { isFccIdRelevant } from '../../../../lib/itemFieldRelevance';
 import {
   buildGradeEstimateBody,
   parseGradeEstimate,
@@ -117,6 +118,7 @@ interface ItemEditState {
   // eBay product identifiers
   brand?: string;
   mpn?: string;
+  fccId?: string;
   upc?: string;
 }
 
@@ -182,6 +184,7 @@ interface Item {
   // eBay product identifiers
   brand?: string | null;
   mpn?: string | null;
+  fccId?: string | null;
   upc?: string | null;
   // Feature #565: Grounded-identity provenance (display-only, never auto-applied to title)
   groundedIdentity?: string | null;
@@ -308,6 +311,7 @@ function buildEditStateFromItem(item: Item): ItemEditState {
     // eBay product identifiers: seed from DB (default to '')
     brand: item.brand ?? '',
     mpn: item.mpn ?? '',
+    fccId: item.fccId ?? '',
     upc: item.upc ?? '',
   };
 }
@@ -1012,6 +1016,7 @@ const ReviewPage = () => {
           ebayCategoryName: updated.ebayCategoryName ?? state.ebayCategoryName,
           brand: updated.brand ?? state.brand,
           mpn: updated.mpn ?? state.mpn,
+          fccId: updated.fccId ?? state.fccId,
           upc: updated.upc ?? state.upc,
           // Price is intentionally NOT changed: organizer pricing always wins.
         };
@@ -2345,6 +2350,24 @@ const ReviewPage = () => {
                                 className="w-full px-3 py-2 text-sm font-mono rounded-lg bg-white dark:bg-[#1C1C1E] text-[#1A1814] dark:text-[#F5F5F0] border border-black/10 dark:border-[#3A3A3C] focus:outline-none focus:border-[rgba(26,24,20,0.3)] dark:focus:border-[#B8B8BA] placeholder-[rgba(26,24,20,0.4)] dark:placeholder-[#B8B8BA]"
                               />
                             </div>
+                            {(isFccIdRelevant(editState.category, editState.ebayCategoryName) || !!editState.fccId) && (
+                              <div>
+                                <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA] mb-1">
+                                  FCC ID <span className="text-[rgba(26,24,20,0.35)] dark:text-[#8A8A8C]">· optional</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  maxLength={20}
+                                  value={editState.fccId ?? ''}
+                                  onChange={(e) => handleEditChange(item.id, 'fccId', e.target.value)}
+                                  placeholder="A3LSMG991U"
+                                  className="w-full px-3 py-2 text-sm font-mono rounded-lg bg-white dark:bg-[#1C1C1E] text-[#1A1814] dark:text-[#F5F5F0] border border-black/10 dark:border-[#3A3A3C] focus:outline-none focus:border-[rgba(26,24,20,0.3)] dark:focus:border-[#B8B8BA] placeholder-[rgba(26,24,20,0.4)] dark:placeholder-[#B8B8BA]"
+                                />
+                                <p className="mt-1 text-[11px] text-[rgba(26,24,20,0.5)] dark:text-[#8A8A8C]">
+                                  Found on the device label or battery compartment (e.g. A3LSMG991U)
+                                </p>
+                              </div>
+                            )}
                           </div>
 
                           {/* Tags row */}

@@ -56,6 +56,7 @@ export interface ItemFormData {
   upc: string;
   mpn: string;
   isbn: string;
+  fccId: string;
   allowBestOffer: boolean;
   excludeFromMarkdown: boolean;
   /** UI-only percent (0-100) or '' when blank. Never sent. */
