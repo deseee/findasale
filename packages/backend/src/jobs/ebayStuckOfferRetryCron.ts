@@ -187,6 +187,8 @@ async function runEbayStuckOfferRetryCron(): Promise<void> {
       status: 'AVAILABLE',
       isActive: true,
       deletedAt: null,
+      // 2026-10-11 (unpublish-withdraws-listings): never resurrect an item the organizer moved back to Draft / Pending Review.
+      draftStatus: 'PUBLISHED',
       ebayOfferId: { not: null },
       ebayListingId: null,
       ebayNeedsReview: false,

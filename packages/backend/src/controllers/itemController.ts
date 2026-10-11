@@ -53,6 +53,7 @@ import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig';
 import { prepareItemForDeletion, recordItemDeletion } from '../services/itemDeletionService'; // eBay sync hardening (2026-10-01): shared withdraw+snapshot+audit for every hard delete
 import { reopenEbayCancelledSale as reopenEbayCancelledSaleService } from '../services/ebaySaleReopenService'; // eBay sync hardening (2026-10-01): reopen an item whose eBay sale was cancelled/refunded
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
+import { withdrawLiveListingsOnUnpublish, type UnpublishWithdrawalResult } from '../services/unpublishWithdrawalService'; // 2026-10-11: Published -> Draft/Pending Review takes every live listing down
 import { suggestNativeShippingPrice, ShippingHardBlockError as NativeShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-104 Sec3: native-checkout suggested shipping price
 import { getShippingRates } from '../services/shippingLabelService'; // ADR-115 Phase 3: live Shippo rate-check preview on the edit-item page (Finding 2, order-fulfillment-and-shipping-price-validation-2026-09-05.md)
 import { computeChannelStatusForItems, ChannelStatusItemInput, ExtensionPlatformsUsed, PublishedExtensionPlatformsByItemId } from '../services/itemChannelStatusService'; // Add Items collapsed-row multi-channel status (2026-09-14), see ADR-2026-09-14-add-items-multichannel-status-aggregation.md
@@ -2813,9 +2814,25 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       console.warn(`[updateItem] marketplace plan failed for item ${id}:`, (planErr as Error).message);
     }
 
+    // 2026-10-11 (Patrick): Published -> Draft / Pending Review through this generic edit must take the item down from
+    // EVERY marketplace, exactly like the bulk draftStatus route (shared service). Runs AFTER the status write, awaited
+    // (bounded per channel) so the result can ride the response; never throws and never rolls the edit back.
+    const unpublishedNow = draftStatus !== undefined && item.draftStatus === 'PUBLISHED' && updatedItem.draftStatus !== 'PUBLISHED';
+    let unpublishResult: UnpublishWithdrawalResult | undefined;
+    if (unpublishedNow) {
+      try {
+        unpublishResult = await withdrawLiveListingsOnUnpublish([id], 'updateItem unpublish');
+      } catch (unpublishErr) {
+        console.warn(`[updateItem] withdraw on unpublish failed for item ${id}:`, (unpublishErr as Error).message);
+      }
+    }
+
     res.json({
       ...(cardPatch !== undefined ? { ...updatedItem, card: updatedCard ?? null } : updatedItem),
       ...(marketplacePlan ? { marketplacePlan } : {}),
+      ...(unpublishResult && unpublishResult.withdrawn > 0 ? { withdrawnListingsCount: unpublishResult.withdrawn } : {}),
+      ...(unpublishResult && unpublishResult.warnings.length > 0 ? { withdrawalWarnings: unpublishResult.warnings } : {}),
+      ...(unpublishResult && unpublishResult.extensionRemovalsQueued > 0 ? { extensionRemovalsQueued: unpublishResult.extensionRemovalsQueued } : {}),
     });
 
     // Bug #461: FB nudge on single-item status → SOLD transition
@@ -2879,7 +2896,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // services/ebayItemPushService.ts (U1, 2026-10-04). It pushes only the fields that REALLY changed, returns a
     // structured outcome and records one ItemMarketplacePush row per attempt. A held item (U2) records SKIPPED_HELD and
     // makes no eBay call. Only fires if this item is live on eBay (has an offer ID); never awaited, never throws.
-    if (changedMarketplaceFields.length > 0 && (updatedItem.ebayOfferId || updatedItem.ebayListingId)) {
+    // (Skipped when this save just unpublished the item: its eBay listing was ended above, so a push-back would hit a dead offer.)
+    if (!unpublishedNow && changedMarketplaceFields.length > 0 && (updatedItem.ebayOfferId || updatedItem.ebayListingId)) {
       if (heldThisSave) {
         pushItemToEbay({ itemId: id, organizerId: ownerOrganizer.id, trigger: 'SAVE', fields: changedMarketplaceFields, hold: true })
           .catch(err => console.warn(`[eBay PushSync] Unhandled error recording held save for item ${id}:`, err));

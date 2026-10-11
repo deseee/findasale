@@ -311,6 +311,9 @@ async function processOrganizer(
     status: 'AVAILABLE' as const,
     isActive: true,
     deletedAt: null,
+    // 2026-10-11 (unpublish-withdraws-listings): a Draft / Pending Review item must never be auto-published to eBay or
+    // counted as a live listing, even if it still carries ebayQueuedAt / ebayOfferId from before it was unpublished.
+    draftStatus: 'PUBLISHED',
   };
 
   // Count currently active eBay listings

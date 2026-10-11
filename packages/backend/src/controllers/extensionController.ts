@@ -319,6 +319,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       // 2026-07-26 (S1169): sale.deletedAt filter -- see matching comment on the sales query above.
       sale: { organizerId: organizer.id, deletedAt: null },
       status: 'AVAILABLE',
+      draftStatus: 'PUBLISHED', // 2026-10-11: a Draft / Pending Review item is never listed, price-synced or renewed on a marketplace
       OR: [
         { ebayShippingOverride: null },
         { ebayShippingOverride: { not: 'DONT_LIST' } },
@@ -1620,7 +1621,9 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   // same way it already does for sold-elsewhere items -- no second removal pathway to build.
   const availableCandidateJobs = await prisma.marketplaceListingJob.findMany({
     where: {
-      item: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE' },
+      // 2026-10-11 (unpublish-withdraws-listings): also saleless inventory items (owned via Item.organizerId), because an
+      // unpublished item of either kind must have its extension listings taken down (see the UNPUBLISHED branch below).
+      item: { status: 'AVAILABLE', OR: [{ sale: { organizerId: organizer.id, deletedAt: null } }, { saleId: null, organizerId: organizer.id }] },
       platform: { in: VALID_LISTING_PLATFORMS },
     },
     select: { itemId: true, platform: true, action: true, status: true, createdAt: true, remoteListingId: true, lastAttemptAt: true, lastErrorMessage: true },
@@ -1664,7 +1667,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     stillLiveAvailablePlatformsByItem.set(itemId, arr);
   }
 
-  const complianceItems: Array<{ id: string; title: string; platforms: string[]; listingRefs: Record<string, string>; reason: 'POLICY_INELIGIBLE'; deleteAllMatches?: boolean }> = [];
+  const complianceItems: Array<{ id: string; title: string; platforms: string[]; listingRefs: Record<string, string>; reason: 'POLICY_INELIGIBLE' | 'UNPUBLISHED'; deleteAllMatches?: boolean }> = [];
   // S-EXT-RESYNC-VERIFY (2026-09-30): AVAILABLE items whose Poshmark/Mercari listing FindA.Sale still
   // thinks is live. Only ever served on an organizer-initiated resync, and tagged RESYNC_VERIFY so the
   // content scripts LOOK for the listing but never delete it (see markItemRemovalSkipped's verifyOnly).
@@ -1674,7 +1677,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     const candidateItems = await prisma.item.findMany({
       where: { id: { in: candidateItemIds } },
       select: {
-        id: true, title: true, category: true, ebayCategoryId: true,
+        id: true, title: true, category: true, ebayCategoryId: true, draftStatus: true,
         packageWeightOz: true, aiPackageWeightOz: true,
         packageLengthIn: true, packageWidthIn: true, packageHeightIn: true,
       },
@@ -1700,9 +1703,18 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
         packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
       };
       const livePlatforms = stillLiveAvailablePlatformsByItem.get(it.id) || [];
-      const nowIneligiblePlatforms = livePlatforms.filter(
-        (p) => !checkEligibility(p as MarketplaceListingPlatform, eligibilityItem).eligible
-      );
+      // 2026-10-11 (Patrick, unpublish-withdraws-listings): an item moved from Published back to Draft / Pending Review
+      // must come down from EVERY marketplace. Nothing is queued when that happens; it is derived here: an AVAILABLE item
+      // whose draftStatus is not PUBLISHED and whose latest (non-SKIPPED) job for a platform is POST/POSTED has that
+      // listing served as a removal, reason 'UNPUBLISHED', through the same engine, skip caps and cooldowns as the
+      // POLICY_INELIGIBLE takedowns. Idempotent (no rows written), cancelled by a re-publish before the extension acts,
+      // and on /removed the normal REMOVE/REMOVED row is written, so a later re-publish can relist cleanly.
+      const unpublished = it.draftStatus !== 'PUBLISHED';
+      const nowIneligiblePlatforms = unpublished
+        ? livePlatforms
+        : livePlatforms.filter(
+            (p) => !checkEligibility(p as MarketplaceListingPlatform, eligibilityItem).eligible
+          );
       if (nowIneligiblePlatforms.length === 0) continue;
       // Surface anything past the fast-fail cap for organizer visibility, same as the SOLD path.
       const stuckCompliance = nowIneligiblePlatforms
@@ -1735,7 +1747,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
         const latest = latestAvailableByItemPlatform.get(it.id + ':' + p);
         if (latest?.remoteListingId) refs[p] = latest.remoteListingId;
       }
-      complianceItems.push({ id: it.id, title: it.title, platforms: retryablePlatforms, listingRefs: refs, reason: 'POLICY_INELIGIBLE' });
+      complianceItems.push({ id: it.id, title: it.title, platforms: retryablePlatforms, listingRefs: refs, reason: unpublished ? 'UNPUBLISHED' : 'POLICY_INELIGIBLE' });
     }
   }
 
@@ -1981,6 +1993,7 @@ export const getPendingUpdates = async (req: AuthRequest, res: Response): Promis
       // 2026-07-26 (S1169): sale.deletedAt filter -- see matching comment in getExtensionItems.
       sale: { organizerId: organizer.id, deletedAt: null },
       status: 'AVAILABLE',
+      draftStatus: 'PUBLISHED', // 2026-10-11: a Draft / Pending Review item is never listed, price-synced or renewed on a marketplace
       OR: [
         { ebayShippingOverride: null },
         { ebayShippingOverride: { not: 'DONT_LIST' } },
@@ -2067,7 +2080,7 @@ export const getPendingSoldChecks = async (req: AuthRequest, res: Response): Pro
   if (isPlatformPaused((organizer as any).pausedMarketplaces, 'FACEBOOK')) { res.json({ items: [], paused: true }); return; }
 
   const availableItems = await prisma.item.findMany({
-    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE' },
+    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE', draftStatus: 'PUBLISHED' }, // 2026-10-11: unpublished items are never re-renewed / re-checked on a marketplace
     select: { id: true, title: true },
   });
   if (!availableItems.length) { res.json({ items: [] }); return; }
@@ -2119,7 +2132,7 @@ export const getPendingRenewals = async (req: AuthRequest, res: Response): Promi
   // here). Without this filter, auto-renew would keep refreshing/reposting an already-live
   // Facebook coin listing forever.
   const availableItems = await prisma.item.findMany({
-    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE' },
+    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE', draftStatus: 'PUBLISHED' }, // 2026-10-11: unpublished items are never re-renewed / re-checked on a marketplace
     select: { id: true, title: true, saleId: true, category: true, ebayCategoryId: true },
   });
   if (!availableItems.length) { res.json({ items: [] }); return; }

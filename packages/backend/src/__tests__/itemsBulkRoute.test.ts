@@ -42,6 +42,9 @@ const mockPrisma: any = {
     update: jest.fn(),
     deleteMany: jest.fn(),
   },
+  marketplaceListingJob: {
+    findMany: jest.fn(),
+  },
   organizer: {
     findFirst: jest.fn(),
     findUnique: jest.fn(),
@@ -701,6 +704,31 @@ describe('POST /bulk: draftStatus', () => {
       discogsMock().mockReset().mockResolvedValue(undefined);
       reverbMock().mockReset().mockResolvedValue('skipped');
       etsyMock().mockReset().mockResolvedValue('skipped');
+      mockPrisma.marketplaceListingJob.findMany.mockReset().mockResolvedValue([]);
+    });
+
+    it('reports extensionRemovalsQueued for live extension-channel listings and writes no job rows', async () => {
+      const d = (n: number) => new Date(2026, 9, n);
+      mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'PUBLISHED' })]);
+      mockPrisma.marketplaceListingJob.findMany.mockResolvedValue([
+        { itemId: 'a', platform: 'VINTED', action: 'POST', status: 'POSTED', createdAt: d(1) },
+        { itemId: 'a', platform: 'FACEBOOK', action: 'POST', status: 'POSTED', createdAt: d(1) },
+        { itemId: 'a', platform: 'FACEBOOK', action: 'REMOVE', status: 'REMOVED', createdAt: d(2) }, // already removed: not live
+        { itemId: 'a', platform: 'CRAIGSLIST', action: 'POST', status: 'POSTED', createdAt: d(1) },
+        { itemId: 'a', platform: 'CRAIGSLIST', action: 'REMOVE', status: 'SKIPPED', createdAt: d(3) }, // failed removal attempt: still live
+      ]);
+      const res = makeRes();
+      await bulk(makeReq({ itemIds: ['a'], operation: 'draftStatus', value: 'DRAFT' }), res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.extensionRemovalsQueued).toBe(2);
+      expect(updateManyCalls()).toHaveLength(1);
+    });
+
+    it('omits extensionRemovalsQueued when nothing is live on an extension channel', async () => {
+      mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'PUBLISHED' })]);
+      const res = makeRes();
+      await bulk(makeReq({ itemIds: ['a'], operation: 'draftStatus', value: 'DRAFT' }), res);
+      expect(res.body.extensionRemovalsQueued).toBeUndefined();
     });
 
     it('PUBLISHED -> DRAFT withdraws on every API channel for the published item only, after the status write', async () => {

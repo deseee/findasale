@@ -55,7 +55,7 @@ import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { prepareItemForDeletion, recordItemDeletion, type ItemDeletionSnapshot } from '../services/itemDeletionService'; // eBay sync hardening (2026-10-01): shared withdraw+snapshot+audit for bulk delete
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
-import { withdrawEtsyListingIfExists } from '../services/marketplace/etsyConnector'; // 2026-10-11: bulk Published -> Draft/Pending Review withdraws live listings, same four self-guarding calls as prepareItemForDeletion
+import { withdrawLiveListingsOnUnpublish, type UnpublishWithdrawalResult } from '../services/unpublishWithdrawalService'; // 2026-10-11: Published -> Draft/Pending Review takes every live listing down (shared with itemController.updateItem)
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -74,74 +74,6 @@ import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/sea
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
 import { normalizeBulkCategoryValue } from '../utils/bulkCategory';
 import { importedOnlyEditNeedsDirtyMark, importedOnlyIdsNeedingDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: a bulk category/tags/photos edit must survive the next import
-
-// 2026-10-11 (Patrick): moving items Published -> Draft / Pending Review in bulk is a conscious choice to stop
-// selling them, so every API-driven live listing must come down. Reuses the exact self-guarding withdraw calls the
-// delete path (services/itemDeletionService.prepareItemForDeletion) and the SOLD path use: eBay / Discogs / Reverb / Etsy.
-// Each call no-ops when the item was never on that channel. Best-effort: nothing here throws, a channel failure or
-// timeout becomes a warning, and the status change that already happened is never rolled back. Extension-driven
-// channels (Vinted, Craigslist, FB Marketplace, ...) have no removal API and are deliberately NOT touched here.
-type BulkWithdrawalWarning = { itemId: string; channel: 'eBay' | 'Discogs' | 'Reverb' | 'Etsy'; reason: string };
-const BULK_WITHDRAW_TIMEOUT_MS = 20000;
-const BULK_WITHDRAW_CHUNK = 5;
-
-function boundedWithdraw<T>(call: () => Promise<T>, ms: number): Promise<{ value?: T; error?: string; timedOut?: boolean }> {
-  return new Promise((resolve) => {
-    const t = setTimeout(() => resolve({ timedOut: true }), ms);
-    Promise.resolve()
-      .then(call)
-      .then(
-        (value) => { clearTimeout(t); resolve({ value }); },
-        (err: any) => { clearTimeout(t); resolve({ error: err?.message || 'unknown error' }); }
-      );
-  });
-}
-
-async function withdrawLiveListingsOnUnpublish(itemIds: string[]): Promise<{ withdrawn: number; warnings: BulkWithdrawalWarning[] }> {
-  const warnings: BulkWithdrawalWarning[] = [];
-  let withdrawn = 0;
-  for (let i = 0; i < itemIds.length; i += BULK_WITHDRAW_CHUNK) {
-    const chunk = itemIds.slice(i, i + BULK_WITHDRAW_CHUNK);
-    await Promise.all(
-      chunk.map(async (itemId) => {
-        try {
-          const [ebay, discogs, reverb, etsy] = await Promise.all([
-            boundedWithdraw(() => endEbayListingIfExists(itemId, 'delete'), BULK_WITHDRAW_TIMEOUT_MS),
-            boundedWithdraw(() => withdrawDiscogsListingIfExists(itemId), BULK_WITHDRAW_TIMEOUT_MS),
-            boundedWithdraw(() => withdrawReverbListingIfExists(itemId), BULK_WITHDRAW_TIMEOUT_MS),
-            boundedWithdraw(() => withdrawEtsyListingIfExists(itemId), BULK_WITHDRAW_TIMEOUT_MS),
-          ]);
-          if (ebay.error || ebay.timedOut || ebay.value === false) {
-            warnings.push({ itemId, channel: 'eBay', reason: ebay.error || (ebay.timedOut ? 'timed out' : 'could not be ended') });
-          } else if (ebay.value === true) {
-            withdrawn++;
-          }
-          // Discogs reports no outcome (void, never throws): only a thrown error or a timeout is detectable.
-          if (discogs.error || discogs.timedOut) {
-            warnings.push({ itemId, channel: 'Discogs', reason: discogs.error || 'timed out' });
-          }
-          if (reverb.error || reverb.timedOut || reverb.value === 'failed') {
-            warnings.push({ itemId, channel: 'Reverb', reason: reverb.error || (reverb.timedOut ? 'timed out' : 'could not be ended') });
-          } else if (reverb.value === 'withdrawn' || reverb.value === 'gone') {
-            withdrawn++;
-          }
-          if (etsy.error || etsy.timedOut || etsy.value === 'failed') {
-            warnings.push({ itemId, channel: 'Etsy', reason: etsy.error || (etsy.timedOut ? 'timed out' : 'could not be ended') });
-          } else if (etsy.value === 'withdrawn' || etsy.value === 'gone') {
-            withdrawn++;
-          }
-        } catch (err: any) {
-          console.warn(`[bulk draftStatus] withdraw on unpublish failed for item ${itemId}:`, err?.message);
-          warnings.push({ itemId, channel: 'eBay', reason: 'withdraw check failed unexpectedly' });
-        }
-      })
-    );
-  }
-  if (warnings.length > 0) {
-    console.warn(`[bulk draftStatus] ${warnings.length} listing withdrawal warning(s):`, JSON.stringify(warnings));
-  }
-  return { withdrawn, warnings };
-}
 
 // Bulk operations validation schemas
 const bulkItemsSchema = z.object({
@@ -1106,9 +1038,9 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         // 2026-10-11: Published -> Draft / Pending Review ends every live API-driven marketplace listing.
         // Runs AFTER the status write and never fails or rolls back the request; problems go in withdrawalWarnings.
         const unpublishedIds = confirmedItems.filter((item) => item.draftStatus === 'PUBLISHED').map((item) => item.id);
-        const withdrawal = unpublishedIds.length > 0
-          ? await withdrawLiveListingsOnUnpublish(unpublishedIds)
-          : { withdrawn: 0, warnings: [] as BulkWithdrawalWarning[] };
+        const withdrawal: UnpublishWithdrawalResult = unpublishedIds.length > 0
+          ? await withdrawLiveListingsOnUnpublish(unpublishedIds, 'bulk draftStatus')
+          : { withdrawn: 0, warnings: [], extensionRemovalsQueued: 0 };
         const dsStatus = failed.length > 0 ? 207 : 200;
         return res.status(dsStatus).json({
           message: `Updated draftStatus to ${value} for ${confirmedIds.length} item(s).`,
@@ -1118,6 +1050,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           oldValues,
           newValues,
           ...(withdrawal.withdrawn > 0 && { withdrawnListingsCount: withdrawal.withdrawn }),
+          ...(withdrawal.extensionRemovalsQueued > 0 && { extensionRemovalsQueued: withdrawal.extensionRemovalsQueued }),
           ...(withdrawal.warnings.length > 0 && { withdrawalWarnings: withdrawal.warnings }),
         });
       }

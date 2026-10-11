@@ -1094,11 +1094,23 @@ const ReviewPage = () => {
     try {
       if (item.draftStatus === 'PUBLISHED') {
         // Unpublish: use generic update endpoint (draftStatus now accepted)
-        await updateItemMutation.mutateAsync({
+        const unpublishRes: any = await updateItemMutation.mutateAsync({
           itemId: item.id,
           updates: { draftStatus: 'DRAFT' } as any,
         });
         showToast('Item unpublished', 'success');
+        // 2026-10-11: unpublishing ends the item's live marketplace listings; surface anything that needs attention.
+        const unpubData = unpublishRes?.data || {};
+        const unpubWarnings: Array<{ channel?: string }> = unpubData.withdrawalWarnings || [];
+        if (unpubWarnings.length > 0) {
+          const channels = Array.from(new Set(unpubWarnings.map((w) => w.channel).filter(Boolean))).join(', ');
+          showToast(`Some live listings could not be ended automatically${channels ? ` (${channels})` : ''}. Check those listings and end them manually.`, 'warning');
+        } else if ((unpubData.withdrawnListingsCount || 0) > 0) {
+          showToast(`Ended ${unpubData.withdrawnListingsCount} live marketplace listing${unpubData.withdrawnListingsCount !== 1 ? 's' : ''}`, 'info');
+        }
+        if ((unpubData.extensionRemovalsQueued || 0) > 0) {
+          showToast(`${unpubData.extensionRemovalsQueued} listing${unpubData.extensionRemovalsQueued !== 1 ? 's' : ''} on extension-driven marketplaces will be removed the next time your browser extension runs. Keep Chrome open with the extension signed in.`, 'info');
+        }
       } else {
         // Publish: use dedicated publish endpoint. Finish any autosave first and freeze the card.
         await autosave.flush(item.id);

@@ -1418,6 +1418,11 @@ const AddItemsDetailPage = () => {
       } else if (withdrawnListingsCount > 0) {
         showToast(`Ended ${withdrawnListingsCount} live marketplace listing${withdrawnListingsCount !== 1 ? 's' : ''}`, 'info');
       }
+      // Extension-driven channels (Facebook, Craigslist, Vinted, ...) come down when the browser extension next runs.
+      const extensionRemovalsQueued: number = response?.data?.extensionRemovalsQueued || 0;
+      if (extensionRemovalsQueued > 0) {
+        showToast(`${extensionRemovalsQueued} listing${extensionRemovalsQueued !== 1 ? 's' : ''} on extension-driven marketplaces will be removed the next time your browser extension runs. Keep Chrome open with the extension signed in.`, 'info');
+      }
 
       // Check for partial failures (207 response with failed items)
       if (failed.length > 0) {

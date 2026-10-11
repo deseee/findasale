@@ -27,6 +27,7 @@ const mockPhotoLimit = jest.fn();
 const mockSpendXp = jest.fn();
 const mockGetSpendableXp = jest.fn();
 const mockComposeDescription = jest.fn();
+const mockUnpublish = jest.fn();
 
 jest.mock('../index', () => ({ prisma: mockPrisma }));
 jest.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
@@ -62,6 +63,7 @@ jest.mock('../services/descriptionMerger', () => ({
   composeDescription: (...a: unknown[]) => mockComposeDescription(...a),
   stripShippingPhrases: (t: string) => t,
 }));
+jest.mock('../services/unpublishWithdrawalService', () => ({ withdrawLiveListingsOnUnpublish: (...a: unknown[]) => mockUnpublish(...a) }));
 jest.mock('../services/webhookService', () => ({ fireWebhooks: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/marketplace/autoFanoutDispatcher', () => ({ dispatchApiTierAutoFanout: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../jobs/fetchEbayComps', () => ({ enqueueFetchEbayComps: jest.fn() }));
@@ -161,6 +163,7 @@ beforeEach(() => {
   mockSpendXp.mockReset().mockResolvedValue(true);
   mockGetSpendableXp.mockReset().mockResolvedValue(1000);
   mockComposeDescription.mockReset().mockReturnValue({ appended: false, reason: 'duplicate' });
+  mockUnpublish.mockReset().mockResolvedValue({ withdrawn: 0, warnings: [], extensionRemovalsQueued: 0 });
   mockPush.mockReset().mockResolvedValue({ status: 'SUCCESS', fieldsAttempted: [], fieldsPushed: [], errorCode: null, errorMessage: null });
   mockPrisma.organizer.findFirst.mockImplementation(async ({ where }: any) =>
     where && where.id === 'org_inv' && where.userId === OWNER_USER ? INVENTORY_ORGANIZER_ROW : null,
@@ -202,6 +205,42 @@ describe('updateItem: marketplacePlan, hold, dirty, strict skipMarketplaceSync',
       itemId: 'i1', organizerId: 'org_sale', trigger: 'SAVE', fields: ['title'], dirtyBefore: null,
     });
     expect(mockPush.mock.calls[0][0].hold).toBeUndefined();
+  });
+
+  describe('Published -> Draft / Pending Review withdraws every live listing (2026-10-11)', () => {
+    it('PUBLISHED -> DRAFT runs the shared withdrawal once after the write and returns its results additively', async () => {
+      arrange(ebayListed({ draftStatus: 'PUBLISHED' }), { draftStatus: 'DRAFT' });
+      mockUnpublish.mockResolvedValue({ withdrawn: 2, warnings: [{ itemId: 'i1', channel: 'Etsy', reason: 'timed out' }], extensionRemovalsQueued: 3 });
+      const res = await run({ draftStatus: 'DRAFT' });
+      expect(res.statusCode).toBe(200);
+      expect(mockUnpublish).toHaveBeenCalledTimes(1);
+      expect(mockUnpublish.mock.calls[0][0]).toEqual(['i1']);
+      expect(mockPrisma.item.update).toHaveBeenCalledTimes(1);
+      expect(res.body.withdrawnListingsCount).toBe(2);
+      expect(res.body.withdrawalWarnings).toEqual([{ itemId: 'i1', channel: 'Etsy', reason: 'timed out' }]);
+      expect(res.body.extensionRemovalsQueued).toBe(3);
+      // the eBay listing was just ended: no push-back to the dead offer
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('PUBLISHED -> PENDING_REVIEW also withdraws; the save still succeeds when the service throws', async () => {
+      arrange(saleItem({ draftStatus: 'PUBLISHED' }), { draftStatus: 'PENDING_REVIEW' });
+      mockUnpublish.mockRejectedValue(new Error('boom'));
+      const res = await run({ draftStatus: 'PENDING_REVIEW' });
+      expect(res.statusCode).toBe(200);
+      expect(mockUnpublish).toHaveBeenCalledTimes(1);
+      expect(res.body.withdrawalWarnings).toBeUndefined();
+    });
+
+    it('does not withdraw when the item was not published, when it stays published, or when draftStatus is not sent', async () => {
+      arrange(saleItem({ draftStatus: 'DRAFT' }), { draftStatus: 'PENDING_REVIEW' });
+      await run({ draftStatus: 'PENDING_REVIEW' });
+      arrange(saleItem({ draftStatus: 'PUBLISHED' }), { draftStatus: 'PUBLISHED' });
+      await run({ draftStatus: 'PUBLISHED' });
+      arrange(saleItem({ draftStatus: 'PUBLISHED' }), { draftStatus: 'PUBLISHED' });
+      await run({ title: 'New title' });
+      expect(mockUnpublish).not.toHaveBeenCalled();
+    });
   });
 
   it('an unchanged resave plans nothing and makes no eBay push at all', async () => {

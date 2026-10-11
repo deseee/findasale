@@ -602,8 +602,9 @@ export async function processRapidDraft(itemId: string): Promise<void> {
             const mergedTags = (mergedData.tags !== undefined ? mergedData.tags : freshItem.tags) as string[];
             mergedData.ebayShippingClassification = classifyEbayShipping(mergedCategory, mergedTags);
           }
-          // Always set draftStatus to PENDING_REVIEW regardless
-          mergedData.draftStatus = 'PENDING_REVIEW';
+          // Always set draftStatus to PENDING_REVIEW regardless, except when the organizer published the item while the AI was
+          // running: demoting it here would be an unpublish with no marketplace withdrawal (2026-10-11 unpublish rule).
+          if (freshItem.draftStatus !== 'PUBLISHED') mergedData.draftStatus = 'PENDING_REVIEW';
 
           if (Object.keys(mergedData).length > 0) {
             await prisma.item.update({
