@@ -55,6 +55,20 @@ export const SQUARE_TIER_PRICE_CENTS: Record<BillableOrganizerTier, number> = {
  * end does NOT move, and the next renewal bills the full TEAMS price. Returns 0 for a
  * non-upgrade, an unknown tier, or a period that has already ended.
  */
+/**
+ * Prorates a flat amount by the days remaining in the current billing period (capped at one
+ * full interval). Shared by computeUpgradeProrationCents (tier-diff proration) and
+ * addTeamSeat's extra-seat charge (workspaceController.ts) -- same arithmetic, different inputs.
+ * Returns 0 for a non-positive amount or a period that has already ended.
+ */
+export function prorateByRemainingDays(amountCents: number, periodEnd: Date, now: Date = new Date()): number {
+  if (!(amountCents > 0)) return 0;
+  const remainingMs = periodEnd.getTime() - now.getTime();
+  if (!(remainingMs > 0)) return 0;
+  const remainingDays = Math.min(BILLING_INTERVAL_DAYS, Math.max(1, Math.ceil(remainingMs / MS_PER_DAY)));
+  return Math.round((amountCents * remainingDays) / BILLING_INTERVAL_DAYS);
+}
+
 export function computeUpgradeProrationCents(
   fromTier: BillableOrganizerTier,
   toTier: BillableOrganizerTier,
@@ -63,10 +77,7 @@ export function computeUpgradeProrationCents(
 ): number {
   const diff = (SQUARE_TIER_PRICE_CENTS[toTier] ?? 0) - (SQUARE_TIER_PRICE_CENTS[fromTier] ?? 0);
   if (!(diff > 0)) return 0;
-  const remainingMs = periodEnd.getTime() - now.getTime();
-  if (!(remainingMs > 0)) return 0;
-  const remainingDays = Math.min(BILLING_INTERVAL_DAYS, Math.max(1, Math.ceil(remainingMs / MS_PER_DAY)));
-  return Math.round((diff * remainingDays) / BILLING_INTERVAL_DAYS);
+  return prorateByRemainingDays(diff, periodEnd, now);
 }
 
 // Hunt Pass: $4.99/mo, confirmed via schema.prisma comment + claude_docs/STATE.md/decisions-log.md.

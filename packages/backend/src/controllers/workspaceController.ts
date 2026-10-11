@@ -6,6 +6,8 @@ import { AuthRequest } from '../middleware/auth';
 import { TIER_LIMITS } from '../constants/tierLimits';
 import { TASK_TEMPLATES } from '../utils/taskTemplates';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { chargeStoredCard, prorateByRemainingDays } from '../services/squareBillingService';
+import { claimBillingCharge, completeBillingCharge, failBillingCharge } from '../services/organizerBillingLedger';
 
 export const createWorkspace = async (req: AuthRequest, res: Response) => {
   try {
@@ -123,7 +125,12 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
     if (!ownerOrganizer?.isEnterpriseAccount) {
       const memberCount = await prisma.workspaceMember.count({ where: { workspaceId: workspace.id } });
       const inviteCount = await prisma.workspaceInvite.count({ where: { workspaceId: workspace.id } });
-      const maxMembers = TIER_LIMITS.TEAMS.maxTeamMembers;
+      // ADR-teams-extra-seat-billing-square-fix-2026-10-10: WorkspaceSettings.maxMembers is the
+      // real, purchasable cap (base 5 + any $20/mo extra seats bought via addTeamSeat). The
+      // TIER_LIMITS constant is kept only as a defensive floor -- nothing should ever set
+      // maxMembers below it, but this guards against it anyway.
+      const workspaceSettings = await prisma.workspaceSettings.findUnique({ where: { workspaceId: workspace.id }, select: { maxMembers: true } });
+      const maxMembers = Math.max(TIER_LIMITS.TEAMS.maxTeamMembers, workspaceSettings?.maxMembers ?? TIER_LIMITS.TEAMS.maxTeamMembers);
       if (memberCount + inviteCount + 1 > maxMembers) {
         return res.status(403).json({ message: `Team member limit (${maxMembers}) reached. Add more seats ($20/mo each) or upgrade to Enterprise for unlimited members.`, code: 'MEMBER_CAP_EXCEEDED', limit: maxMembers, current: memberCount + inviteCount + 1 });
       }
@@ -721,7 +728,12 @@ export const getWorkspaceCostCalculator = async (req: AuthRequest, res: Response
 
     const maxMembers = settings?.maxMembers || 5;
     const currentMemberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length; // owner is in members table
-    const additionalSeats = Math.max(0, currentMemberCount - maxMembers);
+    // ADR-teams-extra-seat-billing-square-fix-2026-10-10: this used to compute
+    // currentMemberCount - maxMembers, which is always <= 0 once inviteMember actually enforces
+    // maxMembers as the cap (you can never have more members than seats you've paid for). The
+    // figure this calculator is meant to show is "how many extra seats beyond the base 5 has this
+    // organizer purchased", i.e. maxMembers minus the base tier cap.
+    const additionalSeats = Math.max(0, maxMembers - TIER_LIMITS.TEAMS.maxTeamMembers);
     const additionalSeatPrice = 20;
     const baseTeamsFee = 79;
 
@@ -1390,8 +1402,13 @@ export const getTaskTemplates = async (req: Request, res: Response) => {
 
 /**
  * POST /workspace/add-seat
- * Add an additional team member seat via Stripe subscription item
- * TEAMS tier only, real Stripe charge
+ * Add an additional team member seat ($20/mo). TEAMS tier only.
+ * ADR-teams-extra-seat-billing-square-fix-2026-10-10: this used to call Stripe
+ * (subscriptionItems.create against organizer.stripeSubscriptionId), which is dead -- Stripe is
+ * no longer the live billing processor. Rewritten against the live Square flat-charge model
+ * (squareBillingService.ts / squareBillingChargeJob.ts): an immediate prorated charge for the
+ * remainder of the current period, then WorkspaceSettings.maxMembers is incremented so
+ * inviteMember's cap check and the next renewal (squareBillingChargeJob.ts) both pick it up.
  */
 export const addTeamSeat = async (req: AuthRequest, res: Response) => {
   try {
@@ -1402,8 +1419,12 @@ export const addTeamSeat = async (req: AuthRequest, res: Response) => {
       where: { id: organizerId },
       select: {
         subscriptionTier: true,
-        stripeSubscriptionId: true,
         isEnterpriseAccount: true,
+        billingProcessor: true,
+        squareCustomerId: true,
+        squareCardId: true,
+        billingCurrentPeriodEnd: true,
+        workspace: { select: { id: true } },
       },
     });
 
@@ -1414,51 +1435,94 @@ export const addTeamSeat = async (req: AuthRequest, res: Response) => {
     if (organizer.isEnterpriseAccount) {
       return res.status(403).json({ message: 'Enterprise accounts have unlimited seats' });
     }
-    if (!organizer.stripeSubscriptionId) {
-      return res.status(400).json({ message: 'No active subscription found. Please contact support.' });
+    if (!organizer.workspace) {
+      return res.status(404).json({ message: 'Workspace not found' });
+    }
+    if (
+      organizer.billingProcessor !== 'square' ||
+      !organizer.squareCustomerId ||
+      !organizer.squareCardId ||
+      !organizer.billingCurrentPeriodEnd
+    ) {
+      return res.status(400).json({ message: 'Add a payment method on your subscription page first, then try again.' });
     }
 
-    // Stripe seat price ID from environment
-    const STRIPE_TEAMS_SEAT_PRICE_ID = process.env.STRIPE_TEAMS_SEAT_PRICE_ID;
-    if (!STRIPE_TEAMS_SEAT_PRICE_ID) {
-      console.error('[add-seat] STRIPE_TEAMS_SEAT_PRICE_ID is not configured');
-      return res.status(500).json({ message: 'Seat pricing is not configured. Please contact support.' });
+    const workspaceId = organizer.workspace.id;
+    const settings = await prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: { maxMembers: true } });
+    const currentMaxMembers = Math.max(TIER_LIMITS.TEAMS.maxTeamMembers, settings?.maxMembers ?? TIER_LIMITS.TEAMS.maxTeamMembers);
+    const targetMaxMembers = currentMaxMembers + 1;
+
+    const ADDITIONAL_SEAT_PRICE_CENTS = 2000; // $20/mo, flat, not tier-dependent
+    const amountCents = prorateByRemainingDays(ADDITIONAL_SEAT_PRICE_CENTS, organizer.billingCurrentPeriodEnd, new Date());
+    if (!(amountCents > 0)) {
+      return res.status(400).json({ message: 'Your current billing period has already ended. Please try again after your next renewal.' });
     }
 
-    // Add subscription item for additional seat to Stripe
-    const { getStripe } = await import('../utils/stripe');
-    const stripe = getStripe();
+    // Idempotency: keyed on the TARGET seat count + current period, so a double-submit of the
+    // same purchase reuses this row (in_progress / already_completed), while a later, separate
+    // seat purchase naturally gets a different key (different targetMaxMembers).
+    const periodKey = `seat:${organizerId}:${targetMaxMembers}:${organizer.billingCurrentPeriodEnd.toISOString()}`;
 
-    try {
-      const subscriptionItem = await stripe.subscriptionItems.create({
-        subscription: organizer.stripeSubscriptionId,
-        price: STRIPE_TEAMS_SEAT_PRICE_ID,
-        quantity: 1,
+    const claim = await claimBillingCharge({
+      organizerId,
+      periodKey,
+      kind: 'SEAT_ADD',
+      tier: 'TEAMS',
+      amountCents,
+    });
+    if (claim.state === 'in_progress') {
+      return res.status(409).json({ code: 'PAYMENT_IN_PROGRESS', message: 'A payment for this seat is already being processed. Please wait a moment and check your team before trying again.' });
+    }
+
+    if (claim.state !== 'already_completed') {
+      const charge = await chargeStoredCard({
+        customerId: organizer.squareCustomerId,
+        cardId: organizer.squareCardId,
+        amountCents,
+        idempotencyParts: ['seat-add', organizerId, periodKey, organizer.squareCardId, String(amountCents)],
+        note: 'FindA.Sale additional team seat (prorated)',
+        referenceId: organizerId,
+        requireCompleted: true,
       });
-
-      console.log(`[add-seat] Added seat for organizer ${organizerId}, subscription_item: ${subscriptionItem.id}`);
-
-      // Return the new seat limit
-      return res.json({
-        success: true,
-        seatAdded: true,
-        baseSeatLimit: 5,
-        message: 'Additional seat added successfully. You can now invite more team members.',
-      });
-    } catch (stripeError: any) {
-      console.error('[add-seat] Stripe error:', stripeError);
-      let message = 'Failed to add seat to subscription';
-
-      if (stripeError.type === 'StripeInvalidRequestError') {
-        if (stripeError.message?.includes('No such subscription')) {
-          message = 'Subscription not found. Please contact support.';
-        } else if (stripeError.message?.includes('No such price')) {
-          message = 'Seat pricing not found. Please contact support.';
+      if (!charge.ok) {
+        const marked = await failBillingCharge(claim.id, charge.message);
+        if (!marked) {
+          return res.status(409).json({ code: 'PAYMENT_IN_PROGRESS', message: 'A payment for this seat is already being processed. Please wait a moment and check your team before trying again.' });
         }
+        return res.status(400).json({ message: charge.message || 'Failed to add seat. Please try again.' });
       }
-
-      return res.status(400).json({ message });
+      try {
+        await completeBillingCharge(claim.id, charge.paymentId);
+      } catch (ledgerErr) {
+        console.error(`[add-seat] CRITICAL: payment ${charge.paymentId} COMPLETED for organizer ${organizerId} but the ledger write failed:`, ledgerErr);
+      }
+    } else {
+      console.warn(`[add-seat] organizer ${organizerId} period ${periodKey} already COMPLETED -- re-applying the seat without a new charge`);
     }
+
+    // Conditional increment: only applies if maxMembers is still exactly what this charge was
+    // priced against, so a retried/duplicate request can never increment twice.
+    const updated = await prisma.workspaceSettings.updateMany({
+      where: { workspaceId, maxMembers: currentMaxMembers },
+      data: { maxMembers: targetMaxMembers },
+    });
+    if (updated.count !== 1) {
+      // Charge succeeded (or was already completed) but another request already advanced
+      // maxMembers past currentMaxMembers in the meantime -- don't apply this one on top; the
+      // other request's increment already covers a seat, and double-applying would overcount.
+      console.warn(`[add-seat] organizer ${organizerId} workspace ${workspaceId} maxMembers changed concurrently -- not re-applying this seat's increment`);
+    }
+
+    const finalSettings = await prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: { maxMembers: true } });
+
+    console.log(`[add-seat] Added seat for organizer ${organizerId}, maxMembers now ${finalSettings?.maxMembers ?? targetMaxMembers}`);
+
+    return res.json({
+      success: true,
+      seatAdded: true,
+      maxMembers: finalSettings?.maxMembers ?? targetMaxMembers,
+      message: 'Additional seat added successfully. You can now invite more team members.',
+    });
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error adding team seat:', error);

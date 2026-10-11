@@ -42,6 +42,7 @@ import {
 } from '../services/squareBillingService';
 import { claimBillingCharge, completeBillingCharge, failBillingCharge, huntPassPeriodKey } from '../services/organizerBillingLedger';
 import { addDaysUtc, renewalPeriodKey } from '../utils/billingPeriod';
+import { TIER_LIMITS } from '../constants/tierLimits'; // ADR-teams-extra-seat-billing-square-fix-2026-10-10: TEAMS renewal charge must include purchased extra seats
 
 // 2026-09-30: periods advance by exact UTC milliseconds (utils/billingPeriod.ts), the same arithmetic the
 // subscribe path uses. The old local-time setDate here landed 23 or 25 hours off across a DST change and
@@ -64,6 +65,9 @@ type DueOrganizer = {
   billingGraceEndsAt: Date | null;
   businessName: string;
   user: { email: string; name: string | null } | null;
+  // ADR-teams-extra-seat-billing-square-fix-2026-10-10: purchased extra seats live on the
+  // owned workspace's settings, not on Organizer itself.
+  workspace: { settings: { maxMembers: number } | null } | null;
 };
 
 async function downgradeOrganizerToSimple(organizerId: string, statusLabel: string): Promise<void> {
@@ -225,6 +229,7 @@ export async function processOrganizerBilling(): Promise<void> {
       billingGraceEndsAt: true,
       businessName: true,
       user: { select: { email: true, name: true } },
+      workspace: { select: { settings: { select: { maxMembers: true } } } },
     },
   });
 
@@ -254,7 +259,16 @@ export async function processOrganizerBilling(): Promise<void> {
       }
 
       const tier = org.subscriptionTier as BillableOrganizerTier;
-      const amountCents = SQUARE_TIER_PRICE_CENTS[tier];
+      // ADR-teams-extra-seat-billing-square-fix-2026-10-10: TEAMS renewals bill base + any
+      // purchased extra seats ($20/mo each, WorkspaceSettings.maxMembers beyond the base 5).
+      // PRO has no team feature at all (multiUserAllowed: false), so extraSeats is always 0
+      // there even if a stray settings row exists from a prior TEAMS period.
+      const extraSeats =
+        tier === 'TEAMS'
+          ? Math.max(0, (org.workspace?.settings?.maxMembers ?? TIER_LIMITS.TEAMS.maxTeamMembers) - TIER_LIMITS.TEAMS.maxTeamMembers)
+          : 0;
+      const baseAmountCents = SQUARE_TIER_PRICE_CENTS[tier];
+      const amountCents = baseAmountCents ? baseAmountCents + extraSeats * 2000 : baseAmountCents;
       if (!amountCents) {
         // Defensive: a row with billingProcessor='square' but a non-billable tier (SIMPLE/
         // ENTERPRISE) shouldn't exist, but never loop forever attempting a $0 charge if it does.

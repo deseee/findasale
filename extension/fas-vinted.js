@@ -4881,8 +4881,16 @@
         console.log('[FAS Vinted] sold-check: Vinted ' + r.vintedId + ' "' + r.title + '" -> ' + r.result +
           (r.itemId ? ' (item ' + r.itemId + ', via ' + r.via + ')' : '') + (r.reason ? ' [' + r.reason + ']' : '') +
           (r.candidateCount ? ' [' + r.candidateCount + ' candidates]' : ''));
-        // 'error' is a server-side failure for that one entry: leave it unreported so it retries.
-        if (r && r.vintedId && r.result !== 'error') reported.add(String(r.vintedId));
+        // S-VINTED-BCW-AMBIGUOUS-SILENT-DROP (2026-10-10): 'error' was already excluded so a
+        // server-side failure retries -- 'ambiguous' and 'notFound' belong in that same bucket.
+        // Neither means "handled": the sale was never committed, nothing was removed, and the
+        // backend now sends the organizer a real notification for both (see
+        // facebookMarketplaceEmailPollService.ts notifyOrganizerVintedReconciliationNeeded) --
+        // permanently blacklisting the vintedId here only stops a correction from ever being
+        // retried, e.g. after the organizer renames a title collision. Only a genuinely resolved
+        // outcome (sold / alreadySold / notAvailable) is ever marked reported.
+        const isResolved = r && (r.result === 'sold' || r.result === 'alreadySold' || r.result === 'notAvailable');
+        if (isResolved && r.vintedId) reported.add(String(r.vintedId));
       }
       await vintRemStorageSet(VINT_SOLD_REPORTED_KEY, Array.from(reported).slice(-VINT_SOLD_REPORTED_CAP));
       await vintRemStorageSet(VINT_SOLD_LAST_OUTCOME_KEY, { at: Date.now(), outcome: 'reported', summary: resp.data.summary || null });

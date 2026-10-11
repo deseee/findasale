@@ -63,6 +63,44 @@ import { processVintedSoldEmail, type VintedSoldEmailResult } from './vintedSold
 import { processMercariSoldEmail, type MercariSoldEmailResult } from './mercariSoldEmailDetection';
 import { processPoshmarkSoldEmail, type PoshmarkSoldEmailResult } from './poshmarkSoldEmailDetection';
 import { processGrailedSoldEmail, type GrailedSoldEmailResult } from './grailedSoldEmailDetection';
+import { prisma } from '../lib/prisma';
+import { createNotification } from '../lib/notificationService';
+
+/**
+ * S-VINTED-BCW-AMBIGUOUS-SILENT-DROP (2026-10-10, Patrick live report: "BCW tubes and pages"
+ * sold-on-Vinted items never closing out). Root cause: an 'unmatched'/'ambiguous' title-email
+ * outcome was only ever console.warn'd (text a human would only see by tailing server logs) and
+ * then the email was marked \Seen -- permanently dropped, never retried, never surfaced to the
+ * organizer. Organizers who list several near-identical items (same brand/product, e.g. multiple
+ * "BCW Trading Card Pages" listings) hit the title-collision 'ambiguous' case routinely, since
+ * title matching is deliberately exact-and-unique-only (it never guesses which item sold -- that
+ * safety behavior is correct and is NOT changed here). This at least gets a real notification in
+ * front of the organizer so they can resolve it (rename one of the colliding titles so future
+ * sales match uniquely, or mark the item sold manually) instead of the sale silently vanishing.
+ * Best-effort: never throws, never blocks the \Seen mark or the rest of the poll.
+ */
+async function notifyOrganizerVintedReconciliationNeeded(
+  label: 'Vinted' | 'Mercari' | 'Poshmark' | 'Grailed',
+  organizerId: string,
+  title: string,
+  detail: string,
+): Promise<void> {
+  try {
+    const organizer = await prisma.organizer.findUnique({ where: { id: organizerId }, select: { userId: true } });
+    if (!organizer?.userId) return;
+    await createNotification({
+      userId: organizer.userId,
+      type: 'sold_email_needs_reconciliation',
+      title: `A ${label} sale needs your attention`,
+      body: `We received a "sold" notice for "${title}" on ${label}, but ${detail}. This item was NOT automatically marked sold or removed from your other listings -- please find it and update it yourself (or rename it if another listing shares its exact title) so future sales match correctly.`,
+      link: '/organizer/inventory',
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    });
+  } catch (err: any) {
+    console.error(`[facebookMarketplaceEmailPollService] Failed to notify organizer ${organizerId} of ${label} reconciliation need:`, err?.message || err);
+  }
+}
 
 export interface VintedSoldEmailPollCounts {
   processed: number;
@@ -343,12 +381,24 @@ async function processTitleEmailBatch(
           `[facebookMarketplaceEmailPollService] UNMATCHED ${label} sold email -- needs manual reconciliation`,
           { uid, organizerId: outcome.organizerId, itemTitleFromBody: outcome.title, reason: outcome.reason }
         );
+        await notifyOrganizerVintedReconciliationNeeded(
+          label,
+          outcome.organizerId,
+          outcome.title,
+          "we couldn't find a matching listing for it in your account"
+        );
         break;
       case 'ambiguous':
         counts.ambiguous++;
         console.warn(
           `[facebookMarketplaceEmailPollService] AMBIGUOUS ${label} sold email -- title matches more than one item, needs manual reconciliation`,
           { uid, organizerId: outcome.organizerId, itemTitleFromBody: outcome.title, candidateCount: outcome.candidateCount, reason: outcome.reason }
+        );
+        await notifyOrganizerVintedReconciliationNeeded(
+          label,
+          outcome.organizerId,
+          outcome.title,
+          `its title matches ${outcome.candidateCount ?? 'more than one'} of your listings, so we couldn't tell which one actually sold`
         );
         break;
       case 'ignored':

@@ -23,7 +23,7 @@
  */
 import { prisma } from '../lib/prisma';
 
-export type BillingChargeKind = 'RENEWAL' | 'SUBSCRIBE' | 'UPGRADE' | 'HUNT_PASS_RENEWAL';
+export type BillingChargeKind = 'RENEWAL' | 'SUBSCRIBE' | 'UPGRADE' | 'HUNT_PASS_RENEWAL' | 'SEAT_ADD';
 
 /**
  * Hunt Pass renewals (2026-09-29) reuse this ledger without a schema change: the `organizerId`
