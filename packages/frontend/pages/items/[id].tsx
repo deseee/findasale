@@ -1606,7 +1606,9 @@ export async function getStaticProps(context: GetStaticPropsContext) {
     // via findasale-dev cost-optimization batch (Vercel ISR Writes 345% of cap).
     const isEnded = item.sale?.status === 'ENDED';
     await logIsrWrite('items/[id]', isEnded ? 'success_ended' : 'success_active');
-    return { props: { ogData, initialData }, revalidate: isEnded ? 2592000 : 604800 };
+    // JSON round trip drops undefined keys (organizer tier fields are absent from the item API). Production already
+    // drops them when it serializes; next dev refuses undefined, which made every item page 500 locally.
+    return { props: { ogData: JSON.parse(JSON.stringify(ogData)), initialData }, revalidate: isEnded ? 2592000 : 604800 };
   } catch (error) {
     // Fail open: page still works, OG tags fall back to CSR version
     console.error('[items/[id] getStaticProps error]', error);

@@ -590,6 +590,15 @@ export default function POSPage() {
     staleTime: 15000,
     retry: false,
   });
+  // Same status query and key as the staff holds page, so the cache is shared. Gates the link to that page: it shows only while the flag is on.
+  const { data: bulkStatus } = useQuery({
+    queryKey: ['bulk-lots-status'],
+    queryFn: async () => readBulkStatus((await api.get('/bulk-lots/status')).data),
+    enabled: !!user && !!selectedSaleId && !venueHubId,
+    staleTime: 60000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
   const bulkLotById = new Map<string, BulkLot>(bulkLots.map((l) => [l.itemId, l]));
   const [bulkModalLot, setBulkModalLot] = useState<BulkLot | null>(null);
   const cartHasBulk = cart.some((c) => !!c.bulkQuantity);
@@ -3252,6 +3261,16 @@ export default function POSPage() {
             </button>
           </div>
 
+          {/* ADR-136 Addendum D: staff holds page for bulk lots. Only while bulk lots are turned on. */}
+          {bulkStatus?.enabled === true && (
+            <Link
+              href={`/organizer/bulk-lots/${encodeURIComponent(selectedSaleId)}/holds`}
+              className="mt-1 inline-flex min-h-[44px] items-center text-sm font-medium text-sage-700 dark:text-sage-400 underline"
+            >
+              {BULK_COPY.regHoldsLink}
+            </Link>
+          )}
+
           {searchResults.length > 0 && (
             <ul className="mt-1 border border-warm-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm divide-y divide-warm-100 dark:divide-gray-700 max-h-40 overflow-y-auto">
               {searchResults.map(item => (
@@ -3262,7 +3281,7 @@ export default function POSPage() {
                   >
                     <span className="text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</span>
                     <span className="text-sm font-semibold text-sage-700 ml-2 shrink-0">
-                      +${item.price?.toFixed(2) ?? '0.00'}
+                      {bulkLotById.get(item.id)?.pricePerThousandLabel ?? `+$${item.price?.toFixed(2) ?? '0.00'}`}
                     </span>
                   </button>
                 </li>

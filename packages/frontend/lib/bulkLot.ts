@@ -138,6 +138,7 @@ export const BULK_COPY = {
   regPerThousandSuffix: 'per 1,000 cards',
   regUnconfirmed: 'We could not confirm this sale. Check your recent sales before you try again.',
   regLotBadge: 'Bulk lot',
+  regHoldsLink: 'Bulk lot holds',
   regCardsSuffix: 'cards',
 
   // Public pages
