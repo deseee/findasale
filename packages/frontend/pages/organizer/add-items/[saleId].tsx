@@ -1408,6 +1408,17 @@ const AddItemsDetailPage = () => {
         showToast(`${skipped.length} item(s) skipped${skipMessage}`, 'warning');
       }
 
+      // 2026-10-11: moving Published items to Draft / Pending Review ends their live eBay / Discogs / Reverb / Etsy listings.
+      // Best-effort on the server: the status change always stands, and any channel that could not be ended comes back here.
+      const withdrawalWarnings: Array<{ itemId: string; channel?: string; reason?: string }> = response?.data?.withdrawalWarnings || [];
+      const withdrawnListingsCount: number = response?.data?.withdrawnListingsCount || 0;
+      if (withdrawalWarnings.length > 0) {
+        const channels = Array.from(new Set(withdrawalWarnings.map((w) => w.channel).filter(Boolean))).join(', ');
+        showToast(`Some live listings could not be ended automatically${channels ? ` (${channels})` : ''}. Check those listings and end them manually.`, 'warning');
+      } else if (withdrawnListingsCount > 0) {
+        showToast(`Ended ${withdrawnListingsCount} live marketplace listing${withdrawnListingsCount !== 1 ? 's' : ''}`, 'info');
+      }
+
       // Check for partial failures (207 response with failed items)
       if (failed.length > 0) {
         const toastMessage = `${succeeded.length}/${count + failed.length} items updated. ${failed.length} skipped`;

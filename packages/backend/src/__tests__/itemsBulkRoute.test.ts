@@ -85,6 +85,7 @@ jest.mock('../controllers/valuationController', () => mockProxyFactory());
 jest.mock('../services/shopifyService', () => mockProxyFactory());
 jest.mock('../services/marketplace/discogsListingConnector', () => mockProxyFactory());
 jest.mock('../services/marketplace/reverbConnector', () => mockProxyFactory());
+jest.mock('../services/marketplace/etsyConnector', () => mockProxyFactory());
 jest.mock('../services/itemDeletionService', () => mockProxyFactory());
 jest.mock('../services/facebookNudgeService', () => mockProxyFactory());
 jest.mock('../utils/actingOrganizer', () => mockProxyFactory());
@@ -687,6 +688,66 @@ describe('POST /bulk: draftStatus', () => {
     expect(updateManyCalls()).toHaveLength(1);
     expect(updateManyCalls()[0].data).toEqual({ draftStatus: 'PENDING_REVIEW', lastEditedAt: expect.any(Date) });
     expect(publishMock()).not.toHaveBeenCalled();
+  });
+
+  describe('withdraws live marketplace listings when unpublishing (2026-10-11)', () => {
+    const ebayMock = (): jest.Mock => require('../controllers/ebayController').endEbayListingIfExists;
+    const discogsMock = (): jest.Mock => require('../services/marketplace/discogsListingConnector').withdrawDiscogsListingIfExists;
+    const reverbMock = (): jest.Mock => require('../services/marketplace/reverbConnector').withdrawReverbListingIfExists;
+    const etsyMock = (): jest.Mock => require('../services/marketplace/etsyConnector').withdrawEtsyListingIfExists;
+
+    beforeEach(() => {
+      ebayMock().mockReset().mockResolvedValue(true);
+      discogsMock().mockReset().mockResolvedValue(undefined);
+      reverbMock().mockReset().mockResolvedValue('skipped');
+      etsyMock().mockReset().mockResolvedValue('skipped');
+    });
+
+    it('PUBLISHED -> DRAFT withdraws on every API channel for the published item only, after the status write', async () => {
+      mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'PUBLISHED' }), saleItem('b', { draftStatus: 'PENDING_REVIEW' })]);
+      const res = makeRes();
+      await bulk(makeReq({ itemIds: ['a', 'b'], operation: 'draftStatus', value: 'DRAFT' }), res);
+      expect(res.statusCode).toBe(200);
+      expect(updateManyCalls()).toHaveLength(1);
+      expect(ebayMock()).toHaveBeenCalledTimes(1);
+      expect(ebayMock()).toHaveBeenCalledWith('a', 'delete');
+      expect(discogsMock()).toHaveBeenCalledWith('a');
+      expect(reverbMock()).toHaveBeenCalledWith('a');
+      expect(etsyMock()).toHaveBeenCalledWith('a');
+      expect(res.body.withdrawnListingsCount).toBe(1);
+      expect(res.body.withdrawalWarnings).toBeUndefined();
+    });
+
+    it('does not withdraw when moving to PUBLISHED or when nothing was published', async () => {
+      mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'DRAFT' })]);
+      const res = makeRes();
+      await bulk(makeReq({ itemIds: ['a'], operation: 'draftStatus', value: 'PENDING_REVIEW' }), res);
+      expect(res.statusCode).toBe(200);
+      expect(ebayMock()).not.toHaveBeenCalled();
+      expect(discogsMock()).not.toHaveBeenCalled();
+      expect(res.body.withdrawalWarnings).toBeUndefined();
+    });
+
+    it('a channel failure or throw never fails the request or rolls back; it is reported in withdrawalWarnings', async () => {
+      mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'PUBLISHED' })]);
+      ebayMock().mockResolvedValue(false);
+      discogsMock().mockRejectedValue(new Error('discogs down'));
+      reverbMock().mockResolvedValue('failed');
+      etsyMock().mockResolvedValue('withdrawn');
+      const res = makeRes();
+      await bulk(makeReq({ itemIds: ['a'], operation: 'draftStatus', value: 'DRAFT' }), res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.succeeded).toEqual(['a']);
+      expect(updateManyCalls()).toHaveLength(1);
+      expect(res.body.withdrawnListingsCount).toBe(1);
+      expect(res.body.withdrawalWarnings.map((w: any) => w.channel).sort()).toEqual(['Discogs', 'Reverb', 'eBay']);
+    });
+
+    it('a dry run withdraws nothing', async () => {
+      mockPrisma.item.findMany.mockResolvedValue([saleItem('a', { draftStatus: 'PUBLISHED' })]);
+      await bulk(makeReq({ itemIds: ['a'], operation: 'draftStatus', value: 'DRAFT', dryRun: true }), makeRes());
+      expect(ebayMock()).not.toHaveBeenCalled();
+    });
   });
 
   it('PUBLISHED goes through publishItemForUser per item and never a bare updateMany', async () => {
