@@ -32,6 +32,12 @@ interface BacklogItem {
   skipCount: number;
   lastErrorMessage: string | null;
   lastAttemptAt: string | null;
+  // 2026-10-11 (BUG S-EXT-VINTED-STUCK-MANUAL-REVIEW investigation): false means the worst-
+  // affected platform's live listing has never had a remoteListingId captured, so it cannot
+  // structurally self-resolve via id-based matching -- distinguishes a Hortilux/Vinted-style
+  // item (stuck forever, no id ever captured) from one that may still resolve on a later
+  // automated retry. Optional so older cached API responses don't break this page.
+  remoteListingIdCaptured?: boolean;
 }
 
 const AdminMarketplaceReviewBacklog = () => {
@@ -125,6 +131,7 @@ const AdminMarketplaceReviewBacklog = () => {
                   <th className="text-left px-4 py-3 font-medium text-warm-900 dark:text-warm-100">Sale</th>
                   <th className="text-left px-4 py-3 font-medium text-warm-900 dark:text-warm-100">Item</th>
                   <th className="text-right px-4 py-3 font-medium text-warm-900 dark:text-warm-100">Skips</th>
+                  <th className="text-left px-4 py-3 font-medium text-warm-900 dark:text-warm-100">Can Self-Resolve?</th>
                   <th className="text-left px-4 py-3 font-medium text-warm-900 dark:text-warm-100">Last Error</th>
                   <th className="text-right px-4 py-3 font-medium text-warm-900 dark:text-warm-100">Last Attempt</th>
                 </tr>
@@ -140,6 +147,13 @@ const AdminMarketplaceReviewBacklog = () => {
                       </a>
                     </td>
                     <td className="px-4 py-3 text-right text-amber-700 dark:text-amber-400 font-medium">{record.skipCount}</td>
+                    <td className="px-4 py-3 text-xs">
+                      {record.remoteListingIdCaptured ? (
+                        <span className="text-warm-500 dark:text-warm-400">Maybe (id captured)</span>
+                      ) : (
+                        <span className="text-red-700 dark:text-red-400 font-medium">No -- no listing id ever captured</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs max-w-xs">
                       {record.lastErrorMessage || 'N/A'}
                     </td>
