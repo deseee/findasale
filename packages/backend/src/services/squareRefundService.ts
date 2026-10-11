@@ -1612,3 +1612,163 @@ async function runDisputeStepOnce(disputeId: string, step: string, fn: () => Pro
     if (err?.code !== 'P2002') throw err; // already recorded by a concurrent delivery
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Square refund.updated sync (Wave 1 #4, dispatched 2026-10-11 -- health-scout Medium
+// finding 2026-10-04/2026-10-11: this integration point existed only as a log-only stub in
+// squareWebhookController.ts since the file was written 2026-09-07).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * syncSquareRefundWebhookStatus -- reacts to Square's `refund.updated` webhook for a refund
+ * FindA.Sale may or may not have initiated itself.
+ *
+ * Two distinct paths a Square refund can take:
+ *   1. FindA.Sale-initiated (executeVerifiedSquareRefund): the Purchase row is flipped PAID ->
+ *      REFUNDING BEFORE calling Square's refund API, and finalizeSquareRefundTx runs
+ *      SYNCHRONOUSLY right after that API call returns -- by the time this webhook arrives for
+ *      that same refund, the row has normally already moved past REFUNDING (to REFUNDED, or
+ *      back to PAID on a rejected refund). This function deliberately does NOT call
+ *      finalizeSquareRefundTx at all (not even guarded): finalizeSquareRefundTx's bulk-lot and
+ *      cash-fee-debt side effects have no "did this already run from the other trigger path"
+ *      guard against being entered from TWO different call sites for the SAME underlying
+ *      refund, so keeping this function's own effects completely separate from that path is the
+ *      safe choice, not a shortcut.
+ *   2. Externally-initiated (Square Seller Dashboard, a Square-side auto-refund, or any other
+ *      path that doesn't go through executeVerifiedSquareRefund): the Purchase row was NEVER
+ *      flipped out of PAID -- FindA.Sale has no idea a refund happened until this webhook
+ *      arrives. THIS is the gap Wave 1 #4 exists to close.
+ *
+ * Scope decision (deliberately conservative, not a guess): only auto-applies a COMPLETED, FULL
+ * refund against Purchase row(s) still sitting at PAID with zero refundedAmount recorded, and
+ * only when none of those rows are a bulk-lot sale row (Purchase.bulkQuantity set) -- bulk-lot
+ * card-return proportions and the cash-fee-debt re-accrual in finalizeSquareRefundTx are both
+ * concepts tied to FindA.Sale's OWN checkout flow with no well-defined meaning for a refund the
+ * platform did not initiate and had no amount-intent for ahead of time. A partial external
+ * refund, a bulk-lot row, or any row already past PAID (REFUNDING/REFUNDED/DISPUTED/already
+ * partially refunded) is logged and Sentry-captured for manual admin review instead of guessed
+ * at -- same "flag, don't silently guess" posture as the rest of this file (see
+ * handleSquareDisputeWebhook's own unresolved-Purchase handling just above).
+ *
+ * Never throws on a "nothing to do" / "needs manual review" outcome (those return normally
+ * after logging) -- only a genuine DB failure mid-apply rethrows, so the webhook controller
+ * marks that one delivery FAILED and Square retries it. A retry is safe: the `where: { status:
+ * 'PAID' }` guard on the update makes re-entry a no-op once the first attempt's transaction
+ * already committed.
+ */
+export async function syncSquareRefundWebhookStatus(refund: {
+  id?: string;
+  status?: string;
+  payment_id?: string;
+  amount_money?: { amount?: number; currency?: string };
+}): Promise<void> {
+  const refundId = refund?.id ?? 'unknown';
+  const status = refund?.status;
+  const paymentId = refund?.payment_id;
+
+  if (status !== 'COMPLETED') {
+    console.log(`[squareRefundService] refund.updated for ${refundId}: status=${status ?? 'unknown'} -- not COMPLETED, nothing to sync yet.`);
+    return;
+  }
+  if (!paymentId) {
+    console.warn(`[squareRefundService] Square refund ${refundId} COMPLETED with no payment_id -- cannot resolve a Purchase, skipping.`);
+    return;
+  }
+
+  const rows = await prisma.purchase.findMany({
+    where: { squarePaymentId: paymentId },
+    select: {
+      id: true,
+      status: true,
+      amount: true,
+      refundedAmount: true,
+      itemId: true,
+      bulkQuantity: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (rows.length === 0) {
+    console.warn(`[squareRefundService] Square refund ${refundId} COMPLETED for payment ${paymentId} -- no matching Purchase row(s), skipping.`);
+    return;
+  }
+
+  // Only act on rows FindA.Sale never touched for this payment's refund history (still PAID,
+  // nothing refunded yet, not a bulk-lot row). Anything else means either FindA.Sale's own flow
+  // already knows about this refund, or the row needs proportional math this function won't guess at.
+  const untouched = rows.filter(
+    (r) => r.status === 'PAID' && !(Number(r.refundedAmount) > 0) && !(Number(r.bulkQuantity) > 0)
+  );
+  const needsReview = rows.filter((r) => !untouched.includes(r));
+
+  if (needsReview.length > 0) {
+    console.log(
+      `[squareRefundService] Square refund ${refundId} (payment ${paymentId}): ${needsReview.length} row(s) skipped by syncSquareRefundWebhookStatus ` +
+      `(status/bulk-lot/already-refunded) -- assuming FindA.Sale's own refund flow already handled them, or flagging for manual review.`
+    );
+  }
+
+  if (untouched.length === 0) return;
+
+  const refundedCents = Math.round(Number(refund?.amount_money?.amount ?? 0)); // Square's amount_money is already minor units (cents for USD)
+  const refundedDollars = roundMoney(refundedCents / 100);
+  const totalUntouchedCents = untouched.reduce((sum, r) => sum + Math.round(r.amount * 100), 0);
+  const isFullRefund = totalUntouchedCents > 0 && refundedCents >= totalUntouchedCents;
+
+  if (!isFullRefund) {
+    console.warn(
+      `[squareRefundService] Square refund ${refundId} (payment ${paymentId}) is a PARTIAL external refund ` +
+      `($${refundedDollars} of $${roundMoney(totalUntouchedCents / 100)} across ${untouched.length} row(s)) -- not auto-applied, needs manual admin review.`
+    );
+    Sentry.captureMessage('Square refund.updated: partial external refund needs manual review', {
+      level: 'warning',
+      tags: { area: 'square-refund-sync' },
+      extra: { refundId, paymentId, refundedDollars, purchaseIds: untouched.map((r) => r.id) },
+    });
+    return;
+  }
+
+  for (const row of untouched) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const flipped = await tx.purchase.updateMany({
+          where: { id: row.id, status: 'PAID' },
+          data: {
+            status: 'REFUNDED',
+            refundedAmount: row.amount,
+            refundedAt: new Date(),
+            refundInitiatedBy: 'square_dashboard',
+          },
+        });
+        if (flipped.count === 0) return; // raced with something else since the read above -- a later delivery/sweep reconciles
+
+        if (row.itemId) {
+          await tx.item.updateMany({
+            where: { id: row.itemId, stockSold: { gt: 0 }, listingType: { not: 'CONSIGNOR_TAG' } },
+            data: { stockSold: { decrement: 1 } },
+          });
+          await tx.item.updateMany({
+            where: { id: row.itemId, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } },
+            data: { status: 'AVAILABLE' },
+          });
+          await tx.itemReservation.updateMany({
+            where: { itemId: row.itemId, status: { notIn: ['CANCELLED', 'EXPIRED', 'COMPLETED'] } },
+            data: { status: 'CANCELLED' },
+          });
+        }
+      });
+      console.log(`[squareRefundService] Purchase ${row.id} marked REFUNDED from external Square refund ${refundId} (payment ${paymentId}).`);
+      Sentry.captureMessage('Square refund.updated: external refund applied (no FindA.Sale-initiated flow saw it first)', {
+        level: 'info',
+        tags: { area: 'square-refund-sync' },
+        extra: { refundId, paymentId, purchaseId: row.id, refundedDollars: row.amount },
+      });
+    } catch (err) {
+      console.error(`[squareRefundService] Failed to sync external Square refund ${refundId} for purchase ${row.id}:`, err);
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+        tags: { area: 'square-refund-sync' },
+        extra: { refundId, paymentId, purchaseId: row.id },
+      });
+      throw err; // rethrow so the webhook controller marks this delivery FAILED and Square retries
+    }
+  }
+}

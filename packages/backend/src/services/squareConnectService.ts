@@ -760,12 +760,16 @@ export const resolveExistingSquareIdentityForUser = async (
 //     Wave 0 was trying to catch.
 // ---------------------------------------------------------------------------
 
-interface ResolvedSquareOwner {
+// Exported 2026-10-11 (Wave 1 #2 webhook wiring dispatch): squareWebhookController.ts's
+// bank_account.created/bank_account.verified handler needs to resolve which owner a Square
+// merchant id belongs to before it can pick the right per-owner-type token resolver -- same
+// lookup this file already does internally, not re-implemented at the call site.
+export interface ResolvedSquareOwner {
   ownerType: ConnectOwnerType;
   ownerId: string;
 }
 
-async function resolveSquareOwners(squareAccountId: string): Promise<ResolvedSquareOwner[]> {
+export async function resolveSquareOwners(squareAccountId: string): Promise<ResolvedSquareOwner[]> {
   const [organizers, consignors, booths] = await Promise.all([
     prisma.organizer.findMany({ where: { squareMerchantId: squareAccountId }, select: { id: true } }),
     prisma.consignor.findMany({ where: { squareAccountId }, select: { id: true } }),

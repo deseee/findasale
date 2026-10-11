@@ -4,6 +4,10 @@ import * as Sentry from '@sentry/node'; // 2026-09-29 money review P1-3: alert o
 import { prisma } from '../lib/prisma';
 import { createNotification } from '../lib/notificationService';
 import { handleSquareDisputeWebhook, type SquareDisputeWebhookEvent } from '../services/squareRefundService'; // findasale-hacker fix-and-reverify (2026-09-08): wire the REAL dispute handler -- squareRefundService.ts's handleSquareDisputeWebhook was fully built for exactly this call site (see its own doc comment) but was never actually invoked here; the dispute.created/dispute.state.updated cases below were silently calling a local log-only stub instead, meaning real Square chargebacks were never processed (no DISPUTED/DISPUTE_LOST status, no serial-chargeback buyer suspension, no organizer notification, no chargeback-rate metric). See VALID-STATE-ONLY-EXPOSURE finding in the 2026-09-08 security-QA pass.
+import { syncSquareRefundWebhookStatus } from '../services/squareRefundService'; // dispatched 2026-10-11 (health-scout Wave 1 #4 finding): wire the REAL refund-sync function -- squareRefundService.ts's syncSquareRefundWebhookStatus was built for exactly this call site (see its own doc comment) but the refund.updated case below was silently calling a local log-only stub instead, meaning a Square refund issued OUTSIDE FindA.Sale's own refund flow (Seller Dashboard, Square-side auto-refund) never updated the Purchase row or restored stock.
+import { resolveSquareOwners, fetchAndCheckSquareBankFingerprints } from '../services/squareConnectService'; // dispatched 2026-10-11 (health-scout Wave 1 #2 finding): resolveSquareOwners + fetchAndCheckSquareBankFingerprints were both already built in squareConnectService.ts (the latter does its OWN live Bank Accounts API fetch, which is why the bank_account.* webhook payload's own fingerprint-field gap never mattered -- see that function's doc comment) but neither was ever called from here.
+import { resolveOrganizerSquareAccessToken, SquareOnboardingIncompleteError } from '../services/squarePaymentService'; // NOTE: imported here, not added to squareConnectService.ts itself -- squarePaymentService.ts already imports refreshSquareAccessToken FROM squareConnectService.ts, so importing this back would be a circular import. The controller sits above both services, so it can safely import from each.
+import { resolveVendorBoothSquareAccessToken, SquareBoothOnboardingIncompleteError } from '../services/squareVendorBoothCartService'; // same circular-import reasoning as the organizer import directly above.
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // Square changeover Wave S2 #3 (2026-09-09): wires the payment.updated stub below to actually record a Hold-to-Pay invoice as PAID -- see HOLD_INVOICE_NOTE_KEY import below for how the invoice is found.
 import { HOLD_INVOICE_NOTE_KEY } from '../services/holdInvoiceSquareCheckoutHelper'; // the paymentNote key holdInvoiceSquareCheckoutHelper.ts encodes a HoldInvoice.id into at link-creation time
 import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // 2026-09-29 Sale Passport wiring: XP, milestones, referral, badge, achievement and passport stamp for a paid Square link purchase (idempotent, never throws)
@@ -435,17 +439,6 @@ export async function syncSquarePaymentStatus(
   fireSquarePurchaseEngagement(purchase.id);
 }
 
-/**
- * TODO (Wave 1 #4 -- Refunds/disputes, squareRefundService.ts, a concurrent dispatch not yet
- * built at the time this file was written): integration point for refund status sync.
- */
-async function syncSquareRefundStatus(refund: any): Promise<void> {
-  console.log(
-    `[square-webhook] refund.updated received for Square refund ${refund?.id ?? 'unknown'} ` +
-    `(status=${refund?.status ?? 'unknown'}, payment_id=${refund?.payment_id ?? 'unknown'}) -- ` +
-    `refund-sync integration point (see TODO above), not yet wired.`
-  );
-}
 
 /**
  * TODO (Wave 1 #2 -- Connect-equivalent onboarding, squareConnectService.ts, a concurrent
@@ -479,12 +472,93 @@ async function recordAndCheckSquareBankFingerprint(
   bankAccount: any,
   merchantId: string | undefined
 ): Promise<void> {
-  const hasFingerprint = typeof bankAccount?.fingerprint === 'string' && bankAccount.fingerprint.length > 0;
-  console.log(
-    `[square-webhook] ${eventType} received for merchant ${merchantId ?? 'unknown'}, bank account ` +
-    `${bankAccount?.id ?? 'unknown'} (fingerprint present in payload: ${hasFingerprint}) -- ` +
-    `bank-fingerprint fraud-guard integration point (see TODO above), not yet wired to ConnectBankFingerprint.`
-  );
+  // dispatched 2026-10-11 -- real implementation. The `bankAccount` webhook payload object is
+  // intentionally NOT read for its fingerprint field: fetchAndCheckSquareBankFingerprints does
+  // its own live GET /v2/bank-accounts call against the merchant's own token, which is exactly
+  // the "polling fallback" this file's original TODO comment flagged as probably required if
+  // the webhook payload omits `fingerprint` (confirmed it does, per that comment's research
+  // note) -- so the live-fetch path is the only one wired here, not a payload-trusting shortcut.
+  if (!merchantId) {
+    console.warn(`[square-webhook] ${eventType} event has no merchant_id -- cannot resolve an owner, skipping bank-fingerprint check.`);
+    return;
+  }
+
+  let owners: Array<{ ownerType: 'ORGANIZER' | 'CONSIGNOR' | 'VENDOR_BOOTH'; ownerId: string }>;
+  try {
+    owners = await resolveSquareOwners(merchantId) as any;
+  } catch (err) {
+    console.error(`[square-webhook] ${eventType}: resolveSquareOwners threw for merchant ${merchantId}:`, err);
+    Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+      tags: { area: 'square-bank-fingerprint' },
+      extra: { merchantId, eventType },
+    });
+    return;
+  }
+  if (owners.length === 0) {
+    // Not yet persisted to a FindA.Sale owner row -- same no-op posture as the Stripe guard's
+    // own early return for an unrecognized account.
+    console.log(`[square-webhook] ${eventType}: no FindA.Sale owner found for Square merchant ${merchantId} yet -- skipping.`);
+    return;
+  }
+
+  let token: string | null = null;
+  const skippedOwnerTypes: string[] = [];
+  for (const owner of owners) {
+    try {
+      if (owner.ownerType === 'ORGANIZER') {
+        const organizer = await prisma.organizer.findUnique({
+          where: { id: owner.ownerId },
+          select: { id: true, squareMerchantId: true, squareOnboarded: true },
+        });
+        if (!organizer) continue;
+        token = await resolveOrganizerSquareAccessToken(organizer);
+        break;
+      } else if (owner.ownerType === 'VENDOR_BOOTH') {
+        const booth = await prisma.vendorBooth.findUnique({
+          where: { id: owner.ownerId },
+          select: { id: true, userId: true, squareAccountId: true, squareOnboarded: true },
+        });
+        if (!booth) continue;
+        token = await resolveVendorBoothSquareAccessToken(booth);
+        break;
+      } else {
+        // CONSIGNOR: squareRefundService.ts / squarePaymentService.ts / squareVendorBoothCartService.ts
+        // each export a clean resolveXSquareAccessToken(...) for their own owner type; no equivalent
+        // exists yet for Consignor (consignorSquareConnectService.ts only refreshes a token inline,
+        // scoped to its own portal-token-driven flow, not as a standalone resolver callable here).
+        // Flagged, not guessed at -- see this dispatch's handoff for the follow-up this needs.
+        skippedOwnerTypes.push('CONSIGNOR');
+      }
+    } catch (err) {
+      if (err instanceof SquareOnboardingIncompleteError || err instanceof SquareBoothOnboardingIncompleteError) {
+        // This particular owner's onboarding isn't far enough along to have a usable token yet --
+        // try the next owner (normally there is only one) rather than treating it as a real failure.
+        continue;
+      }
+      console.error(`[square-webhook] ${eventType}: failed to resolve a Square access token for ${owner.ownerType} ${owner.ownerId}:`, err);
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+        tags: { area: 'square-bank-fingerprint' },
+        extra: { merchantId, eventType, ownerType: owner.ownerType, ownerId: owner.ownerId },
+      });
+    }
+  }
+
+  if (!token) {
+    if (skippedOwnerTypes.length > 0) {
+      console.warn(`[square-webhook] ${eventType}: merchant ${merchantId} resolves only to CONSIGNOR owner(s) -- no token resolver exists for that owner type yet, bank-fingerprint check skipped. See handoff follow-up.`);
+      Sentry.captureMessage('Square bank-fingerprint check skipped: no token resolver for CONSIGNOR owner type', {
+        level: 'warning',
+        tags: { area: 'square-bank-fingerprint' },
+        extra: { merchantId, eventType },
+      });
+    } else {
+      console.warn(`[square-webhook] ${eventType}: could not resolve a usable Square access token for merchant ${merchantId} (owner(s) found but not fully onboarded) -- bank-fingerprint check skipped.`);
+    }
+    return;
+  }
+
+  // fetchAndCheckSquareBankFingerprints never throws (own non-fatal posture) -- no try/catch needed here.
+  await fetchAndCheckSquareBankFingerprints(token, merchantId);
 }
 
 /**
@@ -598,8 +672,9 @@ export async function processSquareWebhookEvent(event: SquareWebhookEnvelope): P
     }
 
     case 'refund.updated': {
+      // dispatched 2026-10-11: call the REAL handler (see import comment above).
       const refund = dataObject.refund ?? {};
-      await syncSquareRefundStatus(refund);
+      await syncSquareRefundWebhookStatus(refund);
       break;
     }
 

@@ -21,7 +21,7 @@ jest.mock('../lib/prisma', () => ({
   },
 }));
 jest.mock('../lib/notificationService', () => ({ createNotification: jest.fn() }));
-jest.mock('../services/squareRefundService', () => ({ handleSquareDisputeWebhook: jest.fn() }));
+jest.mock('../services/squareRefundService', () => ({ handleSquareDisputeWebhook: jest.fn(), syncSquareRefundWebhookStatus: jest.fn() })); // dispatched 2026-10-11: controller now also imports syncSquareRefundWebhookStatus for the refund.updated case
 const mockMarkPaid = jest.fn();
 jest.mock('../services/holdInvoicePaymentRecorder', () => ({ markHoldInvoicePaid: (...a: any[]) => mockMarkPaid(...a) }));
 jest.mock('../services/holdInvoiceSquareCheckoutHelper', () => ({ HOLD_INVOICE_NOTE_KEY: 'invoiceId' }));
