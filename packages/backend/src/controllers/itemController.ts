@@ -1269,7 +1269,7 @@ const repushInFlight = new Set<string>();
 export const repushItemToEbay = async (req: AuthRequest, res: Response) => {
   let guardedItemId: string | null = null;
   try {
-    const loaded = await loadOwnedItemForMarketplace(req, res, { ebayOfferId: true, ebayListingId: true, fccId: true, ...HOLD_SELECT });
+    const loaded = await loadOwnedItemForMarketplace(req, res, { ebayOfferId: true, ebayListingId: true, fccId: true, brand: true, mpn: true, upc: true, ean: true, isbn: true, ...HOLD_SELECT });
     if (!loaded) return;
     const { item, owner } = loaded;
 
@@ -1322,6 +1322,13 @@ export const repushItemToEbay = async (req: AuthRequest, res: Response) => {
       // its own GET and sends nothing (no PUT, no republish) when eBay already carries the same value or the category has
       // no FCC ID aspect, so this adds no eBay write for an item whose FCC ID is already on eBay.
       if (typeof item.fccId === 'string' && item.fccId.trim().length > 0) set.add('fccId');
+      // Product identifiers (2026-10-11): each non-empty one is included, like fccId. pushItemToEbay merges them into the live
+      // inventory item and sends nothing when eBay already carries the same values. A blank one is NOT included here (an
+      // explicit "Update eBay now" never clears an identifier on eBay; clears go through a save, where they are reported).
+      for (const idField of ['brand', 'mpn', 'upc', 'ean', 'isbn'] as const) {
+        const v = (item as Record<string, unknown>)[idField];
+        if (typeof v === 'string' && v.trim().length > 0) set.add(idField);
+      }
       fields = Array.from(set);
     }
 
@@ -2592,6 +2599,12 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         conditionGrade: updateData.conditionGrade,
         price: updateData.price,
         fccId: updateData.fccId, // already normalized (normalizeFccId) or null when cleared
+        // Product identifiers: undefined when the body did not carry the key; `|| null` already applied above. The diff trims.
+        brand: updateData.brand,
+        mpn: updateData.mpn,
+        upc: updateData.upc,
+        ean: updateData.ean,
+        isbn: updateData.isbn,
       },
       { priceReopen, shippingInputsChanged: shippingInputsChanged || cardEnvelopePriceCrossed }
     );

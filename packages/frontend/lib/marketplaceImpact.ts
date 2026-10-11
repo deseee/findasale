@@ -16,7 +16,7 @@
  */
 import { desiredEbayCondition } from './conditionModel';
 
-export type EbayPushField = 'title' | 'description' | 'condition' | 'price' | 'shipping' | 'fccId';
+export type EbayPushField = 'title' | 'description' | 'condition' | 'price' | 'shipping' | 'fccId' | 'brand' | 'mpn' | 'upc' | 'ean' | 'isbn';
 export type EbayPlanReason = 'not_listed' | 'no_offer_id' | 'held' | 'no_changes';
 
 /** The fields whose change prompts a manual update on an extension marketplace (same set as the backend). */
@@ -62,6 +62,11 @@ export interface SaveImpactLoadedItem {
   packageHeightIn?: unknown;
   packageType?: string | null;
   fccId?: string | null;
+  brand?: string | null;
+  mpn?: string | null;
+  upc?: string | null;
+  ean?: string | null;
+  isbn?: string | null;
   ebayOfferId?: string | null;
   ebayListingId?: string | null;
 }
@@ -93,6 +98,14 @@ const blank = (v: unknown): string => (v === null || v === undefined ? '' : Stri
 function normalizeFcc(v: unknown): string {
   return typeof v === 'string' ? v.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 20) : '';
 }
+
+/** Same trim as the backend (utils/ebayIdentifierMerge.ts normalizeIdentifier). */
+function normalizeIdentifier(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : '';
+}
+
+/** Product identifiers that sync to a live eBay listing, in the backend's order. */
+const IDENTIFIER_FIELDS: ReadonlyArray<'brand' | 'mpn' | 'upc' | 'ean' | 'isbn'> = ['brand', 'mpn', 'upc', 'ean', 'isbn'];
 
 function priceNumber(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null;
@@ -148,6 +161,12 @@ export function computeChangedEbayFields(
     if (nextFcc && nextFcc !== normalizeFcc(loaded.fccId)) fields.push('fccId');
   }
 
+  // brand, mpn, upc, ean, isbn: any real change after trimming, including a clear (the backend reports a clear it cannot
+  // apply, for example a brand, instead of removing it from eBay). Same rule as computeEbayPushFields.
+  IDENTIFIER_FIELDS.forEach((key) => {
+    if (provided(dirty, key) && normalizeIdentifier(dirty[key]) !== normalizeIdentifier(loaded[key])) fields.push(key);
+  });
+
   if (shippingChanged) fields.push('shipping');
 
   return fields;
@@ -197,6 +216,11 @@ const FIELD_WORDS: Record<string, string> = {
   price: 'price',
   shipping: 'shipping',
   fccId: 'FCC ID',
+  brand: 'brand',
+  mpn: 'MPN',
+  upc: 'UPC',
+  ean: 'EAN',
+  isbn: 'ISBN',
 };
 
 export function fieldList(fields: ReadonlyArray<string>): string {

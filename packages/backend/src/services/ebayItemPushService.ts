@@ -24,13 +24,17 @@ import { prisma } from '../lib/prisma';
 import { ebayPublishWithSelfHeal, ensureConditionValidForCategory, getRequiredAspectsForCategory } from './ebayPublishService';
 import { applyFccIdAspect } from '../utils/ebayFccAspect'; // FCC ID item specific, shared with the first-publish path
 import { normalizeFccId } from '../utils/fccId';
+import { mergeEbayIdentifiers, resolveMpnRequired, normalizeIdentifier, EBAY_IDENTIFIER_FIELDS, type EbayIdentifierField } from '../utils/ebayIdentifierMerge'; // brand, mpn, upc, ean, isbn on a live listing
 import { desiredEbayCondition, buildEbayConditionDescription } from '../utils/conditionMapping';
 import { findBulkLotItemIds } from './bulkLot/bulkLotService'; // ADR-136 Addendum C (#659)
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
 
 // fccId (2026-10-11): an FCC ID added or edited after the item went live is sent as the "FCC ID" item specific. It is
 // deliberately NOT in EBAY_CONTENT_FIELDS (no pull-sync dirty flag, no hold-release coupling).
-export const EBAY_PUSH_FIELDS = ['title', 'description', 'condition', 'price', 'shipping', 'fccId'] as const;
+//
+// brand, mpn, upc, ean, isbn (2026-10-11): product identifiers edited after the item went live, merged into the live
+// inventory item by utils/ebayIdentifierMerge.ts (same GET, merge, PUT, republish path as fccId). Not content fields either.
+export const EBAY_PUSH_FIELDS = ['title', 'description', 'condition', 'price', 'shipping', 'fccId', 'brand', 'mpn', 'upc', 'ean', 'isbn'] as const;
 export type EbayPushField = (typeof EBAY_PUSH_FIELDS)[number];
 /** The fields the pull-sync cron would otherwise overwrite from eBay (guarded by ebayContentDirtyAt). */
 export const EBAY_CONTENT_FIELDS = ['title', 'description', 'condition'] as const;
@@ -134,6 +138,11 @@ type DiffExisting = {
   conditionGrade?: string | null;
   price?: unknown;
   fccId?: string | null;
+  brand?: string | null;
+  mpn?: string | null;
+  upc?: string | null;
+  ean?: string | null;
+  isbn?: string | null;
 };
 type DiffNext = {
   title?: string | null;
@@ -142,6 +151,11 @@ type DiffNext = {
   conditionGrade?: string | null;
   price?: unknown;
   fccId?: string | null;
+  brand?: string | null;
+  mpn?: string | null;
+  upc?: string | null;
+  ean?: string | null;
+  isbn?: string | null;
 };
 
 const blank = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
@@ -201,6 +215,14 @@ export function computeEbayPushFields(
   if (next.fccId !== undefined) {
     const nextFcc = normalizeFccId(next.fccId);
     if (nextFcc && nextFcc !== normalizeFccId(existing.fccId)) fields.push('fccId');
+  }
+
+  // brand, mpn, upc, ean, isbn: any real change after trimming, INCLUDING a clear. A clear is pushed so upc / ean can be
+  // removed and so a cleared brand / mpn / isbn is reported (pushItemToEbay leaves eBay's brand, and a required mpn / isbn,
+  // untouched and says so). next === undefined means "not provided".
+  for (const f of EBAY_IDENTIFIER_FIELDS) {
+    if (next[f] === undefined) continue;
+    if ((normalizeIdentifier(next[f]) ?? '') !== (normalizeIdentifier(existing[f]) ?? '')) fields.push(f);
   }
 
   if (opts.shippingInputsChanged) fields.push('shipping');
@@ -419,6 +441,9 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
         conditionNotes: true,
         brand: true,
         mpn: true,
+        isbn: true,
+        upc: true,
+        ean: true,
         fccId: true,
         category: true,
         tags: true,
@@ -506,6 +531,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
       if (f === 'condition') return !!item.condition;
       if (f === 'price') return item.price !== null && item.price !== undefined;
       if (f === 'fccId') return !!normalizeFccId(item.fccId); // never attempt (or send) an empty FCC ID
+      if ((EBAY_IDENTIFIER_FIELDS as readonly string[]).includes(f)) return true; // a clear is attempted too (removed, or reported as skipped)
       return f === 'shipping' ? !!item.ebayListingId : false;
     });
 
@@ -590,7 +616,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
           }
         }
 
-        const inventoryFields = contentRequested.filter((f) => f === 'title' || f === 'description' || f === 'condition' || f === 'fccId');
+        const inventoryFields = contentRequested.filter((f) => f === 'title' || f === 'description' || f === 'condition' || f === 'fccId' || (EBAY_IDENTIFIER_FIELDS as readonly string[]).includes(f));
         const sku = offerObject ? (offerObject.sku as string | undefined) : undefined;
         if (inventoryFields.length > 0 && offerObject && !sku) {
           fail('NO_SKU', 'eBay did not return a SKU for this listing.');
@@ -648,6 +674,40 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
               else delete invObject.conditionDescription;
             }
 
+            // Product identifiers (brand, mpn, upc, ean, isbn): pure merge in utils/ebayIdentifierMerge.ts. It preserves every
+            // other product key and aspect, keeps Brand paired with an MPN, and never deletes a Brand (or an MPN / ISBN the
+            // category may require). A field it deliberately leaves alone is reported through fail() (PARTIAL / FAILED, like
+            // FCC_ASPECT_SKIPPED) and is never sent. An unchanged result makes no PUT and no republish for these fields.
+            const idSkipPut = new Set<string>();
+            const idFields = inventoryFields.filter((f): f is EbayIdentifierField => (EBAY_IDENTIFIER_FIELDS as readonly string[]).includes(f));
+            if (idFields.length > 0) {
+              const offerCat = offerObject ? offerObject.categoryId : undefined;
+              const idCategoryId: string | null = (typeof offerCat === 'string' && offerCat.length > 0 ? offerCat : null) || item.ebayCategoryId || null;
+              const mpnRequired =
+                idFields.includes('mpn') && !normalizeIdentifier(item.mpn)
+                  ? await resolveMpnRequired(idCategoryId, getRequiredAspectsForCategory)
+                  : null;
+              const merged = mergeEbayIdentifiers(
+                (invObject.product as Record<string, unknown> | undefined) ?? {},
+                { brand: item.brand, mpn: item.mpn, upc: item.upc, ean: item.ean, isbn: item.isbn },
+                idFields,
+                { categoryId: idCategoryId, mpnRequired }
+              );
+              invObject.product = merged.product;
+              for (const note of merged.skipped) {
+                console.warn(`[eBay PushSync] Item ${item.id}: ${note.code}, left untouched on eBay.`);
+                fail(note.code, note.message);
+                idSkipPut.add(note.field);
+              }
+              if (!merged.changed) {
+                // Already identical on eBay: nothing to send for these fields.
+                for (const f of merged.done) {
+                  pushed.add(f);
+                  idSkipPut.add(f);
+                }
+              }
+            }
+
             // Missing product.brand causes 25002 BrandMPN on republish (confirmed 2026-06-30): mirror it from the
             // aspects when absent. Heals items first pushed before Fix A.
             const invProduct = invObject.product as Record<string, unknown> | undefined;
@@ -689,7 +749,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
               }
             }
 
-            const putFields = inventoryFields.filter((f) => f !== 'fccId' || fccApplied);
+            const putFields = inventoryFields.filter((f) => (f !== 'fccId' || fccApplied) && !idSkipPut.has(f));
             if (putFields.length > 0) {
               try {
                 const invRes = await fetch(proxyUrl(invPath), {
@@ -727,6 +787,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
                 condition: item.condition,
                 brand: item.brand,
                 mpn: item.mpn,
+                isbn: item.isbn, // ADR-089: heal25002 injects the real ISBN for Books
                 ebayCategoryId: item.ebayCategoryId,
                 ebayCategoryName: item.ebayCategoryName,
                 ebayOfferId,

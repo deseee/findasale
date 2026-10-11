@@ -322,3 +322,42 @@ test('fccId: held and no-offer items report the field without pushing', () => {
   const held = computeSaveImpact({ loadedItem: { ...loaded, fccId: null }, dirtyFields: { fccId: 'ABC123XYZ' }, held: true, ebayListed: true, extensionPlatformsListed: noExt });
   assert.deepEqual(held.ebay, { willPush: false, fields: ['fccId'], reason: 'held' });
 });
+
+test('identifiers: a new or changed brand, MPN, UPC, EAN or ISBN on a listed item is planned as an eBay push, with the form wording', () => {
+  const brand = computeSaveImpact({ loadedItem: { ...loaded, brand: 'Acme' }, dirtyFields: { brand: 'NewCo' }, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.deepEqual(brand.ebay, { willPush: true, fields: ['brand'] });
+  assert.deepEqual(describeSaveImpact(brand), ['Saving will update eBay: brand.']);
+  const all = computeSaveImpact({
+    loadedItem: { ...loaded, brand: null, mpn: null, upc: null, ean: null, isbn: null },
+    dirtyFields: { brand: 'Acme', mpn: 'X1', upc: '012345678905', ean: '4006381333931', isbn: '9781234567897' },
+    held: false, ebayListed: true, extensionPlatformsListed: noExt,
+  });
+  assert.deepEqual(all.ebay.fields, ['brand', 'mpn', 'upc', 'ean', 'isbn']);
+  assert.deepEqual(describeSaveImpact(all), ['Saving will update eBay: brand, MPN, UPC, EAN, ISBN.']);
+});
+
+test('identifiers: a clear counts as a change (the backend removes upc / ean and reports the rest)', () => {
+  const cleared = computeSaveImpact({ loadedItem: { ...loaded, upc: '012345678905' }, dirtyFields: { upc: '' }, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.deepEqual(cleared.ebay, { willPush: true, fields: ['upc'] });
+});
+
+test('identifiers: unchanged after trimming, blank to null, or omitted does not push; not an extension-relevant field', () => {
+  const same = computeSaveImpact({ loadedItem: { ...loaded, brand: 'Acme', mpn: null }, dirtyFields: { brand: ' Acme ', mpn: '' }, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.deepEqual(same.ebay, { willPush: false, fields: [], reason: 'no_changes' });
+  const omitted = computeSaveImpact({ loadedItem: { ...loaded, brand: 'Acme' }, dirtyFields: {}, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.equal(omitted.ebay.willPush, false);
+  const ext = computeSaveImpact({ loadedItem: { ...loaded, brand: null }, dirtyFields: { brand: 'Acme' }, held: false, ebayListed: true, extensionPlatformsListed: ['VINTED'] });
+  assert.deepEqual(ext.extensions, []);
+});
+
+test('identifiers: held items report the fields without pushing; not-listed items say nothing', () => {
+  const held = computeSaveImpact({ loadedItem: { ...loaded, mpn: null }, dirtyFields: { mpn: 'X1' }, held: true, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.deepEqual(held.ebay, { willPush: false, fields: ['mpn'], reason: 'held' });
+  const unlisted = computeSaveImpact({ loadedItem: { ...loaded, mpn: null }, dirtyFields: { mpn: 'X1' }, held: false, ebayListed: false, extensionPlatformsListed: noExt });
+  assert.deepEqual(unlisted.ebay, { willPush: false, fields: [], reason: 'not_listed' });
+});
+
+test('identifiers: push outcome rows use the same words', () => {
+  const view = describePushOutcome({ status: 'PARTIAL', fieldsAttempted: ['title', 'brand'], fieldsPushed: ['title'], errorMessage: null });
+  assert.match(view.text, /Could not update: brand\./);
+});
