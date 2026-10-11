@@ -31,7 +31,7 @@
  */
 
 import { redis } from '../../lib/redis';
-import { getValidToken } from './tokenStore';
+import { getAccount, getValidToken } from './tokenStore';
 import { youtubePublisher } from './platforms/youtube';
 import { listRecentChannelComments } from './platforms/youtube';
 import { draftCommentReply } from './engagementReplyDrafter';
@@ -54,6 +54,17 @@ const FIRST_RUN_LOOKBACK_MS = 24 * 60 * 60 * 1000;
  */
 export async function checkYouTubeComments(): Promise<{ checked: number; staged: number }> {
   const fetchStartedAt = new Date();
+
+  // FINDASALE-NODEJS-4X / 4Y (2026-10-11): no YouTube SocialAccount connected is an
+  // expected "integration not set up yet" state, not a failure — skip gracefully
+  // instead of throwing, which was killing the whole engagementMonitorPoll cron run
+  // (checkXMentions() never got to run either) and tripping cronGuard's consecutive-
+  // failure alert every hour. Real auth problems (inactive account, refresh failure)
+  // still throw from getValidToken below and surface to Sentry as before.
+  if (!(await getAccount('YOUTUBE'))) {
+    console.warn('[commentMonitor] No YouTube SocialAccount connected — skipping this run.');
+    return { checked: 0, staged: 0 };
+  }
 
   const { account, accessToken } = await getValidToken('YOUTUBE', youtubePublisher.refresh);
   const channelId = account.platformUserId;
