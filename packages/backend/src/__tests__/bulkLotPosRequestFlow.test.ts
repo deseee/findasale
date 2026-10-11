@@ -660,7 +660,7 @@ describe('manualCardPayment with a bulk lot', () => {
     const res = await run();
     const out = res.json.mock.calls[0][0];
     expect(out).toMatchObject({ charged: true, refunded: false, code: 'BULK_SOLD_OUT_AFTER_PAYMENT' });
-    expect(out.message).toContain('$7.14');
+    expect(out.message).toContain('$6.75'); // CHARGED = 675 cents; CNP surcharge disabled 2026-10-11 (was $7.14)
     expect(out.message).toMatch(/Square dashboard/);
   });
 
