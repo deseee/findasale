@@ -4588,7 +4588,17 @@
   //   2) the organizer's own /member/<id> page (Vinted's post-Upload landing, round-3 note above) or
   //      the "I posted"/"Continue" click -> a COMPLETE wardrobe API read with exactly ONE listing
   //      whose title equals the fill's title. Ambiguity or an incomplete read -> nothing is sent.
-  // Never clicks anything and never blocks the listing flow.
+  // Never clicks anything and never blocks the listing flow, EXCEPT: FIX 2026-10-11
+  // (S-EXT-VINTED-ID-CAPTURE-MISS-RATE, 117/246 VINTED POST/POSTED jobs since the 2026-09-23 fix
+  // still landed with remoteListingId null) -- vintCapOwnMemberId() now has an opt-in
+  // allowClickFallback that reuses discoverVintedOwnProfileUrlByClick() (the same account-menu
+  // click the removal flow already uses) when the passive own-id checks below find nothing. Only
+  // vintCapAfterMarkListed() (fired synchronously from the organizer's own "I posted"/"Continue"
+  // click, i.e. right after they already clicked Vinted's real Upload) passes true. The two
+  // unattended paths -- vintCapMaybeCapture() (runs on every page load and on every SPA
+  // navigation via watchForVintedNavigationAway(), independent of any click) and
+  // vintSoldMaybeCheck() -- still pass no fallback and keep the old passive-only behavior, since
+  // the organizer is not confirmed to be present or watching when those fire.
   const VINT_CAP_FILLS_KEY = 'fasVintedRecentFills';
   const VINT_CAP_WINDOW_MS = 15 * 60 * 1000;
   const VINT_CAP_MAX_FILLS = 10;
@@ -4728,20 +4738,32 @@
   // The organizer's OWN member id, or null. On a /member/<id> page it must equal the cached own
   // profile id; with no cache yet, only Vinted's post-Upload landing (?promo_shown=...) is trusted.
   // Off a member page, the cached own profile id is used.
-  async function vintCapOwnMemberId() {
+  // allowClickFallback (2026-10-11, S-EXT-VINTED-ID-CAPTURE-MISS-RATE): when the passive checks
+  // above find nothing, fall back to resolveVintedOwnProfileUrl()'s own click-based discovery
+  // (discoverVintedOwnProfileUrlByClick(), the same account-menu click the removal flow already
+  // uses) instead of giving up. Callers MUST only pass true from a path that runs synchronously
+  // in direct response to the organizer's own click (currently just vintCapAfterMarkListed, fired
+  // from the "I posted"/"Continue" button handlers) -- never from an unattended/background path
+  // (vintCapMaybeCapture's on-load/navigation-watcher calls, vintSoldMaybeCheck), where the
+  // organizer is not confirmed to be present. Default (omitted/false) is the original
+  // passive-only behavior, unchanged.
+  async function vintCapOwnMemberId(allowClickFallback) {
     const here = vintRemMemberIdFromLocation();
     const cached = await vintRemStorageGet(VINTED_OWN_PROFILE_URL_STORAGE_KEY);
     const cm = /\/member\/(\d+)/.exec(String(cached || ''));
     const cachedId = cm ? cm[1] : null;
-    if (here) {
-      if (cachedId) return cachedId === here ? here : null;
-      return /[?&]promo_shown=/.test(location.search) ? here : null;
-    }
-    return cachedId;
+    if (cachedId) return here ? (cachedId === here ? here : null) : cachedId;
+    if (here && /[?&]promo_shown=/.test(location.search)) return here;
+    if (!allowClickFallback) return null;
+    const discovered = await resolveVintedOwnProfileUrl();
+    const dm = /\/member\/(\d+)/.exec(String(discovered || ''));
+    const discoveredId = dm ? dm[1] : null;
+    if (!discoveredId) return null;
+    return here ? (discoveredId === here ? here : null) : discoveredId;
   }
 
-  async function vintCapFromWardrobe(onlyItemId) {
-    const memberId = await vintCapOwnMemberId();
+  async function vintCapFromWardrobe(onlyItemId, allowClickFallback) {
+    const memberId = await vintCapOwnMemberId(allowClickFallback);
     if (!memberId) {
       console.log('[FAS Vinted] id-capture: own member id unknown on this page -- wardrobe capture skipped.');
       return;
@@ -4780,7 +4802,10 @@
     if (!item || !item.id || vintCapBusy) return;
     vintCapBusy = true;
     try {
-      await Promise.race([vintCapFromWardrobe(String(item.id)), sleep(8000)]);
+      // allowClickFallback=true: this runs synchronously from the organizer's own "I posted"/
+      // "Continue" click, right after they already clicked Vinted's real Upload -- safe to add
+      // one more click here (see vintCapOwnMemberId's header comment).
+      await Promise.race([vintCapFromWardrobe(String(item.id), true), sleep(8000)]);
     } catch (e) {
       console.warn('[FAS Vinted] id-capture after markListed threw:', e && e.message);
     } finally { vintCapBusy = false; }
@@ -4908,6 +4933,9 @@
     vintCapBusy = true;
     try {
       if (/^\/items\/\d+(?:-[^/]*)?\/?$/.test(location.pathname)) await vintCapOnItemPage();
+      // allowClickFallback intentionally omitted (stays false/passive-only): this runs
+      // unattended, on every page load and SPA navigation (see watchForVintedNavigationAway),
+      // not in direct response to any click -- the organizer may not even be looking at this tab.
       else if (isOnVintedOwnProfilePage()) await vintCapFromWardrobe(null);
     } catch (e) {
       console.warn('[FAS Vinted] id-capture threw:', e && e.message);
