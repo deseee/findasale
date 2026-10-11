@@ -257,7 +257,7 @@ describe('updateItem: eBay self-heal receives the card record (B5b)', () => {
     const arg = (ebayPublishWithSelfHeal as jest.Mock).mock.calls[0][0];
     expect(arg.item.card).toBeNull();
     expect(Object.keys(arg.item).sort()).toEqual(
-      ['brand', 'card', 'category', 'description', 'ebayCategoryId', 'ebayCategoryName', 'ebayOfferId', 'id', 'mpn', 'tags', 'title', 'condition'].sort()
+      ['brand', 'card', 'category', 'description', 'ebayCategoryId', 'ebayCategoryName', 'ebayOfferId', 'id', 'isbn', 'mpn', 'tags', 'title', 'condition'].sort()
     );
   });
 
