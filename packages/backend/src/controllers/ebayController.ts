@@ -31,6 +31,7 @@ import {
 // ADR-134 #643 (B5): pinned card categories and card-derived item specifics. Both are pure modules.
 import { getPinnedCardCategory, isPinnedCardCategoryId } from '../config/cardEbayCategories';
 import { buildCardAspects, mergeCardAspects } from '../services/ebayCardAspects';
+import { applyFccIdAspect } from '../utils/ebayFccAspect'; // FCC ID item specific, shared with ebayItemPushService
 // Re-export so external importers of ensureConditionValidForCategory / RequiredAspect from
 // './ebayController' keep resolving (same pattern S1048 used for the OAuth token fns).
 export { ensureConditionValidForCategory } from '../services/ebayPublishService';
@@ -3054,18 +3055,14 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // verified 2026-10-10: aspect name "FCC ID", STRING, FREE_TEXT, optional) actually include it. Never
         // sends empty or invented values, never overwrites an aspect already set from tags, and never blocks
         // publish (eBay enforces).
+        // Shared with the live-edit push (utils/ebayFccAspect.ts) so both paths apply identical rules.
         if (item.fccId && item.fccId.trim()) {
-          try {
-            const fccCatAspects = await getRequiredAspectsForCategory(categoryId ?? '99');
-            const fccAspectName = fccCatAspects?.find((a) => a.name.trim().toLowerCase() === 'fcc id')?.name;
-            if (fccAspectName) {
-              const fccAspects: Record<string, string[]> = aspects ?? {};
-              const hasFccKey = Object.keys(fccAspects).some((k) => k.toLowerCase() === 'fcc id');
-              if (!hasFccKey) fccAspects[fccAspectName] = [item.fccId.trim()];
-              aspects = fccAspects;
-            }
-          } catch (fccErr) {
-            console.warn(`[eBay Publish] FCC ID aspect lookup failed (non-fatal): ${(fccErr as Error).message}`);
+          const fccAspects: Record<string, string[]> = aspects ?? {};
+          const fccResult = await applyFccIdAspect(fccAspects, item.fccId, categoryId ?? '99', getRequiredAspectsForCategory, { overwrite: false });
+          if (fccResult.status === 'lookup_failed') {
+            console.warn(`[eBay Publish] FCC ID aspect lookup failed (non-fatal): ${fccResult.error}`);
+          } else if (fccResult.status === 'applied' || fccResult.status === 'kept_existing') {
+            aspects = fccAspects;
           }
         }
         const sanitizedDescription = sanitizeDescriptionForEbay(item.description);

@@ -16,7 +16,7 @@
  */
 import { desiredEbayCondition } from './conditionModel';
 
-export type EbayPushField = 'title' | 'description' | 'condition' | 'price' | 'shipping';
+export type EbayPushField = 'title' | 'description' | 'condition' | 'price' | 'shipping' | 'fccId';
 export type EbayPlanReason = 'not_listed' | 'no_offer_id' | 'held' | 'no_changes';
 
 /** The fields whose change prompts a manual update on an extension marketplace (same set as the backend). */
@@ -61,6 +61,7 @@ export interface SaveImpactLoadedItem {
   packageWidthIn?: unknown;
   packageHeightIn?: unknown;
   packageType?: string | null;
+  fccId?: string | null;
   ebayOfferId?: string | null;
   ebayListingId?: string | null;
 }
@@ -87,6 +88,11 @@ export interface SaveImpact {
 }
 
 const blank = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
+
+/** Same normalizer as the backend (utils/fccId.ts normalizeFccId): trim, uppercase, letters, digits and hyphens, max 20. */
+function normalizeFcc(v: unknown): string {
+  return typeof v === 'string' ? v.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 20) : '';
+}
 
 function priceNumber(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null;
@@ -136,6 +142,12 @@ export function computeChangedEbayFields(
     (provided(dirty, 'packageWidthIn') && numOrNull(dirty.packageWidthIn) !== numOrNull(loaded.packageWidthIn)) ||
     (provided(dirty, 'packageHeightIn') && numOrNull(dirty.packageHeightIn) !== numOrNull(loaded.packageHeightIn)) ||
     (provided(dirty, 'packageType') && (blank(dirty.packageType) || null) !== (blank(loaded.packageType) || null));
+  // fccId: a non-empty FCC ID that differs from the stored one (a clear never pushes), same rule as the backend.
+  if (provided(dirty, 'fccId')) {
+    const nextFcc = normalizeFcc(dirty.fccId);
+    if (nextFcc && nextFcc !== normalizeFcc(loaded.fccId)) fields.push('fccId');
+  }
+
   if (shippingChanged) fields.push('shipping');
 
   return fields;
@@ -184,6 +196,7 @@ const FIELD_WORDS: Record<string, string> = {
   condition: 'condition',
   price: 'price',
   shipping: 'shipping',
+  fccId: 'FCC ID',
 };
 
 export function fieldList(fields: ReadonlyArray<string>): string {

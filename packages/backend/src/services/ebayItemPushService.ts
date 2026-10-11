@@ -21,12 +21,16 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { ebayPublishWithSelfHeal, ensureConditionValidForCategory } from './ebayPublishService';
+import { ebayPublishWithSelfHeal, ensureConditionValidForCategory, getRequiredAspectsForCategory } from './ebayPublishService';
+import { applyFccIdAspect } from '../utils/ebayFccAspect'; // FCC ID item specific, shared with the first-publish path
+import { normalizeFccId } from '../utils/fccId';
 import { desiredEbayCondition, buildEbayConditionDescription } from '../utils/conditionMapping';
 import { findBulkLotItemIds } from './bulkLot/bulkLotService'; // ADR-136 Addendum C (#659)
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
 
-export const EBAY_PUSH_FIELDS = ['title', 'description', 'condition', 'price', 'shipping'] as const;
+// fccId (2026-10-11): an FCC ID added or edited after the item went live is sent as the "FCC ID" item specific. It is
+// deliberately NOT in EBAY_CONTENT_FIELDS (no pull-sync dirty flag, no hold-release coupling).
+export const EBAY_PUSH_FIELDS = ['title', 'description', 'condition', 'price', 'shipping', 'fccId'] as const;
 export type EbayPushField = (typeof EBAY_PUSH_FIELDS)[number];
 /** The fields the pull-sync cron would otherwise overwrite from eBay (guarded by ebayContentDirtyAt). */
 export const EBAY_CONTENT_FIELDS = ['title', 'description', 'condition'] as const;
@@ -129,6 +133,7 @@ type DiffExisting = {
   condition?: string | null;
   conditionGrade?: string | null;
   price?: unknown;
+  fccId?: string | null;
 };
 type DiffNext = {
   title?: string | null;
@@ -136,6 +141,7 @@ type DiffNext = {
   condition?: string | null;
   conditionGrade?: string | null;
   price?: unknown;
+  fccId?: string | null;
 };
 
 const blank = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
@@ -188,6 +194,13 @@ export function computeEbayPushFields(
     }
   } else if (opts.priceReopen && priceNumber(existing.price) !== null) {
     fields.push('price');
+  }
+
+  // fccId: a non-empty FCC ID that differs from the stored one. Clearing one (null / empty) never pushes: eBay's
+  // existing "FCC ID" aspect is left untouched, the same way a cleared brand or MPN is never pushed.
+  if (next.fccId !== undefined) {
+    const nextFcc = normalizeFccId(next.fccId);
+    if (nextFcc && nextFcc !== normalizeFccId(existing.fccId)) fields.push('fccId');
   }
 
   if (opts.shippingInputsChanged) fields.push('shipping');
@@ -406,6 +419,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
         conditionNotes: true,
         brand: true,
         mpn: true,
+        fccId: true,
         category: true,
         tags: true,
         ebayCategoryId: true,
@@ -491,6 +505,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
       if (f === 'description') return finalDescription.length > 0;
       if (f === 'condition') return !!item.condition;
       if (f === 'price') return item.price !== null && item.price !== undefined;
+      if (f === 'fccId') return !!normalizeFccId(item.fccId); // never attempt (or send) an empty FCC ID
       return f === 'shipping' ? !!item.ebayListingId : false;
     });
 
@@ -575,7 +590,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
           }
         }
 
-        const inventoryFields = contentRequested.filter((f) => f === 'title' || f === 'description' || f === 'condition');
+        const inventoryFields = contentRequested.filter((f) => f === 'title' || f === 'description' || f === 'condition' || f === 'fccId');
         const sku = offerObject ? (offerObject.sku as string | undefined) : undefined;
         if (inventoryFields.length > 0 && offerObject && !sku) {
           fail('NO_SKU', 'eBay did not return a SKU for this listing.');
@@ -644,20 +659,53 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
               if (aspectBrand && aspectBrand.toLowerCase() !== 'unbranded') invProduct.brand = aspectBrand;
             }
 
-            try {
-              const invRes = await fetch(proxyUrl(invPath), {
-                method: 'PUT',
-                headers: authHeaders,
-                body: JSON.stringify(invObject),
-              });
-              if (invRes.ok || invRes.status === 204) {
-                pendingAfterRepublish.push(...inventoryFields);
-                republishNeeded = true;
+            // FCC ID item specific (eBay requirement effective 2026-10-13). Same helper and rules as first publish
+            // (utils/ebayFccAspect.ts) except an edited value replaces the existing one. The category comes from the
+            // live offer (falling back to the stored one). A lookup failure is logged and skipped: it never blocks the
+            // other fields. Existing eBay aspects are preserved (the aspects object comes from the GET above).
+            let fccApplied = false;
+            if (inventoryFields.includes('fccId')) {
+              const offerCategoryId = offerObject ? offerObject.categoryId : undefined;
+              const liveCategoryId: string | null =
+                (typeof offerCategoryId === 'string' && offerCategoryId.length > 0 ? offerCategoryId : null) || item.ebayCategoryId || null;
+              if (!liveCategoryId) {
+                console.warn(`[eBay PushSync] Item ${item.id}: no eBay category for the FCC ID aspect (non-fatal), skipped.`);
+                fail('FCC_ASPECT_SKIPPED', 'Could not tell which eBay category this listing is in, so the FCC ID was not sent.');
               } else {
-                fail('INVENTORY_PUT_FAILED', `eBay did not accept the listing changes (${httpCode(invRes.status)}).`);
+                const invProd = ((invObject.product as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+                const fccAspects: Record<string, string[]> =
+                  invProd.aspects && typeof invProd.aspects === 'object' ? (invProd.aspects as Record<string, string[]>) : {};
+                const fccResult = await applyFccIdAspect(fccAspects, item.fccId, liveCategoryId, getRequiredAspectsForCategory, { overwrite: true });
+                if (fccResult.status === 'applied') {
+                  invObject.product = { ...invProd, aspects: fccAspects };
+                  fccApplied = true;
+                } else if (fccResult.status === 'lookup_failed') {
+                  console.warn(`[eBay PushSync] Item ${item.id}: FCC ID aspect lookup failed (non-fatal): ${fccResult.error}`);
+                  fail('FCC_ASPECT_LOOKUP_FAILED', 'Could not check whether this eBay category takes an FCC ID, so it was not sent.');
+                } else {
+                  // unchanged, unsupported, empty: nothing to send, so there is nothing left to push for this field.
+                  pushed.add('fccId');
+                }
               }
-            } catch (invPutErr) {
-              fail('INVENTORY_PUT_FAILED', `Could not send the listing changes to eBay: ${(invPutErr as Error).message}`);
+            }
+
+            const putFields = inventoryFields.filter((f) => f !== 'fccId' || fccApplied);
+            if (putFields.length > 0) {
+              try {
+                const invRes = await fetch(proxyUrl(invPath), {
+                  method: 'PUT',
+                  headers: authHeaders,
+                  body: JSON.stringify(invObject),
+                });
+                if (invRes.ok || invRes.status === 204) {
+                  pendingAfterRepublish.push(...putFields);
+                  republishNeeded = true;
+                } else {
+                  fail('INVENTORY_PUT_FAILED', `eBay did not accept the listing changes (${httpCode(invRes.status)}).`);
+                }
+              } catch (invPutErr) {
+                fail('INVENTORY_PUT_FAILED', `Could not send the listing changes to eBay: ${(invPutErr as Error).message}`);
+              }
             }
           }
         }

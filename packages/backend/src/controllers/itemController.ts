@@ -68,6 +68,7 @@ import { getPinnedCardCategory, isPinnedCardCategoryId, standardEnvelopePriceCro
 import { normalizeCondition, normalizeGrade, type ConditionGrade } from '../utils/conditionMapping'; // 2026-10-04 (U4): one condition vocabulary; coerces legacy values, never 400s on them
 import { pushItemToEbay, computeEbayPushFields, buildEbayPlan, buildExtensionPlan, EBAY_CONTENT_FIELDS, EBAY_PUSH_FIELDS, type EbayPushField, type MarketplacePlan } from '../services/ebayItemPushService'; // 2026-10-04 (U1/U2): structured, recorded eBay push extracted from updateItem
 import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: a local category/tags/photos edit must survive the next import
+import { loadShadowPricingByItemId, shadowDtoFromCompRow } from '../services/shadowPricingStore'; // shadow mode (2026-10-11): model price + market estimate side by side (read-only)
 import { listedExtensionPlatformsByItemId, getItemMarketplaceStatus, getFailedPushCountsByItemId, ITEM_STATUS_SELECT, EXTENSION_PLATFORMS } from '../services/itemMarketplaceStatusService'; // 2026-10-04 (U3): newest-row-wins listing status shared by the Add Items list and GET /items/:id/marketplace-status
 
 /**
@@ -1268,7 +1269,7 @@ const repushInFlight = new Set<string>();
 export const repushItemToEbay = async (req: AuthRequest, res: Response) => {
   let guardedItemId: string | null = null;
   try {
-    const loaded = await loadOwnedItemForMarketplace(req, res, { ebayOfferId: true, ebayListingId: true, ...HOLD_SELECT });
+    const loaded = await loadOwnedItemForMarketplace(req, res, { ebayOfferId: true, ebayListingId: true, fccId: true, ...HOLD_SELECT });
     if (!loaded) return;
     const { item, owner } = loaded;
 
@@ -1317,6 +1318,10 @@ export const repushItemToEbay = async (req: AuthRequest, res: Response) => {
       const set = new Set<EbayPushField>(held);
       if (item.ebayContentDirtyAt || set.size === 0) EBAY_CONTENT_FIELDS.forEach((f) => set.add(f));
       if (!item.ebayContentDirtyAt && held.length === 0) set.add('price');
+      // FCC ID (2026-10-11): included whenever the item has one. pushItemToEbay compares it with the live aspect fetched in
+      // its own GET and sends nothing (no PUT, no republish) when eBay already carries the same value or the category has
+      // no FCC ID aspect, so this adds no eBay write for an item whose FCC ID is already on eBay.
+      if (typeof item.fccId === 'string' && item.fccId.trim().length > 0) set.add('fccId');
       fields = Array.from(set);
     }
 
@@ -2586,6 +2591,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         condition: updateData.condition,
         conditionGrade: updateData.conditionGrade,
         price: updateData.price,
+        fccId: updateData.fccId, // already normalized (normalizeFccId) or null when cleared
       },
       { priceReopen, shippingInputsChanged: shippingInputsChanged || cardEnvelopePriceCrossed }
     );
@@ -4886,6 +4892,10 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     // pushes per item, scoped to this sale's organizer. Drives the warning badge on the list row.
     const failedPushCounts = await getFailedPushCountsByItemId(itemIds, sale.organizerId);
 
+    // Shadow mode (2026-10-11): ONE batched ItemCompLookup read for the page (never per item). Best-effort: returns an
+    // empty map on any error, so the list never fails because of it. Display only; never touches price.
+    const shadowPricingByItemId = await loadShadowPricingByItemId(itemIds);
+
     // Sprint 1: Compute health score for each item
     const itemsWithHealth = items.map(item => ({
       ...item,
@@ -4905,6 +4915,8 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
       channelStatus: channelStatusByItemId[item.id] ?? null,
       // U1 (2026-10-04): failed, unacknowledged eBay push attempts for this item (0 = no badge).
       marketplacePushFailedCount: failedPushCounts.get(item.id) ?? 0,
+      // Shadow mode: { smartPrice, marketPrice, marketConfidence, compsFound } or null (no market estimate saved).
+      shadowPricing: shadowPricingByItemId.get(item.id) ?? null,
     }));
 
     res.json(itemsWithHealth);
@@ -5655,6 +5667,8 @@ export const getCompSummary = async (req: Request, res: Response) => {
       medianLow,
       medianHigh,
       lastUpdated,
+      // Shadow mode: { smartPrice, marketPrice, marketConfidence, compsFound } or null. Display only.
+      shadowPricing: shadowDtoFromCompRow(compLookup),
     });
   } catch (error) {
     console.error('[getCompSummary] Error:', error);

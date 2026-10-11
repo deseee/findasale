@@ -300,3 +300,25 @@ test('pollForNewPush: a cancel that lands while a fetch is in flight discards it
   assert.equal(result.row, null);
   assert.equal(result.cancelled, true);
 });
+
+test('fccId: a new or changed FCC ID on a listed item is planned as an eBay push, worded "FCC ID"', () => {
+  const added = computeSaveImpact({ loadedItem: { ...loaded, fccId: null }, dirtyFields: { fccId: 'abc123xyz' }, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.deepEqual(added.ebay, { willPush: true, fields: ['fccId'] });
+  assert.deepEqual(describeSaveImpact(added), ['Saving will update eBay: FCC ID.']);
+  const changed = computeSaveImpact({ loadedItem: { ...loaded, fccId: 'OLD111AAA' }, dirtyFields: { fccId: 'ABC123XYZ', price: '50' }, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.deepEqual(changed.ebay.fields, ['price', 'fccId']);
+});
+
+test('fccId: unchanged (after normalizing), cleared or omitted does not push; not an extension-relevant field', () => {
+  const same = computeSaveImpact({ loadedItem: { ...loaded, fccId: 'ABC123XYZ' }, dirtyFields: { fccId: ' abc123xyz ' }, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.deepEqual(same.ebay, { willPush: false, fields: [], reason: 'no_changes' });
+  const cleared = computeSaveImpact({ loadedItem: { ...loaded, fccId: 'ABC123XYZ' }, dirtyFields: { fccId: '' }, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.equal(cleared.ebay.willPush, false);
+  const ext = computeSaveImpact({ loadedItem: { ...loaded, fccId: null }, dirtyFields: { fccId: 'ABC123XYZ' }, held: false, ebayListed: true, extensionPlatformsListed: ['VINTED'] });
+  assert.deepEqual(ext.extensions, []);
+});
+
+test('fccId: held and no-offer items report the field without pushing', () => {
+  const held = computeSaveImpact({ loadedItem: { ...loaded, fccId: null }, dirtyFields: { fccId: 'ABC123XYZ' }, held: true, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.deepEqual(held.ebay, { willPush: false, fields: ['fccId'], reason: 'held' });
+});

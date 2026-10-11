@@ -1523,6 +1523,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
     'packageWidthIn',
     'packageHeightIn',
     'packageType',
+    'fccId',
   ].forEach((key) => {
     if (wouldSend[key] !== undefined) impactDirty[key] = wouldSend[key];
   });
