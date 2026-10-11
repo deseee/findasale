@@ -388,6 +388,8 @@ export const resolveOrganizerFeeReport = (
  * The two coexist on the same charge without conflict: this file's rate is the platform's own
  * cut of the sale subtotal; the CNP surcharge is an amount added on top of that same subtotal
  * before the buyer's total is computed. Do not fold one into the other.
+ * NOTE (2026-10-11): the CNP surcharge is currently DISABLED (rate and fixed amount set to 0 in
+ * posPaymentController.ts) pending compliance review; the buyer pays the sale subtotal only.
  */
 
 export type PaymentChannel = 'IN_PERSON' | 'ONLINE';

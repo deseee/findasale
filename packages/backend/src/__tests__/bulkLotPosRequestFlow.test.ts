@@ -580,8 +580,8 @@ describe('confirmPaymentRequest with a bulk lot', () => {
 // ---------------------------------------------------------------------------
 
 describe('manualCardPayment with a bulk lot', () => {
-  // 1,500 cards = 675 cents; card-not-present surcharge round(675 x 0.035) + 15 = 39; charged 714
-  const CHARGED = 714;
+  // 1,500 cards = 675 cents; card-not-present surcharge is DISABLED (2026-10-11), so charged = 675
+  const CHARGED = 675;
   const body = (over: Record<string, any> = {}) => ({
     sourceId: 'cnon:card-nonce-1',
     saleId: 'sale1',
@@ -725,7 +725,7 @@ describe('manualCardPayment with a bulk lot', () => {
     expect(rows).toHaveLength(2);
     expect(rows.find((r: any) => r.itemId === 'lot1').bulkQuantity).toBe(1500);
     expect('bulkQuantity' in rows.find((r: any) => r.itemId === 'i2')).toBe(false);
-    expect(mockCreateAndCapturePayment.mock.calls[0][0].amountCents).toBe(4675 + Math.round(4675 * 0.035) + 15);
+    expect(mockCreateAndCapturePayment.mock.calls[0][0].amountCents).toBe(4675); // CNP surcharge disabled 2026-10-11 (was 4675 + round(4675 x 0.035) + 15 = 4853)
   });
 
   it('a failing post-payment update on the ORDINARY item never undoes the recorded lot sale (alerted instead)', async () => {

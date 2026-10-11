@@ -120,7 +120,7 @@ describe('consignor price tags on the card paths', () => {
   });
 
   describe('manualCardPayment', () => {
-    it('charges tag cents + the CNP fee, mints one SOLD CONSIGNOR_TAG item and records a Purchase carrying its itemId', async () => {
+    it('charges tag cents (CNP surcharge currently disabled), mints one SOLD CONSIGNOR_TAG item and records a Purchase carrying its itemId', async () => {
       const { sale, user, consignor, tag } = await seed('mc-happy');
       mockCreateAndCapturePayment.mockResolvedValueOnce({ ok: true, paymentId: 'sqp_ctag_happy', captured: true });
 
@@ -130,7 +130,7 @@ describe('consignor price tags on the card paths', () => {
       expect(res.status).not.toHaveBeenCalledWith(400);
       expect(res.status).not.toHaveBeenCalledWith(403);
       expect(res.status).not.toHaveBeenCalledWith(500);
-      const expectedCnp = Math.round(500 * 0.035) + 15;
+      const expectedCnp = 0; // CNP surcharge disabled 2026-10-11 (pending compliance): the card is charged the tag cents only
       expect(mockCreateAndCapturePayment).toHaveBeenCalledWith(expect.objectContaining({ amountCents: 500 + expectedCnp }));
       const body = res.json.mock.calls[0][0];
       expect(body.subtotalCents).toBe(500);

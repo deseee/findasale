@@ -152,14 +152,14 @@ const manualBody = (over: Record<string, any> = {}) => ({
 });
 
 describe('manualCardPayment -- split tender', () => {
-  it('charges the card the remainder plus CNP surcharge, fee on the card leg only', async () => {
+  it('charges the card the remainder (CNP surcharge currently disabled), fee on the card leg only', async () => {
     const res = makeRes();
     await manualCardPayment({ body: manualBody({ cashAmountCents: 4000, expectedTotalCents: 10000 }), headers: {}, user: { id: 'owner1' } } as any, res);
 
-    // card subtotal 6000; CNP = round(6000 * 0.035) + 15 = 225; charge = 6225; SIMPLE in-person 8% of 6000 = 480
+    // card subtotal 6000; CNP surcharge disabled 2026-10-11 (was 225 -> 6225); charge = 6000; SIMPLE in-person 8% of 6000 = 480
     expect(mockCreateAndCapturePayment).toHaveBeenCalledTimes(1);
     const arg = mockCreateAndCapturePayment.mock.calls[0][0];
-    expect(arg.amountCents).toBe(6225);
+    expect(arg.amountCents).toBe(6000);
     expect(arg.appFeeCents).toBe(480);
 
     const body = res.json.mock.calls[0][0];
@@ -168,7 +168,7 @@ describe('manualCardPayment -- split tender', () => {
       isSplitPayment: true,
       cashAmountCents: 4000,
       cardSubtotalCents: 6000,
-      totalChargedCents: 6225,
+      totalChargedCents: 6000,
       cashFeeAccrualPending: false,
     });
   });
@@ -194,8 +194,8 @@ describe('manualCardPayment -- split tender', () => {
   it('a normal all-card sale charges the full amount and accrues nothing', async () => {
     const res = makeRes();
     await manualCardPayment({ body: manualBody(), headers: {}, user: { id: 'owner1' } } as any, res);
-    // 10000 + round(10000 * 0.035) + 15 = 10365
-    expect(mockCreateAndCapturePayment.mock.calls[0][0].amountCents).toBe(10365);
+    // CNP surcharge disabled 2026-10-11 (was 10365): the full subtotal only
+    expect(mockCreateAndCapturePayment.mock.calls[0][0].amountCents).toBe(10000);
     expect(mockAccrueSplit).not.toHaveBeenCalled();
     expect(res.json.mock.calls[0][0]).toMatchObject({ isSplitPayment: false });
   });
@@ -213,17 +213,17 @@ describe('manualCardPayment -- split tender', () => {
       jest.requireMock('../services/checkoutGuard').recordSuspectedSignal.mockResolvedValue(undefined);
     });
 
-    it('a single all-card row carries the whole surcharge (365 on $100), amount unchanged', async () => {
+    it('a single all-card row carries the whole surcharge (currently disabled: 0 instead of 365 on $100), amount unchanged', async () => {
       const res = makeRes();
       await manualCardPayment({ body: manualBody(), headers: {}, user: { id: 'owner1' } } as any, res);
       const rows = createdRows();
       expect(rows).toHaveLength(1);
-      expect(rows[0].cnpSurchargeCents).toBe(365);
+      expect(rows[0].cnpSurchargeCents).toBe(0); // surcharge disabled 2026-10-11 (was 365)
       expect(rows[0].amount).toBe(100); // the surcharge is never folded into the sale amount
-      expect(res.json.mock.calls[0][0]).toMatchObject({ success: true, cnpFeeCents: 365 });
+      expect(res.json.mock.calls[0][0]).toMatchObject({ success: true, cnpFeeCents: 0 });
     });
 
-    it('three rows that do not divide evenly still sum exactly to the surcharge', async () => {
+    it('three rows that do not divide evenly still sum exactly to the surcharge (currently disabled: sums to 0)', async () => {
       const res = makeRes();
       await manualCardPayment(
         { body: manualBody({ items: [{ amount: 33.34, label: 'A' }, { amount: 33.33, label: 'B' }, { amount: 33.33, label: 'C' }] }), headers: {}, user: { id: 'owner1' } } as any,
@@ -232,21 +232,21 @@ describe('manualCardPayment -- split tender', () => {
       const rows = createdRows();
       expect(rows).toHaveLength(3);
       const shares = rows.map((r: any) => r.cnpSurchargeCents);
-      expect(shares.reduce((a: number, b: number) => a + b, 0)).toBe(365);
+      expect(shares.reduce((a: number, b: number) => a + b, 0)).toBe(0); // surcharge disabled 2026-10-11 (was 365)
       expect(rows.map((r: any) => r.amount)).toEqual([33.34, 33.33, 33.33]);
     });
 
-    it('split tender: the surcharge is weighted by each row\'s card leg (item amount minus its cash share)', async () => {
+    it('split tender: the surcharge (currently disabled: 0 / 0) is weighted by each row\'s card leg (item amount minus its cash share)', async () => {
       const res = makeRes();
-      // $60 + $40 rows, $40 cash: cash shares 24/16, card legs 36/24, surcharge on $60 card = 225 -> 135 / 90
+      // $60 + $40 rows, $40 cash: cash shares 24/16, card legs 36/24, surcharge on $60 card was 225 -> 135 / 90, now disabled (2026-10-11) -> 0 / 0
       await manualCardPayment(
         { body: manualBody({ items: [{ amount: 60, label: 'A' }, { amount: 40, label: 'B' }], cashAmountCents: 4000, expectedTotalCents: 10000 }), headers: {}, user: { id: 'owner1' } } as any,
         res
       );
       const rows = createdRows();
-      expect(rows.map((r: any) => r.cnpSurchargeCents)).toEqual([135, 90]);
+      expect(rows.map((r: any) => r.cnpSurchargeCents)).toEqual([0, 0]);
       expect(rows.map((r: any) => r.cashLegAmount)).toEqual([24, 16]);
-      expect(res.json.mock.calls[0][0]).toMatchObject({ success: true, cnpFeeCents: 225 });
+      expect(res.json.mock.calls[0][0]).toMatchObject({ success: true, cnpFeeCents: 0 });
     });
   });
 

@@ -82,9 +82,12 @@ type ManualCardState = 'idle' | 'processing' | 'success' | 'error';
 // figure, so the amount shown on the pay button understated the real charge. The button label must
 // equal the amount actually charged, so the estimate now uses the same formula the server does,
 // in whole cents: round(card amount x 3.5%) + 15.
-const CNP_FEE_RATE_ESTIMATE = 0.035;
-const CNP_FEE_FIXED_DOLLARS_ESTIMATE = 0.15;
-const CNP_FEE_FIXED_CENTS_ESTIMATE = 15;
+// SURCHARGE DISABLED 2026-10-11 by Patrick, pending compliance (credit-only, network cap, disclosure).
+// Keep in sync with posPaymentController.ts; restore 0.035 / 0.15 / 15 only after that work.
+const CNP_FEE_RATE_ESTIMATE = 0;
+const CNP_FEE_FIXED_DOLLARS_ESTIMATE = 0;
+const CNP_FEE_FIXED_CENTS_ESTIMATE = 0;
+const CNP_FEE_ENABLED = CNP_FEE_RATE_ESTIMATE > 0 || CNP_FEE_FIXED_CENTS_ESTIMATE > 0;
 // Square refuses a payment whose application fee is (nearly) the whole charge; mirrors
 // cashFeeService.MAX_APP_FEE_SHARE_OF_CARD_LEG on the backend, which re-checks authoritatively.
 const MAX_APP_FEE_SHARE_OF_CHARGE = 0.9;
@@ -286,10 +289,12 @@ export default function PosManualCard({
               <span className="text-amber-600 dark:text-amber-400 text-base mt-0.5">⚠</span>
               <div>
                 <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">Manual Entry. Higher Risk</p>
-                <p className="text-xs text-amber-800 dark:text-amber-300 mb-1">
-                  Card-not-present fee: {(CNP_FEE_RATE_ESTIMATE * 100).toFixed(1)}% + ${CNP_FEE_FIXED_DOLLARS_ESTIMATE.toFixed(2)}
-                  {' '}(Square's rate for a manually keyed card), added to the card amount and shown as its own line on the receipt. It is refunded in proportion to any refund.
-                </p>
+                {CNP_FEE_ENABLED && (
+                  <p className="text-xs text-amber-800 dark:text-amber-300 mb-1">
+                    Card-not-present fee: {(CNP_FEE_RATE_ESTIMATE * 100).toFixed(1)}% + ${CNP_FEE_FIXED_DOLLARS_ESTIMATE.toFixed(2)}
+                    {' '}(Square's rate for a manually keyed card), added to the card amount and shown as its own line on the receipt. It is refunded in proportion to any refund.
+                  </p>
+                )}
                 <p className="text-xs text-amber-800 dark:text-amber-300">
                   <strong>No dispute protection.</strong> If a shopper disputes this charge, you may lose the sale amount plus a dispute fee with no recourse.
                 </p>
@@ -307,7 +312,7 @@ export default function PosManualCard({
                     Cash already collected: ${(splitCashCents / 100).toFixed(2)} of ${cartTotal.toFixed(2)}
                   </p>
                   <p className="text-emerald-700 dark:text-emerald-400 mt-0.5">
-                    The card is charged only the remaining ${(cardSubtotalCents / 100).toFixed(2)}, plus the card-not-present fee.
+                    The card is charged only the remaining ${(cardSubtotalCents / 100).toFixed(2)}{CNP_FEE_ENABLED ? ', plus the card-not-present fee' : ''}.
                   </p>
                   {onClearCash && (
                     <button

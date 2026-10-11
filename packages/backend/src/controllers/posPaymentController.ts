@@ -2211,8 +2211,12 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
 // made in this rebuild. Platform commission (appFeeCents below) is computed on the subtotal
 // only, not on this surcharge -- the surcharge exists to cover this organizer's higher
 // effective processing cost for a manually-keyed card, not to enlarge the platform's own cut.
-const CNP_FEE_RATE_PLACEHOLDER = 0.035;
-const CNP_FEE_FIXED_CENTS_PLACEHOLDER = 15;
+// SURCHARGE DISABLED 2026-10-11 by Patrick, pending compliance (credit-only with debit exclusion,
+// card-network cap, buyer disclosure). With both constants 0 the buyer is charged exactly the sale
+// subtotal and no surcharge line appears. Restore the previous values (0.035 / 15) ONLY after that
+// compliance work is done; keep PosManualCard.tsx's *_ESTIMATE constants in sync.
+const CNP_FEE_RATE_PLACEHOLDER = 0;
+const CNP_FEE_FIXED_CENTS_PLACEHOLDER = 0;
 
 /**
  * Thrown inside the manual card bulk lot transaction when another identical submission already recorded this Square

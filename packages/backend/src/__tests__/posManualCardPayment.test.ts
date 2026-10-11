@@ -135,7 +135,7 @@ describe('POS manual card entry -- manualCardPayment (Square rebuild)', () => {
     await prisma.$disconnect();
   });
 
-  it('charges a real $50 item (subtotal + CNP fee), creates a PAID Purchase, and marks the item sold', async () => {
+  it('charges a real $50 item (subtotal only, CNP surcharge disabled), creates a PAID Purchase, and marks the item sold', async () => {
     const { orgUser, sale, item } = await seed('happy', 50);
 
     mockCreateAndCapturePayment.mockResolvedValueOnce({
@@ -159,15 +159,15 @@ describe('POS manual card entry -- manualCardPayment (Square rebuild)', () => {
     expect(res.status).not.toHaveBeenCalledWith(403);
     expect(res.status).not.toHaveBeenCalledWith(500);
 
-    // $50.00 subtotal + CNP fee = 5000 + 175 + 15 = 5190 cents.
+    // CNP surcharge DISABLED 2026-10-11 (Patrick, pending compliance): $50.00 subtotal charged as-is = 5000 cents.
+    // Previously 3.5% + $0.15 (5190 cents total); restore that expectation only when the surcharge is re-enabled.
     // Rate is Square's real published "Keyed-in" (manually-entered / card-not-present) rate,
     // 3.5% + $0.15 -- corrected 2026-09-18 from the earlier 2.9% + $0.30 placeholder, which was
     // actually Square's Payments/Online API rate for a different integration surface and
     // understated the true cost. Independently re-confirmed against Square's own published
     // pricing page 2026-09-19. Source of truth is posPaymentController.ts's
     // CNP_FEE_RATE_PLACEHOLDER / CNP_FEE_FIXED_CENTS_PLACEHOLDER -- keep these in step.
-    const expectedCnpFeeCents = Math.round(5000 * 0.035) + 15;
-    expect(expectedCnpFeeCents).toBe(190); // 3.5% of $50 (175) + $0.15 fixed (15)
+    const expectedCnpFeeCents = 0;
     const expectedTotalCents = 5000 + expectedCnpFeeCents;
 
     expect(mockCreateAndCapturePayment).toHaveBeenCalledWith(
@@ -297,8 +297,8 @@ describe('POS manual card entry -- manualCardPayment (Square rebuild)', () => {
     expect(res.status).not.toHaveBeenCalledWith(400);
     const responseBody = res.json.mock.calls[0][0];
     expect(responseBody.subtotalCents).toBe(9000); // $90.00 after the 10% discount
-    // Square "Keyed-in" rate 3.5% + $0.15 on the DISCOUNTED subtotal: 9000 -> 315 + 15 = 330.
-    const expectedCnpFeeCents = Math.round(9000 * 0.035) + 15;
+    // CNP surcharge DISABLED 2026-10-11: no fee on the DISCOUNTED subtotal either (was 315 + 15 = 330).
+    const expectedCnpFeeCents = 0;
     expect(responseBody.cnpFeeCents).toBe(expectedCnpFeeCents);
 
     const purchase = await prisma.purchase.findUnique({ where: { id: responseBody.purchaseIds[0] } });
