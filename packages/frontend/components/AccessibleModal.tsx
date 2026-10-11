@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useRef } from 'react';
 import FocusTrap from 'focus-trap-react';
 
 interface AccessibleModalProps {
@@ -17,6 +17,12 @@ interface AccessibleModalProps {
  * AccessibleModal — Base wrapper for all modals ensuring WCAG 2.1 AA compliance
  * Implements focus trap to prevent keyboard users from tabbing outside the modal
  * Provides consistent aria attributes and keyboard handling
+ *
+ * Closing: only the Escape key (onKeyDown) and a click on the backdrop call onClose.
+ * The focus trap is deliberately NOT wired to onClose (no onDeactivate, and
+ * escapeDeactivates is false): focus-trap deactivates on every unmount, including the
+ * simulated unmount in React StrictMode (next dev), which would close the modal
+ * right after it opens. Unmounting therefore never calls onClose.
  */
 const AccessibleModal: React.FC<AccessibleModalProps> = ({
   isOpen,
@@ -29,6 +35,10 @@ const AccessibleModal: React.FC<AccessibleModalProps> = ({
   overlayClassName,
   contentClassName = 'bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6',
 }) => {
+  // Fallback focus target so the trap does not throw when the dialog has no
+  // tabbable element at mount (e.g. content that loads later, like a payment iframe).
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   if (!isOpen) return null;
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -54,8 +64,8 @@ const AccessibleModal: React.FC<AccessibleModalProps> = ({
     <FocusTrap
       active={isOpen}
       focusTrapOptions={{
-        escapeDeactivates: true,
-        onDeactivate: onClose,
+        escapeDeactivates: false,
+        fallbackFocus: () => dialogRef.current as HTMLElement,
       }}
     >
       <div
@@ -65,6 +75,8 @@ const AccessibleModal: React.FC<AccessibleModalProps> = ({
         role="presentation"
       >
         <div
+          ref={dialogRef}
+          tabIndex={-1}
           className={contentClassName}
           role="dialog"
           aria-modal="true"
