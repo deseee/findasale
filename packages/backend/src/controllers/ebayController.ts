@@ -2477,6 +2477,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ean: true,
             isbn: true,
             mpn: true,
+            fccId: true,
             brand: true,
             ebayEpid: true,
             ebaySubtitle: true,
@@ -3048,6 +3049,25 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           isbnAspects['ISBN'] = [item.isbn.trim()];
           aspects = isbnAspects;
         }
+        // FCC ID (eBay requirement effective 2026-10-13): send the organizer/photo-captured FCC ID as the
+        // "FCC ID" item specific, but ONLY when it is non-empty AND the category's aspects (Commerce Taxonomy,
+        // verified 2026-10-10: aspect name "FCC ID", STRING, FREE_TEXT, optional) actually include it. Never
+        // sends empty or invented values, never overwrites an aspect already set from tags, and never blocks
+        // publish (eBay enforces).
+        if (item.fccId && item.fccId.trim()) {
+          try {
+            const fccCatAspects = await getRequiredAspectsForCategory(categoryId ?? '99');
+            const fccAspectName = fccCatAspects?.find((a) => a.name.trim().toLowerCase() === 'fcc id')?.name;
+            if (fccAspectName) {
+              const fccAspects: Record<string, string[]> = aspects ?? {};
+              const hasFccKey = Object.keys(fccAspects).some((k) => k.toLowerCase() === 'fcc id');
+              if (!hasFccKey) fccAspects[fccAspectName] = [item.fccId.trim()];
+              aspects = fccAspects;
+            }
+          } catch (fccErr) {
+            console.warn(`[eBay Publish] FCC ID aspect lookup failed (non-fatal): ${(fccErr as Error).message}`);
+          }
+        }
         const sanitizedDescription = sanitizeDescriptionForEbay(item.description);
         // Bug #424: replace ALL occurrences of {{DESCRIPTION}} in the organizer's template.
         // String.replace() with a string arg only replaces the first match; split/join is
@@ -3520,7 +3540,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
               // toast, so a stale/invalid fulfillmentPolicyId (or any other eBay
               // rejection reason) is no longer a silent generic "failed" message.
               message: healResult.lastErrorMessage
-                ? `eBay rejected this listing: ${healResult.lastErrorMessage}`
+                ? withFccIdHint(`eBay rejected this listing: ${healResult.lastErrorMessage}`)
                 : `Failed to publish offer${healResult.lastErrorId ? ` (eBay error ${healResult.lastErrorId})` : ''}`,
             });
           }
@@ -4447,7 +4467,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({
         code: 'PUBLISH_FAILED',
         message: healResult.lastErrorMessage
-          ? `eBay rejected this listing: ${healResult.lastErrorMessage}`
+          ? withFccIdHint(`eBay rejected this listing: ${healResult.lastErrorMessage}`)
           : healResult.lastErrorId
           ? `eBay rejected publish (error ${healResult.lastErrorId})`
           : 'eBay rejected publish',
@@ -4687,6 +4707,15 @@ async function getOrCreateMerchantLocation(
 
   // No address hint and no existing locations — fail
   return { error: 'MERCHANT_LOCATION_UNAVAILABLE' };
+}
+
+/**
+ * Non-blocking hint appended to an eBay rejection message when the rejection mentions the FCC ID
+ * item specific (eBay requirement effective 2026-10-13). Leaves every other message untouched.
+ */
+function withFccIdHint(message: string): string {
+  if (!/\bfcc\b/i.test(message)) return message;
+  return `${message} Tip: add the FCC ID (printed on the device label or in its battery compartment) in the item's Product IDs section, then push again.`;
 }
 
 function buildAspects(tags: string[]): Record<string, string[]> | undefined {

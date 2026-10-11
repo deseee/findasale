@@ -53,7 +53,6 @@ import { useEtsyConnection } from '../../lib/useEtsyConnection';
 import {
   getApparelDetailsDisclosure,
   getProductIdsDisclosure,
-  isFccIdRelevant,
   hasAnyValue,
 } from '../../lib/itemFieldRelevance';
 import { buildEditSavePayload } from '../../lib/itemFormSave';
@@ -1456,8 +1455,9 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
     fccId: formData.fccId,
     showAll: showAllFields,
   });
-  const showFccId =
-    isFccIdRelevant(formData.category, formData.ebayCategoryName) || !!formData.fccId || showAllFields;
+  // FCC ID lives inside the Product IDs section and is always rendered there: eBay's guidance is that category alone does
+  // not decide who needs an FCC ID, so whenever the section is open (by default, by value, by Show all fields, or by the
+  // organizer expanding it) the input is reachable. The section's default-collapsed behavior for non-electronics is unchanged.
   const apparelDisclosure = getApparelDetailsDisclosure({
     category: formData.category,
     ebayCategoryName: formData.ebayCategoryName,
@@ -1985,25 +1985,24 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                       <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">ISBN is typically 10 or 13 characters</p>
                     )}
                   </div>
-                  {showFccId && (
-                    <div>
-                      <label htmlFor="item-fcc-id" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                        FCC ID <span className="text-warm-400 font-normal">(optional)</span>
-                      </label>
-                      <input
-                        id="item-fcc-id"
-                        type="text"
-                        maxLength={20}
-                        value={formData.fccId}
-                        onChange={(e) => setFormData({ ...formData, fccId: e.target.value })}
-                        placeholder="A3LSMG991U"
-                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                      />
-                      <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5">
-                        Found on the device label or battery compartment (e.g. A3LSMG991U)
-                      </p>
-                    </div>
-                  )}
+                  {/* FCC ID: always available inside Product IDs (see note above) */}
+                  <div>
+                    <label htmlFor="item-fcc-id" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                      FCC ID <span className="text-warm-400 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      id="item-fcc-id"
+                      type="text"
+                      maxLength={20}
+                      value={formData.fccId}
+                      onChange={(e) => setFormData({ ...formData, fccId: e.target.value })}
+                      placeholder="A3LSMG991U"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    />
+                    <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5">
+                      Found on the device label or battery compartment (e.g. A3LSMG991U)
+                    </p>
+                  </div>
                 </div>
               </ItemFormSection>
 

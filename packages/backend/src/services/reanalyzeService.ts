@@ -72,6 +72,7 @@ export interface ReanalyzeAfter {
   brand: string | null;
   color: string | null;
   mpn: string | null;
+  fccId: string | null;
   upc: string | null;
   catalogEnrichment: {
     sources: string[];
@@ -149,6 +150,7 @@ export async function reanalyzeItem(
       brand: true,
       color: true,
       mpn: true,
+      fccId: true,
       upc: true,
       ean: true,
       isbn: true,
@@ -249,6 +251,7 @@ export async function reanalyzeItem(
     upc: item.upc ?? null,
     ean: item.ean ?? null,
     isbn: item.isbn ?? null,
+    fccId: item.fccId ?? null, // FCC ID: organizer-set value wins (also gated by userEditedFields)
     ebayEpid: item.ebayEpid ?? null,
     ebayCategoryId: item.ebayCategoryId ?? null,
     packageWeightOz: item.packageWeightOz ?? null,
@@ -329,6 +332,7 @@ export async function reanalyzeItem(
     brand: (catalogApply.brand as string) ?? item.brand ?? result.brand ?? null,
     color: (appliedData.color as string) ?? item.color ?? result.color ?? null,
     mpn: (catalogApply.mpn as string) ?? item.mpn ?? result.mpn ?? null,
+    fccId: (catalogApply.fccId as string) ?? item.fccId ?? null,
     upc: (catalogApply.upc as string) ?? item.upc ?? result.upc ?? null,
     catalogEnrichment: Object.keys(merged).length > 0
       ? {

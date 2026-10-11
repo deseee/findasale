@@ -12,6 +12,7 @@ import { isSafeFetchUrl, SAFE_FETCH_AXIOS_OPTIONS } from '../utils/safeFetchUrl'
 import { classifyPackageSurchargeTrigger } from '../services/ebayRateEstimateService'; // ADR-103 Phase 5: persisted margin-risk flag
 import FormData from 'form-data';
 import { z } from 'zod';
+import { normalizeFccId } from '../utils/fccId'; // FCC ID normalizer shared with the photo pipeline
 import { getIO } from '../lib/socket'; // V1: live bidding broadcast
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { dispatchApiTierAutoFanout } from '../services/marketplace/autoFanoutDispatcher'; // ADR-DRAFT approve-to-autolist-fanout
@@ -313,15 +314,9 @@ const OWNER_ORGANIZER_SELECT = { id: true, userId: true, subscriptionTier: true,
 // U7 (2026-10-04): true only when a submitted field value really differs from the stored one. Blank values
 // (undefined, null, empty string) all mean "no value"; numbers compare numerically; arrays compare element by
 // element; dates compare as instants. Used so userEditedFields (D-006) only records fields that actually changed.
-/**
- * FCC ID normalizer: trim, uppercase, keep only letters, digits and hyphens, max 20 chars.
- * Empty or non-string input becomes null.
- */
-export const normalizeFccId = (v: unknown): string | null => {
-  if (typeof v !== 'string') return null;
-  const cleaned = v.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 20);
-  return cleaned.length > 0 ? cleaned : null;
-};
+// FCC ID normalizer now lives in utils/fccId.ts (shared with the photo pipeline OCR extractor); re-exported here
+// so existing importers keep working.
+export { normalizeFccId };
 
 const fieldValueChanged = (existing: unknown, next: unknown): boolean => {
   const norm = (v: unknown): unknown => (v === undefined || v === '' ? null : v);

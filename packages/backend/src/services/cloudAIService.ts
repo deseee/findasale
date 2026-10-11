@@ -24,6 +24,7 @@ import { isAudioFormatMatch } from './pricingEngine/adapters/discogs';
 import { applyCharmPricing } from '../utils/charmPricing';
 import type { AIRecordIdentity } from './marketplace/recordIdentity';
 import { normalizeAiCard, AICardResult } from './cardAiSuggestion'; // card-aware tagging: validates the optional `card` block
+import { extractFccIdFromText, normalizeFccIdStrict } from '../utils/fccId'; // FCC ID: OCR fallback + shape check for the model-read value
 
 // Destructured (same values) so the pre-commit secret scan does not read an env lookup as a hardcoded key.
 const { GOOGLE_VISION_API_KEY, ANTHROPIC_API_KEY } = process.env;
@@ -314,6 +315,8 @@ export interface AITagResult {
   estimatedPackageType?: string; // eBay packageType enum (MAILING_BOX | PACKAGE_THICK_ENVELOPE | LARGE_PACKAGE | etc.)
   packageConfidence?: number; // 0.0-1.0 confidence in the package estimate
   ocrIsbn?: string; // ADR-089: checksum-valid ISBN extracted from the full Vision OCR block (books)
+  fccId?: string; // FCC ID printed on a rear label (evidence-only; the OCR-regex value wins over the model value when both exist)
+  ocrFccId?: string; // FCC ID extracted by regex from the full Vision OCR block (explicit "FCC ID" label only)
   // ADR-132 (2026-09-23): structured record identity for vinyl/CD/cassette items, returned by the SAME
   // tagging call (no extra API call). null for everything else. Evidence-only for label/catalogNumber/year.
   // Persisted via mergeAiRecordIdentity (organizer values always win; low-confidence rules applied there).
@@ -535,7 +538,7 @@ export function extractIsbnFromText(text: string | null | undefined): string | n
 
 // ── Step 1: Google Vision label extraction ────────────────────────────────────
 
-export async function getVisionLabels(imageBase64: string): Promise<{ objectLabels: string[]; detectedText: string[]; qualityScore: number; ocrIsbn?: string }> {
+export async function getVisionLabels(imageBase64: string): Promise<{ objectLabels: string[]; detectedText: string[]; qualityScore: number; ocrIsbn?: string; ocrFccId?: string }> {
   try {
     const response = await axios.post(
       `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
@@ -569,6 +572,8 @@ export async function getVisionLabels(imageBase64: string): Promise<{ objectLabe
     // A book's printed/barcode ISBN lives there — extract a checksum-valid ISBN before discarding it.
     const fullOcrBlock: string = textAnnotations[0]?.description ?? '';
     const ocrIsbn = extractIsbnFromText(fullOcrBlock) ?? undefined;
+    // FCC ID: same OCR block, deterministic regex that only matches behind an explicit "FCC ID" label.
+    const ocrFccId = extractFccIdFromText(fullOcrBlock) ?? undefined;
 
     // Derive quality score from max label confidence — replaces computePhotoQualityScore
     const qualityScore = labelAnnotations.length > 0
@@ -584,7 +589,7 @@ export async function getVisionLabels(imageBase64: string): Promise<{ objectLabe
     // in with generic label guesses (see evidence-hierarchy instruction in the Haiku prompts).
     const objectLabels = [...new Set([...objects, ...labels])].slice(0, 18);
     const detectedText = [...new Set(detectedTexts)].slice(0, 18);
-    return { objectLabels, detectedText, qualityScore, ocrIsbn };
+    return { objectLabels, detectedText, qualityScore, ocrIsbn, ocrFccId };
   } catch (error: any) {
     // Feature #109: Graceful degradation — return empty labels on Vision API failure
     console.warn('[cloudAIService] Google Vision API error:', error.message || error);
@@ -795,6 +800,7 @@ Price: Suggest a realistic secondary market price for this item. Do not use reta
 Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Only add "Vintage" (roughly 20+ years), "Antique" (roughly 100+ years), or a specific era when there is real evidence of age — a datable maker mark, a date, or distinct period styling. Do NOT call an item vintage or antique just because it looks worn, used, or generic; when age is unclear, omit era tags entirely. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
 Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
 Model number: If a model number or part number is actually VISIBLE on a label, plate, or marking in the photos (e.g. "Model AP-40", "Part No. 12345", "M/N: XR500"), capture it exactly as printed in the "mpn" field. Evidence-only: include mpn ONLY when you can literally read it from the item — never infer or guess a model number. If no model/part number is visible, set mpn to null or omit it.
+FCC ID: If an FCC ID is literally PRINTED on a label in the photos (usually written as "FCC ID: XXXXXXXX" or "Contains FCC ID: XXXXXXXX" on a rear or bottom label of a wireless or electronic device), copy it exactly as printed into the "fccId" field. Evidence-only: never infer, recall or guess an FCC ID from the brand or model, and never copy a model number, IC number or serial number into it. If no FCC ID is printed and legible, set fccId to null or omit it.
 UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in the photos, read the digits exactly as shown and put them in the "upc" field. HARD RULE: never invent a UPC or exact dimensions from memory — a UPC must be visibly present in the photo (as a scannable barcode or printed digits) or omitted. If no UPC is visible, set upc to null or omit it.
 Brand: If a brand, maker, or manufacturer name is identifiable from a visible label, tag, stamp, engraving, or is confidently stated in the title/description above, capture it in the "brand" field as a short proper-noun string (e.g. "Cherub", "Pyrex", "McCoy") — but this must be the brand of THIS PRODUCT as sold, not a brand incidentally referenced elsewhere. UPCYCLED/REPURPOSED ITEMS (live-confirmed gap, 2026-08-31: a lamp made from a Bell's Brewery Oberon Ale bottle got brand="Bells" purely because the beer's brand was mentioned in the description): if the item is handmade or repurposed from a branded raw material — e.g. a lamp made from a beer bottle, furniture made from a shipping crate, jewelry made from a coin — the raw material's original brand is NOT this product's brand. Mentioning it in the title/description for searchability is fine and encouraged, but "brand" must reflect who made the actual product being sold (the crafter, if stated, otherwise null/omitted for unbranded handmade work) — never the brand printed on the raw material. Do not guess a brand with no supporting evidence — omit or set null if genuinely unidentifiable. Consistency check (mandatory, product brand only): if you state a brand/maker name in the title, tags, or description as THIS PRODUCT's own identity, you MUST also set that same value in the "brand" field — never state a product's brand in prose while leaving "brand" null or omitted. A raw-material brand mentioned only as origin/material context (see upcycled case above) is explicitly exempt from this consistency check.
 Color: State the item's own actual/dominant surface color as a short common color word or phrase (e.g. "black", "navy blue", "brushed silver") in the "color" field — describe the ITEM's own color, never the background, backdrop, or photo lighting/reflections. Omit color (leave it null) if the item's true color is unclear, multi-colored or patterned in a way that doesn't reduce to one word, or occluded — do not guess.
@@ -813,6 +819,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
   "tags": ["Tag1", "Tag2", "Tag3"],
   "confidence": 0.85,
   "mpn": null,
+  "fccId": null,
   "upc": null,
   "brand": null,
   "color": null,
@@ -869,6 +876,8 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
       parsed.color = undefined;
       // Catalog Enrichment: model number is evidence-only — drop it under low confidence too
       parsed.mpn = undefined;
+      // FCC ID: evidence-only like mpn/upc
+      parsed.fccId = undefined;
       // Enrichment Cascade: a UPC must be visibly read, never recalled — drop it under low confidence too
       parsed.upc = undefined;
     }
@@ -880,6 +889,8 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
       parsed.estimatedDimensionsIn = undefined;
       parsed.estimatedPackageType = undefined;
     }
+    // FCC ID: keep only a well-formed model-read value (6-19 alphanumerics with a letter and a digit); anything else is dropped.
+    parsed.fccId = normalizeFccIdStrict(parsed.fccId) ?? undefined;
     await finalizePricing(parsed);
     // ADR ROUND 3 (2026-08-29): pass eBay's listing-title majority consensus alongside
     // Vision OCR tokens -- second zero-cost candidate-word source (see
@@ -1145,6 +1156,7 @@ export async function analyzeItemImage(
   let objectLabels: string[] = [];
   let detectedText: string[] = [];
   let ocrIsbn: string | undefined;
+  let ocrFccId: string | undefined;
   let catalogMatches: CatalogMatch[] | null = null;
   let webMatch: { webEntities: string[]; bestGuessLabels: string[] } | null = null;
   let ebayMatch: EbayImageMatch | null = null;
@@ -1164,6 +1176,7 @@ export async function analyzeItemImage(
     objectLabels = visionSettled.value.objectLabels;
     detectedText = visionSettled.value.detectedText;
     ocrIsbn = visionSettled.value.ocrIsbn;
+    ocrFccId = visionSettled.value.ocrFccId;
   }
   // Vision API unavailable or quota exceeded — Haiku will analyse image alone (unchanged behavior)
   if (catalogSettled.status === 'fulfilled') {
@@ -1181,6 +1194,11 @@ export async function analyzeItemImage(
 
   const result = await getHaikuAnalysis(imageBase64, mimeType, objectLabels, detectedText, comps, catalogMatches, webMatch, ebayMatch);
   if (ocrIsbn) result.ocrIsbn = ocrIsbn; // ADR-089: thread OCR-derived ISBN onto the analysis result
+  // FCC ID: the deterministic OCR-regex value wins over the model-read value when they disagree.
+  if (ocrFccId) {
+    result.ocrFccId = ocrFccId;
+    result.fccId = ocrFccId;
+  }
 
   // Fix C: curated tag suggestions derived LOCALLY (no extra Anthropic call). Match the curated
   // vocabulary against the main-response tags + Vision object labels + detected text.
@@ -1296,6 +1314,7 @@ export async function analyzeItemImages(
   let objectLabels: string[] = [];
   let detectedText: string[] = [];
   let ocrIsbn: string | undefined; // ADR-089: first checksum-valid ISBN across all photos
+  let ocrFccId: string | undefined; // FCC ID: first labelled FCC ID found by OCR across all photos
   // Reverse-Image Product Index (ADR 2026-07-01 §1): catalog-match vector search
   // runs IN PARALLEL with the per-photo Vision pass below (both are pre-Haiku,
   // independent of each other) — not sequentially after Vision. Uses the FIRST
@@ -1320,8 +1339,8 @@ export async function analyzeItemImages(
     const allVisionResults = await Promise.all(
       imageBase64Array.map((b64, idx) =>
         getVisionLabels(b64)
-          .then(res => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: res.qualityScore, objectLabels: res.objectLabels, detectedText: res.detectedText, ocrIsbn: res.ocrIsbn as string | undefined }))
-          .catch(() => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: 0, objectLabels: [] as string[], detectedText: [] as string[], ocrIsbn: undefined as string | undefined }))
+          .then(res => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: res.qualityScore, objectLabels: res.objectLabels, detectedText: res.detectedText, ocrIsbn: res.ocrIsbn as string | undefined, ocrFccId: res.ocrFccId as string | undefined }))
+          .catch(() => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: 0, objectLabels: [] as string[], detectedText: [] as string[], ocrIsbn: undefined as string | undefined, ocrFccId: undefined as string | undefined }))
       )
     );
 
@@ -1355,6 +1374,7 @@ export async function analyzeItemImages(
     objectLabels = Array.from(new Set(allObjectLabels)).slice(0, 20);
     detectedText = Array.from(new Set(allDetectedText)).slice(0, 20);
     ocrIsbn = allVisionResults.map(r => r.ocrIsbn).find((v): v is string => !!v);
+    ocrFccId = allVisionResults.map(r => r.ocrFccId).find((v): v is string => !!v);
   } catch {
     // Vision pass failed — proceed with original order and no labels (non-blocking)
   }
@@ -1376,6 +1396,11 @@ export async function analyzeItemImages(
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
   const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch, ebayMatch);
   if (ocrIsbn) result.ocrIsbn = ocrIsbn; // ADR-089: thread OCR-derived ISBN onto the analysis result
+  // FCC ID: the deterministic OCR-regex value wins over the model-read value when they disagree.
+  if (ocrFccId) {
+    result.ocrFccId = ocrFccId;
+    result.fccId = ocrFccId;
+  }
 
   // Fix C: curated tag suggestions derived LOCALLY (no extra Anthropic call). Match the curated
   // vocabulary against the main-response tags + Vision object labels + detected text.
@@ -1519,6 +1544,7 @@ Price: Suggest a realistic secondary market price for this item. Do not use reta
 Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Only add "Vintage" (roughly 20+ years), "Antique" (roughly 100+ years), or a specific era when there is real evidence of age — a datable maker mark, a date, or distinct period styling. Do NOT call an item vintage or antique just because it looks worn, used, or generic; when age is unclear, omit era tags entirely. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
 Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
 Model number: If a model number or part number is actually VISIBLE on a label, plate, or marking in any of the photos (e.g. "Model AP-40", "Part No. 12345", "M/N: XR500"), capture it exactly as printed in the "mpn" field. Evidence-only: include mpn ONLY when you can literally read it from the item — never infer or guess a model number. If no model/part number is visible, set mpn to null or omit it.
+FCC ID: If an FCC ID is literally PRINTED on a label in any of the photos (usually written as "FCC ID: XXXXXXXX" or "Contains FCC ID: XXXXXXXX" on a rear or bottom label of a wireless or electronic device), copy it exactly as printed into the "fccId" field. Evidence-only: never infer, recall or guess an FCC ID from the brand or model, and never copy a model number, IC number or serial number into it. If no FCC ID is printed and legible, set fccId to null or omit it.
 UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in any of the photos, read the digits exactly as shown and put them in the "upc" field. HARD RULE: never invent a UPC or exact dimensions from memory — a UPC must be visibly present in the photo (as a scannable barcode or printed digits) or omitted. If no UPC is visible, set upc to null or omit it.
 Brand: If a brand, maker, or manufacturer name is identifiable from a visible label, tag, stamp, engraving, or is confidently stated in the title/description above, capture it in the "brand" field as a short proper-noun string (e.g. "Cherub", "Pyrex", "McCoy") — but this must be the brand of THIS PRODUCT as sold, not a brand incidentally referenced elsewhere. UPCYCLED/REPURPOSED ITEMS (live-confirmed gap, 2026-08-31: a lamp made from a Bell's Brewery Oberon Ale bottle got brand="Bells" purely because the beer's brand was mentioned in the description): if the item is handmade or repurposed from a branded raw material — e.g. a lamp made from a beer bottle, furniture made from a shipping crate, jewelry made from a coin — the raw material's original brand is NOT this product's brand. Mentioning it in the title/description for searchability is fine and encouraged, but "brand" must reflect who made the actual product being sold (the crafter, if stated, otherwise null/omitted for unbranded handmade work) — never the brand printed on the raw material. Do not guess a brand with no supporting evidence — omit or set null if genuinely unidentifiable. Consistency check (mandatory, product brand only): if you state a brand/maker name in the title, tags, or description as THIS PRODUCT's own identity, you MUST also set that same value in the "brand" field — never state a product's brand in prose while leaving "brand" null or omitted. A raw-material brand mentioned only as origin/material context (see upcycled case above) is explicitly exempt from this consistency check.
 Color: State the item's own actual/dominant surface color as a short common color word or phrase (e.g. "black", "navy blue", "brushed silver") in the "color" field — describe the ITEM's own color, never the background, backdrop, or photo lighting/reflections. Omit color (leave it null) if the item's true color is unclear, multi-colored or patterned in a way that doesn't reduce to one word, or occluded — do not guess.
@@ -1536,6 +1562,7 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
   "tags": ["Tag1", "Tag2", "Tag3"],
   "confidence": 0.85,
   "mpn": null,
+  "fccId": null,
   "upc": null,
   "brand": null,
   "color": null,
@@ -1595,10 +1622,14 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
       parsed.color = undefined;
       // Catalog Enrichment: model number is evidence-only — drop it under low confidence too
       parsed.mpn = undefined;
+      // FCC ID: evidence-only like mpn/upc
+      parsed.fccId = undefined;
       // Enrichment Cascade: a UPC must be visibly read, never recalled — drop it under low confidence too
       parsed.upc = undefined;
     }
 
+    // FCC ID: keep only a well-formed model-read value (6-19 alphanumerics with a letter and a digit); anything else is dropped.
+    parsed.fccId = normalizeFccIdStrict(parsed.fccId) ?? undefined;
     await finalizePricing(parsed);
     // ADR ROUND 3 (2026-08-29): pass eBay's listing-title majority consensus alongside
     // Vision OCR tokens -- second zero-cost candidate-word source (see

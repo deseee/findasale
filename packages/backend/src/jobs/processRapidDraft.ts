@@ -462,6 +462,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
           upc: item.upc ?? null,
           ean: item.ean ?? null,
           isbn: item.isbn ?? null,
+          fccId: item.fccId ?? null, // FCC ID: organizer-set value wins (also gated by userEditedFields)
           ebayEpid: item.ebayEpid ?? null,
           ebayCategoryId: item.ebayCategoryId ?? null,
           packageWeightOz: item.packageWeightOz ?? null,

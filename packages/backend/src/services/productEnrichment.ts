@@ -22,11 +22,12 @@
 
 import axios from 'axios';
 import { enrichItemFromCatalog } from './ebayCatalogLookup';
+import { normalizeFccIdStrict } from '../utils/fccId';
 
 // ── Contract (from the ADR) ─────────────────────────────────────────────────
 
 export type EnrichField =
-  | 'brand' | 'mpn' | 'upc' | 'ean' | 'isbn' | 'epid'
+  | 'brand' | 'mpn' | 'upc' | 'ean' | 'isbn' | 'epid' | 'fccId'
   | 'ebayCategoryId' | 'ebayCategoryName'
   | 'weightOz' | 'lengthIn' | 'widthIn' | 'heightIn';
 
@@ -164,12 +165,18 @@ const localBarcodeProvider: EnrichmentProvider = {
 const ocrIdentifierProvider: EnrichmentProvider = {
   name: 'ocrIdentifier',
   isEnabled: () => true,
-  appliesTo: (_item, ctx) => !!ctx.aiResult?.ocrIsbn,
+  appliesTo: (_item, ctx) => !!ctx.aiResult?.ocrIsbn || !!ctx.aiResult?.ocrFccId,
   async lookup(_item, ctx) {
     try {
+      const fields: Partial<Record<EnrichField, string | number>> = {};
       const raw = String(ctx.aiResult?.ocrIsbn || '').replace(/[-\s]/g, '').trim();
-      if (!raw || !isIsbnCode(raw)) return null;
-      return { fields: { isbn: raw }, confidence: 0.9, source: 'ocr' };
+      if (raw && isIsbnCode(raw)) fields.isbn = raw;
+      // FCC ID: regex-extracted from the same OCR block (only behind an explicit "FCC ID" label).
+      // Authoritative like the ISBN; wins over the model-read value because this provider runs first.
+      const fcc = normalizeFccIdStrict(ctx.aiResult?.ocrFccId);
+      if (fcc) fields.fccId = fcc;
+      if (Object.keys(fields).length === 0) return null;
+      return { fields, confidence: 0.9, source: 'ocr' };
     } catch {
       return null;
     }
@@ -604,6 +611,12 @@ const aiEstimateProvider: EnrichmentProvider = {
         fields.mpn = mpn;
         fieldConfidence.mpn = aiConfidence;
       }
+      // FCC ID: evidence-only (printed on a rear label), judged at the AI's own confidence like brand/mpn.
+      const fccId = normalizeFccIdStrict(ai.fccId);
+      if (fccId) {
+        fields.fccId = fccId;
+        fieldConfidence.fccId = aiConfidence;
+      }
       if (Object.keys(fields).length === 0) return null;
       return { fields, confidence: 0.5, source: 'aiEstimate', fieldConfidence };
     } catch {
@@ -640,7 +653,8 @@ async function runProvider(
   item: EnrichItemInput,
   ctx: EnrichContext,
 ): Promise<ProviderResult | null> {
-  if (provider.name === 'aiEstimate') {
+  // aiEstimate and ocrIdentifier depend on the per-item analysis result (not a stable identifier), so never cache them.
+  if (provider.name === 'aiEstimate' || provider.name === 'ocrIdentifier') {
     return provider.lookup(item, ctx);
   }
   const key = cacheKey(provider.name, item, ctx);
@@ -705,6 +719,8 @@ export interface ApplyTargetItem {
   upc?: string | null;
   ean?: string | null;
   isbn?: string | null;
+  /** FCC ID column. When the caller omits this key entirely, fccId is never auto-applied (keeps older callers safe). */
+  fccId?: string | null;
   ebayEpid?: string | null;
   ebayCategoryId?: string | null;
   packageWeightOz?: number | null;
@@ -748,6 +764,11 @@ export function planEnrichmentApply(
     { field: 'epid',  col: 'ebayEpid', existingVal: existing.ebayEpid },
     { field: 'ebayCategoryId', col: 'ebayCategoryId', ueKey: 'ebayCategoryId', existingVal: existing.ebayCategoryId },
   ];
+  // FCC ID is only considered when the caller passes the current column value (key present), so a caller that
+  // never selected it can never overwrite an organizer-set value with an AI value.
+  if ('fccId' in existing) {
+    idMap.push({ field: 'fccId', col: 'fccId', ueKey: 'fccId', existingVal: existing.fccId });
+  }
   for (const { field, col, ueKey, existingVal } of idMap) {
     const m = merged[field];
     if (!accept(m)) continue;

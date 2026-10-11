@@ -494,7 +494,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               select: {
                 description: true, userEditedFields: true, ebayCategoryId: true,
                 ebayCategoryName: true,
-                brand: true, mpn: true, upc: true, ean: true, isbn: true,
+                brand: true, mpn: true, fccId: true, upc: true, ean: true, isbn: true,
                 packageWeightOz: true, packageLengthIn: true, packageWidthIn: true,
                 packageHeightIn: true, packageConfirmedByOrganizer: true,
                 catalogSuggestions: true, // read so a pending cardSuggestion survives the catalogSuggestions write below
@@ -580,6 +580,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 upc: existing?.upc ?? null,
                 ean: existing?.ean ?? null,
                 isbn: existing?.isbn ?? null,
+                fccId: existing?.fccId ?? null, // FCC ID: organizer-set value wins (also gated by userEditedFields)
                 ebayEpid: (existing as any)?.ebayEpid ?? null,
                 ebayCategoryId: existing?.ebayCategoryId ?? null,
                 packageWeightOz: existing?.packageWeightOz ?? null,

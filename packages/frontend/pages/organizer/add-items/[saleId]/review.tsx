@@ -53,7 +53,6 @@ import {
   typedPriceDiffersFromSaved,
 } from '../../../../lib/reviewSheetSync';
 import { gradePickerFor } from '../../../../lib/reviewGradePicker';
-import { isFccIdRelevant } from '../../../../lib/itemFieldRelevance';
 import {
   buildGradeEstimateBody,
   parseGradeEstimate,
@@ -2350,24 +2349,23 @@ const ReviewPage = () => {
                                 className="w-full px-3 py-2 text-sm font-mono rounded-lg bg-white dark:bg-[#1C1C1E] text-[#1A1814] dark:text-[#F5F5F0] border border-black/10 dark:border-[#3A3A3C] focus:outline-none focus:border-[rgba(26,24,20,0.3)] dark:focus:border-[#B8B8BA] placeholder-[rgba(26,24,20,0.4)] dark:placeholder-[#B8B8BA]"
                               />
                             </div>
-                            {(isFccIdRelevant(editState.category, editState.ebayCategoryName) || !!editState.fccId) && (
-                              <div>
-                                <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA] mb-1">
-                                  FCC ID <span className="text-[rgba(26,24,20,0.35)] dark:text-[#8A8A8C]">· optional</span>
-                                </label>
-                                <input
-                                  type="text"
-                                  maxLength={20}
-                                  value={editState.fccId ?? ''}
-                                  onChange={(e) => handleEditChange(item.id, 'fccId', e.target.value)}
-                                  placeholder="A3LSMG991U"
-                                  className="w-full px-3 py-2 text-sm font-mono rounded-lg bg-white dark:bg-[#1C1C1E] text-[#1A1814] dark:text-[#F5F5F0] border border-black/10 dark:border-[#3A3A3C] focus:outline-none focus:border-[rgba(26,24,20,0.3)] dark:focus:border-[#B8B8BA] placeholder-[rgba(26,24,20,0.4)] dark:placeholder-[#B8B8BA]"
-                                />
-                                <p className="mt-1 text-[11px] text-[rgba(26,24,20,0.5)] dark:text-[#8A8A8C]">
-                                  Found on the device label or battery compartment (e.g. A3LSMG991U)
-                                </p>
-                              </div>
-                            )}
+                            {/* FCC ID: always shown in this Product IDs row (category alone does not decide who needs one) */}
+                            <div>
+                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA] mb-1">
+                                FCC ID <span className="text-[rgba(26,24,20,0.35)] dark:text-[#8A8A8C]">· optional</span>
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={20}
+                                value={editState.fccId ?? ''}
+                                onChange={(e) => handleEditChange(item.id, 'fccId', e.target.value)}
+                                placeholder="A3LSMG991U"
+                                className="w-full px-3 py-2 text-sm font-mono rounded-lg bg-white dark:bg-[#1C1C1E] text-[#1A1814] dark:text-[#F5F5F0] border border-black/10 dark:border-[#3A3A3C] focus:outline-none focus:border-[rgba(26,24,20,0.3)] dark:focus:border-[#B8B8BA] placeholder-[rgba(26,24,20,0.4)] dark:placeholder-[#B8B8BA]"
+                              />
+                              <p className="mt-1 text-[11px] text-[rgba(26,24,20,0.5)] dark:text-[#8A8A8C]">
+                                Found on the device label or battery compartment (e.g. A3LSMG991U)
+                              </p>
+                            </div>
                           </div>
 
                           {/* Tags row */}

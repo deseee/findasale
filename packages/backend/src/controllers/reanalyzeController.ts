@@ -151,6 +151,7 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
         ebayCategoryName: appliedData.ebayCategoryName ?? after.ebayCategoryName,
         brand: after.brand,
         mpn: after.mpn,
+        fccId: after.fccId,
         upc: after.upc,
         aiConfidence: after.aiConfidence,
         isAiTagged: applied,
