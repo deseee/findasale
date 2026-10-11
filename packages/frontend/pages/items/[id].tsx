@@ -732,10 +732,8 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <Link href={`/sales/${item.sale.id}`}>
-            <a className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 mb-4 inline-block">
-              ← Back to {item.sale.title}
-            </a>
+          <Link href={`/sales/${item.sale.id}`} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 mb-4 inline-block">
+            ← Back to {item.sale.title}
           </Link>
 
           {/* Renders only for visits that arrived via a QR code (utm_source starting with "qr") */}
