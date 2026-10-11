@@ -875,6 +875,8 @@ const AddItemsDetailPage = () => {
   const [bulkPriceModalOpen, setBulkPriceModalOpen] = useState(false);
   const [bulkErrorModalOpen, setBulkErrorModalOpen] = useState(false);
   const [bulkPublishConfirmOpen, setBulkPublishConfirmOpen] = useState(false);
+  // Ids to publish, captured when the toolbar Publish is clicked (not recomputed at confirm time).
+  const [bulkPublishIds, setBulkPublishIds] = useState<string[]>([]);
   // Item id whose row-level Publish (save, then publish) is in flight; blocks double clicks.
   const [publishingItemId, setPublishingItemId] = useState<string | null>(null);
   const [bulkErrorData, setBulkErrorData] = useState<{
@@ -1006,6 +1008,18 @@ const AddItemsDetailPage = () => {
     staleEditIdsRef.current.add(itemId);
     queryClient.invalidateQueries({ queryKey: ['items', saleId] });
   }, [queryClient, saleId]);
+
+  // The items query is disabled while a mutation is in flight (enabled reads inMutationFlight.current), and React Query
+  // skips disabled queries on invalidateQueries/refetchQueries, so an invalidate fired from onSuccess never refetched the
+  // list (rows, 'N published/draft' header, Review & Publish count and filter tabs stayed stale until a hard reload).
+  // Call this from onSettled: clear the flag first, then refetch through the observer (which ignores `enabled`) and refresh
+  // the sale-level / dashboard caches that show item counts.
+  const settleItemsRefresh = () => {
+    inMutationFlight.current = false;
+    void refetchItems();
+    queryClient.invalidateQueries({ queryKey: ['sale', saleId] });
+    queryClient.invalidateQueries({ queryKey: ['organizer-sales'] });
+  };
 
   // Client-side filtered view of the saved-items list (search by name/category/tag,
   // composed with the All/Active/Sold status filter). When the query is empty and the
@@ -1333,7 +1347,7 @@ const AddItemsDetailPage = () => {
         showToast(message, 'error');
       }
     },
-    onSettled: () => { inMutationFlight.current = false; },
+    onSettled: () => { settleItemsRefresh(); },
   });
 
   const deleteMutation = useMutation({
@@ -1351,7 +1365,7 @@ const AddItemsDetailPage = () => {
         error.response?.data?.message || 'Failed to delete item';
       showToast(message, 'error');
     },
-    onSettled: () => { inMutationFlight.current = false; },
+    onSettled: () => { settleItemsRefresh(); },
   });
 
   // Backend failure rows are { id, reason | error }; the error modal wants { itemId, reason }.
@@ -1371,10 +1385,10 @@ const AddItemsDetailPage = () => {
     },
     onMutate: () => { inMutationFlight.current = true; },
     onSuccess: (response: any, variables: { itemIds: string[]; operation: string; value?: any; priceType?: string; keepSelection?: boolean }) => {
-      const succeeded = response.data.succeeded || [];
-      const failed = response.data.failed || [];
-      const skipped = response.data.skipped || []; // P1-B: Handle skipped items from backend
-      const count = response.data.count || succeeded.length || selectedItems.size;
+      const succeeded = response?.data?.succeeded || [];
+      const failed = response?.data?.failed || [];
+      const skipped = response?.data?.skipped || []; // P1-B: Handle skipped items from backend
+      const count = response?.data?.count || succeeded.length || selectedItems.size;
       const operation = variables?.operation || bulkConfirmData?.operation || 'update';
       const operationLabel = {
         delete: 'Deleted',
@@ -1409,6 +1423,9 @@ const AddItemsDetailPage = () => {
       } else if (succeeded.length > 0) {
         // All requested items succeeded (no failures, though may have been skipped)
         showToast(`${operationLabel} ${succeeded.length} item${succeeded.length !== 1 ? 's' : ''}`, 'success');
+      } else if (failed.length === 0 && skipped.length === 0) {
+        // Never finish silently: the server answered OK but reported no per-item results.
+        showToast(response?.data?.message || 'No items were changed', 'info');
       }
 
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
@@ -1430,7 +1447,7 @@ const AddItemsDetailPage = () => {
     },
     onError: (error: any) => {
       const message =
-        error.response?.data?.message || 'Failed to update items';
+        error?.response?.data?.message || error?.message || 'Failed to update items';
       showToast(message, 'error');
 
       // Bug fix S1163: backend names this field "failed", not "errors": this check
@@ -1448,7 +1465,7 @@ const AddItemsDetailPage = () => {
         setBulkErrorModalOpen(true);
       }
     },
-    onSettled: () => { inMutationFlight.current = false; },
+    onSettled: () => { settleItemsRefresh(); },
   });
 
   // Bounty matching mutation (fires after item creation)
@@ -1586,13 +1603,17 @@ const AddItemsDetailPage = () => {
       showToast('The selected items are already published', 'info');
       return;
     }
+    setBulkPublishIds(selectedPublishable.map((i: any) => i.id));
     setBulkPublishConfirmOpen(true);
   };
 
   const handleConfirmBulkPublish = () => {
-    const ids = selectedPublishable.map((i: any) => i.id);
+    const ids = bulkPublishIds;
     setBulkPublishConfirmOpen(false);
-    if (ids.length === 0) return;
+    if (ids.length === 0) {
+      showToast('Nothing to publish: the selected items are already published', 'info');
+      return;
+    }
     bulkUpdateMutation.mutate({ itemIds: ids, operation: 'draftStatus', value: 'PUBLISHED' });
   };
 
@@ -1651,7 +1672,7 @@ const AddItemsDetailPage = () => {
     }
     inMutationFlight.current = false;
 
-    queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+    settleItemsRefresh();
     queryClient.invalidateQueries({ queryKey: ['off-platform-usage'] });
     setSelectedItems(new Set());
 
@@ -4267,9 +4288,9 @@ const AddItemsDetailPage = () => {
 
       <BulkPublishConfirmModal
         isOpen={bulkPublishConfirmOpen}
-        publishCount={selectedPublishable.length}
-        alreadyPublishedCount={selectedItemsList.length - selectedPublishable.length}
-        sampleTitles={selectedPublishable.slice(0, 3).map((i: any) => i.title || 'Untitled item')}
+        publishCount={bulkPublishIds.length}
+        alreadyPublishedCount={Math.max(0, selectedItemsList.length - bulkPublishIds.length)}
+        sampleTitles={(items as any[]).filter((i: any) => bulkPublishIds.includes(i.id)).slice(0, 3).map((i: any) => i.title || 'Untitled item')}
         onCancel={() => setBulkPublishConfirmOpen(false)}
         onConfirm={handleConfirmBulkPublish}
         loading={bulkUpdateMutation.isPending}
