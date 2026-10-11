@@ -954,9 +954,16 @@ app.use((req, res) => res.status(404).json({ message: 'Not found' }));
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   const isEbayWebhookPath =
     req.path === '/api/ebay/account-deletion' || req.path === '/api/ebay/notifications';
+  // FINDASALE-NODEJS-8Z (2026-10-11): ripple events (view/share/save/bid beacons) are
+  // fire-and-forget and frequently aborted mid-request by the client navigating away —
+  // same "stream is not readable" class as the eBay case above, just triggered by our
+  // own frontend instead of eBay's webhook retries. The request can't be processed
+  // either way (body never arrived), so ack 200 rather than surface it as a 500.
+  const isRipplePostPath =
+    req.method === 'POST' && /^\/api\/sales\/[^/]+\/ripples$/.test(req.path);
   const isStreamError =
     err?.type === 'stream.not.readable' || err?.message === 'stream is not readable';
-  if (isEbayWebhookPath && isStreamError) {
+  if ((isEbayWebhookPath || isRipplePostPath) && isStreamError) {
     if (!res.headersSent) {
       res.status(200).json({});
     }
