@@ -36,7 +36,7 @@ jest.mock('../lib/prisma', () => ({
   },
 }));
 
-import { finalizePricing, AITagResult } from '../services/cloudAIService';
+import { finalizePricing, hasShadowEvidence, AITagResult } from '../services/cloudAIService';
 import {
   persistShadowPricing,
   shadowDtoFromCompRow,
@@ -60,7 +60,7 @@ const engineResult = (over: Record<string, unknown> = {}) => ({
   estimatedPrice: 12999, // cents
   priceRange: { low: 9000, high: 15000 },
   confidence: 'MEDIUM',
-  tier: 2,
+  tier: 1,
   compsFound: 7,
   ...over,
 });
@@ -88,7 +88,7 @@ describe('(1) non-audio item: model guess stays the price, engine price is shado
     expect(p.priceEngineConfidence).toBeUndefined();
     expect(p.shadowEnginePrice).toBe(129.99);
     expect(p.shadowEngineConfidence).toBe('MEDIUM');
-    expect(p.shadowEngineTier).toBe(2);
+    expect(p.shadowEngineTier).toBe(1);
     expect(p.shadowEngineCompsFound).toBe(7);
   });
 
@@ -103,6 +103,7 @@ describe('(1) non-audio item: model guess stays the price, engine price is shado
       condition: 'USED',
       conditionGrade: 'B',
       brand: 'Acme',
+      compRelevanceFilter: true,
     });
     expect(req).not.toHaveProperty('itemId');
     expect(req).not.toHaveProperty('persist');
@@ -198,7 +199,7 @@ describe('(4) shadow log line', () => {
     expect(line).toContain('aiGuess=85');
     expect(line).toContain('enginePrice=129.99');
     expect(line).toContain('confidence=MEDIUM');
-    expect(line).toContain('tier=2');
+    expect(line).toContain('tier=1');
     expect(line).toContain('compsFound=7');
     expect(line).toContain('reason=ok');
   });
@@ -208,6 +209,81 @@ describe('(4) shadow log line', () => {
     mockEstimatePrice.mockResolvedValue(engineResult());
     await finalizePricing(tag());
     expect(logSpy.mock.calls.some(c => String(c[0]).startsWith('[pricing] shadow engine:'))).toBe(false);
+  });
+});
+
+describe('(4b) minimum evidence rule: tier 1 + compsFound >= 3 + confidence not LOW', () => {
+  const noShadow = (p: AITagResult) => {
+    expect(p.shadowEnginePrice).toBeUndefined();
+    expect(p.shadowEngineConfidence).toBeUndefined();
+    expect(p.shadowEngineTier).toBeUndefined();
+    expect(p.shadowEngineCompsFound).toBeUndefined();
+    expect(p.suggestedPrice).toBe(84.99);
+    expect(p.priceSource).toBe('ai-guess');
+  };
+  const logs = () => logSpy.mock.calls.map(c => String(c[0])).join('\n');
+
+  it('hasShadowEvidence is a pure predicate', () => {
+    expect(hasShadowEvidence({ tier: 1, compsFound: 3, confidence: 'MEDIUM' })).toBe(true);
+    expect(hasShadowEvidence({ tier: 1, compsFound: 9, confidence: 'HIGH' })).toBe(true);
+    expect(hasShadowEvidence({ tier: 2, compsFound: 9, confidence: 'HIGH' })).toBe(false);
+    expect(hasShadowEvidence({ tier: 3, compsFound: 9, confidence: 'HIGH' })).toBe(false);
+    expect(hasShadowEvidence({ tier: 1, compsFound: 2, confidence: 'HIGH' })).toBe(false);
+    expect(hasShadowEvidence({ tier: 1, compsFound: 5, confidence: 'LOW' })).toBe(false);
+  });
+
+  it('tier 2 (category-only fallback) records nothing and logs insufficient-evidence', async () => {
+    mockEstimatePrice.mockResolvedValue(engineResult({ tier: 2, compsFound: 3, estimatedPrice: 3499 }));
+    const p = tag();
+    await finalizePricing(p);
+    noShadow(p);
+    expect(logs()).toContain('reason=insufficient-evidence');
+    expect(logs()).toContain('tier=2');
+    expect(logs()).toContain('compsFound=3');
+  });
+
+  it('tier 1 with only 2 post-filter comps records nothing', async () => {
+    mockEstimatePrice.mockResolvedValue(engineResult({ tier: 1, compsFound: 2 }));
+    const p = tag();
+    await finalizePricing(p);
+    noShadow(p);
+    expect(logs()).toContain('reason=insufficient-evidence');
+  });
+
+  it('tier 1 with LOW confidence records nothing', async () => {
+    mockEstimatePrice.mockResolvedValue(engineResult({ tier: 1, compsFound: 6, confidence: 'LOW' }));
+    const p = tag();
+    await finalizePricing(p);
+    noShadow(p);
+    expect(logs()).toContain('reason=insufficient-evidence');
+  });
+
+  it('tier 1, 3 comps, MEDIUM is recorded', async () => {
+    mockEstimatePrice.mockResolvedValue(engineResult({ tier: 1, compsFound: 3 }));
+    const p = tag();
+    await finalizePricing(p);
+    expect(p.shadowEnginePrice).toBe(129.99);
+    expect(logs()).toContain('reason=ok');
+  });
+
+  it('an insufficient-evidence run clears an older shadow row (persist with no shadow price)', async () => {
+    mockFindUnique.mockResolvedValue({ pricingResultJson: { shadowEngine: true, smartPrice: 84.99 } });
+    mockEstimatePrice.mockResolvedValue(engineResult({ tier: 2, compsFound: 3 }));
+    const p = tag();
+    await finalizePricing(p);
+    await persistShadowPricing('it1', p.suggestedPrice, p);
+    expect(mockDeleteMany).toHaveBeenCalledWith({ where: { itemId: 'it1' } });
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it('audio path never sets the relevance flag and keeps its old behavior at tier 2', async () => {
+    mockIsAudio.mockReturnValue(true);
+    mockEstimatePrice.mockResolvedValue(engineResult({ tier: 2, compsFound: 1, confidence: 'LOW', estimatedPrice: 1500 }));
+    const p = tag({ suggestedPrice: 40 });
+    await finalizePricing(p);
+    expect(mockEstimatePrice.mock.calls[0][0]).not.toHaveProperty('compRelevanceFilter');
+    expect(p.priceSource).toBe('engine');
+    expect(p.suggestedPrice).toBe(14.99);
   });
 });
 

@@ -7,6 +7,7 @@
 import { PricingAdapter } from './base';
 import { PricingRequest, SourceResult } from '../types';
 import { fetchEbayPriceComps } from '../../../controllers/ebayController';
+import { filterRelevantComps, MIN_RELEVANT_COMPS } from './ebayRelevance';
 import { resetFailureCounter, recordAdapterFailure, checkQuota, recordApiUsage } from '../circuit-breaker';
 
 export class EbayAdapter implements PricingAdapter {
@@ -48,8 +49,21 @@ export class EbayAdapter implements PricingAdapter {
         return [];
       }
 
-      const results: SourceResult[] = result.listings
-        .filter(listing => listing.price > 0)
+      // Relevance filter (shadow-mode Market estimate only; the audio path leaves the flag unset and is unchanged).
+      // compsFound downstream is the post-filter count; the list is never back-filled with dropped comps.
+      let listings = result.listings.filter(listing => listing.price > 0);
+      let sampleSize = result.count;
+      if (request.compRelevanceFilter) {
+        const filtered = filterRelevantComps(request.title, listings);
+        console.log(`[eBay] Relevance filter for "${String(request.title).slice(0, 60)}": input=${filtered.stats.input} overlap=${filtered.stats.afterOverlap} clean=${filtered.stats.afterExclusions} kept=${filtered.stats.kept}`);
+        if (filtered.stats.sparse) {
+          console.warn(`[eBay] Only ${filtered.stats.kept} relevant comp(s) after filtering (< ${MIN_RELEVANT_COMPS}) for "${String(request.title).slice(0, 60)}"`);
+        }
+        listings = filtered.kept;
+        sampleSize = filtered.kept.length;
+      }
+
+      const results: SourceResult[] = listings
         .map(listing => ({
           sourceId: 'ebay',
           price: Math.round(listing.price * 100), // dollars -> cents
@@ -57,7 +71,7 @@ export class EbayAdapter implements PricingAdapter {
           saleDate: new Date(),
           confidence: 0.75,
           comparabilityScore: 0.75,
-          sampleSize: result.count,
+          sampleSize,
         }));
 
       if (results.length > 0) {

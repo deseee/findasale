@@ -350,6 +350,12 @@ export function applyCardAwareness(parsed: AITagResult): void {
   }
 }
 
+/** Shadow Market estimate minimum evidence (2026-10-11): tier 1, at least this many post-filter comps, confidence not LOW. */
+export const SHADOW_MIN_COMPS = 3;
+export function hasShadowEvidence(r: { tier: number; compsFound: number; confidence: string }): boolean {
+  return r.tier === 1 && r.compsFound >= SHADOW_MIN_COMPS && r.confidence !== 'LOW';
+}
+
 /**
  * SHADOW MODE (2026-10-11): run the blended pricing engine for a NON-audio item and record its result on
  * parsed.shadowEngine* WITHOUT touching suggestedPrice / priceSource. Same request shape and 6000ms timeout as the
@@ -374,6 +380,7 @@ async function recordShadowEnginePrice(parsed: AITagResult, aiGuess: number, tim
       condition: parsed.condition,
       conditionGrade: parsed.suggestedConditionGrade,
       brand: parsed.brand,
+      compRelevanceFilter: true, // shadow only: eBay comps are relevance-filtered; the audio path does not set this
     });
     // If the timeout wins, a later rejection of the lookup must not become an unhandled rejection.
     Promise.resolve(lookup).catch(() => undefined);
@@ -388,6 +395,9 @@ async function recordShadowEnginePrice(parsed: AITagResult, aiGuess: number, tim
         reason = 'FLOOR';
       } else if (!(typeof result.estimatedPrice === 'number' && isFinite(result.estimatedPrice) && result.estimatedPrice > 0)) {
         reason = 'non-positive';
+      } else if (!hasShadowEvidence(result)) {
+        // Minimum evidence rule: record/display only tier 1 + at least 3 post-filter comps + non-LOW confidence.
+        reason = 'insufficient-evidence';
       } else {
         const dollars = applyCharmPricing(result.estimatedPrice / 100); // orchestrator returns cents
         parsed.shadowEnginePrice = dollars;

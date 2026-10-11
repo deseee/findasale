@@ -16,6 +16,10 @@ export interface PricingRequest {
   // B3 (2026-10-04): when false, the estimate is ephemeral and the orchestrator writes NOTHING keyed to itemId
   // (no ItemCompLookup upsert). Omitted or true keeps the historical behavior (persist when itemId is set).
   persist?: boolean;
+  // 2026-10-11: when true the eBay adapter drops irrelevant comps (token overlap, parts/incomplete/other-edition,
+  // price outliers) before they reach the weighted median. Set only by the shadow-mode Market estimate; omitted
+  // everywhere else (audio path included), which keeps the previous unfiltered behavior.
+  compRelevanceFilter?: boolean;
 }
 
 export interface PricingResult {
