@@ -32,6 +32,8 @@ interface PricingCompSummaryProps {
   /** Optional extra context for a better lookup. Sent only when provided. */
   category?: string;
   brand?: string;
+  /** Bump (e.g. after a re-analyze) to re-read the saved summary so the two shadow numbers stay current. */
+  refreshToken?: number;
 }
 
 /**
@@ -56,6 +58,7 @@ const PricingCompSummary: React.FC<PricingCompSummaryProps> = ({
   conditionGrade,
   category,
   brand,
+  refreshToken,
 }) => {
   const [compData, setCompData] = useState<CompSummaryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,7 +88,7 @@ const PricingCompSummary: React.FC<PricingCompSummaryProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [itemId]);
+  }, [itemId, refreshToken]);
 
   const runLookup = async () => {
     if (inFlight.current || !itemId || !canLookup) return;

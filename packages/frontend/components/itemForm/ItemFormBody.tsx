@@ -2187,6 +2187,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                   <PricingCompSummary
                     itemId={id as string}
                     itemTitle={formData.title}
+                    refreshToken={priceRefreshToken}
                     condition={normalizeCondition(formData.condition).condition ?? undefined}
                     conditionGrade={
                       gradeApplies(formData.condition) ? normalizeGrade(formData.conditionGrade) ?? undefined : undefined

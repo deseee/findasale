@@ -15,6 +15,7 @@ import { gradeFactorFor, applyGradeFactor } from './gradeFactor';
 import { getDepreciationCurve, applyDepreciation } from './depreciation';
 import { adapterRegistry } from './adapters/registry';
 import { prisma } from '../../lib/prisma';
+import { withShadowMarker } from '../shadowPricingStore'; // keeps a shadow row's model price when this manual upsert replaces its JSON
 import { applyCharmPricingCents } from '../../utils/charmPricing';
 
 /**
@@ -254,10 +255,12 @@ async function finalizeResult(
   // |"blended") — set it here too so the field never goes stale relative to estimatedPrice/
   // priceConfidence when the orchestrator is the one that last wrote the row.
   if (request.itemId && request.persist !== false) {
+    // Shadow mode: if the existing row is a shadow row, carry its model price into the new JSON (display only).
+    const persistedJson = await withShadowMarker(request.itemId, result);
     await prisma.itemCompLookup.upsert({
       where: { itemId: request.itemId },
       update: {
-        pricingResultJson: result as any,
+        pricingResultJson: persistedJson as any,
         estimatedPrice: BigInt(result.estimatedPrice),
         priceConfidence: result.confidence,
         tierUsed: result.tier,
@@ -275,7 +278,7 @@ async function finalizeResult(
       },
       create: {
         itemId: request.itemId,
-        pricingResultJson: result as any,
+        pricingResultJson: persistedJson as any,
         estimatedPrice: BigInt(result.estimatedPrice),
         priceConfidence: result.confidence,
         tierUsed: result.tier,

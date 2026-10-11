@@ -8,11 +8,16 @@
  *   (3) audio path unchanged (engine can still win; no shadow fields)
  *   (4) one log line per non-audio item with the title truncated to 60 chars
  *   (5) shadowPricingStore: persist onto ItemCompLookup, DTO from a saved row, nothing written without a shadow price
+ *   (6) manual Suggest Price upsert keeps the shadow model price (carry marker)
+ *   (7) a later run with no engine price clears stale shadow data, but only shadow rows
  */
 const mockEstimatePrice = jest.fn();
 const mockIsAudio = jest.fn();
 const mockUpsert = jest.fn();
 const mockFindMany = jest.fn();
+const mockFindUnique = jest.fn();
+const mockDeleteMany = jest.fn();
+const mockUpdate = jest.fn();
 
 jest.mock('../lib/aiCostTracker', () => ({}));
 jest.mock('../services/imageMatchService', () => ({}));
@@ -24,6 +29,9 @@ jest.mock('../lib/prisma', () => ({
     itemCompLookup: {
       upsert: (...a: unknown[]) => mockUpsert(...a),
       findMany: (...a: unknown[]) => mockFindMany(...a),
+      findUnique: (...a: unknown[]) => mockFindUnique(...a),
+      deleteMany: (...a: unknown[]) => mockDeleteMany(...a),
+      update: (...a: unknown[]) => mockUpdate(...a),
     },
   },
 }));
@@ -34,6 +42,9 @@ import {
   shadowDtoFromCompRow,
   shadowFromAiResult,
   loadShadowPricingByItemId,
+  carryShadowMarker,
+  withShadowMarker,
+  SHADOW_CARRY_KEY,
 } from '../services/shadowPricingStore';
 
 const tag = (over: Partial<AITagResult> = {}): AITagResult => ({
@@ -244,8 +255,8 @@ describe('(5) shadowPricingStore', () => {
       compsFound: 7,
       pricingResultJson: { shadowEngine: true, smartPrice: 84.99 },
     };
-    expect(shadowDtoFromCompRow(row)).toEqual({ smartPrice: 84.99, marketPrice: 129.99, marketConfidence: 'MEDIUM', compsFound: 7 });
-    expect(shadowDtoFromCompRow({ ...row, pricingResultJson: { priceRange: {} } })).toMatchObject({ smartPrice: null, marketPrice: 129.99 });
+    expect(shadowDtoFromCompRow(row)).toEqual({ smartPrice: 84.99, marketPrice: 129.99, marketConfidence: 'MEDIUM', compsFound: 7, isShadow: true });
+    expect(shadowDtoFromCompRow({ ...row, pricingResultJson: { priceRange: {} } })).toMatchObject({ smartPrice: null, marketPrice: 129.99, isShadow: false });
     expect(shadowDtoFromCompRow({ ...row, priceConfidence: 'FLOOR' })).toBeNull();
     expect(shadowDtoFromCompRow({ ...row, estimatedPrice: null })).toBeNull();
     expect(shadowDtoFromCompRow(null)).toBeNull();
@@ -261,5 +272,73 @@ describe('(5) shadowPricingStore', () => {
     expect([...map.keys()]).toEqual(['a']);
     mockFindMany.mockRejectedValue(new Error('no table'));
     expect((await loadShadowPricingByItemId(['a'])).size).toBe(0);
+  });
+});
+
+describe('(6) manual Suggest Price upsert keeps the shadow model price', () => {
+  const engineJson = { estimatedPrice: 2349, priceRange: { low: 1000, high: 5000 }, confidence: 'MEDIUM' };
+
+  it('carries the model price from a pure shadow row into the new JSON', () => {
+    const merged = carryShadowMarker({ shadowEngine: true, smartPrice: 84.99, enginePrice: 129.99 }, engineJson) as any;
+    expect(merged.estimatedPrice).toBe(2349);
+    expect(merged[SHADOW_CARRY_KEY]).toBe(84.99);
+  });
+
+  it('keeps carrying across repeated manual lookups, including a null model price', () => {
+    expect((carryShadowMarker({ [SHADOW_CARRY_KEY]: 84.99, estimatedPrice: 1 }, engineJson) as any)[SHADOW_CARRY_KEY]).toBe(84.99);
+    expect((carryShadowMarker({ shadowEngine: true, smartPrice: null }, engineJson) as any)[SHADOW_CARRY_KEY]).toBeNull();
+  });
+
+  it('leaves non-shadow rows alone (same object back)', () => {
+    expect(carryShadowMarker({ priceRange: {} }, engineJson)).toBe(engineJson);
+    expect(carryShadowMarker(null, engineJson)).toBe(engineJson);
+  });
+
+  it('withShadowMarker reads the existing row, and never throws', async () => {
+    mockFindUnique.mockResolvedValue({ pricingResultJson: { shadowEngine: true, smartPrice: 84.99 } });
+    expect(((await withShadowMarker('it1', engineJson)) as any)[SHADOW_CARRY_KEY]).toBe(84.99);
+    mockFindUnique.mockRejectedValue(new Error('db down'));
+    expect(await withShadowMarker('it1', engineJson)).toBe(engineJson);
+  });
+
+  it('a merged row still yields both numbers and is flagged shadow', () => {
+    const row = {
+      estimatedPrice: BigInt(2349),
+      priceConfidence: 'MEDIUM',
+      compsFound: 10,
+      pricingResultJson: { ...engineJson, [SHADOW_CARRY_KEY]: 84.99 },
+    };
+    expect(shadowDtoFromCompRow(row)).toEqual({ smartPrice: 84.99, marketPrice: 23.49, marketConfidence: 'MEDIUM', compsFound: 10, isShadow: true });
+  });
+});
+
+describe('(7) stale shadow data is cleared when the new run has no engine price', () => {
+  it('deletes a pure shadow row', async () => {
+    mockFindUnique.mockResolvedValue({ pricingResultJson: { shadowEngine: true, smartPrice: 84.99 } });
+    await persistShadowPricing('it1', 84.99, { shadowEngineConfidence: undefined });
+    expect(mockDeleteMany).toHaveBeenCalledWith({ where: { itemId: 'it1' } });
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it('only strips the marker from a real comp row, keeping its data', async () => {
+    mockFindUnique.mockResolvedValue({ pricingResultJson: { estimatedPrice: 2349, [SHADOW_CARRY_KEY]: 84.99 } });
+    await persistShadowPricing('it1', 84.99, {});
+    expect(mockDeleteMany).not.toHaveBeenCalled();
+    expect(mockUpdate).toHaveBeenCalledWith({ where: { itemId: 'it1' }, data: { pricingResultJson: { estimatedPrice: 2349 } } });
+  });
+
+  it('never touches a real comp row without a shadow marker', async () => {
+    mockFindUnique.mockResolvedValue({ pricingResultJson: { estimatedPrice: 2349, priceRange: {} } });
+    await persistShadowPricing('it1', 84.99, {});
+    expect(mockDeleteMany).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no scan ran (r null) and never throws on db failure', async () => {
+    await persistShadowPricing('it1', 84.99, null);
+    expect(mockFindUnique).not.toHaveBeenCalled();
+    mockFindUnique.mockRejectedValue(new Error('db down'));
+    await expect(persistShadowPricing('it1', 84.99, {})).resolves.toBeUndefined();
   });
 });

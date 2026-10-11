@@ -8,6 +8,8 @@ export interface ShadowPricing {
   marketConfidence?: string | null;
   /** How many comparable listings the market estimate is based on. */
   compsFound?: number | null;
+  /** True when the saved row came from the shadow scan (non-record item). Used to skip one-click apply panels. */
+  isShadow?: boolean;
 }
 
 interface ShadowPriceCompareProps {

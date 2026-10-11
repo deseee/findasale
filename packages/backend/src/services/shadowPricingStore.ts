@@ -25,6 +25,61 @@ export interface ShadowPricingDto {
   marketConfidence: string | null;
   /** Number of comparable listings behind the market estimate. */
   compsFound: number;
+  /**
+   * True when this item's row came from the shadow scan (non-record item: the model price is the price and the
+   * market estimate is reference only). Lets the UI skip the one-click "Use $X" apply panel for such items.
+   */
+  isShadow: boolean;
+}
+
+/**
+ * Key under which the model's price survives a manual "Suggest Price" upsert. The orchestrator replaces the whole
+ * pricingResultJson with its own result; carryShadowMarker() copies the model price into that new JSON under this key
+ * (null when the shadow row had no model price) so the Smart suggestion line does not vanish. The key only ever
+ * exists on a row that started life as a shadow row.
+ */
+export const SHADOW_CARRY_KEY = 'shadowSmartPrice';
+
+function isObj(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+/** Shadow info found in a saved pricingResultJson, or null when the row is not (or no longer) a shadow row. */
+function readShadowMarker(json: unknown): { smartPrice: number | null; pure: boolean } | null {
+  if (!isObj(json)) return null;
+  if (json.shadowEngine === true) {
+    return { smartPrice: typeof json.smartPrice === 'number' && isFinite(json.smartPrice) ? json.smartPrice : null, pure: true };
+  }
+  if (SHADOW_CARRY_KEY in json) {
+    const v = json[SHADOW_CARRY_KEY];
+    return { smartPrice: typeof v === 'number' && isFinite(v) ? v : null, pure: false };
+  }
+  return null;
+}
+
+/**
+ * Pure helper: given the row's existing pricingResultJson and the JSON a manual lookup is about to write, return the
+ * JSON to write. If the existing row was a shadow row (or already carries the marker) the model price is kept under
+ * SHADOW_CARRY_KEY; otherwise newJson is returned untouched.
+ */
+export function carryShadowMarker<T extends object>(existingJson: unknown, newJson: T): T | (T & Record<string, number | null>) {
+  const m = readShadowMarker(existingJson);
+  if (!m) return newJson;
+  return { ...newJson, [SHADOW_CARRY_KEY]: m.smartPrice };
+}
+
+/**
+ * Read the item's current row and return the JSON to persist for a manual lookup (see carryShadowMarker). Best-effort:
+ * any read problem returns newJson unchanged, so a manual lookup is never blocked by this.
+ */
+export async function withShadowMarker<T extends object>(itemId: string, newJson: T): Promise<T | (T & Record<string, number | null>)> {
+  try {
+    const existing = await prisma.itemCompLookup.findUnique({ where: { itemId }, select: { pricingResultJson: true } });
+    return carryShadowMarker(existing?.pricingResultJson, newJson);
+  } catch (err: any) {
+    console.warn(`[shadowPricing] marker carry failed (non-fatal) for item ${itemId}:`, err?.message || err);
+    return newJson;
+  }
 }
 
 type ShadowFields = Pick<
@@ -45,12 +100,18 @@ export function shadowFromAiResult(
     marketPrice: r.shadowEnginePrice,
     marketConfidence: r.shadowEngineConfidence ?? null,
     compsFound: typeof r.shadowEngineCompsFound === 'number' ? r.shadowEngineCompsFound : 0,
+    isShadow: true,
   };
 }
 
 /**
- * Upsert the shadow result onto the item's ItemCompLookup row. No-op when the scan produced no shadow price.
- * smartPrice is the model price that was actually written to / suggested for the item (dollars).
+ * Upsert the shadow result onto the item's ItemCompLookup row. smartPrice is the model price that was actually written
+ * to / suggested for the item (dollars).
+ *
+ * When the scan ran (r given) but produced no usable engine price (FLOOR / timeout / exception / non-positive), any
+ * shadow data left by an EARLIER run is stale, so it is cleared: a pure shadow row is deleted, and a real comp row that
+ * only carries the shadow marker has the marker removed. Rows with no shadow marker (real comp lookups, eBay cache
+ * rows) are never touched. r null/undefined means "no scan ran" and does nothing.
  */
 export async function persistShadowPricing(
   itemId: string,
@@ -58,8 +119,12 @@ export async function persistShadowPricing(
   r: ShadowFields | null | undefined,
 ): Promise<void> {
   try {
+    if (!itemId) return;
     const dto = shadowFromAiResult(r, smartPrice);
-    if (!dto || !itemId) return;
+    if (!dto) {
+      if (r) await clearStaleShadow(itemId);
+      return;
+    }
     const cents = Math.round(dto.marketPrice * 100);
     const data = {
       pricingResultJson: {
@@ -88,6 +153,19 @@ export async function persistShadowPricing(
   }
 }
 
+/** Remove stale shadow data from the item's row (see persistShadowPricing). Never throws; never touches non-shadow rows. */
+async function clearStaleShadow(itemId: string): Promise<void> {
+  const existing = await prisma.itemCompLookup.findUnique({ where: { itemId }, select: { pricingResultJson: true } });
+  const m = readShadowMarker(existing?.pricingResultJson);
+  if (!m) return;
+  if (m.pure) {
+    await prisma.itemCompLookup.deleteMany({ where: { itemId } });
+    return;
+  }
+  const { [SHADOW_CARRY_KEY]: _drop, ...rest } = existing?.pricingResultJson as Record<string, unknown>;
+  await prisma.itemCompLookup.update({ where: { itemId }, data: { pricingResultJson: rest as any } });
+}
+
 interface CompRowLike {
   estimatedPrice?: bigint | number | null;
   priceConfidence?: string | null;
@@ -105,13 +183,10 @@ export function shadowDtoFromCompRow(row: CompRowLike | null | undefined): Shado
   const cents = Number(row.estimatedPrice);
   if (!isFinite(cents) || cents <= 0) return null;
   if (!row.priceConfidence || row.priceConfidence === 'FLOOR') return null;
-  let smart: number | null = null;
-  const j = row.pricingResultJson as { shadowEngine?: unknown; smartPrice?: unknown } | null | undefined;
-  if (j && typeof j === 'object' && j.shadowEngine === true && typeof j.smartPrice === 'number' && isFinite(j.smartPrice)) {
-    smart = j.smartPrice;
-  }
+  const marker = readShadowMarker(row.pricingResultJson);
   return {
-    smartPrice: smart,
+    smartPrice: marker ? marker.smartPrice : null,
+    isShadow: !!marker,
     marketPrice: Math.round(cents) / 100,
     marketConfidence: row.priceConfidence,
     compsFound: typeof row.compsFound === 'number' ? row.compsFound : 0,

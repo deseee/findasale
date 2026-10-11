@@ -45,6 +45,21 @@ interface PriceSuggestionProps {
   autoRefreshToken?: number;
 }
 
+/**
+ * Shadow mode (2026-10-11): for a non-record item a reanalyze already saved the model price and the market estimate
+ * (shown via ShadowPriceCompare, "Smart suggestion" / "Market estimate", display only). The auto-refresh must NOT turn
+ * that market number into a one-click "Use $X" panel, so it checks the saved summary first and does nothing when a
+ * shadow row exists. A manual "Suggest Price" tap is unaffected.
+ */
+async function hasSavedShadow(itemId: string): Promise<boolean> {
+  try {
+    const response = await api.get(`/items/${itemId}/comp-summary`);
+    return response.data?.shadowPricing?.isShadow === true;
+  } catch {
+    return false;
+  }
+}
+
 interface SuggestionResult {
   low: number;
   high: number;
@@ -130,7 +145,10 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
     setNoDataYet(false);
     setError(null);
     if (isEnabled) {
-      handleSuggestPrice();
+      void (async () => {
+        if (itemId && (await hasSavedShadow(itemId))) return;
+        await handleSuggestPrice();
+      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefreshToken]);
