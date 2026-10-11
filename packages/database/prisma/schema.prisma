@@ -6957,6 +6957,30 @@ model ItemDeletionLog {
   @@index([createdAt])
 }
 
+// Data-persistence incident (2026-10-11, claude/data-persistence-health-2026-10-11.md):
+// audit trail for Sale rows under MANAGED (Organizer.isClaimed = true) organizers,
+// populated by a Postgres trigger (migration z20261011120000_sale_audit_log), not by
+// application code. No FK to Sale on purpose: it must outlive a hard-deleted row.
+// A trigger -- not saleController.ts/adminController.ts -- is what makes this catch a
+// write that bypasses the app entirely (raw psql, a script, a test harness), which is
+// exactly what made the 2026-10-11 incident unprovable. Scoped to managed orgs only,
+// deliberately excluding the ~16k+/day unmanaged scraper churn this DB otherwise sees.
+model SaleAuditLog {
+  id          String   @id @default(cuid())
+  saleId      String
+  organizerId String?
+  title       String?
+  status      String?
+  action      String // INSERT | HARD_DELETE | SOFT_DELETE
+  source      String? // db_trigger for now -- app-level actor attribution is a later enhancement
+  actorUserId String?
+  createdAt   DateTime @default(now())
+
+  @@index([saleId])
+  @@index([organizerId])
+  @@index([createdAt])
+}
+
 // ============================================================================
 // ADR-134 (2026-10-03): Card seller base buildout. ItemCard, CardPrinting, CardPrice,
 // CardDataSource, CardIntakeBatch. Additive. See migrations 20261003180000 and 20261003190000.

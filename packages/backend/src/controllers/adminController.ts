@@ -965,9 +965,17 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Delete the sale -- cascading deletes handle items, favorites, etc.
-    await prisma.sale.delete({
+    // DATA-01 fix (2026-10-11, following the data-persistence incident writeup in
+    // claude/data-persistence-health-2026-10-11.md): converted from a bare hard
+    // prisma.sale.delete() to the soft-delete convention the rest of the codebase
+    // already follows for Sale.deletedAt (saleController.ts, extensionController.ts,
+    // creatorAffiliateService.ts, googleMerchantFeed.ts all check it). A hard delete
+    // here left zero trace of what was removed if it ever happened outside this
+    // guarded path -- soft-delete plus the new SaleAuditLog trigger (migration
+    // z20261011120000_sale_audit_log) together close that gap.
+    await prisma.sale.update({
       where: { id: saleId },
+      data: { deletedAt: new Date() },
     });
 
     res.json({ message: 'Sale deleted successfully' });
