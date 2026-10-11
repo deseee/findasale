@@ -28,6 +28,7 @@ import Skeleton from '../../../../components/Skeleton';
 import NearMissNudge from '../../../../components/NearMissNudge'; // Feature 61
 import ItemPhotoManager from '../../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../../components/PriceSuggestion'; // CD2 Phase 3
+import ShadowPriceCompare, { ShadowPricing } from '../../../../components/ShadowPriceCompare'; // shadow mode: model price beside market estimate
 import PriceResearchPanel from '../../../../components/PriceResearchPanel';
 import PricingSignalBanners from '../../../../components/PricingSignalBanners';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
@@ -189,6 +190,8 @@ interface Item {
   groundedIdentity?: string | null;
   groundedConfidence?: number | null;
   groundedSource?: string | null;
+  // Shadow mode (2026-10-11): saved market estimate beside the model price (display only; null when none saved)
+  shadowPricing?: ShadowPricing | null;
 }
 
 // Track which items should be pushed to eBay
@@ -2465,6 +2468,10 @@ const ReviewPage = () => {
                                 onApplyPrice={(price) => setPriceInput(item.id, String(price))}
                               />
                             </div>
+                            {/* Shadow mode: Smart suggestion and Market estimate side by side. Display only; never fills the price input. */}
+                            {item.shadowPricing && (
+                              <ShadowPriceCompare shadowPricing={item.shadowPricing} className="mb-1.5" />
+                            )}
                             {/* Price input: starts empty, organizer must type */}
                             <div
                               className="flex items-center gap-1 px-3 py-2.5 rounded-lg border-2 bg-white dark:bg-[#3A3A3C] transition-colors"

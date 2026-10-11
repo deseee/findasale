@@ -162,6 +162,10 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
       },
       // suggestedPrice returned for reference only — price is never written.
       suggestedPrice: after.suggestedPrice,
+      // Shadow mode: the pricing-engine market estimate beside the model price, for comparison only (never written to price).
+      shadowEnginePrice: after.shadowEnginePrice ?? null,
+      shadowEngineConfidence: after.shadowEngineConfidence ?? null,
+      shadowEngineCompsFound: after.shadowEngineCompsFound ?? null,
       ebaySynced,
       ebayCategoryLocked,
     });

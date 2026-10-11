@@ -300,6 +300,13 @@ export interface AITagResult {
   priceSource?: 'engine' | 'ai-guess';
   priceEngineConfidence?: string; // engine confidence label (HIGH/MEDIUM/LOW/...) when priceSource === 'engine'
   priceEngineTier?: number; // engine tier used when priceSource === 'engine'
+  // SHADOW MODE (2026-10-11): for NON-audio items finalizePricing() still runs the blended pricing engine but does NOT
+  // use it to set suggestedPrice (that stays the model guess, priceSource 'ai-guess'). A real comp-backed result is
+  // recorded here so the organizer can compare both numbers. All four are undefined on FLOOR / timeout / error / audio.
+  shadowEnginePrice?: number; // dollars, charm-rounded like suggestedPrice
+  shadowEngineConfidence?: string; // HIGH | MEDIUM | LOW
+  shadowEngineTier?: number;
+  shadowEngineCompsFound?: number;
   tags: string[];
   confidence?: number; // Camera Workflow v2: AI confidence score (0.0–1.0), defaults to 0.5
   suggestedTags?: string[]; // Sprint 1: Curated tags suggested by Haiku from Vision labels
@@ -344,6 +351,67 @@ export function applyCardAwareness(parsed: AITagResult): void {
 }
 
 /**
+ * SHADOW MODE (2026-10-11): run the blended pricing engine for a NON-audio item and record its result on
+ * parsed.shadowEngine* WITHOUT touching suggestedPrice / priceSource. Same request shape and 6000ms timeout as the
+ * audio path; no itemId and no persist flag, so the orchestrator writes nothing (persistence is done by the caller
+ * through shadowPricingStore). Never throws. FLOOR / non-positive / timeout / error leave the fields undefined.
+ * Logs one line per item so a week of logs can be compared by title.
+ */
+async function recordShadowEnginePrice(parsed: AITagResult, aiGuess: number, timeoutMs: number): Promise<void> {
+  let reason = 'ok';
+  let confidence = 'none';
+  let tier = 'none';
+  let compsFound = 'none';
+  let enginePriceLog = 'none';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<null>(resolve => {
+      timer = setTimeout(() => resolve(null), timeoutMs);
+    });
+    const lookup = estimatePrice({
+      title: parsed.title,
+      category: parsed.category || '',
+      condition: parsed.condition,
+      conditionGrade: parsed.suggestedConditionGrade,
+      brand: parsed.brand,
+    });
+    // If the timeout wins, a later rejection of the lookup must not become an unhandled rejection.
+    Promise.resolve(lookup).catch(() => undefined);
+    const result = await Promise.race([lookup, timeout]);
+    if (!result) {
+      reason = 'timeout';
+    } else {
+      confidence = String(result.confidence);
+      tier = String(result.tier);
+      compsFound = String(result.compsFound);
+      if (result.confidence === 'FLOOR') {
+        reason = 'FLOOR';
+      } else if (!(typeof result.estimatedPrice === 'number' && isFinite(result.estimatedPrice) && result.estimatedPrice > 0)) {
+        reason = 'non-positive';
+      } else {
+        const dollars = applyCharmPricing(result.estimatedPrice / 100); // orchestrator returns cents
+        parsed.shadowEnginePrice = dollars;
+        parsed.shadowEngineConfidence = confidence;
+        parsed.shadowEngineTier = result.tier;
+        parsed.shadowEngineCompsFound = result.compsFound;
+        enginePriceLog = String(dollars);
+      }
+    }
+  } catch (err) {
+    reason = 'exception';
+    console.error('[finalizePricing] Shadow pricing engine lookup failed (ignored):', err);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  try {
+    const titleLog = String(parsed.title ?? '').slice(0, 60);
+    console.log(`[pricing] shadow engine: title="${titleLog}" aiGuess=${aiGuess} enginePrice=${enginePriceLog} confidence=${confidence} tier=${tier} compsFound=${compsFound} reason=${reason}`);
+  } catch {
+    // logging must never throw
+  }
+}
+
+/**
  * Finalize the price on a freshly-parsed AI tag result: for records/vinyl/CD/
  * cassette (detected via the shared Discogs isAudioFormatMatch check), run the
  * item through the same blended multi-source pricing engine used everywhere
@@ -365,7 +433,7 @@ export function applyCardAwareness(parsed: AITagResult): void {
  * pressing happened to come back first.
  * See claude_docs/feature-notes/ADR-charm-pricing-discogs-comp-wiring-2026-08-24.md
  */
-async function finalizePricing(parsed: AITagResult): Promise<void> {
+export async function finalizePricing(parsed: AITagResult): Promise<void> {
   if (typeof parsed.suggestedPrice !== 'number' || !isFinite(parsed.suggestedPrice)) {
     return;
   }
@@ -406,6 +474,9 @@ async function finalizePricing(parsed: AITagResult): Promise<void> {
       skipReason = 'exception';
       console.error('[finalizePricing] Pricing engine lookup failed, keeping AI guess:', err);
     }
+  } else {
+    // Non-audio: shadow mode. Never changes suggestedPrice or priceSource; never throws.
+    await recordShadowEnginePrice(parsed, rawAiGuess, PRICING_ENGINE_TIMEOUT_MS);
   }
 
   if (parsed.priceSource !== 'engine') {

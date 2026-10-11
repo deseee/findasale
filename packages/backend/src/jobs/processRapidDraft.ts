@@ -19,6 +19,7 @@ import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/an
 import { mergeAiRecordIdentity } from '../services/marketplace/recordIdentity'; // ADR-132
 import { applyAiCardResult, withPreservedCardSuggestion, AiCardDb } from '../services/cardAiSuggestion'; // card-aware tagging (same Haiku call, no extra API call)
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
+import { persistShadowPricing } from '../services/shadowPricingStore'; // shadow mode: second (market) price kept beside the model price
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -615,6 +616,10 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       } else {
         console.log(`[rapidfire] Item ${itemId} processed successfully. Status: PENDING_REVIEW`);
       }
+
+      // Shadow mode (2026-10-11): store the pricing-engine market estimate beside the model price so the organizer can
+      // compare both. Never touches Item.price / aiSuggestedPrice; best-effort (persistShadowPricing never throws).
+      await persistShadowPricing(itemId, refinedPrice, aiResult);
 
       // Card-aware tagging: when the SAME Haiku call recognized a single trading card, create/fill its ItemCard
       // (identity fields only; organizer-set and locked fields always win) and store the suggested NM/LP/MP/HP/DMG

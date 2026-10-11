@@ -34,6 +34,7 @@ import { desiredEbayCondition, buildEbayConditionDescription } from '../utils/co
 import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: an applied re-analyze must survive the next import
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 import { applyAiCardResult, withPreservedCardSuggestion, AiCardDb } from './cardAiSuggestion'; // card-aware re-analyze (same result, no extra API call)
+import { persistShadowPricing } from './shadowPricingStore'; // shadow mode: market estimate returned/stored beside the model price (never Item.price)
 
 export type ReanalyzeErrorCode =
   | 'ITEM_NOT_FOUND'
@@ -65,6 +66,11 @@ export interface ReanalyzeAfter {
   condition: string | null;
   conditionGrade: string | null;
   suggestedPrice: number | null;
+  // Shadow mode (2026-10-11): pricing-engine market estimate for a non-audio item, for comparison only. Never written to
+  // Item.price. null when the engine had no real comps (FLOOR), timed out, failed, or the item is audio (engine already used).
+  shadowEnginePrice?: number | null;
+  shadowEngineConfidence?: string | null;
+  shadowEngineCompsFound?: number | null;
   tags: string[] | null;
   ebayCategoryId: string | null;
   ebayCategoryName: string | null;
@@ -325,6 +331,9 @@ export async function reanalyzeItem(
     condition: result.condition ?? null,
     conditionGrade: result.card ? item.conditionGrade ?? null : result.suggestedConditionGrade ?? null,
     suggestedPrice: result.suggestedPrice ?? null,
+    shadowEnginePrice: result.shadowEnginePrice ?? null,
+    shadowEngineConfidence: result.shadowEngineConfidence ?? null,
+    shadowEngineCompsFound: result.shadowEngineCompsFound ?? null,
     tags: nextTags,
     ebayCategoryId: cat?.categoryId ?? null,
     ebayCategoryName: cat?.categoryName ?? null,
@@ -374,6 +383,9 @@ export async function reanalyzeItem(
     if (Object.keys(data).length > 0) {
       await prisma.item.update({ where: { id: itemId }, data });
     }
+    // Shadow mode: keep the stored market estimate in step with the re-identified item. ItemCompLookup only, never
+    // Item.price (re-analyze never overwrites price). Best-effort; persistShadowPricing never throws.
+    await persistShadowPricing(itemId, result.suggestedPrice, result);
     // Card-aware (same Haiku result, no extra API call): create/fill the ItemCard identity and store the condition suggestion.
     // Runs AFTER the item update so the suggestion store re-reads the final catalogSuggestions. Never writes the card condition,
     // never overwrites organizer-set or locked fields, never re-suggests over a confirmed condition, and never fails the re-analyze.

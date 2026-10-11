@@ -9,12 +9,14 @@ import {
   parseEstimateResponse,
   type ParsedEstimate,
 } from '../lib/pricingCompFormat';
+import ShadowPriceCompare, { ShadowPricing } from './ShadowPriceCompare'; // shadow mode: model price beside market estimate
 
 interface CompSummaryData {
   sourceCount: number;
   medianLow: number | null;
   medianHigh: number | null;
   lastUpdated: string | null;
+  shadowPricing?: ShadowPricing | null; // saved market estimate beside the model price (display only)
 }
 
 interface PricingCompSummaryProps {
@@ -116,9 +118,10 @@ const PricingCompSummary: React.FC<PricingCompSummaryProps> = ({
   }
 
   const hasCached = !!compData && compData.sourceCount > 0;
+  const hasShadow = typeof compData?.shadowPricing?.marketPrice === 'number';
 
   // Nothing to show and nothing the organizer can do: render nothing (graceful no-op)
-  if (!hasCached && !canLookup && !estimate && !lookupError) {
+  if (!hasCached && !hasShadow && !canLookup && !estimate && !lookupError) {
     return null;
   }
 
@@ -136,6 +139,10 @@ const PricingCompSummary: React.FC<PricingCompSummaryProps> = ({
 
   return (
     <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+      {hasShadow && (
+        <ShadowPriceCompare shadowPricing={compData?.shadowPricing} className="mb-2" />
+      )}
+
       {hasCached && compData && (
         <p className="text-sm text-amber-900 dark:text-amber-100">
           <span className="font-medium">
