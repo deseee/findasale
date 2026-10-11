@@ -82,7 +82,7 @@ import { createNotification } from '../lib/notificationService';
 async function notifyOrganizerVintedReconciliationNeeded(
   label: 'Vinted' | 'Mercari' | 'Poshmark' | 'Grailed',
   organizerId: string,
-  title: string,
+  title: string | null,
   detail: string,
 ): Promise<void> {
   try {
@@ -92,7 +92,7 @@ async function notifyOrganizerVintedReconciliationNeeded(
       userId: organizer.userId,
       type: 'sold_email_needs_reconciliation',
       title: `A ${label} sale needs your attention`,
-      body: `We received a "sold" notice for "${title}" on ${label}, but ${detail}. This item was NOT automatically marked sold or removed from your other listings -- please find it and update it yourself (or rename it if another listing shares its exact title) so future sales match correctly.`,
+      body: `We received a "sold" notice for ${title ? `"${title}"` : "an item"} on ${label}, but ${detail}. This item was NOT automatically marked sold or removed from your other listings -- please find it and update it yourself (or rename it if another listing shares its exact title) so future sales match correctly.`,
       link: '/organizer/inventory',
       channel: 'OPERATIONAL',
       sendEmail: true,
