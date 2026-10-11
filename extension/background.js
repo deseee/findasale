@@ -529,6 +529,57 @@ function tabsGet(tabId) {
   return new Promise((resolve) => chrome.tabs.get(tabId, (t) => { void chrome.runtime.lastError; resolve(t || null); }));
 }
 
+// FIX 2026-10-11 (S-EXT-VINTED-REOPEN-RESUME-BUG, Patrick live report: closing a Vinted tab
+// mid-queue and reopening Vinted -- even via Chrome's own "reopen closed tab" -- loses queue
+// progress; he has to go back to the popup and reselect items from scratch). Root cause: the
+// 2026-09-27 fix above (fasVintedTabId single-owner binding, added to stop multiple simultaneous
+// Vinted tabs from all showing duplicate "Continue to next item?" prompts for the same queue)
+// never gets updated once set. There is no chrome.tabs.onRemoved listener anywhere in this file,
+// so when the one tab holding fasVintedTabId is closed, getVintedQueueItem/advanceVintedQueue
+// keep comparing every future asking tab against that now-dead id forever -- any new or reopened
+// Vinted tab is treated as a non-owner (item: null / notOwner: true) until the organizer starts a
+// brand-new queue via the popup's setVintedQueue, which resets fasVintedIndex to 0 and throws away
+// progress. That exactly matches Patrick's report.
+//
+// Shared by getVintedQueueItem and advanceVintedQueue (both need the identical ownership check):
+// resolves whether `senderTab` counts as the current Vinted queue owner, and SELF-HEALS the
+// fasVintedTabId binding storage-side when the recorded owner tab is simply gone. If the
+// recorded owner tab no longer exists (closed -- chrome.tabs.get can't find it), this tab is
+// adopted as the new owner so the queue resumes at whatever fasVintedIndex it was already at --
+// fasVintedQueue/fasVintedIndex themselves are never touched here, only who's allowed to read/
+// advance them. If the recorded owner tab is still open AND still on vinted.com, the original
+// 2026-09-27 multi-tab behavior is preserved exactly: this asking tab is rejected as a non-owner
+// so it can't hijack a still-live owner's queue and cause duplicate prompts again.
+//
+// Judgment call (not explicitly reported by Patrick, a related-but-distinct edge case): an owner
+// tab that's still open but has since navigated away from vinted.com entirely (e.g. the organizer
+// typed a different URL into that same tab) is treated the SAME as a closed tab here -- i.e. it
+// no longer blocks adoption -- since a tab that isn't on vinted.com anymore can't be running
+// fas-vinted.js's queue-consumption polling and isn't a real "owner" in any functional sense
+// either. This is a one-line judgment call, not a hard requirement; revisit if that ever causes
+// an unwanted takeover of a tab that's just mid-navigation.
+async function resolveVintedTabOwner(senderTab) {
+  if (!senderTab || senderTab.id == null) return false;
+  const { fasVintedTabId = null } = await chrome.storage.local.get(['fasVintedTabId']);
+  if (fasVintedTabId == null) return false; // no queue owner ever recorded -- nothing to adopt
+  if (senderTab.id === fasVintedTabId) return true; // already the recorded owner
+
+  // A different tab is asking. Check whether the recorded owner tab is still genuinely around.
+  const oldTab = await tabsGet(fasVintedTabId); // resolves null if the tab no longer exists
+  const ownerStillLive = !!(oldTab && typeof oldTab.url === 'string' && oldTab.url.includes('vinted.com'));
+  if (ownerStillLive) {
+    // Original owner tab still open and still on Vinted -- keep rejecting this new tab exactly as
+    // before (2026-09-27 multi-tab-duplicate-prompt fix). Do not regress that.
+    return false;
+  }
+
+  // Recorded owner tab is gone (closed) or navigated away from vinted.com -- re-adopt the CURRENT
+  // asking tab as the new owner so it resumes the existing queue instead of being told there's
+  // nothing pending. fasVintedQueue/fasVintedIndex are left completely untouched.
+  await chrome.storage.local.set({ fasVintedTabId: senderTab.id });
+  return true;
+}
+
 async function clearSilentRemovalState() {
   await chrome.storage.local.remove(['fasRemovalTabId', 'fasRemovalPrevTabId', 'fasRemovalStartedAt']);
 }
@@ -3012,17 +3063,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true, tabId: sender.tab.id });
         }
       } else if (msg.type === 'getVintedQueueItem') {
-        const { fasVintedQueue = [], fasVintedIndex = 0, fasVintedTabId = null } =
-          await chrome.storage.local.get(['fasVintedQueue', 'fasVintedIndex', 'fasVintedTabId']);
-        const isOwnVintedTab = fasVintedTabId != null && sender.tab && sender.tab.id === fasVintedTabId;
+        // FIX 2026-10-11 (S-EXT-VINTED-REOPEN-RESUME-BUG): ownership is now resolved (and
+        // self-healed if the recorded owner tab closed) via the shared resolveVintedTabOwner()
+        // helper above -- see its own comment for the full rationale. fasVintedQueue/fasVintedIndex
+        // are read separately and are never touched by that resolution.
+        const { fasVintedQueue = [], fasVintedIndex = 0 } =
+          await chrome.storage.local.get(['fasVintedQueue', 'fasVintedIndex']);
+        const isOwnVintedTab = await resolveVintedTabOwner(sender.tab);
         if (!isOwnVintedTab) {
           sendResponse({ ok: true, item: null, index: fasVintedIndex, total: fasVintedQueue.length });
         } else {
           sendResponse({ ok: true, item: fasVintedQueue[fasVintedIndex] || null, index: fasVintedIndex, total: fasVintedQueue.length });
         }
       } else if (msg.type === 'advanceVintedQueue') {
-        const st = await chrome.storage.local.get(['fasVintedQueue', 'fasVintedIndex', 'fasVintedTabId']);
-        const isOwnVintedTab = st.fasVintedTabId != null && sender.tab && sender.tab.id === st.fasVintedTabId;
+        // FIX 2026-10-11 (S-EXT-VINTED-REOPEN-RESUME-BUG): same shared ownership resolution as
+        // getVintedQueueItem above, instead of the old same-tab-id-only inline check.
+        const st = await chrome.storage.local.get(['fasVintedQueue', 'fasVintedIndex']);
+        const isOwnVintedTab = await resolveVintedTabOwner(sender.tab);
         if (!isOwnVintedTab) {
           sendResponse({ ok: true, item: (st.fasVintedQueue || [])[st.fasVintedIndex || 0] || null, index: st.fasVintedIndex || 0, total: (st.fasVintedQueue || []).length, notOwner: true });
           return;

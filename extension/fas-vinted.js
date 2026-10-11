@@ -301,6 +301,21 @@
         });
         return;
       }
+      // READ-TRIGGERED ACTION 2026-10-11 (S-EXT-VINTED-DEBUG-RELOAD): same gates as every other
+      // action on this bridge (same-window, same-origin, same shared token) -- adds no new attack
+      // surface. Root problem this solves: every dispatch tonight that edited this file could only
+      // syntax-check the result, never watch the PATCHED code actually run, because nothing
+      // available (Claude in Chrome's navigate refuses chrome://extensions; computer-use is
+      // Chrome-read-only here) could reload the unpacked extension from disk to pick the edit up.
+      // chrome.runtime.reload() is the extension's own standard self-reload API -- for an unpacked
+      // extension this is the same effect as clicking "Reload" in chrome://extensions (re-reads
+      // manifest + all scripts from disk), callable from any extension-privileged context, which
+      // this content script already is. No UI click required.
+      if (data.action === 'debugReloadExtension') {
+        console.log('[FAS Vinted] debug bridge: reloading extension now (chrome.runtime.reload()).');
+        try { chrome.runtime.reload(); } catch (e) { console.warn('[FAS Vinted] debug bridge: reload threw -- ' + (e && e.message || e)); }
+        return;
+      }
       chrome.runtime.sendMessage({ type: 'debugSetVintedQueueForThisTab', token: data.token, queue: data.queue || [] }, (resp) => {
         if (chrome.runtime.lastError) { console.warn('[FAS Vinted] debug bridge: sendMessage failed -- ' + chrome.runtime.lastError.message); return; }
         console.log('[FAS Vinted] debug bridge: queue set for this tab -- ' + JSON.stringify(resp));
@@ -2919,9 +2934,34 @@
     const photosOk = await injectPhotos(item.photoUrls);
     if (!photosOk) console.warn('[FAS Vinted] Photos did not attach (deferred path).');
     await humanPause(400, 800);
+    // BUG FIX 2026-10-11 (S-EXT-VINTED-CENT-ROUNDING, live-tested). Price was previously rounded to
+    // the nearest WHOLE DOLLAR before being typed into Vinted's Price field (Math.round(Number(...))
+    // with no decimal component), silently turning $119.99 into $120 and $1.25 into $1 on every real
+    // Vinted listing. That rounding was never Vinted-specific -- it was copy-pasted from a genuine,
+    // live-confirmed bug on Grailed (fas-grailed.js ~line 1884-1897: typing "103.50" into Grailed's
+    // masked Floor Price input in one bulk write corrupted it into "$16,874", digits dropped/reflowed),
+    // then applied preventively here (and to Mercari/Poshmark/Craigslist/Facebook) WITHOUT independently
+    // confirming Vinted's own Price field has the same digit-reflow bug. It does not. Live-tested
+    // directly against Patrick's own signed-in vinted.com/items/new (2026-10-11) by replicating
+    // vintedTypeLikePrice()'s exact native-setter + InputEvent('insertText') sequence via javascript_tool
+    // and reading the field's resulting value back afterward:
+    //   "19.99"  -> field read back "$19.99"  (clean, no corruption, no stale validation banner)
+    //   "1.25"   -> field read back "$1.25"   (clean, no corruption, no stale validation banner)
+    //   "103.50" -> field read back "$103.50" (clean -- this is the EXACT value that corrupted Grailed
+    //               into "$16,874"; on Vinted it held correctly)
+    // No digit dropping, reflow, or garbled value was observed in any of the three trials. This also
+    // matches Vinted's own live validation text ("must be greater than or equal to 1.0", see
+    // vintedErrorStillShown() above) already being decimal-formatted -- a standing (if weak) signal the
+    // field is decimal-aware that nobody had actually tested against until now. Rounding now goes to the
+    // nearest CENT instead of the nearest dollar at all 5 price-computation sites in this file (search
+    // "Math.round(Number(priceToUse) * 100) / 100"); the VINTED_MIN_PRICE clamp is unchanged.
+    // fillVintedPrice()'s checkStuck() already used a 0.005 tolerance float compare for its value-match
+    // check -- re-verified here that this tolerance already works correctly for 2-decimal values
+    // (e.g. 19.99 vs 19.99 diff 0, correctly rejects a real 1-cent-or-more mismatch like 19.99 vs 20.00),
+    // so no change was needed there.
     const priceToUse = (item.vintedPrice != null && isFinite(Number(item.vintedPrice))) ? item.vintedPrice : item.price;
     if (priceToUse != null && isFinite(Number(priceToUse))) {
-      let priceVal = Math.round(Number(priceToUse));
+      let priceVal = Math.round(Number(priceToUse) * 100) / 100;
       if (priceVal < VINTED_MIN_PRICE) priceVal = VINTED_MIN_PRICE;
       await tryFill('Price', priceVal, (v) => fillVintedPrice(String(v)), warnings);
       if (item.vintedShippingNote) warnings.push(item.vintedShippingNote);
@@ -3260,13 +3300,17 @@
       if (!deferredMode || !(priceToUse != null && isFinite(Number(priceToUse)))) return false;
       const pe = fieldByLabel('Price');
       const cur = parseFloat(String((pe && pe.value) || '').replace(/[^0-9.]/g, ''));
-      const want = Math.max(VINTED_MIN_PRICE, Math.round(Number(priceToUse)));
+      // Rounds to the nearest cent, not the nearest dollar -- see S-EXT-VINTED-CENT-ROUNDING
+      // comment in fillVintedWithoutCategory above for the live-test rationale.
+      const want = Math.max(VINTED_MIN_PRICE, Math.round(Number(priceToUse) * 100) / 100);
       if (!isFinite(cur) || Math.abs(cur - want) < 0.005) return false;
       console.log('[FAS Vinted] deferred fill: Price already shows ' + cur + ' (not the ' + want + ' FindA.Sale set) -- not overwriting it.');
       return true;
     })();
     if (priceToUse != null && isFinite(Number(priceToUse))) {
-      let priceVal = Math.round(Number(priceToUse));
+      // Rounds to the nearest cent, not the nearest dollar -- see S-EXT-VINTED-CENT-ROUNDING comment
+      // in fillVintedWithoutCategory above for the live-test rationale.
+      let priceVal = Math.round(Number(priceToUse) * 100) / 100;
       if (priceVal < VINTED_MIN_PRICE) {
         console.warn('[FAS Vinted] Price $' + priceVal + ' is below Vinted\'s $' + VINTED_MIN_PRICE + ' minimum -- clamping up rather than submitting an invalid value.');
         priceVal = VINTED_MIN_PRICE;
@@ -3317,7 +3361,9 @@
       await sleep(600);
       if (!priceLocked && vintedErrorStillShown()) {
         console.warn('[FAS Vinted] Price -- stale validation error reappeared after a later field (likely Package Size) touched the page -- re-clearing.');
-        const rePriceVal = Math.max(VINTED_MIN_PRICE, Math.round(Number(priceToUse)));
+        // Rounds to the nearest cent, not the nearest dollar -- see S-EXT-VINTED-CENT-ROUNDING
+        // comment in fillVintedWithoutCategory above for the live-test rationale.
+        const rePriceVal = Math.max(VINTED_MIN_PRICE, Math.round(Number(priceToUse) * 100) / 100);
         await fillVintedPrice(String(rePriceVal));
         if (vintedErrorStillShown()) warnings.push('Price shows a validation error that would not clear -- please check it manually before publishing.');
       }
@@ -3596,7 +3642,9 @@
     // failure mode for; Title/Description were independently confirmed correct on this same live
     // run, so widening this to every field here would be an unevidenced guess, not a fix.
     if (!priceLocked && priceToUse != null && isFinite(Number(priceToUse))) {
-      const rePriceValAfterLanguage = Math.max(VINTED_MIN_PRICE, Math.round(Number(priceToUse)));
+      // Rounds to the nearest cent, not the nearest dollar -- see S-EXT-VINTED-CENT-ROUNDING
+      // comment in fillVintedWithoutCategory above for the live-test rationale.
+      const rePriceValAfterLanguage = Math.max(VINTED_MIN_PRICE, Math.round(Number(priceToUse) * 100) / 100);
       console.warn('[FAS Vinted] Price -- unconditionally re-committing after the Language step (a non-empty displayed value has been proven not to guarantee Vinted\'s real internal state matches it).');
       await tryFill('Price', rePriceValAfterLanguage, (v) => fillVintedPrice(String(v)), warnings);
     }
@@ -5409,7 +5457,17 @@
       closeBtnHandler();
       return;
     }
-    vintedAttemptsStore[queued.item.id] = { count: (vintedPriorAttempt ? vintedPriorAttempt.count : 0) + 1, lastAt: vintedAttemptsNow };
+    // BUG FIX 2026-10-11 (S-EXT-VINTED-LIFETIME-ATTEMPT-COUNTER, live read of Patrick's
+    // real fasVintedItemAttempts showed multiple items sitting at count 10-12 accumulated
+    // over ~3 weeks of normal, well-spaced use -- count never reset when the cooldown
+    // window lapsed, so it kept growing as a lifetime total instead of tracking an actual
+    // short-time burst, misleading the organizer-facing message and tripping the cap faster
+    // than intended. Fix: only increment when this attempt falls within the cooldown window
+    // of the prior one (a genuine short-time cluster); otherwise this is the start of a new
+    // window, so reset to 1. Block condition above (count >= MAX_ATTEMPTS && within cooldown)
+    // is unchanged.
+    const vintedWithinCooldown = !!(vintedPriorAttempt && (vintedAttemptsNow - vintedPriorAttempt.lastAt) < FAS_VINTED_ATTEMPT_COOLDOWN_MS);
+    vintedAttemptsStore[queued.item.id] = { count: vintedWithinCooldown ? (vintedPriorAttempt.count + 1) : 1, lastAt: vintedAttemptsNow };
     try { await chrome.storage.local.set({ [FAS_VINTED_ATTEMPTS_KEY]: vintedAttemptsStore }); } catch (e) {}
 
     const vintedReason = vintedRestrictionReason(queued.item.category, queued.item.title);

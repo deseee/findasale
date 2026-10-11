@@ -6,7 +6,7 @@ import { prisma } from '../index';
 import { actualDiscountPct, loadStickerContext, resolveStickerPct } from '../utils/markdownSticker';
 import { v2 as cloudinary } from 'cloudinary';
 import { Decimal } from '@prisma/client/runtime/library';
-import { ItemRarity } from '@prisma/client';
+import { ItemRarity, MarketplaceJobPlatform } from '@prisma/client';
 import axios from 'axios';
 import { isSafeFetchUrl, SAFE_FETCH_AXIOS_OPTIONS } from '../utils/safeFetchUrl'; // SSRF guard for stored photoUrls
 import { classifyPackageSurchargeTrigger } from '../services/ebayRateEstimateService'; // ADR-103 Phase 5: persisted margin-risk flag
@@ -3268,6 +3268,44 @@ export const undoItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
     }
 
     const updatedItem = await prisma.$transaction(async (tx) => {
+      // Self-heal-window-closing fix (2026-10-11, stale-MarketplaceListingJob leak): the ONLY
+      // path that ever writes a real REMOVE/REMOVED row for an extension-only marketplace
+      // (Vinted/Poshmark/Depop/Grailed/Reverb/Etsy/Discogs) is the browser extension's own
+      // removal engine, polled via getPendingRemovals -- which is keyed on Item.status === 'SOLD'
+      // (see markItemSoldOffPlatform's own comment block for why this endpoint deliberately
+      // never writes that row itself). If the organizer undoes/reopens the item before the
+      // extension ever got a poll cycle to run that real removal, Item.status is about to leave
+      // 'SOLD' for good right below -- so getPendingRemovals will never serve this item again,
+      // permanently closing the only window that would have ever written the REMOVE row. Any
+      // platform whose latest MarketplaceListingJob row is still POST/POSTED (same latest-row-
+      // per-platform rule getExtensionItems/getPendingRemovals already use) is about to be stuck
+      // "still listed" forever, which permanently hides this item from the "post to [platform]"
+      // picker with no way for the organizer to know why. Close out those stale jobs here,
+      // atomically with the status revert below, mirroring markItemRemoved's exact insert shape
+      // (extensionController.ts) -- same two fields, no remoteListingId/accountId needed.
+      const platformJobs = await tx.marketplaceListingJob.findMany({
+        where: { itemId: id },
+        select: { action: true, status: true, platform: true, createdAt: true },
+      });
+      const latestByPlatform = new Map<MarketplaceJobPlatform, { action: string; status: string; createdAt: Date }>();
+      for (const j of platformJobs) {
+        // Same REMOVE/SKIPPED exclusion as getExtensionItems/getPendingRemovals (S-EXT-REMOVAL-
+        // SKIP-ENDS-LISTING) -- a failed removal ATTEMPT must not win "newest row" over a still-
+        // live POST/POSTED row for this same platform.
+        if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
+        const existing = latestByPlatform.get(j.platform);
+        if (!existing || j.createdAt > existing.createdAt) {
+          latestByPlatform.set(j.platform, { action: j.action, status: j.status, createdAt: j.createdAt });
+        }
+      }
+      for (const [platform, latest] of latestByPlatform) {
+        if (latest.action === 'POST' && latest.status === 'POSTED') {
+          await tx.marketplaceListingJob.create({
+            data: { itemId: id, action: 'REMOVE', status: 'REMOVED', platform },
+          });
+        }
+      }
+
       const updated = await tx.item.update({
         where: { id },
         data: { status: 'AVAILABLE', lastSoldVia: null, ...organizerEditStampAlways() }, // B6: organizer undo of their own sold mark
