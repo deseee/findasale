@@ -73,6 +73,14 @@ describe('importer detection from headers (ADR-134 section 4.4)', () => {
     expect(Object.values(appMap)).not.toContain('SKU');
   });
 
+  it('also accepts "Set Code" for the Moxfield set column (header name UNVERIFIED, Edition is the other candidate)', async () => {
+    const p = path.join(tmp, 'moxfield-setcode-synthetic.csv');
+    fs.writeFileSync(p, 'Count,Tradelist Count,Name,Set Code,Condition,Language,Foil,Collector Number\n3,0,Lightning Bolt,LEA,Near Mint,English,,161\n');
+    const shape = await inspectFile(p, 10);
+    expect(detectImporter(shape.headers).id).toBe('moxfield');
+    expect(getImporter('moxfield').mapColumns(shape.headers)).toMatchObject({ setCode: 'Set Code', quantity: 'Count', collectorNumber: 'Collector Number' });
+  });
+
   it('auto-detects generic aliases including sku aliases', async () => {
     const shape = await inspectFile(fixture('generic-synthetic.tsv'), 100);
     expect(getImporter('generic').mapColumns(shape.headers)).toMatchObject({
