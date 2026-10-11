@@ -1775,7 +1775,20 @@ async function autoRenewDueItems(dueItems) {
   // fasCraigslistQueue -- both land on the same accounts.craigslist.org iframe, and
   // fas-craigslist-removal-frame.js's own entrypoint tries a queued removal first, then a
   // requested renew-all, so the two flows never race for the tab.
-  if (craigslistDueCount > 0 && !(await silentCrossPlatformRemovalInProgress('CRAIGSLIST'))) {
+  // ADDED 2026-10-10 (Craigslist reload-loop fix): 6h cooldown after ANY Renew All attempt or a
+  // granted in-flight click, so a failed/unverified run can never be re-triggered in a tight loop.
+  const FAS_CL_RENEWALL_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+  let craigslistRenewAllCooling = false;
+  if (craigslistDueCount > 0) {
+    const clSt = await chrome.storage.local.get(['fasCraigslistRenewAllLastAttemptAt', 'fasCraigslistRenewAllInFlight']);
+    const lastAt = Math.max(Number(clSt.fasCraigslistRenewAllLastAttemptAt) || 0, (clSt.fasCraigslistRenewAllInFlight && Number(clSt.fasCraigslistRenewAllInFlight.at)) || 0);
+    if (lastAt && Date.now() - lastAt < FAS_CL_RENEWALL_COOLDOWN_MS) {
+      craigslistRenewAllCooling = true;
+      console.log('[FAS Craigslist Renew All] cooldown skip, last attempt ' + Math.round((Date.now() - lastAt) / 60000) + ' min ago');
+      fasLog('info', 'autoRenewDueItems', 'Craigslist Renew All skipped: cooldown', { minutesSinceLastAttempt: Math.round((Date.now() - lastAt) / 60000) });
+    }
+  }
+  if (craigslistDueCount > 0 && !craigslistRenewAllCooling && !(await silentCrossPlatformRemovalInProgress('CRAIGSLIST'))) {
     await chrome.storage.local.set({ fasCraigslistRenewAllRequested: true });
     await openSilentCrossPlatformRemovalTab('CRAIGSLIST');
     started += craigslistDueCount;
@@ -3182,12 +3195,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // openSilentCrossPlatformRemovalTab('CRAIGSLIST') may receive requested:true, so an
         // organizer's own, separately-opened Craigslist tab can never auto-trigger a real click.
         const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG.CRAIGSLIST;
-        const st = await chrome.storage.local.get(['fasCraigslistRenewAllRequested', cfg.tabIdKey]);
+        const st = await chrome.storage.local.get(['fasCraigslistRenewAllRequested', 'fasCraigslistRenewAllInFlight', cfg.tabIdKey]);
         const senderTabId = (sender && sender.tab && sender.tab.id != null) ? sender.tab.id : null;
         const removalTabId = st[cfg.tabIdKey] != null ? st[cfg.tabIdKey] : null;
-        if (!st.fasCraigslistRenewAllRequested || senderTabId == null || removalTabId == null || senderTabId !== removalTabId) {
+        const inFlight = st.fasCraigslistRenewAllInFlight || null;
+        const inFlightFresh = !!(inFlight && (Date.now() - (Number(inFlight.at) || 0)) < 10 * 60 * 1000);
+        if (senderTabId == null || removalTabId == null || senderTabId !== removalTabId) {
+          sendResponse({ ok: true, requested: false });
+        } else if (inFlightFresh && inFlight.tabId === senderTabId) {
+          // ADDED 2026-10-10: the click already happened in this tab and the page reloaded (the
+          // content script died before reporting). NEVER click again -- tell the frame to just
+          // close out honestly.
+          console.log('[FAS Craigslist Renew All] RESUMED after reload, not clicking again (tab ' + senderTabId + ')');
+          fasLog('warn', 'getCraigslistRenewAllRequested', 'resumed after reload; not clicking again', { tabId: senderTabId });
+          sendResponse({ ok: true, requested: false, resumed: true });
+        } else if (!st.fasCraigslistRenewAllRequested) {
+          if (inFlight && !inFlightFresh) await chrome.storage.local.remove(['fasCraigslistRenewAllInFlight']);
           sendResponse({ ok: true, requested: false });
         } else {
+          // CONSUME the request atomically-before-reply: one request = at most one granted click.
+          await chrome.storage.local.remove(['fasCraigslistRenewAllRequested']);
+          await chrome.storage.local.set({
+            fasCraigslistRenewAllInFlight: { at: Date.now(), tabId: senderTabId },
+            fasCraigslistRenewAllLastAttemptAt: Date.now()
+          });
+          console.log('[FAS Craigslist Renew All] GRANTED one-shot click to tab ' + senderTabId);
+          fasLog('info', 'getCraigslistRenewAllRequested', 'granted one-shot Renew All click', { tabId: senderTabId });
           sendResponse({ ok: true, requested: true });
         }
       } else if (msg.type === 'craigslistRenewAllFinished') {
@@ -3196,7 +3229,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // closes the shared removal/renew tab (mirrors removalQueueDoneFor) -- a failed or
         // UNVERIFIED attempt is not retried until the next due-renewal poll (once/day, ADR-100
         // S7 Q3), same backoff shape as every other renewal path here.
-        await chrome.storage.local.remove(['fasCraigslistRenewAllRequested']);
+        await chrome.storage.local.remove(['fasCraigslistRenewAllRequested', 'fasCraigslistRenewAllInFlight']);
+        await chrome.storage.local.set({ fasCraigslistRenewAllLastAttemptAt: Date.now() });
         if (msg.ok) {
           // Craigslist's Renew All has no per-item response -- it renews every eligible posting
           // in one action, so FindA.Sale marks every item it currently believes is listed+active

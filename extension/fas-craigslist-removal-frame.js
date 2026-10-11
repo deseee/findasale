@@ -399,6 +399,22 @@
     return btn && !btn.disabled ? { form, btn } : null;
   }
 
+  // ADDED 2026-10-10: form presence regardless of the button's disabled state (a disabled button
+  // during "renewing, please wait" is IN PROGRESS, not finished).
+  function crRenewAllFormPresent() {
+    return !!document.getElementById('accountRenewAllForm');
+  }
+
+  // Resumed after a reload that followed our click (background granted the click once and will
+  // never grant it again). Do NOT click. Wait briefly for the dashboard, then close out honestly.
+  async function runCraigslistRenewAllResumed() {
+    const deadline = Date.now() + 8000;
+    while (!crRenewAllFormPresent() && Date.now() < deadline) await sleep(250);
+    console.log('[FAS Craigslist Renew All] resumed after reload; NOT clicking again. dashboard present=' + crRenewAllFormPresent());
+    overlayWarn('Craigslist reloaded after "renew all postings" was clicked, so the result could not be verified. Check your postings manually.');
+    return { ok: false, reason: 'reloaded_after_click_unverified' };
+  }
+
   async function runCraigslistRenewAll() {
     // Positive signal, same discipline as runCraigslistRemovalQueue above: wait for the real,
     // logged-in postings dashboard rather than acting on whatever's on screen at load time.
@@ -413,16 +429,34 @@
       return { ok: false, reason: 'renew_all_control_not_found' };
     }
     overlayInfo('Renewing all eligible Craigslist postings...');
+    // The background already consumed the one-shot request when it granted this run, so even if
+    // this click reloads the page, the next load is told "resumed" and will not click again.
+    console.log('[FAS Craigslist Renew All] clicking Renew All (one-shot granted by background)');
     control.btn.click(); // live-confirmed 2026-09-27: triggers Craigslist's own async bulk-renew request
 
     const completionDeadline = Date.now() + CR_RENEWALL_COMPLETION_TIMEOUT_MS;
+    const FORM_GONE_GRACE_MS = 10000;
+    let formGoneSince = 0;
     await sleep(1500); // let the "please wait" state actually appear before polling for its exit
     while (Date.now() < completionDeadline) {
-      const still = crRenewAllControl();
-      const text = still && still.btn ? (still.btn.textContent || '') : '';
-      if (!CR_RENEWALL_WAIT_TEXT_RE.test(text)) {
-        overlayInfo('Renewed your eligible Craigslist postings.');
-        return { ok: true };
+      if (!crRenewAllFormPresent()) {
+        // Form momentarily absent (re-render / navigation in flight): keep waiting, only give up
+        // if it stays gone. Never report success from absence alone.
+        if (!formGoneSince) formGoneSince = Date.now();
+        if (Date.now() - formGoneSince >= FORM_GONE_GRACE_MS) {
+          overlayWarn('Clicked "renew all postings" but the page changed and the result could not be verified. Check your Craigslist postings manually.');
+          return { ok: false, reason: 'renew_all_form_disappeared_unverified' };
+        }
+      } else {
+        formGoneSince = 0;
+        const still = crRenewAllControl(); // null while the button is disabled => still in progress
+        if (still && still.btn) {
+          const text = still.btn.textContent || '';
+          if (!CR_RENEWALL_WAIT_TEXT_RE.test(text)) {
+            overlayInfo('Renewed your eligible Craigslist postings.');
+            return { ok: true };
+          }
+        }
       }
       await sleep(2000);
     }
@@ -433,10 +467,11 @@
   async function maybeRunCraigslistRenewAll() {
     let requested;
     try { requested = await chrome.runtime.sendMessage({ type: 'getCraigslistRenewAllRequested' }); } catch (e) { return false; }
-    if (!requested || !requested.ok || !requested.requested) return false;
+    if (!requested || !requested.ok) return false;
+    if (!requested.requested && !requested.resumed) return false;
     let result;
     try {
-      result = await runCraigslistRenewAll();
+      result = requested.resumed ? await runCraigslistRenewAllResumed() : await runCraigslistRenewAll();
     } catch (e) {
       result = { ok: false, reason: 'exception:' + ((e && e.message) || 'unknown') };
     }
