@@ -217,7 +217,8 @@ export async function accrueCashFeeBalance(params: {
  */
 
 /** Cents of outstanding cashFeeBalance that can safely ride on top of `baseAppFeeCents` for a
- *  card sale of `saleAmountCents`, without exceeding the sale's own total. Never negative. */
+ *  card sale of `saleAmountCents` (the amount Square will charge), without exceeding the sale's own total
+ *  or Square's 60% app-fee cap (MAX_APP_FEE_SHARE_OF_CARD_LEG). Never negative. */
 export function computeCashDebtRoomCents(params: {
   cashFeeBalance: number;
   baseAppFeeCents: number;
@@ -227,7 +228,13 @@ export function computeCashDebtRoomCents(params: {
   if (outstandingCents <= 0) return 0;
   const room = params.saleAmountCents - params.baseAppFeeCents;
   if (!(room > 0)) return 0;
-  return Math.min(outstandingCents, room);
+  // Square rejects (INVALID_FEES) any payment whose app_fee_money exceeds 60% of the payment amount, so
+  // baseFee + padding may never pass floor(card amount * MAX_APP_FEE_SHARE_OF_CARD_LEG) (2026-10-11).
+  // Debt that does not fit stays on cashFeeBalance (applyCashDebtToAppFee only claims what is returned here).
+  const shareCapCents = Math.floor(params.saleAmountCents * MAX_APP_FEE_SHARE_OF_CARD_LEG);
+  const shareRoom = shareCapCents - params.baseAppFeeCents;
+  if (!(shareRoom > 0)) return 0;
+  return Math.min(outstandingCents, room, shareRoom);
 }
 
 /**
@@ -338,14 +345,22 @@ export const MAX_POS_AMOUNT_CENTS = 10_000_000;
 export const MIN_SPLIT_CARD_LEG_CENTS = 50;
 
 /**
- * Square refuses a payment whose application fee is (nearly) the whole amount. FindA.Sale's
- * per-transaction minimum fee ($0.75, feeCalculator.MINIMUM_TRANSACTION_FEE_CENTS) can exceed a
- * very small card leg, so the card leg must also leave the fee at or under this share of itself.
- * 90% is Square's published app_fee_money ceiling as best as is known (NOT independently
- * verified against live docs in this session; it is deliberately conservative -- a stricter-than-
- * necessary check only asks the cashier to collect a little more cash, never mischarges).
+ * Square refuses a payment whose application fee is more than this share of the payment amount.
+ * VERIFIED by Square's live production error on 2026-10-11 (a $1.00 hand-keyed card sale carrying
+ * the $0.75 minimum fee): `INVALID_FEES -- app_fee_money must be less than or equal to 60% of the
+ * payment amount.` FindA.Sale's per-transaction minimum fee ($0.75,
+ * feeCalculator.MINIMUM_TRANSACTION_FEE_CENTS) therefore needs a card charge of at least $1.25
+ * (see minCardCentsForAppFee). The earlier 0.9 guess was wrong and let doomed charges through.
+ * packages/frontend/components/PosManualCard.tsx mirrors this value; keep the two in sync.
  */
-export const MAX_APP_FEE_SHARE_OF_CARD_LEG = 0.9;
+export const MAX_APP_FEE_SHARE_OF_CARD_LEG = 0.6;
+
+/** Smallest card charge (cents) that can carry `appFeeCents` under the Square ceiling above. */
+export const minCardCentsForAppFee = (appFeeCents: number): number => {
+  let min = Math.ceil((appFeeCents * 5) / 3); // fee / 0.6 in integer math
+  while (Math.floor(min * MAX_APP_FEE_SHARE_OF_CARD_LEG) < appFeeCents) min += 1; // guard against float rounding
+  return Math.max(min, MIN_SPLIT_CARD_LEG_CENTS);
+};
 
 const dollars = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
 
@@ -398,7 +413,7 @@ export function cardLegProblem(p: { cardCents: number; appFeeCents: number; isSp
     return `The card amount (${dollars(p.cardCents)}) is below the ${dollars(MIN_SPLIT_CARD_LEG_CENTS)} minimum a card can be charged. ${way}`;
   }
   if (p.appFeeCents > Math.floor(p.cardCents * MAX_APP_FEE_SHARE_OF_CARD_LEG)) {
-    return `The card amount (${dollars(p.cardCents)}) is too small to cover the ${dollars(p.appFeeCents)} minimum platform fee. ${way}`;
+    return `The card amount (${dollars(p.cardCents)}) is too small to cover the ${dollars(p.appFeeCents)} minimum platform fee. A card sale must be at least ${dollars(minCardCentsForAppFee(p.appFeeCents))}. ${way}`;
   }
   return null;
 }
