@@ -1489,7 +1489,7 @@ export async function analyzeItemImages(
   );
 
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
-  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch, ebayMatch);
+  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch, ebayMatch, options?.priorTitle);
   if (ocrIsbn) result.ocrIsbn = ocrIsbn; // ADR-089: thread OCR-derived ISBN onto the analysis result
   // FCC ID: the deterministic OCR-regex value wins over the model-read value when they disagree.
   if (ocrFccId) {
@@ -1569,7 +1569,8 @@ async function getHaikuAnalysisMultiImage(
   clusterPhotos?: ClusterPhoto[],
   catalogMatches?: CatalogMatch[] | null,
   webMatch?: { webEntities: string[]; bestGuessLabels: string[] } | null,
-  ebayMatch?: EbayImageMatch | null
+  ebayMatch?: EbayImageMatch | null,
+  priorTitle?: string | null
 ): Promise<AITagResult> {
   const labelContext =
     objectLabels.length > 0 || detectedText.length > 0
@@ -1725,7 +1726,7 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
 
     // FCC ID: keep only a well-formed model-read value (6-19 alphanumerics with a letter and a digit); anything else is dropped.
     parsed.fccId = normalizeFccIdStrict(parsed.fccId) ?? undefined;
-    await finalizePricing(parsed, { priorTitle: options?.priorTitle });
+    await finalizePricing(parsed, { priorTitle });
     // ADR ROUND 3 (2026-08-29): pass eBay's listing-title majority consensus alongside
     // Vision OCR tokens -- second zero-cost candidate-word source (see
     // ADR-ai-title-transcription-fidelity-2026-08-29-round3.md). Same non-blocking
