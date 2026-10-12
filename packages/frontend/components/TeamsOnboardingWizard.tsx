@@ -226,7 +226,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-96 flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
@@ -377,7 +377,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
                     <ul className="space-y-1">
                       {invitees.map((invitee) => (
                         <li key={invitee.email} className="text-gray-700 dark:text-gray-300 text-sm">
-                          {invitee.email} <span className="text-xs bg-sage-100 dark:bg-sage-900 text-sage-700 dark:text-sage-200 px-2 py-0.5 rounded">({invitee.role})</span>
+                          {invitee.email} <span className="text-xs bg-sage-100 dark:bg-sage-700 text-sage-700 dark:text-sage-100 px-2 py-0.5 rounded">({invitee.role})</span>
                         </li>
                       ))}
                     </ul>

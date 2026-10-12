@@ -1444,7 +1444,7 @@ export const addTeamSeat = async (req: AuthRequest, res: Response) => {
       !organizer.squareCardId ||
       !organizer.billingCurrentPeriodEnd
     ) {
-      return res.status(400).json({ message: 'Add a payment method on your subscription page first, then try again.' });
+      return res.status(400).json({ message: 'Add a payment method on your subscription page first, then try again.', code: 'NO_PAYMENT_METHOD' });
     }
 
     const workspaceId = organizer.workspace.id;

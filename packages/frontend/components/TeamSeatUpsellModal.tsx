@@ -16,8 +16,8 @@ interface TeamSeatUpsellModalProps {
   memberLimit?: number;
 }
 
-// Backend addTeamSeat (Square card on file) returns 400 with this message, and no code today,
-// when the organizer has no stored payment method. Match the code if one is added later.
+// Backend addTeamSeat (Square card on file) returns 400 with code NO_PAYMENT_METHOD
+// when the organizer has no stored payment method. The message match is a fallback.
 const isNoPaymentMethodError = (err: any): boolean => {
   const data = err?.response?.data;
   return (
@@ -70,11 +70,12 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
-      console.error('Error adding team seat:', err);
       if (isNoPaymentMethodError(err)) {
+        // Expected state (no card on file): show the amber panel, do not log as an error.
         setNeedsPaymentMethod(true);
         return;
       }
+      console.error('Error adding team seat:', err);
       const message = err.response?.data?.message || 'Failed to add seat. Please try again.';
       setError(message);
       showToast(message, 'error');
@@ -134,8 +135,8 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
             </div>
           )}
 
-          <div className="mb-6 p-4 bg-sage-50 dark:bg-sage-900/20 border border-sage-200 dark:border-sage-800 rounded">
-            <p className="text-sm text-sage-900 dark:text-sage-100">
+          <div className="mb-6 p-4 bg-sage-50 dark:bg-sage-700/30 border border-sage-200 dark:border-sage-700 rounded">
+            <p className="text-sm text-sage-700 dark:text-sage-100">
               New seats are billed monthly to your TEAMS subscription.
             </p>
           </div>
