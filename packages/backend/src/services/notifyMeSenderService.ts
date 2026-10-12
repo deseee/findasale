@@ -35,7 +35,8 @@
  *     waitlist entries are tied to the account email and confirmed by definition.
  *   - Email subjects are generic (no user-supplied search term); the escaped term appears in the body.
  *
- * Safety: the job is OFF unless NOTIFY_ME_SENDER_ENABLED=true; NOTIFY_ME_DRY_RUN=true computes and
+ * Safety: the job is OFF unless NOTIFY_ME_SENDER_ENABLED=true, and real sends also need the shared bulk-email
+ * kill switch OUTREACH_ENABLED=true (utils/bulkEmailGate); NOTIFY_ME_DRY_RUN=true computes and
  * logs without claiming or sending; NOTIFY_ME_MAX_EMAILS_PER_RUN (default 50) is a hard per-run fuse.
  */
 
@@ -43,6 +44,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService, isEmailDomainBlocked } from './suppressionService';
+import { bulkEmailEnabled } from '../utils/bulkEmailGate';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
@@ -626,6 +628,13 @@ export async function runNotifyMeSender(now: Date = new Date()): Promise<NotifyM
 
   if (!summary.enabled) {
     summary.aborted = 'disabled';
+    return summary;
+  }
+  // Shared bulk-email kill switch (OUTREACH_ENABLED). Pausing it stops these alerts too; a dry run
+  // sends nothing, so it may still run while paused.
+  if (!summary.dryRun && !bulkEmailEnabled()) {
+    summary.aborted = 'bulk_email_disabled';
+    console.log('[notifyMeSender] Skipped - bulk email disabled (OUTREACH_ENABLED!=true)');
     return summary;
   }
   if (!summary.dryRun && !unsubSecret()) {

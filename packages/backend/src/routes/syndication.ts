@@ -38,6 +38,20 @@ const syndicationLimiter = rateLimit({
 // Sale ids are cuids; reject anything else before it reaches the database.
 const SALE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
+/**
+ * JSON.stringify with <, >, & and the U+2028/U+2029 separators escaped as \uXXXX. The output is the
+ * same JSON value, but organizer-entered titles/descriptions can no longer close a
+ * <script type="application/ld+json"> block if a consumer pastes the feed into a page.
+ */
+export function toScriptSafeJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
 router.get('/sale/:saleId', syndicationLimiter, async (req: Request, res: Response): Promise<void> => {
   const saleId = typeof req.params.saleId === 'string' ? req.params.saleId.trim() : '';
 
@@ -51,9 +65,11 @@ router.get('/sale/:saleId', syndicationLimiter, async (req: Request, res: Respon
   try {
     const bundle = await generateSyndicationBundle(saleId);
 
-    // Sale data changes infrequently once published. CDN may hold it 10 minutes, browsers 5.
-    res.set('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=60');
-    res.json(bundle);
+    // Sale data changes infrequently once published. Browser and CDN each hold it at most 5 minutes so a
+    // sale that is unpublished, deleted or reverted to DRAFT drops out of caches quickly.
+    res.set('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=60');
+    res.type('application/json');
+    res.send(toScriptSafeJson(bundle));
   } catch (err: unknown) {
     if (err instanceof SyndicationNotAvailableError) {
       // Short cache so a sale that just published is not stuck behind a cached 404.

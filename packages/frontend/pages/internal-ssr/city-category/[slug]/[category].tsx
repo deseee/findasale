@@ -26,7 +26,19 @@ import { buildListingEvent, JsonLdNode } from '@/lib/seo/eventJsonLd';
 import Head from 'next/head';
 import Link from 'next/link';
 import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
-import { buildFaqJsonLd } from '@/lib/seo/cityData';
+import {
+  buildFaqJsonLd,
+  buildSeoTitle,
+  buildSeoDescription,
+  getCuratedCategoryContent,
+  getCityMeta,
+  getNearbyLinks,
+  hasCuratedCityMeta,
+} from '@/lib/seo/cityData';
+import type { FaqItem } from '@/lib/seo/cityData';
+import { mergeFaqs } from '@/lib/seo/cityFaqs';
+import { CityNearbyLinks } from '@/components/CityNearbyLinks';
+import type { CityNearbyLink } from '@/components/CityNearbyLinks';
 import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
 import { hasKnownCityRegion } from '@/lib/seo/cityRegion';
 import CityLiveStats from '@/components/CityLiveStats';
@@ -69,6 +81,15 @@ interface CityCategoryPageProps {
   allCategories: string[];
   activeByType: Record<string, number>;
   stats: CitySaleStats;
+  /** Hand-written About copy for this city and sale type, or null when none exists (no generic filler is shown). */
+  curatedAbout: { knownFor: string; tip: string } | null;
+  /** Curated evergreen FAQs for this sale type (empty for resale). */
+  curatedFaqs: FaqItem[];
+  /**
+   * Editorial nearby cities from cityData (curated cities only; empty otherwise). A static lookup,
+   * so this SSR page adds no backend fetch for it.
+   */
+  nearbyCities: CityNearbyLink[];
 }
 
 export default function CityCategoryPage({
@@ -83,9 +104,24 @@ export default function CityCategoryPage({
   allCategories,
   activeByType,
   stats,
+  curatedAbout,
+  curatedFaqs,
+  nearbyCities,
 }: CityCategoryPageProps) {
-  const title = `${categoryPlural} in ${cityName}, ${cityState} | FindA.Sale`;
-  const description = `Browse ${totalCount} ${categoryPlural.toLowerCase()} in ${cityName}, ${cityState}. Find furniture, antiques, collectibles, and more on FindA.Sale.`;
+  // S1071 crawl-budget policy: this exact page is only emitted in the sitemap when
+  // activeByType[currentTypeKey] >= 3 (see server-sitemap.xml.tsx). Thin/gated
+  // city+category combos below that threshold must not tell crawlers to index them --
+  // otherwise the sitemap gate is cosmetic (internal links/direct nav still reach them).
+  const currentTypeKey = CATEGORY_META[categorySlug]?.saleType ?? '';
+  const activeCountForCategory = activeByType[currentTypeKey] ?? 0;
+  const isGatedThin = activeCountForCategory < 3;
+
+  // Title and description come from the shared builders so every city page follows one pattern.
+  // The number used is the count of ACTIVE listings (never the raw list length, which can include ended ones).
+  // "Resale" is a mass noun ("5 Resale in Denver" reads wrong), so the builders get "Resale Listings" for that type.
+  const seoTypePlural = currentTypeKey === 'RETAIL' ? 'Resale Listings' : categoryPlural;
+  const title = buildSeoTitle(cityName, cityState, activeCountForCategory, seoTypePlural);
+  const description = buildSeoDescription(cityName, cityState, activeCountForCategory, seoTypePlural.toLowerCase());
   const canonicalUrl = `https://finda.sale/city/${citySlug}/${categorySlug}`;
 
   const itemListJsonLd = {
@@ -123,7 +159,6 @@ export default function CityCategoryPage({
   // Scoped to this category within the city — currentTypeKey is the
   // sale-type enum for this category, so the breakdown/FAQs cross-link
   // to the OTHER sale types active in this city.
-  const currentTypeKey = CATEGORY_META[categorySlug]?.saleType ?? '';
   const liveFaqs = buildLiveDataFaqs({
     cityName,
     stateCode: cityState,
@@ -133,14 +168,21 @@ export default function CityCategoryPage({
     stats,
     activeByType,
   });
-  const faqJsonLd = buildFaqJsonLd(liveFaqs);
+  // One list drives BOTH the visible FAQ section and the FAQPage JSON-LD.
+  const faqs = mergeFaqs(liveFaqs, curatedFaqs);
+  const faqJsonLd = buildFaqJsonLd(faqs);
 
-  // S1071 crawl-budget policy: this exact page is only emitted in the sitemap when
-  // activeByType[currentTypeKey] >= 3 (see server-sitemap.xml.tsx). Thin/gated
-  // city+category combos below that threshold must not tell crawlers to index them --
-  // otherwise the sitemap gate is cosmetic (internal links/direct nav still reach them).
-  const activeCountForCategory = activeByType[currentTypeKey] ?? 0;
-  const isGatedThin = activeCountForCategory < 3;
+  // Sibling views of this city: the all-types hub plus every OTHER sale type that has listings here.
+  const typeLinks = [
+    { href: `/city/${citySlug}`, label: `All sales in ${cityName}` },
+    ...allCategories
+      .filter((saleType) => saleType !== currentTypeKey)
+      .map((saleType) => {
+        const catSlug = Object.keys(CATEGORY_META).find((k) => CATEGORY_META[k].saleType === saleType);
+        return catSlug ? { href: `/city/${citySlug}/${catSlug}`, label: CATEGORY_META[catSlug].plural } : null;
+      })
+      .filter((t): t is { href: string; label: string } => t !== null),
+  ];
 
   return (
     <>
@@ -165,7 +207,7 @@ export default function CityCategoryPage({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: jsonLdSafe(breadcrumbJsonLd) }}
         />
-        {liveFaqs.length > 0 && (
+        {faqs.length > 0 && (
           <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{ __html: jsonLdSafe(faqJsonLd) }}
@@ -343,14 +385,27 @@ export default function CityCategoryPage({
             </div>
           )}
 
-          {/* FAQ section — answered from live listing data */}
-          {liveFaqs.length > 0 && (
-            <div className="mt-6">
+          {/* About: hand-written per-city, per-type copy. Rendered only when this city has some. */}
+          {curatedAbout && (
+            <section className="mt-10" aria-labelledby="city-about-heading">
+              <h2 id="city-about-heading" className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-3">
+                About {categoryPlural} in {cityName}
+              </h2>
+              <p className="text-warm-700 dark:text-warm-300 leading-relaxed">{curatedAbout.knownFor}</p>
+              <p className="mt-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-warm-800 dark:text-warm-200 leading-relaxed">
+                <span className="font-semibold">Shopper tip:</span> {curatedAbout.tip}
+              </p>
+            </section>
+          )}
+
+          {/* FAQ section: live listing data first, then curated answers for this sale type */}
+          {faqs.length > 0 && (
+            <div className="mt-8">
               <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">
                 Frequently Asked Questions About {categoryPlural} in {cityName}
               </h2>
               <div className="space-y-4">
-                {liveFaqs.map((faq, i) => (
+                {faqs.map((faq, i) => (
                   <details
                     key={i}
                     className="group border border-warm-200 dark:border-slate-700 rounded-xl overflow-hidden"
@@ -390,6 +445,9 @@ export default function CityCategoryPage({
             </Link>
           </div>
         </div>
+
+        {/* Internal links: nearby cities and the other sale types in this city */}
+        <CityNearbyLinks cityName={cityName} nearbyCities={nearbyCities} typeLinks={typeLinks} />
       </main>
     </>
   );
@@ -435,6 +493,19 @@ export const getServerSideProps: GetServerSideProps<CityCategoryPageProps> = asy
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 
+  // Curated per-city/per-type content and editorial nearby cities. Both are pure static lookups
+  // (no backend fetch, so this SSR page's per-request cost is unchanged). Nearby links come only
+  // from hand-curated city rows; the generated fallback is never shown (ADR-074 thin-content rule).
+  const curated = getCuratedCategoryContent(meta.saleType, citySlug, cityName, stateCode);
+  const nearbyCities: CityNearbyLink[] = hasCuratedCityMeta(citySlug)
+    ? getNearbyLinks(getCityMeta(citySlug))
+    : [];
+  const curatedProps = {
+    curatedAbout: curated.about,
+    curatedFaqs: curated.faqs,
+    nearbyCities,
+  };
+
   let sales: SaleListing[] = [];
   let totalCount = 0;
   let allCategories: string[] = [];
@@ -462,6 +533,7 @@ export const getServerSideProps: GetServerSideProps<CityCategoryPageProps> = asy
         categoryLabel: meta.label, categoryPlural: meta.plural,
         sales: [], totalCount: 0, allCategories: [], activeByType: {},
         stats: computeSaleStats([]),
+        ...curatedProps,
       },
     };
   }
@@ -476,6 +548,7 @@ export const getServerSideProps: GetServerSideProps<CityCategoryPageProps> = asy
         categoryLabel: meta.label, categoryPlural: meta.plural,
         sales: [], totalCount: 0, allCategories: [], activeByType: {},
         stats: computeSaleStats([]),
+        ...curatedProps,
       },
     };
   }
@@ -495,6 +568,7 @@ export const getServerSideProps: GetServerSideProps<CityCategoryPageProps> = asy
         categoryLabel: meta.label, categoryPlural: meta.plural,
         sales: [], totalCount: 0, allCategories: [], activeByType: {},
         stats: computeSaleStats([]),
+        ...curatedProps,
       },
     };
   }
@@ -519,6 +593,7 @@ export const getServerSideProps: GetServerSideProps<CityCategoryPageProps> = asy
       allCategories,
       activeByType,
       stats,
+      ...curatedProps,
     },
   };
 };

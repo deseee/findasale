@@ -25,6 +25,7 @@ import {
   getCuratedCategoryContent,
 } from '@/lib/seo/cityData';
 import type { FaqItem } from '@/lib/seo/cityData';
+import { mergeFaqs } from '@/lib/seo/cityFaqs';
 import { pickNearbyCities } from '@/lib/seo/cityCluster';
 import type { CitySlugRow, NearbyCityLinkData } from '@/lib/seo/cityCluster';
 import { CityNearbyLinks } from '@/components/CityNearbyLinks';
@@ -76,20 +77,6 @@ interface CityCategoryPageProps {
   curatedFaqs: FaqItem[];
   /** Nearby cities that currently have live sales. */
   nearbyCities: NearbyCityLinkData[];
-}
-
-/** Live-data FAQs first (city-specific, current), then curated ones; duplicate questions are dropped. */
-function mergeFaqs(live: FaqItem[], curated: FaqItem[]): FaqItem[] {
-  const seen = new Set<string>();
-  const out: FaqItem[] = [];
-  for (const faq of [...live, ...curated]) {
-    if (!faq || !faq.question?.trim() || !faq.answer?.trim()) continue;
-    const key = faq.question.trim().toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(faq);
-  }
-  return out;
 }
 
 export default function CityCategoryPage({

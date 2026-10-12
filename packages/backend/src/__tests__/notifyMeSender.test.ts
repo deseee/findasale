@@ -37,7 +37,7 @@ const t0 = new Date('2026-09-29T12:00:00Z');
 
 beforeEach(() => {
   jest.clearAllMocks();
-  process.env = { ...ENV, NOTIFY_ME_SENDER_ENABLED: 'true', JWT_SECRET: 'test-secret' };
+  process.env = { ...ENV, NOTIFY_ME_SENDER_ENABLED: 'true', OUTREACH_ENABLED: 'true', JWT_SECRET: 'test-secret' };
   delete process.env.NOTIFY_ME_DRY_RUN;
   mockIsSuppressed.mockResolvedValue(false);
   mockSearch.findMany.mockResolvedValue([]);
@@ -60,6 +60,14 @@ describe('gates', () => {
     delete process.env.NOTIFY_ME_SENDER_ENABLED;
     const r = await runNotifyMeSender(t0);
     expect(r.aborted).toBe('disabled');
+    expect(mockSearch.findMany).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing while the bulk-email kill switch is off', async () => {
+    delete process.env.OUTREACH_ENABLED;
+    const r = await runNotifyMeSender(t0);
+    expect(r.aborted).toBe('bulk_email_disabled');
     expect(mockSearch.findMany).not.toHaveBeenCalled();
     expect(mockSend).not.toHaveBeenCalled();
   });

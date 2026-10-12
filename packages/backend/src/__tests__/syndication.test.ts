@@ -3,6 +3,9 @@
  * Covers public-only visibility (PUBLISHED, not deleted, PUBLIC_ITEM_FILTER items, early-access lock),
  * that organizer phone and organizer street address never appear, and route validation, caching and 404s.
  * NOT EXECUTED when written (jest cannot run on the authoring device); CI is the first real run.
+ * 2026-10-12 security pass: adds non-PUBLISHED / soft-deleted sales, item visibility gates (DRAFT, Hunt Pass
+ * rarity window, Legendary, embargo, prelaunch), organizer phone/address absence, URL scheme filtering,
+ * script-safe JSON escaping, draft-vs-missing 404 parity and GET-only registration.
  */
 const mockSaleFindFirst = jest.fn();
 
@@ -12,7 +15,7 @@ jest.mock('../middleware/rateLimitShared', () => ({ createRateLimitStore: () => 
 // rankService -> xpService -> notificationService pulls in email and push; not needed here.
 jest.mock('../services/notificationService', () => ({ createNotification: jest.fn() }));
 
-import router from '../routes/syndication';
+import router, { toScriptSafeJson } from '../routes/syndication';
 import { generateSyndicationBundle, SyndicationNotAvailableError, SYNDICATION_MAX_ITEMS } from '../services/syndicationFormatterService';
 
 const baseSale = (over: Record<string, any> = {}) => ({
@@ -97,9 +100,10 @@ describe('generateSyndicationBundle', () => {
     const json = JSON.stringify(bundle);
     expect(json).not.toContain('555-0100');
     expect(json).not.toContain('99 Private Lane');
-    expect(bundle.org.telephone).toBeUndefined();
-    expect(bundle.org.address).toBeUndefined();
-    expect(bundle.event.organizer.telephone).toBeUndefined();
+    expect((bundle.org as any).telephone).toBeUndefined();
+    expect((bundle.org as any).address).toBeUndefined();
+    expect((bundle.event.organizer as any).telephone).toBeUndefined();
+    expect(json).not.toContain('telephone');
   });
 
   it('includes the sale street address, which the public sale page already shows', async () => {
@@ -139,6 +143,76 @@ describe('generateSyndicationBundle', () => {
     );
   });
 
+  // ── Security pass 2026-10-12 ────────────────────────────────────────────────
+  // Emulates the database: the row is only returned when it satisfies the where clause's status gate.
+  const findFirstHonoringStatus = (row: any) => (args: any) =>
+    Promise.resolve(args.where.status === row.status && row.deletedAt == null ? row : null);
+
+  it.each(['DRAFT', 'ENDED', 'CANCELLED', 'ARCHIVED'])('a %s sale is not syndicated', async (status) => {
+    mockSaleFindFirst.mockImplementation(findFirstHonoringStatus(baseSale({ status })));
+    await expect(generateSyndicationBundle('sale1')).rejects.toBeInstanceOf(SyndicationNotAvailableError);
+  });
+
+  it('a soft-deleted PUBLISHED sale is not syndicated', async () => {
+    mockSaleFindFirst.mockImplementation(findFirstHonoringStatus(baseSale({ deletedAt: new Date() })));
+    await expect(generateSyndicationBundle('sale1')).rejects.toBeInstanceOf(SyndicationNotAvailableError);
+  });
+
+  it('excludes DRAFT items and every non-public item class in the items query', async () => {
+    mockSaleFindFirst.mockResolvedValue(baseSale());
+    const now = new Date('2026-10-12T12:00:00Z');
+    await generateSyndicationBundle('sale1', now);
+    const where = mockSaleFindFirst.mock.calls[0][0].select.items.where;
+    // DRAFT / PENDING_REVIEW items never match draftStatus: 'PUBLISHED'.
+    expect(where.draftStatus).toBe('PUBLISHED');
+    expect(where.isActive).toBe(true);
+    expect(where.deletedAt).toBeNull();
+    expect(where.listingType).toEqual({ not: 'CONSIGNOR_TAG' });
+    const gates = JSON.stringify(where.AND);
+    // Hunt Pass rarity window (6h RARE / 12h LEGENDARY), Legendary visibility and the item embargo.
+    expect(gates).toContain(new Date(now.getTime() - 6 * 3600 * 1000).toISOString());
+    expect(gates).toContain(new Date(now.getTime() - 12 * 3600 * 1000).toISOString());
+    expect(gates).toContain('legendaryVisibleAt');
+    expect(gates).toContain('earlyAccessUntil');
+  });
+
+  it('syndicates no items while the sale is still in its Sage+ prelaunch window', async () => {
+    mockSaleFindFirst.mockResolvedValue(baseSale({ prelaunchAt: new Date('2026-10-20T00:00:00Z') }));
+    const bundle = await generateSyndicationBundle('sale1', new Date('2026-10-12T00:00:00Z'));
+    expect(bundle.items).toHaveLength(0);
+    expect(bundle.dataCommons.numberOfItems).toBe(0);
+    expect(bundle.event.offers).toBeUndefined();
+  });
+
+  it('never outputs an organizer phone or organizer street address anywhere in the bundle', async () => {
+    const sale = baseSale();
+    Object.assign(sale.organizer as any, { phone: '(616) 555-0199', address: '4 Hidden Hollow Rd' });
+    mockSaleFindFirst.mockResolvedValue(sale);
+    const json = JSON.stringify(await generateSyndicationBundle('sale1'));
+    expect(json).not.toContain('555-0199');
+    expect(json).not.toContain('Hidden Hollow');
+  });
+
+  it('drops non-http(s) organizer and photo URLs', async () => {
+    const sale = baseSale({ photoUrls: ['javascript:alert(1)', 'https://res.cloudinary.com/x/a.jpg'] });
+    Object.assign(sale.organizer as any, {
+      website: 'javascript:alert(document.cookie)',
+      facebook: '@oakestate',
+      instagram: 'https://instagram.com/oakestate',
+      profilePhoto: 'data:text/html,<script>alert(1)</script>',
+    });
+    mockSaleFindFirst.mockResolvedValue(sale);
+    const bundle = await generateSyndicationBundle('sale1');
+    const json = JSON.stringify(bundle);
+    expect(json).not.toContain('javascript:');
+    expect(json).not.toContain('data:text/html');
+    expect(bundle.org.url).toBeUndefined();
+    expect(bundle.org.logo).toBeUndefined();
+    expect(bundle.org.sameAs).toEqual(['https://instagram.com/oakestate']);
+    expect(bundle.event.organizer.url).toBeUndefined();
+    expect(bundle.event.image).toEqual(['https://res.cloudinary.com/x/a.jpg']);
+  });
+
   it('emits one Product per public item', async () => {
     mockSaleFindFirst.mockResolvedValue(baseSale());
     const bundle = await generateSyndicationBundle('sale1');
@@ -159,6 +233,8 @@ describe('GET /sale/:saleId route', () => {
     });
     res.status = jest.fn().mockReturnValue(res);
     res.json = jest.fn().mockReturnValue(res);
+    res.type = jest.fn().mockReturnValue(res);
+    res.send = jest.fn().mockReturnValue(res);
     return res;
   };
 
@@ -168,10 +244,44 @@ describe('GET /sale/:saleId route', () => {
     mockSaleFindFirst.mockResolvedValue(baseSale());
     const res = mkRes();
     await handler({ params: { saleId: 'sale1' } }, res);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ event: expect.any(Object), items: expect.any(Array) }));
+    expect(res.type).toHaveBeenCalledWith('application/json');
+    const body = JSON.parse(res.send.mock.calls[0][0]);
+    expect(body).toEqual(expect.objectContaining({ event: expect.any(Object), items: expect.any(Array) }));
     expect(res.headers['Cache-Control']).toContain('public');
     expect(res.headers['Cache-Control']).toContain('s-maxage');
     expect(res.headers['X-Robots-Tag']).toBe('noindex');
+  });
+
+  it('escapes markup so organizer text cannot break out of an ld+json script block', async () => {
+    mockSaleFindFirst.mockResolvedValue(baseSale({ title: '</script><script>alert(1)</script> & more' }));
+    const res = mkRes();
+    await handler({ params: { saleId: 'sale1' } }, res);
+    const raw: string = res.send.mock.calls[0][0];
+    expect(raw).not.toContain('<');
+    expect(raw).not.toContain('>');
+    expect(JSON.parse(raw).event.name).toBe('</script><script>alert(1)</script> & more');
+    expect(toScriptSafeJson({ a: '\u2028' })).toBe('{"a":"\\u2028"}');
+  });
+
+  it('answers a DRAFT sale id exactly like a nonexistent id (no existence oracle)', async () => {
+    mockSaleFindFirst.mockImplementation((args: any) =>
+      Promise.resolve(args.where.status === 'DRAFT' ? baseSale({ status: 'DRAFT' }) : null)
+    );
+    const draftRes = mkRes();
+    await handler({ params: { saleId: 'sale1' } }, draftRes);
+    const missingRes = mkRes();
+    await handler({ params: { saleId: 'doesnotexist' } }, missingRes);
+    expect(draftRes.status).toHaveBeenCalledWith(404);
+    expect(missingRes.status).toHaveBeenCalledWith(404);
+    expect(draftRes.json.mock.calls[0][0]).toEqual(missingRes.json.mock.calls[0][0]);
+    expect(draftRes.headers).toEqual(missingRes.headers);
+  });
+
+  it('registers GET only', () => {
+    const routes = (router as any).stack.filter((l: any) => l.route).map((l: any) => l.route);
+    for (const r of routes) {
+      expect(Object.keys(r.methods)).toEqual(['get']);
+    }
   });
 
   it('400s on a malformed id before touching the database', async () => {

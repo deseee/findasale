@@ -31,8 +31,8 @@ export interface SaleWithItems {
 export interface OrganizerWithSales {
   id: string;
   businessName: string;
-  phone: string | null;
-  address: string;
+  // Organizer phone and organizer street address are deliberately absent from this type: the feed is
+  // public, and the formatters below have no field to emit them from (security pass 2026-10-12).
   bio: string | null;
   tagline: string | null;
   yearFounded: number | null;
@@ -120,7 +120,6 @@ export interface SchemaOrgEvent {
     '@type': 'Organization';
     name: string;
     url?: string;
-    telephone?: string;
   };
   offers?: SchemaOrgOffer;
   keywords?: string;
@@ -133,8 +132,6 @@ export interface SchemaOrgOrganization {
   name: string;
   description?: string;
   slogan?: string;
-  address?: SchemaOrgPostalAddress;
-  telephone?: string;
   url?: string;
   logo?: string;
   sameAs?: string[];
@@ -194,6 +191,28 @@ export interface SyndicationBundle {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const BASE_URL = 'https://finda.sale';
+
+/**
+ * Returns the value only when it is an absolute http(s) URL. Organizer website/social fields and photo
+ * URLs are organizer-entered (facebook/instagram are free text, and z.string().url() also accepts
+ * javascript: and data: URLs), so anything else is dropped rather than handed to feed consumers that
+ * may render it as a link.
+ */
+function safeHttpUrl(value: string | null | undefined): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? trimmed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function safeHttpUrls(values: string[] | null | undefined): string[] {
+  return (values || []).map((v) => safeHttpUrl(v)).filter((v): v is string => typeof v === 'string');
+}
 
 function saleTypeToEventCategory(saleType: string): string {
   const map: Record<string, string> = {
@@ -255,6 +274,7 @@ export function formatSaleForSchemaOrg(sale: SaleWithItems): SchemaOrgEvent {
   const isOnline = sale.isOnlineOnly;
   const saleUrl = `${BASE_URL}/sales/${sale.id}`;
   const category = saleTypeToEventCategory(sale.saleType);
+  const organizerWebsite = safeHttpUrl(sale.organizer.website);
 
   const location: SchemaOrgEvent['location'] = isOnline
     ? { '@type': 'VirtualLocation', url: saleUrl }
@@ -278,8 +298,7 @@ export function formatSaleForSchemaOrg(sale: SaleWithItems): SchemaOrgEvent {
     organizer: {
       '@type': 'Organization',
       name: sale.organizer.businessName,
-      ...(sale.organizer.website ? { url: sale.organizer.website } : {}),
-      ...(sale.organizer.phone ? { telephone: sale.organizer.phone } : {}),
+      ...(organizerWebsite ? { url: organizerWebsite } : {}),
     },
     url: saleUrl,
   };
@@ -288,8 +307,9 @@ export function formatSaleForSchemaOrg(sale: SaleWithItems): SchemaOrgEvent {
     event.description = sale.description;
   }
 
-  if (sale.photoUrls.length > 0) {
-    event.image = sale.photoUrls;
+  const saleImages = safeHttpUrls(sale.photoUrls);
+  if (saleImages.length > 0) {
+    event.image = saleImages;
   }
 
   const allTags = [...(sale.tags || []), category].filter(Boolean);
@@ -327,27 +347,15 @@ export function formatOrganizerForSchemaOrg(organizer: OrganizerWithSales): Sche
 
   if (organizer.bio) org.description = organizer.bio;
   if (organizer.tagline) org.slogan = organizer.tagline;
-  if (organizer.phone) org.telephone = organizer.phone;
-  if (organizer.website) org.url = organizer.website;
-  if (organizer.profilePhoto) org.logo = organizer.profilePhoto;
+  // Organizer telephone and organizer street address are never emitted (public feed).
+  const website = safeHttpUrl(organizer.website);
+  if (website) org.url = website;
+  const logo = safeHttpUrl(organizer.profilePhoto);
+  if (logo) org.logo = logo;
   if (organizer.yearFounded) org.foundingDate = String(organizer.yearFounded);
 
-  // Build address from Organizer address field (address only — no city/state on Organizer model)
-  if (organizer.address) {
-    org.address = {
-      '@type': 'PostalAddress',
-      streetAddress: organizer.address,
-      addressLocality: '',
-      addressRegion: '',
-      postalCode: '',
-      addressCountry: 'US',
-    };
-  }
-
-  // Social links
-  const sameAs: string[] = [];
-  if (organizer.facebook) sameAs.push(organizer.facebook);
-  if (organizer.instagram) sameAs.push(organizer.instagram);
+  // Social links: only absolute http(s) URLs (the fields are free text and may hold a bare handle).
+  const sameAs = safeHttpUrls([organizer.facebook || '', organizer.instagram || '']);
   if (sameAs.length > 0) org.sameAs = sameAs;
 
   // Aggregate rating
@@ -461,7 +469,8 @@ function formatItemForSchemaOrg(item: ItemForSyndication, saleId: string): Schem
   };
 
   if (item.description) product.description = item.description;
-  if (item.photoUrls.length > 0) product.image = item.photoUrls;
+  const itemImages = safeHttpUrls(item.photoUrls);
+  if (itemImages.length > 0) product.image = itemImages;
   if (item.category) product.category = item.category;
   if (itemCondition) product.itemCondition = itemCondition;
 
@@ -486,15 +495,24 @@ export const SYNDICATION_MAX_ITEMS = 500;
  *  - Sale must be PUBLISHED, not soft-deleted, and not an inventory container. ENDED sales are NOT
  *    syndicated (they are noindex on the site and useless as a live Event feed).
  *  - Anonymous viewers are rank INITIATE, so a sale still inside its early-access window is unavailable.
- *  - Items use PUBLIC_ITEM_FILTER (isActive, not GRACE_LOCKED, draftStatus PUBLISHED), the same filter
- *    the sale page uses, so DRAFT and PENDING_REVIEW items never leave the building.
+ *  - Items use PUBLIC_ITEM_FILTER (isActive, not GRACE_LOCKED, draftStatus PUBLISHED, not CONSIGNOR_TAG),
+ *    the same filter the sale page uses, so DRAFT and PENDING_REVIEW items never leave the building.
+ *    On top of that, the feed applies the anonymous-viewer gates that GET /api/items?saleId= applies
+ *    (no Hunt Pass, rank INITIATE): RARE items younger than 6h and LEGENDARY items younger than 12h,
+ *    Legendary items before legendaryVisibleAt, and items still under an earlyAccessUntil embargo are
+ *    withheld. Soft-deleted items are excluded, and while a sale's prelaunchAt (Sage+ preview) is in
+ *    the future no items are syndicated at all.
  *  - The sale street address IS public (the sale page prints it), so it is included; for online-only
- *    sales it is omitted. Organizer phone and organizer street address are NOT shown on the sale page
- *    (the API only returns phone to the owner or an admin), so they are never selected here.
+ *    sales it is omitted. Organizer phone (GET /api/sales/:id returns it only to the owner or an admin)
+ *    and organizer street address are never selected here. Note GET /api/sales/:id itself still returns
+ *    organizer.address to anonymous callers; the feed is deliberately stricter than that.
  *
  * Throws SyndicationNotAvailableError when the sale is missing or not syndicable.
  */
 export async function generateSyndicationBundle(saleId: string, now: Date = new Date()): Promise<SyndicationBundle> {
+  const rareVisibleBefore = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  const legendaryVisibleBefore = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+
   const sale = await prisma.sale.findFirst({
     where: { id: saleId, status: 'PUBLISHED', deletedAt: null, isInventoryContainer: false },
     select: {
@@ -517,6 +535,7 @@ export async function generateSyndicationBundle(saleId: string, now: Date = new 
       isOnlineOnly: true,
       notes: true,
       publishedAt: true,
+      prelaunchAt: true,
       organizer: {
         select: {
           id: true,
@@ -535,7 +554,24 @@ export async function generateSyndicationBundle(saleId: string, now: Date = new 
         },
       },
       items: {
-        where: { ...PUBLIC_ITEM_FILTER },
+        where: {
+          ...PUBLIC_ITEM_FILTER,
+          deletedAt: null,
+          AND: [
+            // Hunt Pass rarity early access (itemController isItemVisibleToUser): anonymous has no Hunt Pass.
+            {
+              OR: [
+                { rarity: { notIn: ['RARE', 'LEGENDARY'] } },
+                { rarity: 'RARE', createdAt: { lte: rareVisibleBefore } },
+                { rarity: 'LEGENDARY', createdAt: { lte: legendaryVisibleBefore } },
+              ],
+            },
+            // Phase 2b Legendary early access: INITIATE sees a Legendary item only once legendaryVisibleAt passes.
+            { OR: [{ isLegendary: false }, { legendaryVisibleAt: null }, { legendaryVisibleAt: { lte: now } }] },
+            // Hunt Pass embargo on the item itself.
+            { OR: [{ earlyAccessUntil: null }, { earlyAccessUntil: { lte: now } }] },
+          ],
+        },
         orderBy: [{ status: 'asc' }, { id: 'asc' }],
         take: SYNDICATION_MAX_ITEMS,
         select: {
@@ -564,6 +600,10 @@ export async function generateSyndicationBundle(saleId: string, now: Date = new 
     throw new SyndicationNotAvailableError('Sale not yet public');
   }
 
+  // Feature #106 prelaunch preview: before prelaunchAt only Sage+ may browse inventory, so an anonymous
+  // feed carries the sale but none of its items.
+  const inPrelaunch = !!sale.prelaunchAt && sale.prelaunchAt.getTime() > now.getTime();
+
   const saleForSyndication: SaleWithItems = {
     id: sale.id,
     title: sale.title,
@@ -587,9 +627,7 @@ export async function generateSyndicationBundle(saleId: string, now: Date = new 
     organizer: {
       id: sale.organizer.id,
       businessName: sale.organizer.businessName,
-      // Deliberately not selected and never emitted: organizer phone and organizer street address.
-      phone: null,
-      address: '',
+      // Organizer phone and organizer street address are deliberately not selected and have no slot here.
       bio: sale.organizer.bio,
       tagline: sale.organizer.tagline,
       yearFounded: sale.organizer.yearFounded,
@@ -602,7 +640,7 @@ export async function generateSyndicationBundle(saleId: string, now: Date = new 
       totalSales: sale.organizer.totalSales,
       verificationStatus: sale.organizer.verificationStatus,
     },
-    items: sale.items,
+    items: inPrelaunch ? [] : sale.items,
   };
 
   const event = formatSaleForSchemaOrg(saleForSyndication);

@@ -23,10 +23,16 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
-import { buildFaqJsonLd } from '@/lib/seo/cityData';
+import { buildFaqJsonLd, getCityMeta, getNearbyLinks, hasCuratedCityMeta } from '@/lib/seo/cityData';
 import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
 import { hasKnownCityRegion } from '@/lib/seo/cityRegion';
 import CityLiveStats from '@/components/CityLiveStats';
+// ADR-074 city cluster, static parts only. CityTopFinds and CityDirectorySection (shown on the
+// curated ISR page) need their own backend fetches, which this SSR page deliberately does not add.
+import { CityTipsBlock } from '@/components/CityTipsBlock';
+import { CityNearbyLinks } from '@/components/CityNearbyLinks';
+import type { CityNearbyLink } from '@/components/CityNearbyLinks';
+import { getCuratedCityTips } from '@/lib/seo/cityCluster';
 
 // Category slug → display label + saleType enum
 const CATEGORY_META: Record<string, { label: string; plural: string; saleType: string }> = {
@@ -67,6 +73,9 @@ interface CityPageProps {
   allCategories: string[];
   activeByType: Record<string, number>;
   stats: CitySaleStats;
+  // ADR-074 cluster data (static lookups). An empty array renders nothing.
+  tips: string[];
+  nearbyCities: CityNearbyLink[];
 }
 
 export default function CityPage({
@@ -78,6 +87,8 @@ export default function CityPage({
   allCategories,
   activeByType,
   stats,
+  tips,
+  nearbyCities,
 }: CityPageProps) {
   // Client-only "now" for live/ended badges — avoids hydration mismatch on this
   // ISR page (revalidate: 86400). Server always renders with clientNow === null
@@ -134,6 +145,14 @@ export default function CityPage({
     activeByType,
   });
   const faqJsonLd = buildFaqJsonLd(liveFaqs);
+
+  // Per-type views of this city (only types that actually have sales here).
+  const typeLinks = allCategories
+    .map((saleType) => {
+      const catSlug = Object.keys(CATEGORY_META).find((k) => CATEGORY_META[k].saleType === saleType);
+      return catSlug ? { href: `/city/${citySlug}/${catSlug}`, label: CATEGORY_META[catSlug].plural } : null;
+    })
+    .filter((t): t is { href: string; label: string } => t !== null);
 
   return (
     <>
@@ -228,7 +247,7 @@ export default function CityPage({
         )}
 
         {/* Sale grid */}
-        <div className="max-w-5xl mx-auto px-4 pb-16">
+        <div id="city-sales" className="max-w-5xl mx-auto px-4 pb-16">
           {sales.length === 0 ? (
             <div className="py-16 text-center">
               <p className="text-warm-500 dark:text-warm-400 text-lg mb-4">
@@ -367,6 +386,10 @@ export default function CityPage({
             </Link>
           </div>
         </div>
+
+        {/* ADR-074 cluster, below the primary content. Each block renders nothing when it has no data. */}
+        <CityTipsBlock cityName={cityName} cityState={cityState} paragraphs={tips} />
+        <CityNearbyLinks cityName={cityName} nearbyCities={nearbyCities} typeLinks={typeLinks} />
       </main>
     </>
   );
@@ -426,14 +449,14 @@ export const getServerSideProps: GetServerSideProps<CityPageProps> = async ({ pa
     console.error(`[internal-ssr/city/[slug]] getServerSideProps fetch threw for ${citySlug}:`, err);
     res.statusCode = 503;
     res.setHeader('Cache-Control', 'no-store');
-    return { props: { citySlug, cityName: '', cityState: '', sales: [], totalCount: 0, allCategories: [], activeByType: {}, stats: computeSaleStats([]) } };
+    return { props: { citySlug, cityName: '', cityState: '', sales: [], totalCount: 0, allCategories: [], activeByType: {}, stats: computeSaleStats([]), tips: [], nearbyCities: [] } };
   }
 
   if (!apiRes.ok) {
     console.error(`[internal-ssr/city/[slug]] by-city returned ${apiRes.status} for ${citySlug}`);
     res.statusCode = 503;
     res.setHeader('Cache-Control', 'no-store');
-    return { props: { citySlug, cityName: '', cityState: '', sales: [], totalCount: 0, allCategories: [], activeByType: {}, stats: computeSaleStats([]) } };
+    return { props: { citySlug, cityName: '', cityState: '', sales: [], totalCount: 0, allCategories: [], activeByType: {}, stats: computeSaleStats([]), tips: [], nearbyCities: [] } };
   }
 
   const data = await apiRes.json();
@@ -445,7 +468,7 @@ export const getServerSideProps: GetServerSideProps<CityPageProps> = async ({ pa
     console.error(`[internal-ssr/city/[slug]] geocoderStatus=error for ${citySlug}`);
     res.statusCode = 503;
     res.setHeader('Cache-Control', 'no-store');
-    return { props: { citySlug, cityName: '', cityState: '', sales: [], totalCount: 0, allCategories: [], activeByType: {}, stats: computeSaleStats([]) } };
+    return { props: { citySlug, cityName: '', cityState: '', sales: [], totalCount: 0, allCategories: [], activeByType: {}, stats: computeSaleStats([]), tips: [], nearbyCities: [] } };
   }
 
   sales = data.sales ?? [];
@@ -471,6 +494,13 @@ export const getServerSideProps: GetServerSideProps<CityPageProps> = async ({ pa
 
   const stats = computeSaleStats(sales);
 
+  // ADR-074 cluster, static lookups only (no extra backend fetch per request). Tips and nearby
+  // links come only from hand-curated city rows; generated fallback copy is never shown.
+  const tips = getCuratedCityTips(citySlug);
+  const nearbyCities: CityNearbyLink[] = hasCuratedCityMeta(citySlug)
+    ? getNearbyLinks(getCityMeta(citySlug))
+    : [];
+
   return {
     props: {
       citySlug,
@@ -481,6 +511,8 @@ export const getServerSideProps: GetServerSideProps<CityPageProps> = async ({ pa
       allCategories,
       activeByType,
       stats,
+      tips,
+      nearbyCities,
     },
   };
 };

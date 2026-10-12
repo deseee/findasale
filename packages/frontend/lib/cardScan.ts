@@ -1089,7 +1089,7 @@ export async function fetchAllEntries(
     const res = await client.getSession(sessionId, { afterSeq, limit: PAGE_LIMIT_MAX }, opts.signal);
     if (!res.ok) return res;
     const data = res.data;
-    const entries = merged ? merged.entries.concat(data.entries) : data.entries;
+    const entries: ScanQueueState['entries'] = merged ? merged.entries.concat(data.entries) : data.entries;
     merged = { session: data.session, entries, counts: data.counts, catalogReady: data.catalogReady, delver: data.delver };
     if (data.entries.length < PAGE_LIMIT_MAX) break;
     const last = data.entries[data.entries.length - 1];
