@@ -452,7 +452,7 @@ export default function SubscriptionPage() {
                       <p className="text-sm text-teal-700 dark:text-teal-300">Run as many sales as you need simultaneously.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">Up to 12 team members</p>
+                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">Up to 5 team members</p>
                       <p className="text-sm text-teal-700 dark:text-teal-300">Add members, set custom roles & permissions. Add more at $20/mo each.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
