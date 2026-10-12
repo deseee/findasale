@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate, getInclusivePlatformFeeRate, squareAppFeeNetOfProcessingCents, SubscriptionTier } from '../utils/feeCalculator';
+import { getPlatformFeeRate, getInclusivePlatformFeeRate, squareAppFeeNetOfProcessingCents, MAX_APP_FEE_SHARE_OF_CARD_LEG, cardLegFeeFits, SubscriptionTier } from '../utils/feeCalculator';
+// MAX_APP_FEE_SHARE_OF_CARD_LEG and cardLegFeeFits are defined in feeCalculator (pure; the bulk lot pack gate shares them) and re-exported here so existing importers are unchanged.
+export { MAX_APP_FEE_SHARE_OF_CARD_LEG, cardLegFeeFits };
 
 /**
  * ── CASH / OFF-PLATFORM COMMISSION ACCRUAL ───────────────────────────────────────────────
@@ -354,22 +356,11 @@ export const MAX_POS_AMOUNT_CENTS = 10_000_000;
 export const MIN_SPLIT_CARD_LEG_CENTS = 50;
 
 /**
- * Square refuses a payment whose application fee is more than this share of the payment amount.
- * VERIFIED by Square's live production error on 2026-10-11 (a $1.00 hand-keyed card sale carrying
- * the $0.75 minimum fee): `INVALID_FEES -- app_fee_money must be less than or equal to 60% of the
- * payment amount.` FindA.Sale's per-transaction minimum fee ($0.75,
- * feeCalculator.MINIMUM_TRANSACTION_FEE_CENTS) therefore needs a card charge of at least $1.25
- * (see minCardCentsForAppFee) BEFORE the 2026-10-11 net-of-Square-cost adjustment; now only the adjusted fee must fit
- * (cardLegFeeFits). The earlier 0.9 guess was wrong and let doomed charges through.
- * packages/frontend/components/PosManualCard.tsx mirrors this value; keep the two in sync.
+ * Square's 60% app-fee ceiling (MAX_APP_FEE_SHARE_OF_CARD_LEG) and cardLegFeeFits now live in utils/feeCalculator.ts (re-exported above).
+ * VERIFIED by Square's live production error on 2026-10-11: `INVALID_FEES -- app_fee_money must be less than or equal to 60% of the
+ * payment amount.` Only the fee SENT to Square (net of Square's processing cost) must fit under it, so the $0.75 minimum fee needs a
+ * card charge of at least $0.72 (see minCardCentsForAppFee), not the old $1.25.
  */
-export const MAX_APP_FEE_SHARE_OF_CARD_LEG = 0.6;
-
-/** True when a card charge of `cardCents` can carry a platform fee of `inclusiveFeeCents` under the Square ceiling above.
- *  The fee SENT to Square is net of Square's processing cost (2026-10-11 decision, squareAppFeeNetOfProcessingCents),
- *  so e.g. the 75c minimum fee on a $1.25 sale is sent as 41c (not 75c) and only that must fit under 60% of the sale. */
-export const cardLegFeeFits = (cardCents: number, inclusiveFeeCents: number): boolean =>
-  squareAppFeeNetOfProcessingCents(inclusiveFeeCents, cardCents) <= Math.floor(cardCents * MAX_APP_FEE_SHARE_OF_CARD_LEG);
 
 /** Smallest card charge (cents) that can carry the inclusive `appFeeCents` once the Square-net adjustment is applied
  *  (never below MIN_SPLIT_CARD_LEG_CENTS). For the 75c minimum fee this is 72c (the sent fee is 43c, under 60% of 72c). */

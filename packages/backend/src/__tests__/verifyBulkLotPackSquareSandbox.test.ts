@@ -648,10 +648,10 @@ describe('the money assumptions the scenarios rely on, read from the real servic
     expect(() => assertPackSellableOnline({ cents: EXPECTED_PACK_CENTS, platformFeeCents: fee.platformFeeCents, shippingRequested: false, couponCode: null, organizerDiscountAmount: 0 })).not.toThrow();
   });
 
-  it('refuses the 40 cent and the 75 cent packs as BULK_PACK_TOO_CHEAP', () => {
+  it('refuses the 40 cent and the 70 cent packs as BULK_PACK_TOO_CHEAP (the smallest sellable pack is 72 cents)', () => {
     for (const [price, cents] of [
       [0.4, 40],
-      [0.75, 75],
+      [0.7, 70],
     ] as Array<[number, number]>) {
       expect(planFor(price).cents).toBe(cents);
       const fee = feeFor(cents);
@@ -662,6 +662,17 @@ describe('the money assumptions the scenarios rely on, read from the real servic
         thrown = err;
       }
       expect((thrown as { code?: string } | null)?.code).toBe('BULK_PACK_TOO_CHEAP');
+    }
+  });
+
+  it('sells a 72 cent pack (the 75c floor fee is sent as 43c under 60% of 72c) and no longer refuses the old 75 cent pack', () => {
+    for (const [price, cents] of [
+      [0.72, 72],
+      [0.75, 75],
+    ] as Array<[number, number]>) {
+      expect(planFor(price).cents).toBe(cents);
+      const fee = feeFor(cents);
+      expect(() => assertPackSellableOnline({ cents, platformFeeCents: fee.platformFeeCents, shippingRequested: false, couponCode: null, organizerDiscountAmount: 0 })).not.toThrow();
     }
   });
 

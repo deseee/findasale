@@ -264,6 +264,19 @@ describe('executeVerifiedSquareRefund, non-split purchase is unchanged', () => {
     expect(db.organizer.update.mock.calls[0][0].data.cashFeeBalance).toEqual({ increment: 1.5 });
   });
 
+  it('card refund with a GROSS recorded fee (Square-net app fee was sent, 2026-10-11): no ledger fee reversal, no app_fee_money override, debt re-accrual still proportional', async () => {
+    // $100 card sale, recorded platformFeeAmount 7.50 gross + 3.00 debt padding = 10.50; Square was sent (7.50 - Square cost) + 3.00.
+    db.purchase.findUnique.mockResolvedValue(makePurchase({ cashLegAmount: null, platformFeeAmount: 10.5, cashDebtCollectedAmount: 3 }));
+    await executeVerifiedSquareRefund('pur_1', 40, 'organizer');
+    // Square returns the app fee proportionally on its own: the request must not carry an app fee, and our ledger must not
+    // subtract a proportional share of the GROSS fee from anything (only cash purchases reverse a recorded fee).
+    expect(JSON.stringify(mockRefundPayment.mock.calls[0][0], (_k, v) => (typeof v === 'bigint' ? v.toString() : v))).not.toMatch(/appFee|app_fee/i);
+    expect(db.organizer.updateMany).not.toHaveBeenCalled();
+    expect(db.organizer.update).toHaveBeenCalledTimes(1);
+    // the padding share only: 3.00 * 40/100, independent of the recorded gross fee
+    expect(db.organizer.update.mock.calls[0][0].data.cashFeeBalance).toEqual({ increment: 1.2 });
+  });
+
   it('still rejects a refund above the purchase amount before touching Square', async () => {
     await expect(executeVerifiedSquareRefund('pur_1', 100.01, 'organizer')).rejects.toThrow(/cannot exceed/);
     expect(mockRefundPayment).not.toHaveBeenCalled();

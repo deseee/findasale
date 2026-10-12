@@ -114,8 +114,9 @@
  *   P3 lost race          a lot with exactly one pack left, two different buyers pay concurrently: exactly one Purchase, one pack taken,
  *                         the loser's payment fully refunded, the loser's answer is the lost-race refusal (SOLD_OUT_AFTER_PAYMENT, which the
  *                         controller maps to HTTP 409 code BULK_SOLD_OUT_AFTER_PAYMENT, bulkLotPackPaymentController.ts:297-309).
- *   P4 too cheap          BULK_PACK_TOO_CHEAP is refused BEFORE any Square call, for a 40 cent pack and for a 75 cent pack (the fee floor is
- *                         75 cents, feeCalculator.ts:406, and the rule is fee >= price): zero charge calls, and Square's own payment list
+ *   P4 too cheap          BULK_PACK_TOO_CHEAP is refused BEFORE any Square call, for a 40 cent pack and for a 70 cent pack (the fee floor is
+ *                         75 cents and the fee sent to Square, net of Square's processing cost, must fit under 60% of the pack: the
+ *                         smallest sellable pack is 72 cents): zero charge calls, and Square's own payment list
  *                         (read before and after) shows no payment created for it. The list must see the run's earlier payments, or the
  *                         "none" would mean nothing.
  *   P5 refund the winner  a fresh real pack purchase, then executeVerifiedSquareRefund for half the cards (a partial refund) and for the
@@ -145,7 +146,7 @@
  *   https://developer.squareup.com/docs/devtools/sandbox/payments          sandbox nonces: cnon:card-nonce-ok succeeds; declined and CVV nonces fail
  *   https://developer.squareup.com/docs/devtools/sandbox/overview          test accounts, OAuth tokens for extra seller accounts, sandbox limits
  *   https://developer.squareup.com/docs/oauth-api/walkthrough              sandbox OAuth: connect.squareupsandbox.com, sandbox tokens behave like production tokens
- *   https://developer.squareup.com/docs/payments-api/take-payments-and-collect-fees   app fee: OAuth seller token, fee cap 90 percent (60 percent below 5.00 USD)
+ *   https://developer.squareup.com/docs/payments-api/take-payments-and-collect-fees   app fee: OAuth seller token, fee cap 60 percent of the payment (verified live 2026-10-11)
  *   https://developer.squareup.com/reference/square/payments-api/create-payment        app_fee_money, idempotency_key (max 45 characters), reference_id (max 40)
  *   https://developer.squareup.com/docs/payments-api/refund-payments       refund statuses PENDING, COMPLETED, FAILED, REJECTED; GetPaymentRefund; partial refunds
  */
@@ -500,7 +501,7 @@ export function buildNotProven(feeMode: FeeMode): string[] {
     'The OAuth token lifecycle: onboarding, the refresh branch of resolveOrganizerSquareAccessToken and the scopes of the token Square gave the production app. The fixture stores the supplied token encrypted with no expiry, so the refresh branch is never reached.',
     'Square webhooks, payment and refund reconciliation sweeps, disputes and chargebacks.',
     'Load: two simultaneous payments are the most this run makes. Database concurrency is covered by verifyBulkLotConcurrency.ts. Square sandbox payments are not deleted (fake money); they remain in the sandbox account with a reference id that starts with the run prefix.',
-    'Square fee cap on small packs: Square caps an application fee at 90 percent of the payment, and at 60 percent for payments under 5.00 USD (https://developer.squareup.com/docs/payments-api/take-payments-and-collect-fees). The platform fee has a 75 cent floor, so a pack priced between 76 and 124 cents passes assertPackSellableOnline (it only refuses when the fee is at least the price) but asks Square for more than 60 percent. Every amount in this run is 2.00 USD (a 37.5 percent fee), so this is not exercised.',
+    'Square fee cap on small packs: Square caps an application fee at 60 percent of the payment (verified live 2026-10-11; the older 90 percent from 5.00 USD reading is not used). The fee sent is the 75 cent floor minus Square\'s estimated processing cost (assertPackSellableOnline uses cardLegFeeFits), so the smallest sellable pack is 72 cents. P4 refuses a 70 cent pack; no run here charges a pack near the limit, and every charged amount is 2.00 USD (a 37.5 percent inclusive fee, lower after Square\'s cost), so the cap itself is not exercised.',
   ];
   if (feeMode === 'NO_APP_FEE') {
     out.unshift(
@@ -1131,11 +1132,11 @@ async function scenarioTooCheap(ctx: Ctx): Promise<ScenarioResult> {
     ctx,
     'P4 too cheap: BULK_PACK_TOO_CHEAP is refused before any Square call',
     [
-      'services/bulkLot/bulkLotPackCheckout.ts:80 assertPackSellableOnline (cents under 50, or platform fee at least the price) via the controller-order steps of runPackPurchase',
+      'services/bulkLot/bulkLotPackCheckout.ts:80 assertPackSellableOnline (cents under 50, or the Square-net platform fee above 60% of the pack, cardLegFeeFits) via the controller-order steps of runPackPurchase',
       'client.payments.list (Square) before and after, matched on the reference id (the lot item id)',
     ],
     [
-      'Two lots: a 40 cent pack (under the 50 cent Square minimum) and a 75 cent pack (the platform fee floor is 75 cents, and the rule is fee at least the price). Both must be refused by the code, and Square must show no payment for either.',
+      'Two lots: a 40 cent pack (under the 50 cent Square minimum) and a 70 cent pack (the platform fee floor is 75 cents; the fee sent to Square, net of its processing cost, is 43 cents, over 60% of 70 cents, so the smallest sellable pack is 72 cents). Both must be refused by the code, and Square must show no payment for either.',
       'A "no payment" answer from a list only means something if the list can see this run\'s other payments, so the before list must contain a payment made earlier in this run (polled until it does).',
     ],
     async (c) => {
@@ -1146,8 +1147,8 @@ async function scenarioTooCheap(ctx: Ctx): Promise<ScenarioResult> {
       const before = await pollUntil(() => listPayments(c, beginIso), (l) => !anchorId || l.some((p) => p.id === anchorId));
       const anchorSeen = !!anchorId && before.some((p) => p.id === anchorId);
       const cheapA = await createLot(c, 'p4a', { stockTotal: 3 * PACK_SIZE_CARDS, price: 0.4 });
-      const cheapB = await createLot(c, 'p4b', { stockTotal: 3 * PACK_SIZE_CARDS, price: 0.75 });
-      const plans = [cheapA, cheapB].map((id) => ({ id, plan: planPackLine({ price: id === cheapA ? 0.4 : 0.75, status: 'AVAILABLE', stockTotal: 3 * PACK_SIZE_CARDS, stockSold: 0 }, PACK_SIZE_CARDS, 1, null) }));
+      const cheapB = await createLot(c, 'p4b', { stockTotal: 3 * PACK_SIZE_CARDS, price: 0.7 });
+      const plans = [cheapA, cheapB].map((id) => ({ id, plan: planPackLine({ price: id === cheapA ? 0.4 : 0.7, status: 'AVAILABLE', stockTotal: 3 * PACK_SIZE_CARDS, stockSold: 0 }, PACK_SIZE_CARDS, 1, null) }));
       const fees = plans.map((p) => computePackFees({ cents: p.plan.cents, feePercent: getInclusivePlatformFeeRate('SIMPLE' as any, 'ONLINE') }));
       const run = await fireAll(
         c,
@@ -1163,15 +1164,15 @@ async function scenarioTooCheap(ctx: Ctx): Promise<ScenarioResult> {
       const lots = [await readLot(c, cheapA), await readLot(c, cheapB)];
       const checks: InvariantCheck[] = [
         checkEquals('40 cent pack: pack price in cents', 40, plans[0].plan.cents),
-        checkEquals('75 cent pack: pack price in cents', 75, plans[1].plan.cents),
-        checkEquals('75 cent pack: platform fee in cents (the floor)', MINIMUM_TRANSACTION_FEE_CENTS, fees[1].platformFeeCents),
+        checkEquals('70 cent pack: pack price in cents', 70, plans[1].plan.cents),
+        checkEquals('70 cent pack: platform fee in cents (the floor)', MINIMUM_TRANSACTION_FEE_CENTS, fees[1].platformFeeCents),
         checkEquals('checkouts refused with BULK_PACK_TOO_CHEAP', 2, run.tally.refusalCodes.BULK_PACK_TOO_CHEAP ?? 0),
         checkEquals('checkouts that went through', 0, run.tally.succeeded),
         checkEquals('Square charge calls made', 0, track.chargeCalls),
         checkEquals('cash fee debt claimed (it is claimed only just before a charge)', 0, track.claimedCents),
         checkEquals('Purchase rows for the two lots', 0, dbPurchases),
         checkEquals('cards taken from the 40 cent lot', 0, lots[0].stockSold),
-        checkEquals('cards taken from the 75 cent lot', 0, lots[1].stockSold),
+        checkEquals('cards taken from the 70 cent lot', 0, lots[1].stockSold),
         checkEquals('control: Square listing sees a payment made earlier in this run (so "none" below means something)', true, anchorSeen),
         checkEquals('payments Square lists for the two lots (reference id check)', 0, listedForP4),
         checkEquals('new payments with this run prefix for the two lots between the before and after listing', 0, diff.newOwn.length),

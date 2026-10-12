@@ -442,6 +442,23 @@ export const estimateSquareProcessingCents = (amountCents: number): number =>
 export const squareAppFeeNetOfProcessingCents = (inclusiveFeeCents: number, amountCents: number): number =>
   inclusiveFeeCents > 0 ? Math.max(0, Math.round(inclusiveFeeCents) - estimateSquareProcessingCents(amountCents)) : 0;
 
+/**
+ * Square refuses a payment whose application fee is more than this share of the payment amount.
+ * VERIFIED by Square's live production error on 2026-10-11 (a $1.00 hand-keyed card sale carrying
+ * the $0.75 minimum fee): `INVALID_FEES -- app_fee_money must be less than or equal to 60% of the
+ * payment amount.` The ceiling applies to the fee SENT to Square, which is net of Square's processing cost
+ * (squareAppFeeNetOfProcessingCents, 2026-10-11 decision). Lives here (pure, no Prisma) so cashFeeService
+ * (re-exports it) and the bulk lot pack gate share ONE definition.
+ * packages/frontend/components/PosManualCard.tsx mirrors this value; keep the two in sync.
+ */
+export const MAX_APP_FEE_SHARE_OF_CARD_LEG = 0.6;
+
+/** True when a card charge of `cardCents` can carry a platform fee of `inclusiveFeeCents` under the Square ceiling above.
+ *  The fee SENT to Square is net of Square's processing cost (2026-10-11 decision, squareAppFeeNetOfProcessingCents),
+ *  so e.g. the 75c minimum fee on a $1.25 sale is sent as 41c (not 75c) and only that must fit under 60% of the sale. */
+export const cardLegFeeFits = (cardCents: number, inclusiveFeeCents: number): boolean =>
+  squareAppFeeNetOfProcessingCents(inclusiveFeeCents, cardCents) <= Math.floor(cardCents * MAX_APP_FEE_SHARE_OF_CARD_LEG);
+
 const normalizeInclusiveTier = (tier: SubscriptionTier): 'SIMPLE' | 'PRO' | 'TEAMS' =>
   !tier || tier === 'SIMPLE' ? 'SIMPLE' : tier === 'TEAMS' ? 'TEAMS' : 'PRO';
 

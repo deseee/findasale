@@ -50,6 +50,7 @@ import {
 } from '../utils/feeCalculator';
 import { cardLegFeeFits, computeCashDebtRoomCents, minCardCentsForAppFee } from '../services/cashFeeService';
 import { createSquareCheckoutLink } from '../services/squareCheckoutLinkService';
+import { assertPackSellableOnline } from '../services/bulkLot/bulkLotPackCheckout';
 import { authorizeSquareBoothCartLeg } from '../services/squareVendorBoothCartService';
 
 beforeEach(() => {
@@ -114,6 +115,28 @@ describe('minimum card sale from the adjusted fee', () => {
     for (const cents of [72, 125, 500, 1000, 6246]) {
       const sent = squareAppFeeNetOfProcessingCents(75, cents);
       expect(sent).toBeLessThanOrEqual(Math.floor(cents * 0.6));
+    }
+  });
+});
+
+describe('bulk lot pack gate uses the same minimum as the POS', () => {
+  const packOk = (cents: number, platformFeeCents: number) => {
+    try {
+      assertPackSellableOnline({ cents, platformFeeCents, shippingRequested: false, couponCode: null, organizerDiscountAmount: 0 });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  it('the smallest sellable pack for the 75c fee is minCardCentsForAppFee(75) = 72c, not $1.25', () => {
+    expect(minCardCentsForAppFee(75)).toBe(72);
+    expect(packOk(71, 75)).toBe(false);
+    expect(packOk(72, 75)).toBe(true);
+    expect(packOk(124, 75)).toBe(true);
+  });
+  it('agrees with cardLegFeeFits for every pack size from the $0.50 floor to $10.00', () => {
+    for (const fee of [75, 120, 468]) {
+      for (let cents = 50; cents <= 1000; cents += 1) expect(packOk(cents, fee)).toBe(cardLegFeeFits(cents, fee));
     }
   });
 });
