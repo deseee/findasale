@@ -393,6 +393,79 @@ function skipOutcome(status: EbayPushStatus, fields: string[], errorCode: string
   return { status, fieldsAttempted: fields, fieldsPushed: [], errorCode, errorMessage };
 }
 
+/**
+ * What the shipping policy resync reported (resyncItemShippingPolicy returns a short reason, or a routing error code), turned
+ * into a push result. Before this, EVERY reason (no package weight, rate limited, no token, a blocked routing) was recorded as
+ * "shipping pushed", so a soft-blocked item showed "eBay updated: shipping" although nothing was sent to eBay.
+ *   pushed -> eBay was changed
+ *   noop   -> nothing needed sending (already current, or a local-pickup listing that has no shipping policy to resync)
+ *   fail   -> nothing was sent and the organizer must act or retry: the code and the plain message are stored on the push row
+ */
+export type ShippingResyncResult = { kind: 'pushed' } | { kind: 'noop' } | { kind: 'fail'; code: string; message: string };
+
+export const SHIPPING_BLOCK_MESSAGES: Readonly<Record<string, string>> = {
+  NEEDS_PACKAGE_DETAILS:
+    'Shipping was not updated on eBay because this item has no package weight. Add the package weight and box size, or mark the item Local pickup only, then update eBay again.',
+  SHIPPING_POLICY_UNAVAILABLE:
+    'Shipping was not updated on eBay because we could not work out a shipping policy for this item. Check your shipping fallback in eBay Settings and make sure your return and payment policies are set, then try again.',
+  POLICIES_NOT_CONFIGURED: 'Your eBay return and payment policies are not set up yet. Finish eBay setup in Settings, then update eBay again.',
+  NO_FULFILLMENT_POLICY_MATCH:
+    'No shipping policy matched this item. Add a package weight or set a default shipping policy in eBay Settings, then update eBay again.',
+  SHIPPING_RATE_LIMITED: 'eBay is limiting requests right now. Wait a minute, then update eBay again.',
+  NO_TOKEN: 'Could not reach your eBay account. Reconnect eBay and try again.',
+  SHIPPING_RESYNC_FAILED: 'The shipping update could not be sent to eBay. Try again in a minute.',
+};
+
+export function classifyShippingResync(resync: { changed?: boolean; reason?: string } | null | undefined): ShippingResyncResult {
+  if (!resync) return { kind: 'fail', code: 'SHIPPING_RESYNC_FAILED', message: SHIPPING_BLOCK_MESSAGES.SHIPPING_RESYNC_FAILED };
+  if (resync.changed) return { kind: 'pushed' };
+  const reason = String(resync.reason ?? '');
+  switch (reason) {
+    case 'repinned':
+      return { kind: 'pushed' };
+    case 'already-current':
+    case 'local-pickup': // a pickup-only listing has no shipping policy to resync
+    case 'not-live':
+      return { kind: 'noop' };
+    case 'no-weight':
+    case 'NEEDS_PACKAGE_DETAILS':
+      return { kind: 'fail', code: 'NEEDS_PACKAGE_DETAILS', message: SHIPPING_BLOCK_MESSAGES.NEEDS_PACKAGE_DETAILS };
+    case 'rate-limited':
+      return { kind: 'fail', code: 'SHIPPING_RATE_LIMITED', message: SHIPPING_BLOCK_MESSAGES.SHIPPING_RATE_LIMITED };
+    case 'no-token':
+      return { kind: 'fail', code: 'NO_TOKEN', message: SHIPPING_BLOCK_MESSAGES.NO_TOKEN };
+    case 'SHIPPING_POLICY_UNAVAILABLE':
+    case 'POLICIES_NOT_CONFIGURED':
+    case 'NO_FULFILLMENT_POLICY_MATCH':
+      return { kind: 'fail', code: reason, message: SHIPPING_BLOCK_MESSAGES[reason] };
+    default:
+      return { kind: 'fail', code: 'SHIPPING_RESYNC_FAILED', message: SHIPPING_BLOCK_MESSAGES.SHIPPING_RESYNC_FAILED };
+  }
+}
+
+/**
+ * Records an attempt that was stopped BEFORE anything reached eBay (the Re-push to eBay button's shipping soft-block,
+ * a guard that refuses the item) as a FAILED ItemMarketplacePush row, so the item form and the Add Items list show the
+ * same plain, actionable reason instead of a toast that disappears. Only for an item already on eBay. Never throws.
+ */
+export async function recordBlockedEbayPush(input: {
+  itemId: string;
+  organizerId: string;
+  code: string | null | undefined;
+  message: string | null | undefined;
+  startedAt?: Date;
+}): Promise<void> {
+  const code = input.code && /^[A-Z0-9_]{1,40}$/.test(input.code) ? input.code : 'PUSH_BLOCKED';
+  const message = sanitizePushErrorMessage(SHIPPING_BLOCK_MESSAGES[code] ?? input.message) ?? 'eBay could not be updated.';
+  await recordPushRow({
+    itemId: input.itemId,
+    organizerId: input.organizerId,
+    trigger: 'REPUSH',
+    startedAt: input.startedAt ?? new Date(),
+    outcome: { status: 'FAILED', fieldsAttempted: [], fieldsPushed: [], errorCode: code, errorMessage: message },
+  });
+}
+
 /** Item.status values whose eBay offer is already withdrawn or ended: never pushed or republished. */
 const NOT_PUSHABLE_STATUSES: ReadonlySet<string> = new Set(['SOLD', 'DONATED', 'AUCTION_ENDED']);
 
@@ -543,6 +616,9 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
     }
 
     const pushed = new Set<string>();
+    // Fields that needed no eBay change (already identical on eBay, or the category has no such specific). They count as
+    // done for the status but are NOT reported as pushed, so the organizer is never told eBay was updated when nothing was sent.
+    const noop = new Set<string>();
     // The first failure wins: it is the root cause the organizer should see.
     const failure: { code: string | null; message: string | null } = { code: null, message: null };
     const fail = (code: string, message: string | null) => {
@@ -702,7 +778,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
               if (!merged.changed) {
                 // Already identical on eBay: nothing to send for these fields.
                 for (const f of merged.done) {
-                  pushed.add(f);
+                  noop.add(f);
                   idSkipPut.add(f);
                 }
               }
@@ -743,8 +819,9 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
                   console.warn(`[eBay PushSync] Item ${item.id}: FCC ID aspect lookup failed (non-fatal): ${fccResult.error}`);
                   fail('FCC_ASPECT_LOOKUP_FAILED', 'Could not check whether this eBay category takes an FCC ID, so it was not sent.');
                 } else {
-                  // unchanged, unsupported, empty: nothing to send, so there is nothing left to push for this field.
-                  pushed.add('fccId');
+                  // unchanged, unsupported, empty: nothing was sent to eBay, so the field is done but NOT reported as pushed
+                  // (an "unsupported" category used to record SUCCESS fieldsPushed [fccId] and show "eBay updated: FCC ID").
+                  noop.add('fccId');
                 }
               }
             }
@@ -822,16 +899,20 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
       try {
         const { resyncItemShippingPolicy } = await import('../controllers/ebayController');
         const resync = await resyncItemShippingPolicy(item.id);
-        console.log(`[eBay PushSync] Item ${item.id}: shipping resync changed=${resync.changed} reason=${resync.reason}`);
-        pushed.add('shipping');
+        console.log(`[eBay PushSync] Item ${item.id}: shipping resync changed=${resync?.changed} reason=${resync?.reason}`);
+        const verdict = classifyShippingResync(resync);
+        if (verdict.kind === 'pushed') pushed.add('shipping');
+        else if (verdict.kind === 'noop') noop.add('shipping');
+        else fail(verdict.code, verdict.message);
       } catch (resyncErr) {
         fail('SHIPPING_RESYNC_FAILED', `The shipping update could not be sent to eBay: ${(resyncErr as Error).message}`);
       }
     }
 
     const fieldsPushed = attempted.filter((f) => pushed.has(f));
+    const fieldsDone = attempted.filter((f) => pushed.has(f) || noop.has(f));
     const status: EbayPushStatus =
-      fieldsPushed.length === attempted.length ? 'SUCCESS' : fieldsPushed.length === 0 ? 'FAILED' : 'PARTIAL';
+      fieldsDone.length === attempted.length ? 'SUCCESS' : fieldsDone.length === 0 ? 'FAILED' : 'PARTIAL';
     const outcome: EbayPushOutcome = {
       status,
       fieldsAttempted: attempted,
@@ -858,7 +939,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
       } else if (clearDirty) {
         await clearDirtyUnlessSetSince(item.id, startedAt);
       }
-      if (fieldsPushed.length > 0) await ackCoveredFailures(item.id, organizerId, fieldsPushed);
+      if (fieldsDone.length > 0) await ackCoveredFailures(item.id, organizerId, fieldsDone);
     } catch (bookkeepErr) {
       console.warn(`[eBay PushSync] Item ${item.id}: bookkeeping after push failed (non-fatal):`, (bookkeepErr as Error).message);
     }

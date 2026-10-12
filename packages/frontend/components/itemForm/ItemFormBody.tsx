@@ -545,12 +545,16 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
       } else {
         const errorMsg = result?.code?.includes('NOT_CONNECTED')
           ? 'eBay not connected'
+          : result?.code === 'NEEDS_PACKAGE_DETAILS'
+          ? 'This item has no package weight, so eBay could not work out shipping. Add the package weight and box size in the shipping section, or check Local pickup only, then push again.'
           : result?.code === 'NO_FULFILLMENT_POLICY_MATCH'
           ? 'No shipping policy matched. Add package weight or set a default fulfillment policy in eBay Settings'
           : result?.code === 'POLICIES_NOT_CONFIGURED'
           ? 'eBay policies not configured. Complete eBay setup in Settings'
           : result?.message || 'Failed to push item';
         showToast(errorMsg, 'error');
+        // Keep the reason on screen too (the server also recorded the blocked attempt for a listing already on eBay).
+        mp.showPushResult({ tone: 'error', text: `eBay was not updated: ${errorMsg}`, canRetry: false });
       }
       setEbayPushPending(false);
     },
@@ -3125,7 +3129,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                           <div>eBay requires a minimum listing price of $0.99. Raise this item&apos;s price to list it on eBay.</div>
                         )}
                         {missingWeight && (
-                          <div>No weight set. We&apos;ll auto-estimate shipping for you when you publish. To use your own weight instead, add one above or check &quot;Local pickup only&quot;.</div>
+                          <div>No package weight set. eBay needs a weight to work out shipping, so add one above or check &quot;Local pickup only&quot; before you push.</div>
                         )}
                       </div>
                     );

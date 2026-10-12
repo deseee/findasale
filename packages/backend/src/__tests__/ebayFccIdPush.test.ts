@@ -143,6 +143,9 @@ describe('pushItemToEbay: fccId', () => {
     mockAspects.mockResolvedValue(NO_FCC_SPEC);
     const out = await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['fccId'] });
     expect(out.status).toBe('SUCCESS');
+    // Nothing was sent to eBay, so the field is done but must NOT be recorded as pushed (the UI would say "eBay updated: FCC ID").
+    expect(out.fieldsAttempted).toEqual(['fccId']);
+    expect(out.fieldsPushed).toEqual([]);
     expect(invPut()).toBeUndefined();
     expect(mockHeal).not.toHaveBeenCalled();
   });
@@ -166,6 +169,7 @@ describe('pushItemToEbay: fccId', () => {
     });
     const out = await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['fccId'] });
     expect(out.status).toBe('SUCCESS');
+    expect(out.fieldsPushed).toEqual([]);
     expect(invPut()).toBeUndefined();
     expect(mockHeal).not.toHaveBeenCalled();
   });
@@ -206,7 +210,8 @@ describe('pushItemToEbay: fccId inside a full "Update eBay now" field list', () 
     liveInventory({ Brand: ['Acme'], 'FCC ID': ['ABC123XYZ'] });
     const out = await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'REPUSH', fields: [...FULL] });
     expect(out.status).toBe('SUCCESS');
-    expect(out.fieldsPushed).toEqual([...FULL]);
+    // fccId already carries the same value on eBay: nothing was sent for it, so it is done but not reported as pushed.
+    expect(out.fieldsPushed).toEqual(['title', 'description', 'condition', 'price']);
     expect(fetchCalls.filter((c) => c.method === 'PUT' && decodeURIComponent(c.url).includes('/inventory_item/'))).toHaveLength(1);
     expect(invPut()?.body.product.aspects).toEqual({ Brand: ['Acme'], 'FCC ID': ['ABC123XYZ'] });
     expect(mockHeal).toHaveBeenCalledTimes(1);

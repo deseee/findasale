@@ -232,7 +232,8 @@ describe('pushItemToEbay: identifiers', () => {
     mockPrisma.item.findUnique.mockResolvedValue(ITEM_ROW({ brand: 'Acme', mpn: 'X1' }));
     const out = await push(['brand', 'mpn']);
     expect(out.status).toBe('SUCCESS');
-    expect(out.fieldsPushed).toEqual(['brand', 'mpn']);
+    expect(out.fieldsAttempted).toEqual(['brand', 'mpn']);
+    expect(out.fieldsPushed).toEqual([]); // nothing was sent, so nothing is reported as pushed
     expect(fetchCalls.filter((c) => c.method !== 'GET')).toHaveLength(0);
     expect(mockHeal).not.toHaveBeenCalled();
   });

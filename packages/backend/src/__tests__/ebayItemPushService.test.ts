@@ -31,6 +31,9 @@ import {
   buildExtensionPlan,
   sanitizePushErrorMessage,
   pushItemToEbay,
+  classifyShippingResync,
+  recordBlockedEbayPush,
+  SHIPPING_BLOCK_MESSAGES,
   PUSH_HISTORY_LIMIT,
   INTERNAL_ERROR_TEXT,
 } from '../services/ebayItemPushService';
@@ -426,6 +429,77 @@ describe('pushItemToEbay', () => {
     mockResync.mockRejectedValue(new Error('boom'));
     const bad = await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['shipping'] });
     expect(bad).toMatchObject({ status: 'FAILED', errorCode: 'SHIPPING_RESYNC_FAILED' });
+  });
+
+  it('shipping soft-block (no package weight): FAILED with a plain, actionable message, never "shipping pushed"', async () => {
+    mockResync.mockResolvedValue({ changed: false, reason: 'no-weight' });
+    const out = await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'REPUSH', fields: ['shipping'] });
+    expect(out).toMatchObject({ status: 'FAILED', fieldsPushed: [], errorCode: 'NEEDS_PACKAGE_DETAILS' });
+    expect(out.errorMessage).toContain('package weight');
+    expect(mockPrisma.itemMarketplacePush.create).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.itemMarketplacePush.create.mock.calls[0][0].data).toMatchObject({ status: 'FAILED', errorCode: 'NEEDS_PACKAGE_DETAILS' });
+  });
+
+  it('shipping already current or a local-pickup listing: SUCCESS but nothing reported as pushed', async () => {
+    mockResync.mockResolvedValue({ changed: false, reason: 'already-current' });
+    const cur = await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['shipping'] });
+    expect(cur).toMatchObject({ status: 'SUCCESS', fieldsPushed: [] });
+    mockResync.mockResolvedValue({ changed: false, reason: 'local-pickup' });
+    const pickup = await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['shipping'] });
+    expect(pickup).toMatchObject({ status: 'SUCCESS', fieldsPushed: [] });
+  });
+});
+
+describe('classifyShippingResync', () => {
+  it('maps every resync reason to pushed, noop or an actionable failure', () => {
+    expect(classifyShippingResync({ changed: true, reason: 'repinned' })).toEqual({ kind: 'pushed' });
+    expect(classifyShippingResync({ changed: false, reason: 'already-current' })).toEqual({ kind: 'noop' });
+    expect(classifyShippingResync({ changed: false, reason: 'local-pickup' })).toEqual({ kind: 'noop' });
+    expect(classifyShippingResync({ changed: false, reason: 'no-weight' })).toMatchObject({ kind: 'fail', code: 'NEEDS_PACKAGE_DETAILS' });
+    expect(classifyShippingResync({ changed: false, reason: 'NEEDS_PACKAGE_DETAILS' })).toMatchObject({ kind: 'fail', code: 'NEEDS_PACKAGE_DETAILS' });
+    expect(classifyShippingResync({ changed: false, reason: 'rate-limited' })).toMatchObject({ kind: 'fail', code: 'SHIPPING_RATE_LIMITED' });
+    expect(classifyShippingResync({ changed: false, reason: 'no-token' })).toMatchObject({ kind: 'fail', code: 'NO_TOKEN' });
+    expect(classifyShippingResync({ changed: false, reason: 'POLICIES_NOT_CONFIGURED' })).toMatchObject({ kind: 'fail', code: 'POLICIES_NOT_CONFIGURED' });
+    expect(classifyShippingResync({ changed: false, reason: 'exception' })).toMatchObject({ kind: 'fail', code: 'SHIPPING_RESYNC_FAILED' });
+    expect(classifyShippingResync(undefined)).toMatchObject({ kind: 'fail', code: 'SHIPPING_RESYNC_FAILED' });
+  });
+
+  it('block messages follow the brand rules (no em dash, no "AI", no estate sale wording)', () => {
+    for (const m of Object.values(SHIPPING_BLOCK_MESSAGES)) {
+      expect(m).not.toMatch(/\u2014|\u2013/);
+      expect(m).not.toMatch(/\bAI\b/);
+      expect(m.toLowerCase()).not.toContain('estate sale');
+    }
+  });
+});
+
+describe('recordBlockedEbayPush', () => {
+  it('writes one FAILED REPUSH row with the plain message for a known code', async () => {
+    await recordBlockedEbayPush({ itemId: 'i1', organizerId: 'org1', code: 'NEEDS_PACKAGE_DETAILS', message: 'raw text' });
+    expect(mockPrisma.itemMarketplacePush.create).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.itemMarketplacePush.create.mock.calls[0][0].data).toMatchObject({
+      itemId: 'i1',
+      organizerId: 'org1',
+      platform: 'EBAY',
+      trigger: 'REPUSH',
+      status: 'FAILED',
+      fieldsAttempted: [],
+      fieldsPushed: [],
+      errorCode: 'NEEDS_PACKAGE_DETAILS',
+      errorMessage: SHIPPING_BLOCK_MESSAGES.NEEDS_PACKAGE_DETAILS,
+    });
+  });
+
+  it('keeps the supplied message for an unknown code and falls back to PUSH_BLOCKED for a malformed one', async () => {
+    await recordBlockedEbayPush({ itemId: 'i1', organizerId: 'org1', code: 'bad code!', message: 'Add a price of at least $0.99.' });
+    const data = mockPrisma.itemMarketplacePush.create.mock.calls[0][0].data;
+    expect(data.errorCode).toBe('PUSH_BLOCKED');
+    expect(data.errorMessage).toBe('Add a price of at least $0.99.');
+  });
+
+  it('never throws when the database write fails', async () => {
+    mockPrisma.itemMarketplacePush.create.mockRejectedValue(new Error('db down'));
+    await expect(recordBlockedEbayPush({ itemId: 'i1', organizerId: 'org1', code: 'X', message: 'm' })).resolves.toBeUndefined();
   });
 });
 

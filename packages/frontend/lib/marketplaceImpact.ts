@@ -290,8 +290,25 @@ export function describePushOutcome(row: OutcomeRowLike): OutcomeView {
   const pushed = row.fieldsPushed && row.fieldsPushed.length > 0 ? row.fieldsPushed : [];
   switch (row.status) {
     case 'SUCCESS': {
-      const shown = pushed.length > 0 ? pushed : attempted;
-      return { tone: 'success', text: shown.length > 0 ? `eBay updated: ${fieldList(shown)}` : 'eBay updated', canRetry: false };
+      // fieldsPushed lists only what was actually sent to eBay. A field that needed no change (already on eBay, or the category
+      // has no such field) is in fieldsAttempted but not fieldsPushed: never say "updated" for it. A row with no fieldsPushed
+      // list at all (older data) falls back to the attempted fields, as before.
+      if (row.fieldsPushed === undefined || row.fieldsPushed === null) {
+        return { tone: 'success', text: attempted.length > 0 ? `eBay updated: ${fieldList(attempted)}` : 'eBay updated', canRetry: false };
+      }
+      if (pushed.length > 0) {
+        const unchanged = attempted.filter((f) => pushed.indexOf(f) === -1);
+        return {
+          tone: 'success',
+          text: unchanged.length > 0 ? `eBay updated: ${fieldList(pushed)}. No change needed for ${fieldList(unchanged)}.` : `eBay updated: ${fieldList(pushed)}`,
+          canRetry: false,
+        };
+      }
+      return {
+        tone: 'success',
+        text: attempted.length > 0 ? `eBay already has this (${fieldList(attempted)}). Nothing needed to be sent.` : 'eBay is already up to date. Nothing needed to be sent.',
+        canRetry: false,
+      };
     }
     case 'PARTIAL': {
       const failed = attempted.filter((f) => pushed.indexOf(f) === -1);

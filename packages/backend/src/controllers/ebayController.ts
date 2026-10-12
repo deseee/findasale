@@ -3620,6 +3620,24 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // A re-push that is stopped before anything reaches eBay (the shipping soft-block for a missing package weight, a
+    // pre-publish guard, a blocked policy) used to leave only a toast: no ItemMarketplacePush row, so the item form and the
+    // Add Items list showed nothing. For an item that is already on eBay, record the blocked attempt as a FAILED push row
+    // (same table and wording the Update eBay now path uses). Real pushes only: never for the read-only fee check or queue mode.
+    if (!feeCheckOnly && !queueOnly) {
+      try {
+        const { recordBlockedEbayPush } = await import('../services/ebayItemPushService');
+        for (const r of results) {
+          if (r?.status !== 'error') continue;
+          const row = sale.items.find((it: any) => it.id === r.itemId);
+          if (!row || (!row.ebayOfferId && !row.ebayListingId)) continue;
+          await recordBlockedEbayPush({ itemId: row.id, organizerId: organizer.id, code: r.code ?? r.error, message: r.message });
+        }
+      } catch (blockedErr) {
+        console.warn('[eBay Push] could not record blocked push attempts (non-fatal):', (blockedErr as Error).message);
+      }
+    }
+
     // Calculate summary
     const summary = {
       total: results.length,

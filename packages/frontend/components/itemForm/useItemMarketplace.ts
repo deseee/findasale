@@ -197,6 +197,20 @@ export function useItemMarketplace(itemId: string, itemHold?: { heldAt?: string 
     },
   });
 
+  /**
+   * Shows the result of an eBay push started somewhere other than Update eBay now (the Re-push to eBay button) in the same
+   * footer row, so a blocked push stays on screen with its reason instead of vanishing with a toast. It replaces any older
+   * result and stops waiting on an earlier save's push.
+   */
+  const showPushResult = useCallback(
+    (view: OutcomeView) => {
+      pollGen.current += 1;
+      setOutcome({ phase: 'settled', view, extensionLines: [] });
+      queryClient.invalidateQueries({ queryKey: statusKey });
+    },
+    [queryClient, statusKey]
+  );
+
   const releaseMutation = useMutation({
     mutationFn: () => marketplaceApi.releaseHold(itemId),
     onMutate: () => {
@@ -228,6 +242,7 @@ export function useItemMarketplace(itemId: string, itemHold?: { heldAt?: string 
     actionBusy,
     trackSave,
     clearOutcome,
+    showPushResult,
     ack: () => ackMutation.mutate(),
     ackPending: ackMutation.isPending,
     repush: (opts?: { retry?: boolean }) => repushMutation.mutate(opts || {}),

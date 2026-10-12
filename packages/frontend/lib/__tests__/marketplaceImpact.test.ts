@@ -207,6 +207,16 @@ test('describePushOutcome: SUCCESS, PARTIAL, FAILED, SKIPPED_HELD', () => {
   assert.deepEqual(describePushOutcome({ status: 'SKIPPED_HELD', fieldsAttempted: [] }), { tone: 'info', text: 'eBay not changed (sync paused)', canRetry: false });
 });
 
+test('describePushOutcome: SUCCESS where nothing was sent never says eBay was updated', () => {
+  const none = describePushOutcome({ status: 'SUCCESS', fieldsAttempted: ['fccId'], fieldsPushed: [] });
+  assert.equal(none.tone, 'success');
+  assert.ok(!/eBay updated/.test(none.text));
+  assert.match(none.text, /Nothing needed to be sent/);
+  const mixed = describePushOutcome({ status: 'SUCCESS', fieldsAttempted: ['title', 'fccId'], fieldsPushed: ['title'] });
+  assert.match(mixed.text, /^eBay updated: title\./);
+  assert.match(mixed.text, /No change needed for FCC ID/);
+});
+
 test('describePushOutcome: SUCCESS with no fieldsPushed falls back to fieldsAttempted', () => {
   assert.equal(describePushOutcome({ status: 'SUCCESS', fieldsAttempted: ['title'] }).text, 'eBay updated: title');
 });
