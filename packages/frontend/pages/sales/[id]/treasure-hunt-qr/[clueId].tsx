@@ -156,11 +156,9 @@ const CluePage = () => {
       <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="max-w-md mx-auto px-4 py-8">
           {/* Back Link */}
-          <Link href={`/sales/${id}`}>
-            <a className="inline-flex items-center text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 mb-4">
+          <Link href={`/sales/${id}`} className="inline-flex items-center text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 mb-4">
               ← Back to Sale
-            </a>
-          </Link>
+            </Link>
 
           {/* Main Card */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
@@ -268,11 +266,9 @@ const CluePage = () => {
                   <p className="text-warm-600 dark:text-gray-400">
                     Clue not found. It may have been deleted.
                   </p>
-                  <Link href={`/sales/${id}`}>
-                    <a className="inline-block mt-4 text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold">
+                  <Link href={`/sales/${id}`} className="inline-block mt-4 text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold">
                       Return to Sale
-                    </a>
-                  </Link>
+                    </Link>
                 </div>
               )}
             </div>

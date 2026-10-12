@@ -64,11 +64,9 @@ const ProgressPage = () => {
       <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="max-w-md mx-auto px-4 py-8">
           {/* Back Link */}
-          <Link href={`/sales/${id}`}>
-            <a className="inline-flex items-center text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 mb-4">
+          <Link href={`/sales/${id}`} className="inline-flex items-center text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 mb-4">
               ← Back to Sale
-            </a>
-          </Link>
+            </Link>
 
           {/* Main Card */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
@@ -126,14 +124,11 @@ const ProgressPage = () => {
                         {clues.map((clue) => {
                           const isFound = userFoundClues.has(clue.id);
                           return (
-                            <Link key={clue.id} href={`/sales/${id}/treasure-hunt-qr/${clue.id}`}>
-                              <a
-                                className={`block p-3 rounded-lg border-l-4 transition ${
+                            <Link key={clue.id} href={`/sales/${id}/treasure-hunt-qr/${clue.id}`} className={`block p-3 rounded-lg border-l-4 transition ${
                                   isFound
                                     ? 'bg-green-50 dark:bg-green-900/20 border-l-green-500 text-green-900 dark:text-green-100'
                                     : 'bg-warm-50 dark:bg-gray-700/50 border-l-amber-500 text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-600/50'
-                                }`}
-                              >
+                                }`}>
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-3">
                                     <span className="text-lg">
@@ -150,8 +145,7 @@ const ProgressPage = () => {
                                   </div>
                                   <span className="text-xl">→</span>
                                 </div>
-                              </a>
-                            </Link>
+                              </Link>
                           );
                         })}
                       </div>

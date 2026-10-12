@@ -25,9 +25,7 @@ export default function PublicLootLogPage() {
       <div className="flex items-center justify-center min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="text-center px-4 max-w-md">
           <p className="text-xl text-warm-700 dark:text-warm-300 mb-4">Loot Log not found or is private</p>
-          <Link href="/">
-            <a className="px-6 py-2 bg-[#8FB897] text-white rounded-lg">Back to Home</a>
-          </Link>
+          <Link href="/" className="px-6 py-2 bg-[#8FB897] text-white rounded-lg">Back to Home</Link>
         </div>
       </div>
     );

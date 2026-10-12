@@ -401,12 +401,9 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
               )}
               {searchQuery && !user && (
                 <Link
-                  href={`/login?redirect=${encodeURIComponent(`/?q=${searchQuery}`)}`}
-                >
-                  <a className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-colors">
+                  href={`/login?redirect=${encodeURIComponent(`/?q=${searchQuery}`)}`} className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-colors">
                     Sign in to save
-                  </a>
-                </Link>
+                  </Link>
               )}
               {!searchQuery && (
                 <p className="mt-3 text-sm text-white/60">
@@ -535,8 +532,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                         <h3 className="font-heading text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">Items</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                           {searchResults.items.map((item) => (
-                            <Link key={item.id} href={`/items/${item.id}`}>
-                              <a className="group rounded-lg border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col h-full hover:shadow-card-hover transition-shadow duration-300">
+                            <Link key={item.id} href={`/items/${item.id}`} className="group rounded-lg border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col h-full hover:shadow-card-hover transition-shadow duration-300">
                                 <div className="w-full h-48 bg-warm-100 dark:bg-gray-700 relative overflow-hidden">
                                   {item.photoUrls && item.photoUrls.length > 0 ? (
                                     <img
@@ -567,8 +563,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                                   <p className="text-xs font-medium text-warm-600 dark:text-gray-400">{item.sale.title}</p>
                                   <p className="text-xs text-warm-500 dark:text-gray-500">{item.sale.city} · View Sale →</p>
                                 </div>
-                              </a>
-                            </Link>
+                              </Link>
                           ))}
                         </div>
                       </div>

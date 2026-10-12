@@ -185,11 +185,9 @@ const ACHPayoutsPage: React.FC = () => {
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
           <div className="max-w-2xl mx-auto">
             <div className="mb-8">
-              <Link href="/organizer/payouts">
-                <a className="text-blue-600 hover:text-blue-700 text-sm mb-4 inline-block">
+              <Link href="/organizer/payouts" className="text-blue-600 hover:text-blue-700 text-sm mb-4 inline-block">
                   ← Back to Settlement Hub
-                </a>
-              </Link>
+                </Link>
             </div>
 
             <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-lg p-8 text-center">
@@ -198,11 +196,9 @@ const ACHPayoutsPage: React.FC = () => {
                 Consignor payouts are available only for TEAMS tier subscribers.
                 Upgrade to unlock direct payout management for your consignors.
               </p>
-              <Link href="/organizer/subscription">
-                <a className="inline-block px-6 py-3 bg-amber-600 dark:bg-amber-700 text-white rounded-lg hover:bg-amber-700 dark:hover:bg-amber-800 transition font-medium">
+              <Link href="/organizer/subscription" className="inline-block px-6 py-3 bg-amber-600 dark:bg-amber-700 text-white rounded-lg hover:bg-amber-700 dark:hover:bg-amber-800 transition font-medium">
                   Upgrade to TEAMS
-                </a>
-              </Link>
+                </Link>
             </div>
           </div>
         </div>
@@ -228,11 +224,9 @@ const ACHPayoutsPage: React.FC = () => {
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-8">
-            <Link href="/organizer/payouts">
-              <a className="text-blue-600 hover:text-blue-700 text-sm mb-4 inline-block">
+            <Link href="/organizer/payouts" className="text-blue-600 hover:text-blue-700 text-sm mb-4 inline-block">
                 ← Back to Settlement Hub
-              </a>
-            </Link>
+              </Link>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Consignor Payouts</h1>
             <p className="text-gray-600 dark:text-gray-400">
               Send payouts directly to your consignors' bank accounts. Transfers are processed within 1–2 business days.
@@ -257,9 +251,7 @@ const ACHPayoutsPage: React.FC = () => {
           {consignors.length === 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-12 text-center">
               <p className="text-gray-600 dark:text-gray-400 mb-4">No consignors yet.</p>
-              <Link href="/organizer/payouts">
-                <a className="text-blue-600 hover:text-blue-700">Go to Settlement Hub</a>
-              </Link>
+              <Link href="/organizer/payouts" className="text-blue-600 hover:text-blue-700">Go to Settlement Hub</Link>
             </div>
           ) : (
             <div className="space-y-4">

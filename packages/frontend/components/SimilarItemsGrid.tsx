@@ -34,8 +34,7 @@ function ConditionPill({ condition }: { condition: string | null }) {
 
 function ItemCard({ item }: { item: SimilarItem }) {
   return (
-    <Link href={`/items/${item.id}`}>
-      <a className="group block rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:shadow-md transition-shadow">
+    <Link href={`/items/${item.id}`} className="group block rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:shadow-md transition-shadow">
         <div className="aspect-square w-full overflow-hidden bg-gray-100 dark:bg-gray-700">
           {item.photoUrl ? (
             <img
@@ -63,8 +62,7 @@ function ItemCard({ item }: { item: SimilarItem }) {
             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.sale.title}</p>
           )}
         </div>
-      </a>
-    </Link>
+      </Link>
   );
 }
 

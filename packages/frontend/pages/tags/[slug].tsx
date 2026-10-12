@@ -134,8 +134,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
               {/* Item Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {items.map((item) => (
-                  <Link key={item.id} href={`/items/${item.id}`}>
-                    <a className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700 shadow-sm hover:shadow-lg transition-shadow">
+                  <Link key={item.id} href={`/items/${item.id}`} className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700 shadow-sm hover:shadow-lg transition-shadow">
                       {/* Item Photo */}
                       <div className="relative aspect-square bg-warm-100 dark:bg-gray-700 overflow-hidden">
                         {item.thumbnailUrl ? (
@@ -197,8 +196,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
                           </div>
                         )}
                       </div>
-                    </a>
-                  </Link>
+                    </Link>
                 ))}
               </div>
 

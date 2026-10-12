@@ -46,11 +46,9 @@ const SoldItemBanner: React.FC<SoldItemBannerProps> = ({
           ? `This one sold ${relativeTime(soldAt)} ago. Good taste.`
           : 'This item has already sold.'}
       </p>
-      <Link href={ctaHref}>
-        <a className="block w-full text-center mt-3 py-2 px-4 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition-colors">
+      <Link href={ctaHref} className="block w-full text-center mt-3 py-2 px-4 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition-colors">
           {ctaLabel}
-        </a>
-      </Link>
+        </Link>
     </div>
   );
 };

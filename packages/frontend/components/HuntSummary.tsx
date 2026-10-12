@@ -96,11 +96,9 @@ export default function HuntSummary({ saleId }: HuntSummaryProps) {
         </div>
       </div>
 
-      <Link href={`/sales/${saleId}/treasure-hunt-qr/progress`}>
-        <a className="block w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg text-center transition-colors">
+      <Link href={`/sales/${saleId}/treasure-hunt-qr/progress`} className="block w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg text-center transition-colors">
           📱 Start Hunting
-        </a>
-      </Link>
+        </Link>
 
       <p className="text-xs text-gray-600 dark:text-gray-400 text-center mt-3">
         Scan QR codes hidden around the sale to earn XP!

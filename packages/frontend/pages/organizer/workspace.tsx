@@ -195,9 +195,7 @@ export default function WorkspaceSettingsPage() {
           <div className="max-w-4xl mx-auto">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
               <p className="text-gray-600 dark:bg-gray-300 mb-4">No workspace found. Create one first.</p>
-              <Link href="/organizer/workspace">
-                <a className="text-sage-600 hover:text-sage-700 font-semibold">Go back</a>
-              </Link>
+              <Link href="/organizer/workspace" className="text-sage-600 hover:text-sage-700 font-semibold">Go back</Link>
             </div>
           </div>
         </div>
@@ -311,9 +309,7 @@ export default function WorkspaceSettingsPage() {
         <div className="max-w-6xl mx-auto px-4 py-12">
           {/* Header */}
           <div className="mb-12">
-            <Link href="/organizer/dashboard">
-              <a className="text-sage-600 hover:text-sage-700 text-sm mb-4 block">← Back to Dashboard</a>
-            </Link>
+            <Link href="/organizer/dashboard" className="text-sage-600 hover:text-sage-700 text-sm mb-4 block">← Back to Dashboard</Link>
             <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">Workspace Settings</h1>
             <p className="text-gray-600 dark:text-gray-300">Manage your team workspace configuration</p>
           </div>
