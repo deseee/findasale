@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Link from 'next/link';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 import AccessibleModal from './AccessibleModal';
@@ -11,24 +12,39 @@ interface TeamSeatUpsellModalProps {
     email: string;
     role: 'ADMIN' | 'MEMBER';
   };
+  /** Current member cap shown in the copy. Defaults to the TEAMS base cap of 5. */
+  memberLimit?: number;
 }
+
+// Backend addTeamSeat (Square card on file) returns 400 with this message, and no code today,
+// when the organizer has no stored payment method. Match the code if one is added later.
+const isNoPaymentMethodError = (err: any): boolean => {
+  const data = err?.response?.data;
+  return (
+    err?.response?.status === 400 &&
+    (data?.code === 'NO_PAYMENT_METHOD' || /payment method/i.test(String(data?.message || '')))
+  );
+};
 
 const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
   pendingInvite,
+  memberLimit = 5,
 }) => {
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsPaymentMethod, setNeedsPaymentMethod] = useState(false);
 
   const handleAddSeat = async () => {
     setIsLoading(true);
     setError(null);
+    setNeedsPaymentMethod(false);
 
     try {
-      // Add seat via Stripe
+      // Add seat: backend charges the card on file via Square
       const addSeatRes = await api.post('/workspace/add-seat', {});
 
       if (!addSeatRes.data.success) {
@@ -55,6 +71,10 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
       onClose();
     } catch (err: any) {
       console.error('Error adding team seat:', err);
+      if (isNoPaymentMethodError(err)) {
+        setNeedsPaymentMethod(true);
+        return;
+      }
       const message = err.response?.data?.message || 'Failed to add seat. Please try again.';
       setError(message);
       showToast(message, 'error');
@@ -88,8 +108,25 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
         {/* Body */}
         <div className="px-6 py-6">
           <p className="text-gray-700 dark:text-gray-300 mb-6">
-            Your team is full (5/5 seats). Add another seat for <strong>$20/mo</strong> to continue inviting team members.
+            Your team is full ({memberLimit}/{memberLimit} seats). Add another seat for <strong>$20/mo</strong> to continue inviting team members.
           </p>
+
+          {needsPaymentMethod && (
+            <div
+              role="alert"
+              className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-amber-800 dark:text-amber-200 text-sm"
+            >
+              <p className="mb-3">
+                Adding a seat charges the card on your subscription. Add a payment method on your subscription page first, then come back and add the seat.
+              </p>
+              <Link
+                href="/organizer/subscription"
+                className="inline-block px-4 py-2 bg-sage-600 hover:bg-sage-700 text-white rounded-md"
+              >
+                Add payment method
+              </Link>
+            </div>
+          )}
 
           {error && (
             <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-800 dark:text-red-300 text-sm">
@@ -115,7 +152,7 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
           </button>
           <button
             onClick={handleAddSeat}
-            disabled={isLoading}
+            disabled={isLoading || needsPaymentMethod}
             className="px-4 py-2 bg-sage-600 hover:bg-sage-700 text-white rounded-md disabled:opacity-50 flex items-center gap-2"
           >
             {isLoading ? (

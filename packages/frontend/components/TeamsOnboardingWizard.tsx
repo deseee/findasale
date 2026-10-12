@@ -46,6 +46,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
 
   // Upsell Modal state
   const [showSeatUpsellModal, setShowSeatUpsellModal] = useState(false);
+  const [seatLimit, setSeatLimit] = useState<number | undefined>(undefined);
   const [pendingInviteForUpsell, setPendingInviteForUpsell] = useState<InviteeWithRole | null>(null);
 
   const handleAddInvitee = () => {
@@ -162,6 +163,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
             // Show upsell modal and stop processing
             setIsLoading(false);
             setPendingInviteForUpsell(invitee);
+            setSeatLimit(typeof inviteErr.response?.data?.limit === 'number' ? inviteErr.response.data.limit : undefined);
             setShowSeatUpsellModal(true);
             return; // Exit early. Don't mark onboarding as complete yet
           }
@@ -449,6 +451,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
         onClose={() => setShowSeatUpsellModal(false)}
         onSuccess={handleUpsellSuccess}
         pendingInvite={pendingInviteForUpsell || undefined}
+        memberLimit={seatLimit}
       />
     </div>
   );
