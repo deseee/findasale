@@ -147,9 +147,9 @@ describe('createPaymentLink item scope (P1-4/5)', () => {
 });
 
 describe('createPaymentLink catalog floor and discount permission (P1-6/8)', () => {
-  it('a link for a $100 item cannot be created for $1 with no discount', async () => {
+  it('a link for a $100 item cannot be created for $5 with no discount', async () => {
     const res = makeRes();
-    await createPaymentLink(makeReq({ amount: 1 }), res);
+    await createPaymentLink(makeReq({ amount: 5 }), res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json.mock.calls[0][0].code).toBe('TOTAL_BELOW_CATALOG_FLOOR');
     expect(mockCreateLink).not.toHaveBeenCalled();
