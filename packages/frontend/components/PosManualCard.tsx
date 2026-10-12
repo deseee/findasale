@@ -91,6 +91,17 @@ const CNP_FEE_ENABLED = CNP_FEE_RATE_ESTIMATE > 0 || CNP_FEE_FIXED_CENTS_ESTIMAT
 // Square refuses a payment whose application fee exceeds 60% of the amount (live INVALID_FEES error,
 // 2026-10-11); mirrors cashFeeService.MAX_APP_FEE_SHARE_OF_CARD_LEG on the backend, which re-checks authoritatively.
 const MAX_APP_FEE_SHARE_OF_CHARGE = 0.6;
+// 2026-10-11 (Patrick): the platform bears Square's card processing cost, so the app fee SENT to Square is the platform fee
+// minus Square's estimated cost (2.9% + 30c, round half up, integer math); only that must fit under 60% of the charge.
+// Mirrors feeCalculator.squareAppFeeNetOfProcessingCents / cashFeeService.cardLegFeeFits on the backend (authoritative).
+const SQUARE_PROCESSING_RATE_BPS = 290;
+const SQUARE_PROCESSING_FIXED_CENTS = 30;
+const squareAppFeeNetCents = (feeCents: number, chargeCents: number): number =>
+  feeCents > 0
+    ? Math.max(0, feeCents - (chargeCents > 0 ? Math.floor((chargeCents * SQUARE_PROCESSING_RATE_BPS + SQUARE_PROCESSING_FIXED_CENTS * 10000 + 5000) / 10000) : 0))
+    : 0;
+const feeFitsUnderCap = (feeCents: number, chargeCents: number): boolean =>
+  squareAppFeeNetCents(feeCents, chargeCents) <= Math.floor(chargeCents * MAX_APP_FEE_SHARE_OF_CHARGE);
 
 interface ManualCardPaymentResponse {
   success: boolean;
@@ -184,10 +195,11 @@ export default function PosManualCard({
       blockedReason = 'The cash received covers the whole sale, so there is nothing left to charge to a card. Record it as a cash sale.';
     } else if (chargeCents < minChargeCents) {
       blockedReason = `The card amount ($${(chargeCents / 100).toFixed(2)}) is below the $${(minChargeCents / 100).toFixed(2)} minimum a card can be charged. ${way}`;
-    } else if (platformFeeCents !== null && platformFeeCents > Math.floor(chargeCents * MAX_APP_FEE_SHARE_OF_CHARGE)) {
-      let minOkCents = Math.ceil((platformFeeCents * 5) / 3);
-      while (Math.floor(minOkCents * MAX_APP_FEE_SHARE_OF_CHARGE) < platformFeeCents) minOkCents += 1;
-      minOkCents = Math.max(minOkCents, minChargeCents);
+    } else if (platformFeeCents !== null && !feeFitsUnderCap(platformFeeCents, chargeCents)) {
+      // Smallest charge (never below the card minimum) whose Square-net fee fits under the 60% ceiling; the fee never grows, so ceil(fee/0.6)+1 bounds the search.
+      let minOkCents = minChargeCents;
+      const boundCents = Math.max(minChargeCents, Math.ceil((platformFeeCents * 5) / 3) + 1);
+      while (minOkCents < boundCents && !feeFitsUnderCap(platformFeeCents, minOkCents)) minOkCents += 1;
       blockedReason = `The card amount ($${(chargeCents / 100).toFixed(2)}) is too small to cover the $${(platformFeeCents / 100).toFixed(2)} minimum platform fee. A card sale must be at least $${(minOkCents / 100).toFixed(2)}. ${way}`;
     }
   }

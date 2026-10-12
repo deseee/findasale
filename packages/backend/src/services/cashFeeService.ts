@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate, getInclusivePlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { getPlatformFeeRate, getInclusivePlatformFeeRate, squareAppFeeNetOfProcessingCents, SubscriptionTier } from '../utils/feeCalculator';
 
 /**
  * ── CASH / OFF-PLATFORM COMMISSION ACCRUAL ───────────────────────────────────────────────
@@ -218,7 +218,9 @@ export async function accrueCashFeeBalance(params: {
 
 /** Cents of outstanding cashFeeBalance that can safely ride on top of `baseAppFeeCents` for a
  *  card sale of `saleAmountCents` (the amount Square will charge), without exceeding the sale's own total
- *  or Square's 60% app-fee cap (MAX_APP_FEE_SHARE_OF_CARD_LEG). Never negative. */
+ *  or Square's 60% app-fee cap (MAX_APP_FEE_SHARE_OF_CARD_LEG). Never negative.
+ *  `baseAppFeeCents` here is the base app fee actually SENT to Square, i.e. already net of Square's processing
+ *  cost (squareAppFeeNetOfProcessingCents, 2026-10-11 decision); the cap is applied to base + padding. */
 export function computeCashDebtRoomCents(params: {
   cashFeeBalance: number;
   baseAppFeeCents: number;
@@ -253,11 +255,18 @@ export function computeCashDebtRoomCents(params: {
  */
 export async function applyCashDebtToAppFee(params: {
   organizerId: string;
+  /** The sale's INCLUSIVE platform fee (what the organizer is charged and what the Purchase row records). */
   baseAppFeeCents: number;
   saleAmountCents: number;
   tx?: CashFeeClient;
 }): Promise<{ appFeeCents: number; debtAppliedCents: number }> {
   const client = (params.tx ?? prisma) as Prisma.TransactionClient;
+  // 2026-10-11 (Patrick): the platform bears Square's card processing cost, so the base app fee SENT to Square is
+  // the inclusive fee minus Square's estimated cost (squareAppFeeNetOfProcessingCents). The returned `appFeeCents`
+  // is therefore the value to send to Square (net base + debt padding); the recorded platform fee for the sale is
+  // still the inclusive fee + `debtAppliedCents` (callers record that, never `appFeeCents`). The debt room and the
+  // 60% ceiling are computed on this smaller base and apply to the FINAL sent fee.
+  const sentBaseAppFeeCents = squareAppFeeNetOfProcessingCents(params.baseAppFeeCents, params.saleAmountCents);
   for (let attempt = 0; attempt < 3; attempt++) {
     const organizer = await client.organizer.findUnique({
       where: { id: params.organizerId },
@@ -265,7 +274,7 @@ export async function applyCashDebtToAppFee(params: {
     });
     const wantedCents = computeCashDebtRoomCents({
       cashFeeBalance: organizer?.cashFeeBalance ?? 0,
-      baseAppFeeCents: params.baseAppFeeCents,
+      baseAppFeeCents: sentBaseAppFeeCents,
       saleAmountCents: params.saleAmountCents,
     });
     if (wantedCents <= 0) break;
@@ -278,11 +287,11 @@ export async function applyCashDebtToAppFee(params: {
       },
     });
     if (claim.count === 1) {
-      return { appFeeCents: params.baseAppFeeCents + wantedCents, debtAppliedCents: wantedCents };
+      return { appFeeCents: sentBaseAppFeeCents + wantedCents, debtAppliedCents: wantedCents };
     }
     // Another sale claimed part of it first: re-read and claim what is left.
   }
-  return { appFeeCents: params.baseAppFeeCents, debtAppliedCents: 0 };
+  return { appFeeCents: sentBaseAppFeeCents, debtAppliedCents: 0 };
 }
 
 /**
@@ -350,16 +359,26 @@ export const MIN_SPLIT_CARD_LEG_CENTS = 50;
  * the $0.75 minimum fee): `INVALID_FEES -- app_fee_money must be less than or equal to 60% of the
  * payment amount.` FindA.Sale's per-transaction minimum fee ($0.75,
  * feeCalculator.MINIMUM_TRANSACTION_FEE_CENTS) therefore needs a card charge of at least $1.25
- * (see minCardCentsForAppFee). The earlier 0.9 guess was wrong and let doomed charges through.
+ * (see minCardCentsForAppFee) BEFORE the 2026-10-11 net-of-Square-cost adjustment; now only the adjusted fee must fit
+ * (cardLegFeeFits). The earlier 0.9 guess was wrong and let doomed charges through.
  * packages/frontend/components/PosManualCard.tsx mirrors this value; keep the two in sync.
  */
 export const MAX_APP_FEE_SHARE_OF_CARD_LEG = 0.6;
 
-/** Smallest card charge (cents) that can carry `appFeeCents` under the Square ceiling above. */
+/** True when a card charge of `cardCents` can carry a platform fee of `inclusiveFeeCents` under the Square ceiling above.
+ *  The fee SENT to Square is net of Square's processing cost (2026-10-11 decision, squareAppFeeNetOfProcessingCents),
+ *  so e.g. the 75c minimum fee on a $1.25 sale is sent as 41c (not 75c) and only that must fit under 60% of the sale. */
+export const cardLegFeeFits = (cardCents: number, inclusiveFeeCents: number): boolean =>
+  squareAppFeeNetOfProcessingCents(inclusiveFeeCents, cardCents) <= Math.floor(cardCents * MAX_APP_FEE_SHARE_OF_CARD_LEG);
+
+/** Smallest card charge (cents) that can carry the inclusive `appFeeCents` once the Square-net adjustment is applied
+ *  (never below MIN_SPLIT_CARD_LEG_CENTS). For the 75c minimum fee this is 72c (the sent fee is 43c, under 60% of 72c). */
 export const minCardCentsForAppFee = (appFeeCents: number): number => {
-  let min = Math.ceil((appFeeCents * 5) / 3); // fee / 0.6 in integer math
-  while (Math.floor(min * MAX_APP_FEE_SHARE_OF_CARD_LEG) < appFeeCents) min += 1; // guard against float rounding
-  return Math.max(min, MIN_SPLIT_CARD_LEG_CENTS);
+  // The adjusted fee is never larger than the inclusive fee, so the old fee / 0.6 amount always fits: a safe upper bound.
+  const bound = Math.max(MIN_SPLIT_CARD_LEG_CENTS, Math.ceil((appFeeCents * 5) / 3) + 1);
+  let min = MIN_SPLIT_CARD_LEG_CENTS;
+  while (min < bound && !cardLegFeeFits(min, appFeeCents)) min += 1;
+  return min;
 };
 
 const dollars = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
@@ -412,7 +431,8 @@ export function cardLegProblem(p: { cardCents: number; appFeeCents: number; isSp
   if (p.cardCents < MIN_SPLIT_CARD_LEG_CENTS) {
     return `The card amount (${dollars(p.cardCents)}) is below the ${dollars(MIN_SPLIT_CARD_LEG_CENTS)} minimum a card can be charged. ${way}`;
   }
-  if (p.appFeeCents > Math.floor(p.cardCents * MAX_APP_FEE_SHARE_OF_CARD_LEG)) {
+  // `p.appFeeCents` is the INCLUSIVE platform fee; the fee actually sent to Square is that minus Square's processing cost.
+  if (!cardLegFeeFits(p.cardCents, p.appFeeCents)) {
     return `The card amount (${dollars(p.cardCents)}) is too small to cover the ${dollars(p.appFeeCents)} minimum platform fee. A card sale must be at least ${dollars(minCardCentsForAppFee(p.appFeeCents))}. ${way}`;
   }
   return null;

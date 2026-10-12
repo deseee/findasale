@@ -183,7 +183,7 @@ import {
   parsePackClientToken,
 } from '../services/bulkLot/bulkLotPackCheckout';
 import { planPackLine } from '../services/bulkLot/bulkLotPackService';
-import { MINIMUM_TRANSACTION_FEE_CENTS, getInclusivePlatformFeeRate } from '../utils/feeCalculator';
+import { MINIMUM_TRANSACTION_FEE_CENTS, getInclusivePlatformFeeRate, squareAppFeeNetOfProcessingCents } from '../utils/feeCalculator';
 
 /** The Prisma client is created at run time from the generated package, so importing this file (the unit test does) loads no database code. */
 type Db = any;
@@ -976,7 +976,9 @@ async function scenarioHappyPath(ctx: Ctx): Promise<ScenarioResult> {
       const first = run.fired[0] ? run.fired[0].outcome : null;
       const rec = first && first.outcome === 'RECORDED' ? first : null;
       const row = rows[0];
-      const expectedFee = MINIMUM_TRANSACTION_FEE_CENTS + 10;
+      // 2026-10-11: the app fee SENT to Square is net of Square's processing cost; the Purchase row records the inclusive fee + claim.
+      const expectedFee = squareAppFeeNetOfProcessingCents(MINIMUM_TRANSACTION_FEE_CENTS, EXPECTED_PACK_CENTS) + 10;
+      const expectedRecordedFee = MINIMUM_TRANSACTION_FEE_CENTS + 10;
       const checks: InvariantCheck[] = [
         checkEquals('checkouts answered RECORDED', 1, run.tally.succeeded),
         checkEquals('Purchase rows with this clientTransactionId in the database', 1, rows.length),
@@ -991,8 +993,8 @@ async function scenarioHappyPath(ctx: Ctx): Promise<ScenarioResult> {
         checkEquals('cash fee debt claimed onto the sale (cents)', 10, rec ? rec.debtAppliedCents : null),
         checkEquals('Purchase cashDebtCollectedAmount in cents', 10, row ? row.debtCents : null),
         checkEquals('organizer cashFeeBalance after the sale in cents (debt moved off the balance)', 0, debtAfter),
-        checkEquals('app fee in cents (platform fee floor plus the 10 cent claim)', expectedFee, rec ? rec.appFeeCents : null),
-        checkEquals('Purchase platformFeeAmount in cents equals the app fee the checkout used', rec ? rec.appFeeCents : -1, row ? row.platformFeeCents : null),
+        checkEquals('app fee sent to Square in cents (platform fee floor net of Square processing cost, plus the 10 cent claim)', expectedFee, rec ? rec.appFeeCents : null),
+        checkEquals('Purchase platformFeeAmount in cents is the inclusive fee floor plus the 10 cent claim', expectedRecordedFee, row ? row.platformFeeCents : null),
         checkEquals('errors reported through captureError', 0, track.captured.length),
       ];
       const charge = track.charges[0];

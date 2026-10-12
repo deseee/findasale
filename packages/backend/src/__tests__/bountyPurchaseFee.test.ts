@@ -228,7 +228,9 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
     // $10.00 (10%) if the old hardcoded shadow function were still in place -- must be $7.50
     // (7.5% inclusive ONLINE rate, PRO/TEAMS -- inclusive-fee migration 2026-09-24).
     expect(mockCreateSquareCharge).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 10000, appFeeCents: 750, sourceId: 'cnon:test-bounty-pro' })
+      // appFeeCents SENT to Square = 750 inclusive - 320 Square cost (2.9% + 30c on $100.00) = 430 (2026-10-11: the platform bears Square's cost);
+      // the Purchase row below still records the inclusive $7.50.
+      expect.objectContaining({ amountCents: 10000, appFeeCents: 430, sourceId: 'cnon:test-bounty-pro' })
     );
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ squarePaymentId: 'sqp_bounty_pro', processor: 'SQUARE' })
@@ -267,7 +269,7 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
     expect(res.status).not.toHaveBeenCalledWith(409);
 
     expect(mockCreateSquareCharge).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 10000, appFeeCents: 750, sourceId: 'cnon:test-bounty-teams' })
+      expect.objectContaining({ amountCents: 10000, appFeeCents: 430, sourceId: 'cnon:test-bounty-teams' }) // 750 inclusive - 320 Square cost
     );
 
     const purchase = await prisma.purchase.findFirst({
@@ -300,7 +302,7 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
     expect(res.status).not.toHaveBeenCalledWith(500);
 
     expect(mockCreateSquareCharge).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 10000, appFeeCents: 950, sourceId: 'cnon:test-bounty-simple' })
+      expect.objectContaining({ amountCents: 10000, appFeeCents: 630, sourceId: 'cnon:test-bounty-simple' }) // 950 inclusive - 320 Square cost
     );
 
     const purchase = await prisma.purchase.findFirst({

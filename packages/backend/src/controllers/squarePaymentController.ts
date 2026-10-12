@@ -423,7 +423,9 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
           itemId: item.id,
           saleId: item.sale!.id,
           amount: finalPriceCents / 100,
-          platformFeeAmount: appFeeCents / 100,
+          // Recorded fee = the INCLUSIVE fee (+ debt padding), NOT the app fee sent to Square, which is net of Square's
+          // processing cost since the 2026-10-11 decision (platform bears it). Organizer-facing numbers keep the inclusive fee.
+          platformFeeAmount: (platformFeeAmount + debtAppliedCents) / 100,
           cashDebtCollectedAmount: debtAppliedCents > 0 ? debtAppliedCents / 100 : undefined,
           ...snapshotFromBreakdown(feeBreakdown, feePercent, saleCoversFee),
           processor: 'SQUARE',

@@ -34,6 +34,7 @@ jest.mock('../lib/prisma', () => ({
 
 import { applyCashDebtToAppFee, releaseCashDebtClaim, settleCashDebtCollection } from '../services/cashFeeService';
 
+// 2026-10-11: baseAppFeeCents is the INCLUSIVE fee (500); the app fee SENT to Square is net of Square's 2.9% + 30c on $100.00 (320c) = 180c.
 const claim = () => applyCashDebtToAppFee({ organizerId: 'org1', baseAppFeeCents: 500, saleAmountCents: 10000 });
 
 beforeEach(() => {
@@ -45,7 +46,7 @@ describe('applyCashDebtToAppFee claims the debt', () => {
   it('decrements the balance at claim time and pads the fee by the claimed amount', async () => {
     store.org.cashFeeBalance = 15;
     const r = await claim();
-    expect(r).toEqual({ appFeeCents: 2000, debtAppliedCents: 1500 });
+    expect(r).toEqual({ appFeeCents: 180 + 1500, debtAppliedCents: 1500 });
     expect(store.org.cashFeeBalance).toBe(0);
   });
 
@@ -59,7 +60,7 @@ describe('applyCashDebtToAppFee claims the debt', () => {
     expect(Math.min(a.debtAppliedCents, b.debtAppliedCents)).toBe(0);
     // The sale that lost pays only its normal fee.
     const loser = a.debtAppliedCents === 0 ? a : b;
-    expect(loser.appFeeCents).toBe(500);
+    expect(loser.appFeeCents).toBe(180);
   });
 
   it('a lost race re-reads the balance and claims only what is left', async () => {
@@ -69,13 +70,22 @@ describe('applyCashDebtToAppFee claims the debt', () => {
       store.org.cashFeeBalance = 5;
     };
     const r = await claim();
-    expect(r).toEqual({ appFeeCents: 1000, debtAppliedCents: 500 });
+    expect(r).toEqual({ appFeeCents: 180 + 500, debtAppliedCents: 500 });
     expect(store.org.cashFeeBalance).toBe(0);
   });
 
   it('claims nothing when the organizer owes nothing', async () => {
     const r = await claim();
-    expect(r).toEqual({ appFeeCents: 500, debtAppliedCents: 0 });
+    expect(r).toEqual({ appFeeCents: 180, debtAppliedCents: 0 });
+  });
+
+  it('pads on top of the Square-net base and keeps the FINAL sent fee at or under the 60% ceiling', async () => {
+    // $1.25 sale, 75c inclusive fee: Square cost 34c -> base 41c; ceiling floor(125 x 0.6) = 75c -> only 34c of debt fits.
+    store.org.cashFeeBalance = 10;
+    const r = await applyCashDebtToAppFee({ organizerId: 'org1', baseAppFeeCents: 75, saleAmountCents: 125 });
+    expect(r).toEqual({ appFeeCents: 75, debtAppliedCents: 34 });
+    expect(r.appFeeCents).toBeLessThanOrEqual(Math.floor(125 * 0.6));
+    expect(store.org.cashFeeBalance).toBe(9.66); // only the 34c that fit was claimed
   });
 });
 

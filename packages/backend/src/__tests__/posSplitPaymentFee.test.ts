@@ -227,9 +227,10 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
     expect(confirmRes.status).not.toHaveBeenCalledWith(500);
 
     // THE CHARGE ACTUALLY MADE: appFeeCents on the Square charge is 6% IN_PERSON of the card
-    // portion, not the old hardcoded 10% (500 cents).
+    // portion (300 cents, not the old hardcoded 10% = 500) MINUS Square's 2.9% + 30c on $50.00 (175 cents):
+    // the platform bears Square's cost (2026-10-11), so 125 is what is sent. The Purchase row below records 300.
     expect(mockCreateAndCapturePayment).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 5000, appFeeCents: 300, sourceId: 'cnon:test-split-teams' })
+      expect.objectContaining({ amountCents: 5000, appFeeCents: 125, sourceId: 'cnon:test-split-teams' })
     );
 
     // THE CARD-HALF ROW: platformFeeAmount is 6% IN_PERSON of the card portion, not 10%.

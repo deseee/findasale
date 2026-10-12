@@ -1,6 +1,7 @@
 import { SquareError } from 'square';
 import { prisma } from '../lib/prisma';
 import { getSquareClientForMerchant } from '../utils/square';
+import { squareAppFeeNetOfProcessingCents } from '../utils/feeCalculator'; // 2026-10-11: platform bears Square's card processing cost
 import {
   resolveOrganizerSquareAccessToken,
   SquareOnboardingIncompleteError,
@@ -108,8 +109,11 @@ export interface CreateSquareCheckoutLinkParams {
   idempotencyKey: string;
   amountCents: number;
   description: string;
-  /** 0 means no application fee (e.g. a fully platform-absorbed sale) -- omitted from the
-   *  request entirely in that case, matching createSquareCharge's own `appFeeCents > 0` gate. */
+  /** The sale's INCLUSIVE platform fee. 0 means no application fee (e.g. a fully platform-absorbed sale) -- omitted from the
+   *  request entirely in that case, matching createSquareCharge's own `appFeeCents > 0` gate. The app_fee_money actually
+   *  sent to Square is this MINUS Square's estimated processing cost (squareAppFeeNetOfProcessingCents, Patrick decision
+   *  2026-10-11: the platform bears Square's cost), applied once here so every link caller (POS link, hold invoices,
+   *  guest invoices, auction winner links, bulk-lot holds) is covered. Callers pass the inclusive fee and record it. */
   appFeeCents: number;
   /** Best-effort only -- see file header "SQUARE HAS NO METADATA FIELD" note. */
   metadata?: Record<string, string>;
@@ -173,6 +177,7 @@ export async function createSquareCheckoutLink(
 
   const description = (params.description || 'FindA.Sale payment').trim();
   const paymentNote = encodeMetadataAsPaymentNote(params.metadata);
+  const sentAppFeeCents = squareAppFeeNetOfProcessingCents(params.appFeeCents, params.amountCents);
 
   try {
     const response = await client.checkout.paymentLinks.create({
@@ -183,8 +188,8 @@ export async function createSquareCheckoutLink(
         priceMoney: toSquareMoney(params.amountCents),
         locationId: organizer.squareLocationId,
       },
-      ...(params.appFeeCents > 0
-        ? { checkoutOptions: { appFeeMoney: toSquareMoney(params.appFeeCents) } }
+      ...(sentAppFeeCents > 0
+        ? { checkoutOptions: { appFeeMoney: toSquareMoney(sentAppFeeCents) } }
         : {}),
       ...(paymentNote ? { paymentNote } : {}),
     } as any);

@@ -407,6 +407,41 @@ const INCLUSIVE_FEE_RATES: Record<'SIMPLE' | 'PRO' | 'TEAMS', Record<PaymentChan
  *  rather than a bare break-even. */
 export const MINIMUM_TRANSACTION_FEE_CENTS = 75;
 
+/**
+ * PLATFORM BEARS SQUARE'S CARD PROCESSING COST (Patrick decision, 2026-10-11).
+ *
+ * The organizer's TOTAL deduction on a Square card sale must equal our inclusive fee (the rates and
+ * $0.75 minimum above), NOT our fee plus Square's own processing fee. VERIFIED on a live Direct charge
+ * with app_fee_money: Square deducts ITS processing fee from the seller's proceeds first, then the app
+ * fee, and the platform receives app_fee_money in full (a $1.25 sale with a 75c app fee carried a 34c
+ * Square fee and left the seller 16c). So the app_fee_money SENT to Square is the inclusive fee MINUS
+ * Square's estimated cost; the organizer then bears exactly the inclusive fee in total and the platform
+ * nets inclusiveFee - squareCost.
+ *
+ * Square's verified cost for our API-keyed card payments (every POS / online path is ECOMMERCE_API):
+ * 2.9% + 30c. Kept in integer basis points so rounding never drifts on a float (round half up).
+ * Data point: 125c -> 34c (3.625 + 30 = 33.625 -> 34). Only the value sent to Square changes; the
+ * inclusive fee is still what every Purchase row, receipt and report records and shows.
+ */
+export const SQUARE_CARD_PROCESSING_RATE_BPS = 290; // 2.9%
+export const SQUARE_CARD_PROCESSING_FIXED_CENTS = 30;
+
+/** Square's estimated card processing cost, in cents, on a charge of `amountCents` (0 for a non-positive amount). */
+export const estimateSquareProcessingCents = (amountCents: number): number =>
+  amountCents > 0
+    ? Math.floor((Math.round(amountCents) * SQUARE_CARD_PROCESSING_RATE_BPS + SQUARE_CARD_PROCESSING_FIXED_CENTS * 10000 + 5000) / 10000)
+    : 0;
+
+/**
+ * The app fee (cents) to SEND to Square for a card charge of `amountCents` whose inclusive platform fee
+ * is `inclusiveFeeCents`: max(0, inclusiveFee - estimatedSquareProcessing). A zero or negative inclusive
+ * fee (e.g. a referral-discounted sale) stays 0 -- the platform never ADDS a fee to cover Square.
+ * EVERY Square app_fee_money must come through here (directly, or via applyCashDebtToAppFee,
+ * createSquareCheckoutLink, or the booth-cart allocation builder).
+ */
+export const squareAppFeeNetOfProcessingCents = (inclusiveFeeCents: number, amountCents: number): number =>
+  inclusiveFeeCents > 0 ? Math.max(0, Math.round(inclusiveFeeCents) - estimateSquareProcessingCents(amountCents)) : 0;
+
 const normalizeInclusiveTier = (tier: SubscriptionTier): 'SIMPLE' | 'PRO' | 'TEAMS' =>
   !tier || tier === 'SIMPLE' ? 'SIMPLE' : tier === 'TEAMS' ? 'TEAMS' : 'PRO';
 

@@ -1,6 +1,7 @@
 import { SquareError } from 'square';
 import { describeSquareError } from './squareErrorReasons'; // 2026-10-11: specific, safe reason per Square error code
 import { prisma } from '../lib/prisma';
+import { squareAppFeeNetOfProcessingCents } from '../utils/feeCalculator'; // 2026-10-11: platform bears Square's card processing cost
 import { getSquareClientForMerchant, getSquarePlatformClient } from '../utils/square';
 import { decryptToken, encryptToken } from '../utils/tokenCrypto';
 import { buildSquareIdempotencyKey, toSquareMoney, resolveOrganizerSquareAccessToken } from './squarePaymentService';
@@ -296,14 +297,21 @@ function getPlatformSquareLocationId(): string {
  */
 function resolveSquareAppFeeParams(params: {
   appFeeCents: number;
+  /** The leg's charge amount, used to estimate Square's processing cost (2026-10-11 decision). */
+  amountCents: number;
   hubOwnerShareCents?: number;
   hubOwnerSquareLocationId?: string | null;
 }):
+  | Record<string, never>
   | { appFeeMoney: ReturnType<typeof toSquareMoney> }
   | { appFeeAllocations: Array<{ locationId: string; amountMoney: ReturnType<typeof toSquareMoney> }> } {
   const hubOwnerShareCents = params.hubOwnerShareCents ?? 0;
+  // 2026-10-11 (Patrick): the platform bears Square's card processing cost. params.appFeeCents is platformFee + hub
+  // share (the recorded split); Square's cost comes out of the PLATFORM's portion only, never the hub owner's share.
+  const platformPortionCents = squareAppFeeNetOfProcessingCents(params.appFeeCents - hubOwnerShareCents, params.amountCents);
   if (hubOwnerShareCents <= 0) {
-    return { appFeeMoney: toSquareMoney(params.appFeeCents) };
+    // Nothing left after Square's cost: send no app fee at all (never a zero-amount app_fee_money).
+    return platformPortionCents > 0 ? { appFeeMoney: toSquareMoney(platformPortionCents) } : {};
   }
   if (!params.hubOwnerSquareLocationId) {
     throw new Error(
@@ -313,10 +321,10 @@ function resolveSquareAppFeeParams(params: {
         "silently dropping the hub owner's cut (ADR-123 \u00a73.3)."
     );
   }
-  const platformFeeCents = params.appFeeCents - hubOwnerShareCents;
+  const platformFeeCents = platformPortionCents;
   return {
     appFeeAllocations: [
-      { locationId: getPlatformSquareLocationId(), amountMoney: toSquareMoney(platformFeeCents) },
+      ...(platformFeeCents > 0 ? [{ locationId: getPlatformSquareLocationId(), amountMoney: toSquareMoney(platformFeeCents) }] : []),
       { locationId: params.hubOwnerSquareLocationId, amountMoney: toSquareMoney(hubOwnerShareCents) },
     ],
   };

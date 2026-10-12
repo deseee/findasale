@@ -33,7 +33,7 @@ import { sellItemUnits, sellItemUnitsInTransaction, InsufficientStockError } fro
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { assertCheckoutAllowed, CheckoutGuardError, recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4 gap fix: POS payment-request self-dealing guard; recordSuspectedSignal: manual card entry has no verifiable buyer account either (2026-09-12)
-import { snapshotForCommissionOnly, getInclusivePlatformFeeRate, calculateInclusiveCommissionCents } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17); inclusive-fee migration (2026-09-24, Patrick ruling): replaces getPlatformFeeRate (flat tier rate) at both card-fee sites in this file -- both are IN_PERSON channel (POS register, not buyer self-serve)
+import { snapshotForCommissionOnly, getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, squareAppFeeNetOfProcessingCents } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17); inclusive-fee migration (2026-09-24, Patrick ruling): replaces getPlatformFeeRate (flat tier rate) at both card-fee sites in this file -- both are IN_PERSON channel (POS register, not buyer self-serve)
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, applyCashDebtToAppFee, settleCashDebtCollection, releaseCashDebtClaim, wouldExceedCashFeeExposureCap, accrueSplitCashLegOnce, allocateCentsProportionally, validateSplitTender, cardLegProblem, isValidCents, MAX_POS_AMOUNT_CENTS } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use; applyCashDebtToAppFee/settleCashDebtCollection: manual card entry cash-fee-debt recoupment (2026-09-12); wouldExceedCashFeeExposureCap: cash-fee exposure cap pre-check (2026-09-24, Patrick ruling)
 import { CNP_FEE_LABEL } from '../services/cnpSurcharge'; // CNP surcharge (2026-09-30): buyer-facing label for the surcharge line on the manual-card receipt; the surcharge itself is persisted per row (Purchase.cnpSurchargeCents) so refunds can return it proportionally
 import { resolvePosDiscount } from '../services/posDiscountService';
@@ -1579,7 +1579,9 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           accessToken: preflight.accessToken,
           sourceId: sourceId!,
           amountCents: posRequest.cardAmountCents ?? posRequest.totalAmountCents,
-          appFeeCents: posRequest.platformFeeCents,
+          // posRequest.platformFeeCents stays the INCLUSIVE fee (recorded); the app fee sent to Square is net of Square's
+          // processing cost (2026-10-11 decision: the platform bears it).
+          appFeeCents: squareAppFeeNetOfProcessingCents(posRequest.platformFeeCents, posRequest.cardAmountCents ?? posRequest.totalAmountCents),
           posRequestId: posRequest.id,
           existingSquarePaymentId: posRequest.squarePaymentId,
         });
