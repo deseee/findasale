@@ -577,9 +577,27 @@ export const resolvePlatformRevenueDollars = (
     buyerPremiumAmount?: number | null;
     createdAt?: Date | string | null;
     source?: string | null;
+    squareAppFeeSentCents?: number | null;
+    cashDebtCollectedAmount?: number | null;
+    refundedAmount?: number | null;
+    status?: string | null;
   },
   tier: SubscriptionTier
 ): number => {
+  // 2026-10-12: a Square card row records the app fee ACTUALLY SENT (squareAppFeeSentCents), which is already net of Square's
+  // processing cost (the platform bears it) and includes any cash-debt padding. Revenue is that sent fee minus the padding
+  // (debt repayment is not new revenue), scaled down by the refunded share of the payment (Square refunds the app fee
+  // proportionally) and zero once fully refunded. NULL (legacy / cash / non-Square rows) falls through to the gross logic below.
+  if (purchase.squareAppFeeSentCents !== null && purchase.squareAppFeeSentCents !== undefined) {
+    const status = purchase.status ?? '';
+    if (status === 'REFUNDED' || status === 'DISPUTE_LOST') return 0;
+    const amount = Number(purchase.amount) || 0;
+    const refunded = Math.max(0, Number(purchase.refundedAmount) || 0);
+    const keptShare = amount > 0 ? Math.max(0, 1 - refunded / amount) : refunded > 0 ? 0 : 1;
+    const debtCents = Math.round((Number(purchase.cashDebtCollectedAmount) || 0) * 100);
+    const keptCents = Math.max(0, Number(purchase.squareAppFeeSentCents) - debtCents) * keptShare;
+    return keptCents / 100;
+  }
   if (purchase.commissionAmount !== null && purchase.commissionAmount !== undefined) {
     return (Number(purchase.commissionAmount) || 0) + (Number(purchase.buyerPremiumAmount) || 0);
   }

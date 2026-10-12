@@ -1786,6 +1786,15 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           const tagRowCentsList = storedTagLines.map((l) => l.priceCents);
           const rowAmountCents = [...nonTagRowAmountCents, ...tagRowCentsList];
           const rowFeeCents = allocateCentsProportionally(posRequest.platformFeeCents, rowAmountCents);
+          // 2026-10-12: the app fee actually SENT to Square for this card charge (net of Square's processing cost, same value as the
+          // createAndCapturePayment call above), allocated across the rows. Null for a non-Square request. Revenue reports read it.
+          const rowSentCents =
+            posRequest.processor === 'SQUARE'
+              ? allocateCentsProportionally(
+                  squareAppFeeNetOfProcessingCents(posRequest.platformFeeCents, posRequest.cardAmountCents ?? posRequest.totalAmountCents),
+                  rowAmountCents
+                )
+              : null;
           const confirmCashCents = posRequest.isSplitPayment && posRequest.cashAmountCents ? posRequest.cashAmountCents : 0;
           const rowCashCents =
             confirmCashCents > 0
@@ -1887,6 +1896,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
                 saleId: posRequest.saleId,
                 amount: rowAmountCents[idx] / 100,
                 platformFeeAmount: rowFeeDollars,
+                ...(rowSentCents ? { squareAppFeeSentCents: rowSentCents[idx] } : {}),
                 // FEE SNAPSHOT (2026-08-17): commission-only, and commissionRate is null by design: this
                 // flow charges ONE cart-level fee, now allocated across the rows (see above), so there is no
                 // honest per-row rate to record. Must match the idempotent webhook backstop in
@@ -1934,6 +1944,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
                 saleId: posRequest.saleId,
                 amount: rowAmountCents[miscIdx] / 100,
                 platformFeeAmount: miscFeeDollars,
+                ...(rowSentCents ? { squareAppFeeSentCents: rowSentCents[miscIdx] } : {}),
                 // FEE SNAPSHOT (2026-08-17): see the item rows above for why the rate is null.
                 ...snapshotForCommissionOnly(miscFeeDollars, null),
                 // findasale-hacker fix (2026-08-09), STRIPE rows only: genuine Direct charge, see
@@ -1994,6 +2005,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
                 saleId: posRequest.saleId,
                 amount: rowAmountCents[tagRowIdx] / 100,
                 platformFeeAmount: tagFeeDollars,
+                ...(rowSentCents ? { squareAppFeeSentCents: rowSentCents[tagRowIdx] } : {}),
                 ...snapshotForCommissionOnly(tagFeeDollars, null),
                 ...buildProcessorPurchaseFields(mintedTagItemId),
                 source: 'POS',
@@ -2857,6 +2869,13 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     // charged to Square -- instead of silently under-reporting it on floor-priced sales.
     let remainingAppFeeCentsToAllocate = baseAppFeeCents;
 
+    // 2026-10-12: each row's share of the app fee actually SENT to Square (appFeeCents minus the debt padding, which each row
+    // adds back as its own itemDebtCents), so squareAppFeeSentCents sums exactly to appFeeCents. Revenue reports read it.
+    const manualSentBaseShares = allocateCentsProportionally(
+      Math.max(0, appFeeCents - debtAppliedCents),
+      chargedItems.map((ci) => Math.round(ci.amount * 100))
+    );
+
     // One Purchase row for one cart line. `client` is the shared prisma client or a transaction client.
     const buildManualRow = (client: any, item: (typeof chargedItems)[number], idx: number, itemFeeCents: number, itemDebtCents: number) =>
       client.purchase.create({
@@ -2867,6 +2886,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
           amount: item.amount,
           platformFeeAmount: (itemFeeCents + itemDebtCents) / 100,
           cashDebtCollectedAmount: itemDebtCents > 0 ? itemDebtCents / 100 : undefined,
+          squareAppFeeSentCents: (manualSentBaseShares[idx] ?? 0) + itemDebtCents,
           cashLegAmount: manualCashShares[idx] > 0 ? manualCashShares[idx] / 100 : undefined,
           // CNP surcharge (2026-09-30): this row's share, so a refund can return it proportionally.
           cnpSurchargeCents: manualSurchargeShares[idx] ?? 0,

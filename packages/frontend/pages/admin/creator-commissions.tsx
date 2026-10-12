@@ -207,7 +207,7 @@ const AdminCreatorCommissions = () => {
                     <td className="p-3 text-right font-semibold text-warm-900 dark:text-warm-100">
                       {formatCents(c.commissionCents)}
                       <span className="block text-xs font-normal text-warm-500 dark:text-warm-400">
-                        {(c.commissionRateBps / 100).toFixed(0)}% of fee
+                        {(c.commissionRateBps / 100).toFixed(0)}% of net fee
                       </span>
                     </td>
                     <td className="p-3">

@@ -104,7 +104,7 @@ export interface PayoutRequestEligibility {
  *
  * Distinct from the organizer-to-organizer referral program above (AffiliateReferral, 2% / $50
  * floor). A creator is any signed-in account that opted in and accepted the program terms; they
- * share links to a public sale and earn a share of FindA.Sale's own fee on purchases that came
+ * share links to a public sale and earn a share of FindA.Sale's own fee (net of Square's processing cost) on purchases that came
  * through the link. Nothing here pays anyone automatically: commissions accrue in the
  * AffiliateConversion ledger and an admin settles them manually.
  *
@@ -117,7 +117,8 @@ export interface PayoutRequestEligibility {
 export const CREATOR_PROGRAM = {
   /** Version string stored with each creator's acceptance. Bump when the terms text changes materially. */
   TERMS_VERSION: '2026-09-29',
-  /** Commission = this many basis points of FindA.Sale's platform fee on the purchase (1000 = 10%). */
+  /** Commission = this many basis points of FindA.Sale's platform fee on the purchase, NET of Square's estimated
+   *  card processing cost (Patrick, 2026-10-12; creatorAffiliateService.commissionBaseFeeCents) (1000 = 10%). */
   COMMISSION_RATE_BPS: 1000,
   /** Commission counts as approved only this many days after the purchase (refund / chargeback window). */
   HOLD_DAYS: 30,
@@ -130,7 +131,8 @@ export const CREATOR_PROGRAM = {
 
 /**
  * Commission (cents) on a purchase, rounded DOWN so we never over-accrue.
- * @param platformFeeCents FindA.Sale's fee on the purchase, net of any cash-debt recoupment
+ * @param platformFeeCents the commission BASE: FindA.Sale's fee on the purchase net of any cash-debt recoupment AND
+ *   net of Square's estimated processing cost (callers pass creatorAffiliateService.commissionBaseFeeCents, 2026-10-12)
  */
 export function calculateCreatorCommissionCents(
   platformFeeCents: number,

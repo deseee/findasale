@@ -1102,6 +1102,7 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
           // Recorded fee = INCLUSIVE fee (+ debt padding); squareAppFeeCents sent to Square is net of Square's processing cost (2026-10-11).
           platformFeeAmount: (squarePlatformFeeAmount + squareDebtAppliedCents) / 100,
           cashDebtCollectedAmount: squareDebtAppliedCents > 0 ? squareDebtAppliedCents / 100 : undefined,
+          squareAppFeeSentCents: squareAppFeeCents, // 2026-10-12: actual app_fee_money sent to Square; revenue reports read this
           // FEE SNAPSHOT (2026-08-17): commission-only, same as the Stripe branch below -- a
           // bounty fulfillment is a fixed-price purchase, never an auction lot.
           buyerPremiumAmount: 0,

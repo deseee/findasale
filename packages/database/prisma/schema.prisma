@@ -2098,6 +2098,14 @@ model Purchase {
   // every existing row and every purchase from an organizer with no cashFeeBalance owed.
   cashDebtCollectedAmount Float?
 
+  // ── SQUARE APP FEE ACTUALLY SENT (2026-10-12) ───────────────────────────────────────────
+  // Cents of application fee (app_fee_money) ACTUALLY SENT to Square for this row's card charge: the inclusive fee
+  // minus Square's estimated processing cost (squareAppFeeNetOfProcessingCents, platform bears the cost) plus any
+  // cash-debt padding. platformFeeAmount / commissionAmount keep the GROSS inclusive fee for ledger and receipts;
+  // admin revenue reporting (feeCalculator.resolvePlatformRevenueDollars) reads THIS when present. NULL on every
+  // legacy row and every cash / non-Square row, meaning fall back to the gross snapshot. NO BACKFILL, DELIBERATE.
+  squareAppFeeSentCents Int?
+
   // ── CASH+CARD SPLIT TENDER (2026-09-29) ────────────────────────────────────────────────
   // Dollars of THIS row's `amount` that the shopper paid in cash at the register (the row's
   // proportional share of the sale's cash leg). The processor (Square) only ever captured

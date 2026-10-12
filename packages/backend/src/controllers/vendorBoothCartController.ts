@@ -17,7 +17,8 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { sellItemUnits, sellItemUnitsInTransaction, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { generateReceipt, sendBoothCartReceiptEmail } from '../services/receiptService';
-import { calculateInclusiveCommissionCents } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula; inclusive-fee migration (2026-09-24, Patrick ruling) -- booth-cart legs (cash and card) are always IN_PERSON, collected at the physical booth
+import { calculateInclusiveCommissionCents, squareAppFeeNetOfProcessingCents } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula; inclusive-fee migration (2026-09-24, Patrick ruling) -- booth-cart legs (cash and card) are always IN_PERSON, collected at the physical booth
+import { allocateCentsProportionally } from '../services/cashFeeService'; // 2026-10-12: split a Square leg's actually-sent app fee across its Purchase rows
 import { notifyVendorOfBoothSale } from '../services/vendorBoothSaleNotificationService'; // per-vendor "your item sold" notification
 import {
   ConsignorTagError,
@@ -2185,7 +2186,8 @@ async function finalizeCartTagLine(
   cartId: string,
   leg: { processor: string; rail: string; stripePaymentIntentId: string | null; squarePaymentId: string | null; stripeAccountId: string | null },
   line: CartTagLine,
-  allTagLines: CartTagLine[]
+  allTagLines: CartTagLine[],
+  sentAppFeeCents: number | null = null
 ): Promise<string | null> {
   const isSquareLeg = leg.processor === 'SQUARE';
   const isDirectCharge = leg.rail !== 'CASH' && !isSquareLeg && !!leg.stripeAccountId;
@@ -2206,6 +2208,7 @@ async function finalizeCartTagLine(
     source: 'POS' as const,
     status: 'PAID' as const,
     boothCartTransactionId: cartId,
+    ...(sentAppFeeCents !== null ? { squareAppFeeSentCents: sentAppFeeCents } : {}), // 2026-10-12: app fee actually sent to Square for this row
   };
   try {
     return await prisma.$transaction(async (tx) => {
@@ -2273,6 +2276,8 @@ async function finalizeCapturedLegs(
     processor: string;
     rail: string;
     stripeAccountId: string | null;
+    amountCents?: number | null;
+    platformFeeCents?: number | null;
   }>
 ): Promise<string[]> {
   // Finalize: create Purchase rows (real per-booth PaymentIntent id, or the cash_...
@@ -2281,12 +2286,23 @@ async function finalizeCapturedLegs(
   const purchaseIds: string[] = [];
   for (const leg of legs) {
     const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, leg.vendorBoothId);
-    for (const item of items) {
+    // 2026-10-12: a Square leg's platform app fee ACTUALLY SENT (the platform's portion, net of Square's processing cost; the hub
+    // owner's share is excluded, same as resolveSquareAppFeeParams) split across the leg's rows by price. Null for non-Square legs.
+    const legSentShares =
+      leg.processor === 'SQUARE' && leg.rail !== 'CASH' && leg.platformFeeCents != null && leg.amountCents != null
+        ? allocateCentsProportionally(
+            squareAppFeeNetOfProcessingCents(leg.platformFeeCents, leg.amountCents),
+            items.map((it) => (it.tagLine ? it.tagLine.priceCents : it.netPriceCents))
+          )
+        : null;
+    for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
+      const item = items[itemIdx];
+      const legSentCents = legSentShares ? legSentShares[itemIdx] ?? 0 : null;
       try {
         // Consignor price tag: no stock to sell. Mint the SOLD consignor Item and write its Purchase row in ONE transaction.
         if (item.tagLine) {
           const tagLines = items.filter((x) => x.tagLine).map((x) => x.tagLine!);
-          const tagPurchaseId = await finalizeCartTagLine(cart.id, leg, item.tagLine, tagLines);
+          const tagPurchaseId = await finalizeCartTagLine(cart.id, leg, item.tagLine, tagLines, legSentCents);
           if (tagPurchaseId) {
             purchaseIds.push(tagPurchaseId);
             generateReceipt(tagPurchaseId).catch((err) => console.error('[receipt] Failed to generate receipt:', err));
@@ -2308,6 +2324,7 @@ async function finalizeCapturedLegs(
                 priceOriginalCents: item.netPriceCents,
                 priceBeforeDiscretionCents: item.netPriceCents,
                 bulkQuantity: item.bulkLine!.quantity,
+                ...(legSentCents !== null ? { squareAppFeeSentCents: legSentCents } : {}),
                 processor: lotIsSquareLeg ? 'SQUARE' : 'STRIPE',
                 ...(lotIsSquareLeg
                   ? { squarePaymentId: leg.squarePaymentId }
@@ -2387,6 +2404,7 @@ async function finalizeCapturedLegs(
               amount: item.netPriceCents / 100,
               priceOriginalCents: item.discretionCap.originalCents,
               priceBeforeDiscretionCents,
+              ...(legSentCents !== null ? { squareAppFeeSentCents: legSentCents } : {}),
               ...cashierDiscretionFields,
               processor: isSquareLeg ? 'SQUARE' : 'STRIPE',
               ...(isSquareLeg

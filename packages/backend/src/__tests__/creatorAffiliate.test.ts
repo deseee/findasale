@@ -27,6 +27,7 @@ import {
   joinCreatorProgram,
   listAdminCommissions,
   recordAffiliateClick,
+  commissionBaseFeeCents,
   recordAffiliateConversion,
   resolveAffiliateAttribution,
   settleCommission,
@@ -242,6 +243,25 @@ describe('resolveAffiliateAttribution', () => {
   });
 });
 
+describe('commissionBaseFeeCents', () => {
+  it('non-Square purchases (legacy Stripe) have no Square cost: net = gross', () => {
+    expect(commissionBaseFeeCents({ inclusiveFeeCents: 500, cardLegCents: 10000, processor: 'STRIPE' })).toBe(500);
+    expect(commissionBaseFeeCents({ inclusiveFeeCents: 500, cardLegCents: 10000 })).toBe(500);
+  });
+  it('Square card: subtracts 2.9% + 30c (round half up), matching the fee sent to Square', () => {
+    expect(commissionBaseFeeCents({ inclusiveFeeCents: 75, cardLegCents: 125, processor: 'SQUARE' })).toBe(41);
+    expect(commissionBaseFeeCents({ inclusiveFeeCents: 500, cardLegCents: 10000, processor: 'SQUARE' })).toBe(180);
+  });
+  it('a pure cash leg (no card cents) is gross; zero or negative fee is 0', () => {
+    expect(commissionBaseFeeCents({ inclusiveFeeCents: 500, cardLegCents: 0, processor: 'SQUARE' })).toBe(500);
+    expect(commissionBaseFeeCents({ inclusiveFeeCents: 0, cardLegCents: 1000, processor: 'SQUARE' })).toBe(0);
+    expect(commissionBaseFeeCents({ inclusiveFeeCents: -5, cardLegCents: 1000, processor: 'SQUARE' })).toBe(0);
+  });
+  it('never goes negative when processing exceeds the fee', () => {
+    expect(commissionBaseFeeCents({ inclusiveFeeCents: 20, cardLegCents: 1000, processor: 'SQUARE' })).toBe(0);
+  });
+});
+
 describe('recordAffiliateConversion', () => {
   const created = new Date('2026-10-01T00:00:00Z');
   const purchase = {
@@ -288,6 +308,30 @@ describe('recordAffiliateConversion', () => {
     });
     expect(data.eligibleAt.getTime()).toBe(created.getTime() + CREATOR_PROGRAM.HOLD_DAYS * DAY);
     expect(m.affiliateLink.update).toHaveBeenCalledWith({ where: { id: 'l1' }, data: { conversions: { increment: 1 } } });
+  });
+  it('Square card purchase: commission is on the fee NET of Square processing (2026-10-12)', async () => {
+    // $100 card sale, $5.00 fee. Square cost = 2.9% + 30c = 320c, so net fee = 500 - 320 = 180c, commission 10% = 18c.
+    m.purchase.findUnique.mockResolvedValue({ ...purchase, processor: 'SQUARE', cashLegAmount: null });
+    const r = await recordAffiliateConversion('p1');
+    expect(r).toEqual({ recorded: true, commissionCents: 18 });
+    expect(m.affiliateConversion.create.mock.calls[0][0].data).toMatchObject({ platformFeeCents: 180, commissionCents: 18, purchaseAmountCents: 10000 });
+  });
+  it('Square split tender: only the card leg carries processing cost', async () => {
+    // $100 row, $60 cash, $40 card: Square cost on $40 = 116+30 = 146c; net fee 500 - 146 = 354c -> 35c.
+    m.purchase.findUnique.mockResolvedValue({ ...purchase, processor: 'SQUARE', cashLegAmount: 60 });
+    const r = await recordAffiliateConversion('p1');
+    expect(r.commissionCents).toBe(35);
+  });
+  it('Square: a fee smaller than the processing cost earns 0 commission, never negative', async () => {
+    m.purchase.findUnique.mockResolvedValue({ ...purchase, amount: 1.25, processor: 'SQUARE', platformFeeAmount: 0.3 });
+    const r = await recordAffiliateConversion('p1');
+    expect(r.commissionCents).toBe(0);
+    expect(m.affiliateConversion.create.mock.calls[0][0].data.platformFeeCents).toBe(0);
+  });
+  it('Square: cash debt is removed before the processing cost is subtracted', async () => {
+    m.purchase.findUnique.mockResolvedValue({ ...purchase, processor: 'SQUARE', cashDebtCollectedAmount: 3 });
+    const r = await recordAffiliateConversion('p1');
+    expect(r.commissionCents).toBe(0); // (500 - 300) - 320 < 0 -> 0
   });
   it('excludes fee collected against cash debt from the commission base', async () => {
     m.purchase.findUnique.mockResolvedValue({ ...purchase, cashDebtCollectedAmount: 3 });

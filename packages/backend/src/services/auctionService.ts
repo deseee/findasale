@@ -5,7 +5,7 @@ import { fanOutItemSoldWithdrawals } from './soldFanOutService'; // 2026-09-23: 
 import { syncMarketplaceStock } from './marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { createSquareCheckoutLink } from './squareCheckoutLinkService'; // Square migration Wave S2 #2 (2026-09-09): auction-winner-pays-later replacement for the Stripe Checkout Session below
 import { buildSquareIdempotencyKey } from './squarePaymentService';
-import { calculateApplicationFee, formatBuyerPremiumRate, getInclusivePlatformFeeRate, applyInclusiveFloor, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): the winner completes payment remotely (Square hosted checkout link) -- ONLINE channel, mirrors jobs/auctionJob.ts's cron path exactly
+import { calculateApplicationFee, formatBuyerPremiumRate, getInclusivePlatformFeeRate, applyInclusiveFloor, squareAppFeeNetOfProcessingCents, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): the winner completes payment remotely (Square hosted checkout link) -- ONLINE channel, mirrors jobs/auctionJob.ts's cron path exactly
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from './xpService'; // XP parity with jobs/auctionJob.ts — see awardAuctionWinXp below
 import { evaluateAuctionReserve } from '../utils/auctionRules'; // Shared reserve rule — identical to jobs/auctionJob.ts
 import { lotChannelRefusal } from './bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a bulk lot is never an auction
@@ -285,6 +285,7 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
             saleId: item.saleId!,
             amount: amountInCents / 100,
             platformFeeAmount: auctionFees.applicationFeeCents / 100,
+            squareAppFeeSentCents: squareAppFeeNetOfProcessingCents(auctionFees.applicationFeeCents, amountInCents), // 2026-10-12: app fee actually sent to Square via the link
             buyerPremiumAmount: buyerPremium,
             buyerPremiumRate: organizerCoversPremium ? 0 : auctionFees.buyerPremiumRate,
             commissionAmount: auctionFees.organizerCommissionCents / 100,

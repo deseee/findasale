@@ -1,7 +1,7 @@
 import { POSPaymentLink } from '@prisma/client';
 import * as Sentry from '@sentry/node'; // 2026-09-29 money review P1-4/5: alert on foreign item ids
 import { prisma } from '../lib/prisma';
-import { getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, snapshotForCommissionOnly, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): this recorder completes the SAME payment-link flow posController.createPaymentLinkInternal creates (buyer pays remotely via hosted checkout) -- ONLINE channel
+import { getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, snapshotForCommissionOnly, squareAppFeeNetOfProcessingCents, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): this recorder completes the SAME payment-link flow posController.createPaymentLinkInternal creates (buyer pays remotely via hosted checkout) -- ONLINE channel
 import { sellItemUnits, sellItemUnitsInTransaction, InsufficientStockError } from '../services/itemStockService';
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig'; // ADR-136 Addendum A (#659)
 import { formatCardCount } from './bulkLot/bulkLotPricing';
@@ -268,7 +268,7 @@ export async function recordPosPaymentLinkSale(
     // id so a replay finds the same item; a Purchase that already exists (P2002 on the compound unique) is treated as recorded. No stock
     // decrement and no cross-channel hook runs for a tag: the item never existed anywhere else. A mint failure throws a ConsignorTagError,
     // which rolls the whole recording back and is settled with a full refund by the catch around this transaction.
-    const recordTagRows = async (feeShares: number[], cashShares: number[]): Promise<string[]> => {
+    const recordTagRows = async (feeShares: number[], cashShares: number[], sentShares: number[] = []): Promise<string[]> => {
       const ids: string[] = [];
       for (let t = 0; t < tagLines.length; t++) {
         const tagLine = tagLines[t];
@@ -290,6 +290,7 @@ export async function recordPosPaymentLinkSale(
               saleId: fresh.saleId,
               amount: tagLine.priceCents / 100,
               platformFeeAmount: tagFeeAmount,
+              ...(processor === 'SQUARE' ? { squareAppFeeSentCents: sentShares[t] ?? 0 } : {}), // 2026-10-12: app fee actually sent to Square (net of processing cost)
               ...snapshotForCommissionOnly(tagFeeAmount, posFeeRate),
               status: 'PAID',
               source: 'POS',
@@ -480,9 +481,16 @@ export async function recordPosPaymentLinkSale(
           : allocateCentsProportionally(splitCashCents, itemRowCentsList);
       const tagCashShares: number[] = oversoldTagCash ?? (combinedCashShares ? combinedCashShares.slice(items.length) : tagCentsList.map(() => 0));
       let remainingItemsFeeCentsToAllocate = totalItemsFeeCents;
+      // 2026-10-12: the app fee actually SENT to Square for this link's card charge is the inclusive fee minus Square's
+      // estimated processing cost (createSquareCheckoutLink applies squareAppFeeNetOfProcessingCents once). Re-derive it
+      // from the same inputs and split it across the rows in step with their recorded fee. Square rows only.
+      const sentItemsTotalCents = processor === 'SQUARE' ? squareAppFeeNetOfProcessingCents(totalItemsFeeCents, feeBaseCents) : 0;
+      let sentLeftCents = sentItemsTotalCents;
+      let feeLeftForSentCents = totalItemsFeeCents;
       // With tags in the link the platform fee is allocated ONCE across items and tags together (the application fee Square charged
       // is on the whole card amount), so the recorded fees sum to it. Without tags the original per-item remainder logic is untouched.
       const unifiedFeeShares = tagCentsTotal > 0 ? allocateCentsProportionally(totalItemsFeeCents, [...itemRowCentsList, ...tagCentsList]) : null;
+      const unifiedSentShares = unifiedFeeShares ? allocateCentsProportionally(sentItemsTotalCents, unifiedFeeShares) : null;
 
       const createdPurchaseIds: string[] = [];
       for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
@@ -499,6 +507,13 @@ export async function recordPosPaymentLinkSale(
             );
         remainingItemsFeeCentsToAllocate -= itemFeeCents;
         const itemFeeAmount = itemFeeCents / 100;
+        const itemSentCents = unifiedSentShares
+          ? (unifiedSentShares[itemIdx] ?? 0)
+          : isLastRecordedItem || feeLeftForSentCents <= 0
+            ? sentLeftCents
+            : Math.min(sentLeftCents, Math.round((sentLeftCents * itemFeeCents) / feeLeftForSentCents));
+        sentLeftCents -= itemSentCents;
+        feeLeftForSentCents -= itemFeeCents;
         // Never let a row's cash leg exceed the row itself (only possible when an oversold item
         // was excluded above and the cash leg was allocated across fewer rows).
         const rowCashCents = Math.min(cashShares[itemIdx] ?? 0, itemPriceCents);
@@ -509,6 +524,7 @@ export async function recordPosPaymentLinkSale(
               saleId: fresh.saleId,
               amount: lotLineById.has(item.id) ? itemPriceCents / 100 : item.price || 0,
               platformFeeAmount: itemFeeAmount,
+              ...(processor === 'SQUARE' ? { squareAppFeeSentCents: itemSentCents } : {}),
               // FEE SNAPSHOT (2026-08-17): commission-only — a POS payment link never sells an
               // auction lot. Pinning posFeeRate here also pins WHICH tier decision was live at
               // completion time, which this recorder otherwise recomputes (see the note above).
@@ -539,7 +555,7 @@ export async function recordPosPaymentLinkSale(
         }
       }
       if (tagLines.length > 0) {
-        createdPurchaseIds.push(...(await recordTagRows(unifiedFeeShares ? unifiedFeeShares.slice(items.length) : [], tagCashShares)));
+        createdPurchaseIds.push(...(await recordTagRows(unifiedFeeShares ? unifiedFeeShares.slice(items.length) : [], tagCashShares, unifiedSentShares ? unifiedSentShares.slice(items.length) : [])));
       }
       purchaseIds = createdPurchaseIds;
 
@@ -568,6 +584,8 @@ export async function recordPosPaymentLinkSale(
       const miscFeeShares = tagCentsTotal > 0 ? allocateCentsProportionally(totalMiscFeeCents, miscWeights) : null;
       const miscCashShares = tagCentsTotal > 0 && splitCashCents > 0 ? allocateCentsProportionally(splitCashCents, miscWeights) : null;
       const miscFeeAmount = (miscFeeShares ? miscFeeShares[0] : totalMiscFeeCents) / 100;
+      const sentMiscTotalCents = processor === 'SQUARE' ? squareAppFeeNetOfProcessingCents(totalMiscFeeCents, fresh.amount) : 0; // 2026-10-12: app fee actually sent to Square
+      const miscSentShares = miscFeeShares ? allocateCentsProportionally(sentMiscTotalCents, miscFeeShares) : null;
       const miscCashCents = miscCashShares ? miscCashShares[0] : splitCashCents;
       if (miscTotalCents > 0) try {
         const purchase = await tx.purchase.create({
@@ -576,6 +594,7 @@ export async function recordPosPaymentLinkSale(
             saleId: fresh.saleId,
             amount: miscAmount,
             platformFeeAmount: miscFeeAmount,
+            ...(processor === 'SQUARE' ? { squareAppFeeSentCents: miscSentShares ? miscSentShares[0] : sentMiscTotalCents } : {}),
             ...snapshotForCommissionOnly(miscFeeAmount, posFeeRate),
             status: 'PAID',
             source: 'POS',
@@ -603,7 +622,8 @@ export async function recordPosPaymentLinkSale(
       if (tagLines.length > 0) {
         const tagPurchaseIds = await recordTagRows(
           miscFeeShares ? miscFeeShares.slice(1) : [],
-          miscCashShares ? miscCashShares.slice(1) : tagCentsList.map(() => 0)
+          miscCashShares ? miscCashShares.slice(1) : tagCentsList.map(() => 0),
+          miscSentShares ? miscSentShares.slice(1) : []
         );
         purchaseIds = [...purchaseIds, ...tagPurchaseIds];
         if (purchaseIds.length) {

@@ -427,6 +427,7 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
           // processing cost since the 2026-10-11 decision (platform bears it). Organizer-facing numbers keep the inclusive fee.
           platformFeeAmount: (platformFeeAmount + debtAppliedCents) / 100,
           cashDebtCollectedAmount: debtAppliedCents > 0 ? debtAppliedCents / 100 : undefined,
+          squareAppFeeSentCents: appFeeCents, // 2026-10-12: actual app_fee_money sent to Square (net of processing cost + debt padding); revenue reports read this
           ...snapshotFromBreakdown(feeBreakdown, feePercent, saleCoversFee),
           processor: 'SQUARE',
           squarePaymentId: chargeResult.paymentId,
@@ -831,6 +832,7 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
     let anyStockRace = false;
     let anyNewPurchaseCreated = false;
     let remainingDebtCentsToAllocate = debtAppliedCents;
+    let allocatedSentBaseCents = 0;
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
       const item = items[itemIndex];
       const itemPriceCents = Math.round((item.price as number) * 100);
@@ -844,6 +846,13 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
         ? remainingDebtCentsToAllocate
         : Math.min(remainingDebtCentsToAllocate, Math.round(debtAppliedCents * (itemPriceCents / totalCents)));
       remainingDebtCentsToAllocate -= itemDebtCents;
+      // 2026-10-12: this item's share of the app fee actually SENT to Square (net base, allocated by price share, last item
+      // takes the rounding remainder) plus its debt padding, so the rows sum to exactly the cart's appFeeCents.
+      const cartSentBaseCents = appFeeCents - debtAppliedCents;
+      const itemSentBaseCents = isLastItem
+        ? cartSentBaseCents - allocatedSentBaseCents
+        : Math.round(cartSentBaseCents * (itemPriceCents / totalCents));
+      allocatedSentBaseCents += itemSentBaseCents;
 
       let purchase = await prisma.purchase.findFirst({
         where: { squarePaymentId: chargeResult.paymentId, itemId: item.id },
@@ -857,6 +866,7 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
             amount: item.price as number,
             platformFeeAmount: (itemFeeCents + itemDebtCents) / 100,
             cashDebtCollectedAmount: itemDebtCents > 0 ? itemDebtCents / 100 : undefined,
+            squareAppFeeSentCents: itemSentBaseCents + itemDebtCents,
             ...snapshotForCommissionOnly(itemFeeCents / 100, feeRate),
             processor: 'SQUARE',
             squarePaymentId: chargeResult.paymentId,

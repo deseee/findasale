@@ -372,7 +372,7 @@ const CreatorDashboard = () => {
                     </p>
                   )}
                   <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-8 text-sm text-warm-800 dark:text-warm-200">
-                    You earn {rate}% of the platform fee on each purchase from your links. Commissions are held{' '}
+                    You earn {rate}% of the platform fee, after card processing costs, on each purchase from your links. Commissions are held{' '}
                     {holdDays} days, then reviewed and paid by FindA.Sale. Your creator code is{' '}
                     <span className="font-mono font-semibold">{profile?.code}</span>.
                   </div>

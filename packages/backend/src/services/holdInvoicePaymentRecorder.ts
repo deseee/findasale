@@ -17,6 +17,7 @@ import { accrueSplitCashLegOnce, allocateCentsProportionally } from './cashFeeSe
 import { computeOversoldSettlement, settleOversoldPayment, notifyOversoldSettlement, type OversoldSettlement } from './oversoldPaymentRefundService'; // 2026-09-30 payment review finding 2: a paid item that could not be fulfilled (oversold) is refunded by its card share instead of only raising an alert
 import { findBulkLotItemIds } from './bulkLot/bulkLotService'; // ADR-136 Addendum B (#659): a bulk lot on a hold invoice is paid by the cards held for it, never sold as one unit
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
+import { squareAppFeeNetOfProcessingCents } from '../utils/feeCalculator'; // 2026-10-12: record the app fee actually sent to Square (net of its processing cost)
 import { fireSquarePurchaseEngagement } from './squarePurchaseEngagementService'; // 2026-09-29 Sale Passport wiring: purchase XP, milestones, referral, badge, achievement and passport stamp for a Square-paid invoice (idempotent per payment, never throws)
 
 /**
@@ -812,6 +813,12 @@ export async function markHoldInvoicePaid(
       ? allocateCentsProportionally(holdInvoice.totalAmount, itemPriceCentsList)
       : itemPriceCentsList;
     const rowFeeCentsList = allocateCentsProportionally(holdInvoice.platformFeeAmount, itemPriceCentsList);
+    // 2026-10-12: the Square checkout link sent (invoice fee minus Square's estimated processing cost on the card leg) as
+    // app_fee_money; split it across the rows like the fee. Square invoices only (null leaves the column NULL).
+    const rowSentCentsList =
+      processor === 'SQUARE' && externalPaymentId
+        ? allocateCentsProportionally(squareAppFeeNetOfProcessingCents(holdInvoice.platformFeeAmount, invoiceCardLegCents(holdInvoice)), itemPriceCentsList)
+        : null;
     const invoiceCashCents = holdInvoice.cashAmountCents && holdInvoice.cashAmountCents > 0 ? holdInvoice.cashAmountCents : 0;
     // Cash-leg allocation (money review P2, 2026-09-29). The Purchase rows only cover the bundled
     // items; the invoice total can also carry lines that have no row (shipping, misc lines, which
@@ -919,6 +926,7 @@ export async function markHoldInvoicePaid(
             ...(lotHoldForRow ? { bulkQuantity: lotHoldForRow.quantity } : {}), // ADR-136 Addendum B: cards on this sale row (refunds read it)
             amount: itemAmount,
             platformFeeAmount: itemPlatformFeeAmount,
+            ...(rowSentCentsList ? { squareAppFeeSentCents: rowSentCentsList[bundledIdx] ?? 0 } : {}),
             ...(rowCashCents > 0 ? { cashLegAmount: rowCashCents / 100 } : {}),
             // FEE SNAPSHOT (2026-08-17): commission-only — a hold invoice is never an auction
             // lot. commissionRate is null by design: the invoice's fee is prorated across its

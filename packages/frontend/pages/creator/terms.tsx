@@ -56,7 +56,8 @@ const CreatorTermsPage = () => (
           <h2 className={h2}>3. Commission</h2>
           <p className={p}>
             You earn {P.COMMISSION_RATE_PERCENT}% of the platform fee FindA.Sale collects on a credited purchase,
-            rounded down to the nearest cent. The commission is based on our fee, not on the item price, and does
+            after the card processing cost on that purchase is subtracted, rounded down to the nearest cent. The
+            commission is based on our fee, not on the item price, and does
             not reduce what the organizer or the shopper pays. Purchases that carry no platform fee earn no
             commission.
           </p>

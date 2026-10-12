@@ -227,6 +227,7 @@ export async function executePackCheckout(deps: PackCheckoutDeps, input: PackChe
             // Recorded fee = INCLUSIVE fee (+ debt padding); appFeeCents sent to Square is net of Square's processing cost (2026-10-11).
             platformFeeAmount: (input.platformFeeCents + debtAppliedCents) / 100,
             cashDebtCollectedAmount: debtAppliedCents > 0 ? debtAppliedCents / 100 : undefined,
+            squareAppFeeSentCents: appFeeCents, // 2026-10-12: actual app_fee_money sent to Square; revenue reports read this
             ...snapshotFromBreakdown(input.feeBreakdown, input.feePercent, false),
             processor: 'SQUARE',
             squarePaymentId: paymentId,

@@ -8,7 +8,7 @@ import { createNotification } from '../services/notificationService';
 import { createSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // Square migration Wave S2 #2 (2026-09-09): auction-winner-pays-later replacement for the Stripe PaymentIntent below
 import { buildSquareIdempotencyKey } from '../services/squarePaymentService';
 import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // Wave 2 (2026-09-29): engagement parity if an auction Purchase is ever created already PAID
-import { calculateApplicationFee, getInclusivePlatformFeeRate, applyInclusiveFloor, snapshotFromBreakdown, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): the winner completes payment remotely (Square hosted checkout link) -- ONLINE channel
+import { calculateApplicationFee, getInclusivePlatformFeeRate, applyInclusiveFloor, snapshotFromBreakdown, squareAppFeeNetOfProcessingCents, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): the winner completes payment remotely (Square hosted checkout link) -- ONLINE channel
 import { evaluateAuctionReserve } from '../utils/auctionRules'; // Shared with services/auctionService.closeAuction — see that file's header
 import { lotChannelRefusal } from '../services/bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a bulk lot is never an auction
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig';
@@ -269,6 +269,7 @@ export const endAuctions = async () => {
               saleId: currentItem.sale!.id,
               amount: buyerChargeCents / 100,
               platformFeeAmount,
+              ...(purchaseProcessor === 'SQUARE' ? { squareAppFeeSentCents: squareAppFeeNetOfProcessingCents(auctionFees.applicationFeeCents, buyerChargeCents) } : {}), // 2026-10-12: app fee actually sent to Square via the link
               // FEE SNAPSHOT (2026-08-17): the premium/commission split of that
               // application_fee_amount, pinned at charge time so organizer earnings reporting
               // never has to re-derive this lot's fee from whatever the rates and the

@@ -11,7 +11,9 @@
  *     bots and self-clicks never counted)
  *   - attribution resolution used by the Square and legacy Stripe checkout paths
  *   - commission ledger (AffiliateConversion): idempotent per Purchase, no self-referral,
- *     reversal derived from Purchase.status. NOTHING is paid automatically.
+ *     reversal derived from Purchase.status. NOTHING is paid automatically. The commission base is the
+ *     platform fee NET of Square's estimated card processing cost (Patrick, 2026-10-12; see
+ *     commissionBaseFeeCents), because the platform bears that cost.
  *   - dashboard aggregates with real numbers
  *
  * Attribution chain (spec: claude_docs/feature-notes/affiliate-program-spec-S544.md section 5.2):
@@ -28,6 +30,7 @@ import {
   calculateCreatorCommissionCents,
 } from '../config/affiliateConfig';
 import { createNotification } from './notificationService';
+import { squareAppFeeNetOfProcessingCents } from '../utils/feeCalculator';
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -415,6 +418,29 @@ export async function resolveAffiliateAttribution(input: AttributionInput): Prom
 // Conversion ledger
 // ---------------------------------------------------------------------------
 
+/**
+ * The fee (cents) a creator's commission is calculated on (Patrick decision, 2026-10-12): the inclusive
+ * platform fee MINUS Square's estimated card processing cost, because the platform bears that cost
+ * (squareAppFeeNetOfProcessingCents, the same net figure sent to Square as app_fee_money).
+ *
+ *  - `inclusiveFeeCents` is the sale's own platform fee, already net of any cash-debt recoupment.
+ *  - Only the Square CARD leg incurs processing: `cardLegCents` is the purchase amount minus any cash leg of a
+ *    split tender. Cash legs and non-Square (legacy Stripe) purchases have no Square cost, so net = gross there.
+ *  - Never negative; a zero or negative fee stays 0. Computed from fee and amount alone (no stored column).
+ */
+export function commissionBaseFeeCents(params: {
+  inclusiveFeeCents: number;
+  cardLegCents: number;
+  processor?: string | null;
+}): number {
+  const fee = Math.max(0, Math.round(Number(params.inclusiveFeeCents) || 0));
+  if (fee <= 0) return 0;
+  if (params.processor !== 'SQUARE') return fee;
+  const card = Math.round(Number(params.cardLegCents) || 0);
+  if (card <= 0) return fee;
+  return squareAppFeeNetOfProcessingCents(fee, card);
+}
+
 export interface ConversionOutcome {
   recorded: boolean;
   reason?: string;
@@ -436,6 +462,8 @@ export async function recordAffiliateConversion(purchaseId: string): Promise<Con
         amount: true,
         platformFeeAmount: true,
         cashDebtCollectedAmount: true,
+        cashLegAmount: true,
+        processor: true,
         isTestTransaction: true,
         userId: true,
         buyerEmail: true,
@@ -483,10 +511,18 @@ export async function recordAffiliateConversion(purchaseId: string): Promise<Con
     }
 
     const purchaseAmountCents = Math.round((purchase.amount ?? 0) * 100);
-    const platformFeeCents = Math.max(
+    const inclusiveFeeCents = Math.max(
       0,
       Math.round(((purchase.platformFeeAmount ?? 0) - (purchase.cashDebtCollectedAmount ?? 0)) * 100)
     );
+    const cashLegCents = Math.max(0, Math.round((purchase.cashLegAmount ?? 0) * 100));
+    // Commission base = inclusive fee minus Square's estimated processing cost on the card leg (2026-10-12).
+    // Stored in the ledger's platformFeeCents so the row stays self-consistent: commission = rate x platformFeeCents.
+    const platformFeeCents = commissionBaseFeeCents({
+      inclusiveFeeCents,
+      cardLegCents: Math.max(0, purchaseAmountCents - cashLegCents),
+      processor: purchase.processor,
+    });
     const commissionCents = calculateCreatorCommissionCents(platformFeeCents);
     const eligibleAt = new Date(purchase.createdAt.getTime() + CREATOR_PROGRAM.HOLD_DAYS * 24 * 60 * 60 * 1000);
 
@@ -561,8 +597,8 @@ export interface CommissionPurchaseShape {
 const PURCHASE_COMMISSION_SELECT = { status: true, amount: true, refundedAmount: true } as const;
 
 /**
- * Commission after a PARTIAL refund (2026-09-30). A creator's commission is a share of the platform fee on
- * the purchase, and a partial refund returns that fee in proportion (Square refunds the app fee
+ * Commission after a PARTIAL refund (2026-09-30). A creator's commission is a share of the platform fee (net of
+ * Square's processing cost, 2026-10-12) on the purchase, and a partial refund returns that fee in proportion (Square refunds the app fee
  * proportionally), so the commission is prorated by (1 - refunded / amount) in integer cents, floored so
  * it can never round up and is never negative. Unrefunded purchases return the stored commission
  * untouched. A fully refunded purchase prorates to 0 (and its status already reads as reversed).

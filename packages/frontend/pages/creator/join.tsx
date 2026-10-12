@@ -69,7 +69,7 @@ const CreatorJoinPage = () => {
       <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">Earn by sharing great sales</h1>
       <p className="text-warm-700 dark:text-warm-300 mb-6">
         Share a link to any public sale. When someone follows it and buys, you earn {program.commissionRatePercent}%
-        of the platform fee on that purchase, after a {program.holdDays} day hold. It is free to join.
+        of the platform fee (after card processing costs) on that purchase, after a {program.holdDays} day hold. It is free to join.
       </p>
       <ul className="space-y-2 mb-8 text-warm-700 dark:text-warm-300">
         <li>A unique creator code and a link for every sale you want to promote.</li>
