@@ -1278,6 +1278,24 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
     res.json({ ok: true, resolved: true });
     return;
   }
+  // S-EXT-REMOVAL-SKIP-AFTER-REMOVED (2026-10-12): a skip report against a listing that is already
+  // closed is stale (e.g. an old queued poll landing after the REMOVE/REMOVED row). Writing it
+  // anyway inflates skipCount (count of REMOVE/SKIPPED rows per item+platform, read by
+  // getPendingRemovals and needsManualReview) and pushes an already-removed item into the
+  // manual-review backlog (live 2026-09-04 history: FB POST/POSTED, FB REMOVE/REMOVED, then 3
+  // REMOVE/SKIPPED rows). Same definition of "closed" as getPendingRemovals: ignore REMOVE/SKIPPED
+  // rows, and if the newest remaining row is REMOVE/REMOVED the listing is gone (a later POST/POSTED
+  // relist makes it live again, so a real skip still records). Placed AFTER the confirmedGone/verifyOnly
+  // bypass above so the organizer's Resync run is untouched. Mirrors markItemRemoved's dedupe (ada50fc74).
+  const latestNonSkip = await prisma.marketplaceListingJob.findFirst({
+    where: { itemId, platform, NOT: { action: 'REMOVE', status: 'SKIPPED' } },
+    orderBy: { createdAt: 'desc' },
+    select: { action: true, status: true },
+  });
+  if (latestNonSkip && latestNonSkip.action === 'REMOVE' && latestNonSkip.status === 'REMOVED') {
+    res.json({ ok: true, alreadyRemoved: true });
+    return;
+  }
   if (reason === 'listing_not_found') {
     const LISTING_GONE_CONFIRMATIONS = 3;
     const recent = await prisma.marketplaceListingJob.findMany({
