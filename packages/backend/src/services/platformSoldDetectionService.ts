@@ -47,7 +47,7 @@ export interface PlatformSoldResult {
   title: string;
   result: PlatformSoldResultKind;
   itemId?: string;
-  via?: 'remoteId' | 'title';
+  via?: 'remoteId' | 'title' | 'titleTokens';
   itemStatus?: string;
   listingClosed?: boolean;
   candidateCount?: number;
