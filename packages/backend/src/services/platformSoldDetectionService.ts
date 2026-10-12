@@ -22,6 +22,7 @@
 
 import { prisma } from '../lib/prisma';
 import { commitFacebookNativeSale, isMultiStockItem } from './facebookNativeSaleService';
+import { soldEmailStaleReason } from './soldEmailSourceGuard';
 import {
   buildVintedSoldMatchContext,
   matchVintedSoldEntry,
@@ -101,6 +102,8 @@ async function defaultLoadPlatformJobs(organizerId: string, platform: SoldDetect
 export async function closePlatformListingRecord(itemId: string, platform: SoldDetectionPlatform): Promise<boolean> {
   // Multi-unit item (2026-09-30): commitFacebookNativeSale closes the row inside the stock transaction.
   if (await isMultiStockItem(itemId)) return false;
+  // 2026-10-12: a sold e-mail older than the live listing must not close that listing (soldEmailSourceGuard.ts).
+  if (await soldEmailStaleReason(itemId, platform)) return false;
   const latest = await prisma.marketplaceListingJob.findFirst({
     where: { itemId, platform, NOT: { action: 'REMOVE', status: 'SKIPPED' } },
     orderBy: { createdAt: 'desc' },

@@ -44,6 +44,7 @@ jest.mock('mailparser', () => ({
   })),
 }));
 
+import { getSoldEmailSource } from '../soldEmailSourceGuard';
 import {
   processVintedBatch,
   reattachVintedBundleConversations,
@@ -254,5 +255,23 @@ describe('reattachVintedBundleConversations -- retroactive conversation id for a
     const result = newResult();
     await expect(reattachVintedBundleConversations(fakeClient([5]) as any, result)).resolves.toBe(0);
     expect(result.errors.join(' ')).toContain('VintedRetro');
+  });
+});
+
+describe('processVintedBatch -- source e-mail context for the sale guard (2026-10-12)', () => {
+  it('runs the processor inside a context carrying the marker key and the e-mail date (envelope date, else INTERNALDATE)', async () => {
+    const seen: any[] = [];
+    mockProcessVinted.mockImplementation(async () => { seen.push(getSoldEmailSource()); return { kind: 'ignored', reason: 'x' }; });
+    const client: any = fakeClient([5, 6]);
+    client.fetch = jest.fn(() =>
+      (async function* () {
+        yield { uid: 5, envelope: { messageId: '<m5@mail.example>', date: new Date('2026-10-11T21:52:00Z') }, flags: new Set<string>() };
+        yield { uid: 6, envelope: { messageId: '<m6@mail.example>' }, internalDate: new Date('2026-10-11T22:00:00Z'), flags: new Set<string>() };
+      })(),
+    );
+    await processVintedBatch(client, newResult());
+    expect(seen[0]).toEqual({ key: 'sold-email:Vinted:<m5@mail.example>', sentAt: new Date('2026-10-11T21:52:00Z') });
+    expect(seen[1]).toEqual({ key: 'sold-email:Vinted:<m6@mail.example>', sentAt: new Date('2026-10-11T22:00:00Z') });
+    expect(getSoldEmailSource()).toBeUndefined(); // context does not leak out of the call
   });
 });

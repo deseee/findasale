@@ -64,6 +64,7 @@ import { processMercariSoldEmail, type MercariSoldEmailResult } from './mercariS
 import { processPoshmarkSoldEmail, type PoshmarkSoldEmailResult } from './poshmarkSoldEmailDetection';
 import { processGrailedSoldEmail, type GrailedSoldEmailResult } from './grailedSoldEmailDetection';
 import { prisma } from '../lib/prisma';
+import { runWithSoldEmailSource } from './soldEmailSourceGuard';
 import { createNotification } from '../lib/notificationService';
 import {
   notifyOrganizerVintedBundleSale,
@@ -348,6 +349,8 @@ type TitleEmailOutcome =
 
 export interface WindowMessageInfo {
   uid: number;
+  /** Envelope Date header, else IMAP INTERNALDATE; null when neither is available. Feeds soldEmailSourceGuard. */
+  sentAt?: Date | null;
   /** Gmail/RFC822 Message-ID header (envelope), null when absent. */
   messageId: string | null;
   seen: boolean;
@@ -359,6 +362,12 @@ export function soldEmailEventKey(label: string, info: Pick<WindowMessageInfo, '
   return `${SOLD_EMAIL_EVENT_PREFIX}${label}:${id || `uid:${info.uid}`}`;
 }
 
+function toValidDate(v: unknown): Date | null {
+  if (v === null || v === undefined || v === '') return null;
+  const d = v instanceof Date ? v : new Date(v as any);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /** Envelope + flags for the searched UIDs (one IMAP FETCH, no bodies). Returns null on failure. */
 async function fetchWindowMessageInfo(
   client: ImapFlow,
@@ -368,11 +377,12 @@ async function fetchWindowMessageInfo(
 ): Promise<WindowMessageInfo[] | null> {
   try {
     const out: WindowMessageInfo[] = [];
-    for await (const msg of client.fetch(uids, { uid: true, envelope: true, flags: true }, { uid: true })) {
+    for await (const msg of client.fetch(uids, { uid: true, envelope: true, flags: true, internalDate: true }, { uid: true })) {
       const m: any = msg;
       out.push({
         uid: Number(m.uid),
         messageId: m.envelope?.messageId ? String(m.envelope.messageId) : null,
+        sentAt: toValidDate(m.envelope?.date) ?? toValidDate(m.internalDate),
         seen: m.flags instanceof Set ? m.flags.has('\\Seen') : Array.isArray(m.flags) ? m.flags.includes('\\Seen') : false,
       });
     }
@@ -463,7 +473,8 @@ async function processTitleEmailBatch(
         throw new Error(`IMAP fetchOne returned no source for UID ${uid}`);
       }
       const email = await parseImapMessageToInboundEmail(msg.source as Buffer);
-      outcome = await process(email);
+      // 2026-10-12: the sale commit below this call can see WHICH e-mail it came from (replay / relist guard).
+      outcome = await runWithSoldEmailSource({ key, sentAt: info.sentAt ?? null }, () => process(email));
     } catch (err: any) {
       result.errors.push(`${label} UID ${uid}: ${err.message}`);
       console.error(

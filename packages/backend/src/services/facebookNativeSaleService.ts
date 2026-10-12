@@ -49,6 +49,7 @@ import { sellItemUnits } from './itemStockService';
 import { syncMarketplaceStock } from './marketplaceStockSyncService';
 import { lotChannelRefusal } from './bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a bulk lot is never marked SOLD by a sale seen elsewhere
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
+import { soldEmailStaleReason, soldEmailAlreadyApplied, soldRowMessage } from './soldEmailSourceGuard'; // 2026-10-12: an e-mail replayed after marker loss / relist must not consume a unit twice
 import { isReportOfCancelledReopenedSale } from './saleReopenGuard'; // reopen-sale (2026-10-10): a sold signal for a sale the organizer reopened must not re-sell it
 
 export interface CommitFacebookNativeSaleResult {
@@ -219,7 +220,8 @@ async function commitPlatformUnitSale(
         status: 'REMOVED',
         platform,
         lastAttemptAt: new Date(),
-        lastErrorMessage: `sold_on_${platform.toLowerCase()}`,
+        // With a poller e-mail context this is `sold_on_<platform>|src:<hash of the e-mail's marker key>` so the same e-mail is recognised later.
+        lastErrorMessage: soldRowMessage(`sold_on_${platform.toLowerCase()}`),
         // Remember WHICH listing sold (when reported) so a repeat report of it is recognised as already counted.
         remoteListingId: reportedId || null,
       },
@@ -264,6 +266,18 @@ export async function commitFacebookNativeSale(
   if (await isReportOfCancelledReopenedSale(itemId, soldVia, options.soldOnPlatform?.remoteListingId)) {
     console.warn(`[commitFacebookNativeSale] item ${itemId} was reopened after a cancelled sale, ignoring sold signal (${soldVia})`);
     return { ok: true, alreadyCommitted: true };
+  }
+  // Sold-e-mail replay guard (2026-10-12, see soldEmailSourceGuard.ts): only active inside the poller's e-mail context.
+  if (options.soldOnPlatform) {
+    const stale = await soldEmailStaleReason(itemId, options.soldOnPlatform.platform);
+    if (stale) {
+      console.warn(`[commitFacebookNativeSale] item ${itemId}: ignoring sold e-mail (${stale}) on ${options.soldOnPlatform.platform}`);
+      return { ok: true, alreadyCommitted: true };
+    }
+    if (await soldEmailAlreadyApplied(itemId, options.soldOnPlatform.platform)) {
+      console.warn(`[commitFacebookNativeSale] item ${itemId}: this sold e-mail already consumed a unit on ${options.soldOnPlatform.platform}, ignoring replay`);
+      return { ok: true, alreadyCommitted: true };
+    }
   }
   const skip = new Set<string>(options.skipWithdraw ?? []);
   if (options.soldOnPlatform) {

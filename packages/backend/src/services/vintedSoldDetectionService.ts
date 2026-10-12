@@ -37,6 +37,7 @@
 
 import { prisma } from '../lib/prisma';
 import { commitFacebookNativeSale, isMultiStockItem } from './facebookNativeSaleService';
+import { soldEmailStaleReason } from './soldEmailSourceGuard';
 
 export const SOLD_VIA_VINTED = 'VINTED';
 export const VINTED_SOLD_MAX_ENTRIES = 200;
@@ -180,6 +181,8 @@ async function defaultCloseVintedListingRecord(itemId: string): Promise<boolean>
   // Multi-unit item (2026-09-30): commitFacebookNativeSale closes the row itself, inside the same
   // transaction as the stock decrement -- closing it here first would consume the idempotency key.
   if (await isMultiStockItem(itemId)) return false;
+  // 2026-10-12: a sold e-mail older than the live listing must not close that listing (soldEmailSourceGuard.ts).
+  if (await soldEmailStaleReason(itemId, 'VINTED')) return false;
   const latest = await prisma.marketplaceListingJob.findFirst({
     where: { itemId, platform: 'VINTED', NOT: { action: 'REMOVE', status: 'SKIPPED' } },
     orderBy: { createdAt: 'desc' },
