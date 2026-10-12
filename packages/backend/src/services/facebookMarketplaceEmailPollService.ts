@@ -60,6 +60,7 @@ import {
 } from './facebookMarketplaceEmailSoldDetection';
 import { headerValues, extractAddresses, type RawHeaderLine } from './inboundEmailAuthService';
 import { processVintedSoldEmail, inspectVintedBundleEmail, type VintedSoldEmailResult } from './vintedSoldEmailDetection';
+import { processVintedSoldTitleReportTokenMatchOnly } from './vintedSoldDetectionService';
 import { processMercariSoldEmail, type MercariSoldEmailResult } from './mercariSoldEmailDetection';
 import { processPoshmarkSoldEmail, type PoshmarkSoldEmailResult } from './poshmarkSoldEmailDetection';
 import { processGrailedSoldEmail, type GrailedSoldEmailResult } from './grailedSoldEmailDetection';
@@ -562,6 +563,8 @@ export async function processVintedBatch(client: ImapFlow, result: FacebookSoldE
 const VINTED_RETRO_SEARCH_QUERY = '(from:no-reply@vinted.com) newer_than:7d -in:spam -in:trash';
 const VINTED_RETRO_MAX_UIDS = 200;
 const VINTED_RETRO_BACKOFF_MS = 3 * 60 * 60 * 1000;
+/** Token-match retry: e-mails re-evaluated per poll (the rest wait for the next 20-minute run). */
+const VINTED_RETRY_MAX_PER_RUN = 40;
 
 /** Deterministic backoff marker so an unmatched notice is not re-scanned on every 20-minute poll. Exported for tests. */
 export function vintedRetroEventKey(noticeId: string, now: number = Date.now()): string {
@@ -638,6 +641,82 @@ export async function reattachVintedBundleConversations(client: ImapFlow, result
     console.error('[facebookMarketplaceEmailPollService] VintedRetro pass failed:', err?.message || err);
   }
   return attached;
+}
+
+/** Backoff marker for the token-match retry pass: an e-mail that still has no safe match is not re-evaluated for a few hours. Exported for tests. */
+export function vintedSoldRetryKey(emailKey: string, now: number = Date.now()): string {
+  return `${emailKey}:retry:${Math.floor(now / VINTED_RETRO_BACKOFF_MS)}`;
+}
+
+/** Permanent marker: this e-mail went through the token-match retry and reached a final outcome. Exported for tests. */
+export function vintedSoldRetryDoneKey(emailKey: string): string {
+  return `${emailKey}:retry:done`;
+}
+
+/**
+ * TOKEN-MATCH RETRY of already-processed Vinted sold e-mails (2026-10-12, Nickel Coin Tube). processVintedBatch marks every
+ * handled e-mail processed, including an 'unmatched' one, so a sold e-mail whose title could not be matched when it arrived
+ * (here: re-worded versus the stored title, before the token-overlap matcher shipped) was never looked at again and the
+ * Vinted listing row stayed POSTED after the sale. This pass re-reads the last 7 days of Vinted mail and replays an already
+ * processed e-mail ONLY through processVintedSoldTitleReportTokenMatchOnly: it sells something only when the title resolves
+ * to exactly one item with a live Vinted listing by token overlap (never an exact-title hit, which an earlier pass already
+ * handled and which could belong to an item that is back on sale). The usual replay guards still apply (the e-mail context
+ * runs through runWithSoldEmailSource: an e-mail older than the live listing, or one that already consumed a unit, is ignored).
+ * Idempotent through markers (no schema change): ":retry:done" once matched / final, a 3-hour bucket marker while still
+ * unmatched. Never notifies, never marks anything \Seen, never throws. Returns how many items it sold.
+ */
+export async function retryTokenMatchVintedSoldEmails(client: ImapFlow, result: FacebookSoldEmailPollResult): Promise<number> {
+  let sold = 0;
+  try {
+    const found = await searchUnread(client, VINTED_RETRO_SEARCH_QUERY, 'VintedRetry', result);
+    const uids = (found ?? []).slice(-VINTED_RETRO_MAX_UIDS);
+    if (uids.length === 0) return 0;
+    const infos = await fetchWindowMessageInfo(client, uids, 'VintedRetry', result);
+    if (!infos || infos.length === 0) return 0;
+    const now = Date.now();
+    const markers = await loadProcessedKeys(
+      infos.flatMap((i) => {
+        const k = soldEmailEventKey('Vinted', i);
+        return [k, vintedSoldRetryDoneKey(k), vintedSoldRetryKey(k, now)];
+      }),
+    );
+    // Only e-mails the normal pass already handled (marker present); a brand-new one belongs to processVintedBatch.
+    const candidates = infos.filter((i) => {
+      const k = soldEmailEventKey('Vinted', i);
+      return markers.has(k) && !markers.has(vintedSoldRetryDoneKey(k)) && !markers.has(vintedSoldRetryKey(k, now));
+    });
+    for (const info of candidates.slice(0, VINTED_RETRY_MAX_PER_RUN)) {
+      const key = soldEmailEventKey('Vinted', info);
+      try {
+        const msg: any = await client.fetchOne(info.uid, { source: true }, { uid: true });
+        if (!msg || !msg.source) continue;
+        const email = await parseImapMessageToInboundEmail(msg.source as Buffer);
+        const outcome = await runWithSoldEmailSource({ key, sentAt: info.sentAt ?? null }, () =>
+          processVintedSoldEmail(email, {
+            processTitleReport: (organizerId: string, title: string) => processVintedSoldTitleReportTokenMatchOnly(organizerId, title),
+          }),
+        );
+        if (outcome.kind === 'matched') {
+          if (!outcome.alreadySold) {
+            sold++;
+            console.log(`[facebookMarketplaceEmailPollService] VintedRetry: token-matched an unmatched sold e-mail to item ${outcome.itemId} (result=${outcome.result})`);
+          }
+          await claimProcessed(vintedSoldRetryDoneKey(key));
+        } else if (outcome.kind === 'unmatched' || outcome.kind === 'ambiguous') {
+          await claimProcessed(vintedSoldRetryKey(key, now)); // still no safe match: look again in a few hours
+        } else {
+          await claimProcessed(vintedSoldRetryDoneKey(key)); // ignored / bundle: nothing a title retry can do
+        }
+      } catch (err: any) {
+        // A failed commit leaves no marker, so the next poll retries it.
+        console.warn(`[facebookMarketplaceEmailPollService] VintedRetry UID ${info.uid} skipped:`, err?.message || err);
+      }
+    }
+  } catch (err: any) {
+    result.errors.push(`VintedRetry: ${err?.message || err}`);
+    console.error('[facebookMarketplaceEmailPollService] VintedRetry pass failed:', err?.message || err);
+  }
+  return sold;
 }
 
 /** Mercari branch (2026-09-23): every not-yet-processed "You've made a sale: ..." email. */
@@ -768,6 +847,7 @@ export async function pollFacebookMarketplaceSoldEmails(): Promise<FacebookSoldE
 
     await processVintedBatch(client, result);
     await reattachVintedBundleConversations(client, result);
+    await retryTokenMatchVintedSoldEmails(client, result);
     await processMercariBatch(client, result);
     await processPoshmarkBatch(client, result);
     await processGrailedBatch(client, result);

@@ -29,6 +29,10 @@ jest.mock('../vintedSoldEmailDetection', () => ({
   processVintedSoldEmail: (...a: any[]) => mockProcessVinted(...a),
   inspectVintedBundleEmail: (...a: any[]) => mockInspect(...a),
 }));
+const mockTokenOnly = jest.fn();
+jest.mock('../vintedSoldDetectionService', () => ({
+  processVintedSoldTitleReportTokenMatchOnly: (...a: any[]) => mockTokenOnly(...a),
+}));
 jest.mock('../facebookMarketplaceEmailSoldDetection', () => ({ processFacebookMarketplaceOrderEmail: jest.fn() }));
 jest.mock('../mercariSoldEmailDetection', () => ({ processMercariSoldEmail: jest.fn() }));
 jest.mock('../poshmarkSoldEmailDetection', () => ({ processPoshmarkSoldEmail: jest.fn() }));
@@ -48,6 +52,9 @@ import { getSoldEmailSource } from '../soldEmailSourceGuard';
 import {
   processVintedBatch,
   reattachVintedBundleConversations,
+  retryTokenMatchVintedSoldEmails,
+  vintedSoldRetryKey,
+  vintedSoldRetryDoneKey,
   vintedRetroEventKey,
   soldEmailEventKey,
   SOLD_EMAIL_WINDOW_DAYS,
@@ -273,5 +280,57 @@ describe('processVintedBatch -- source e-mail context for the sale guard (2026-1
     expect(seen[0]).toEqual({ key: 'sold-email:Vinted:<m5@mail.example>', sentAt: new Date('2026-10-11T21:52:00Z') });
     expect(seen[1]).toEqual({ key: 'sold-email:Vinted:<m6@mail.example>', sentAt: new Date('2026-10-11T22:00:00Z') });
     expect(getSoldEmailSource()).toBeUndefined(); // context does not leak out of the call
+  });
+});
+
+describe('retryTokenMatchVintedSoldEmails -- token-match retry of already-processed sold e-mails (2026-10-12)', () => {
+  const KEY = 'sold-email:Vinted:<m5@mail.example>';
+  const created = () => mockPrisma.processedWebhookEvent.create.mock.calls.map((c: any[]) => c[0].data.eventId);
+
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  it('leaves an e-mail without a processed marker to processVintedBatch (nothing replayed here)', async () => {
+    mockPrisma.processedWebhookEvent.findMany.mockResolvedValue([]);
+    expect(await retryTokenMatchVintedSoldEmails(fakeClient([5]) as any, newResult())).toBe(0);
+    expect(mockProcessVinted).not.toHaveBeenCalled();
+  });
+
+  it('replays a processed e-mail through the token-match-only processor and closes it with a done marker when it sells', async () => {
+    mockPrisma.processedWebhookEvent.findMany.mockResolvedValue([{ eventId: KEY }]);
+    mockProcessVinted.mockImplementation(async (_email: any, deps: any) => {
+      await deps.processTitleReport('org1', 'BCW Nickel Coin Tubes, Each, Crystal Clear Storage');
+      return { kind: 'matched', organizerId: 'org1', itemId: 'nickel', title: 't', soldVia: 'VINTED', alreadySold: false, result: 'sold' };
+    });
+    expect(await retryTokenMatchVintedSoldEmails(fakeClient([5], [5]) as any, newResult())).toBe(1);
+    expect(mockTokenOnly).toHaveBeenCalledWith('org1', 'BCW Nickel Coin Tubes, Each, Crystal Clear Storage');
+    expect(created()).toEqual([vintedSoldRetryDoneKey(KEY)]);
+  });
+
+  it('an e-mail that still has no safe match is only backed off for a few hours (and never notified or flagged)', async () => {
+    mockPrisma.processedWebhookEvent.findMany.mockResolvedValue([{ eventId: KEY }]);
+    mockProcessVinted.mockResolvedValue({ kind: 'unmatched', organizerId: 'org1', title: 't', reason: 'no_match' });
+    const client = fakeClient([5]);
+    expect(await retryTokenMatchVintedSoldEmails(client as any, newResult())).toBe(0);
+    expect(created()).toEqual([vintedSoldRetryKey(KEY)]);
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+    expect(client.messageFlagsAdd).not.toHaveBeenCalled();
+  });
+
+  it('skips an e-mail already finished or inside its backoff bucket', async () => {
+    mockPrisma.processedWebhookEvent.findMany.mockResolvedValue([{ eventId: KEY }, { eventId: vintedSoldRetryDoneKey(KEY) }]);
+    expect(await retryTokenMatchVintedSoldEmails(fakeClient([5]) as any, newResult())).toBe(0);
+    mockPrisma.processedWebhookEvent.findMany.mockResolvedValue([{ eventId: KEY }, { eventId: vintedSoldRetryKey(KEY) }]);
+    expect(await retryTokenMatchVintedSoldEmails(fakeClient([5]) as any, newResult())).toBe(0);
+    expect(mockProcessVinted).not.toHaveBeenCalled();
+  });
+
+  it('a thrown commit leaves no marker (retried on the next poll) and the pass never throws', async () => {
+    mockPrisma.processedWebhookEvent.findMany.mockResolvedValue([{ eventId: KEY }]);
+    mockProcessVinted.mockRejectedValue(new Error('commit failed'));
+    await expect(retryTokenMatchVintedSoldEmails(fakeClient([5]) as any, newResult())).resolves.toBe(0);
+    expect(created()).toEqual([]);
   });
 });

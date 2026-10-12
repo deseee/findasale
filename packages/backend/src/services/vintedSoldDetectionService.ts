@@ -436,6 +436,38 @@ export async function processVintedSoldTitleReport(
   return result;
 }
 
+/**
+ * RETRY variant for a sold e-mail that was already processed once (2026-10-12, Nickel Coin Tube): the first pass found no
+ * match (the re-worded e-mail title did not exact-match, and the token-overlap matcher was not deployed yet), the e-mail
+ * was marked processed and never looked at again, so the Vinted row stayed POSTED after the sale. A replay must be SAFE, so
+ * it is deliberately narrower than processVintedSoldTitleReport: it only goes ahead when the pure matcher resolves the title
+ * to exactly one item with a LIVE Vinted listing through the token-overlap fallback. Anything else (exact title hit, no
+ * match, ambiguous) returns notFound WITHOUT touching the item, because an exact-title email that matched earlier may belong
+ * to an item the organizer has since put back on sale, and replaying it would sell that item again.
+ */
+export async function processVintedSoldTitleReportTokenMatchOnly(
+  organizerId: string,
+  title: string,
+  deps: VintedSoldDeps = {},
+): Promise<VintedSoldEntryResult> {
+  if (!organizerId) throw new Error('organizerId required'); // never an unscoped lookup
+  const clean = String(title ?? '').slice(0, 500);
+  const loadCandidateItems = deps.loadCandidateItems ?? defaultLoadCandidateItems;
+  const loadVintedJobs = deps.loadVintedJobs ?? defaultLoadVintedJobs;
+  const [items, jobs] = await Promise.all([loadCandidateItems(organizerId), loadVintedJobs(organizerId)]);
+  const m = matchVintedSoldEntry({ vintedId: '', title: clean }, buildVintedSoldMatchContext(items, jobs));
+  if (m.kind !== 'matched' || m.via !== 'titleTokens') {
+    return {
+      vintedId: '',
+      title: clean,
+      result: 'notFound',
+      matched: false,
+      reason: m.kind === 'notFound' ? m.reason : 'retry_not_a_token_match',
+    };
+  }
+  return processVintedSoldTitleReport(organizerId, clean, deps);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Manual reconciliation (2026-10-12, Vinted bundle sale): the organizer ticks the items that were
 // in a bundle and we run the SAME per-item sold flow as the email / wardrobe paths above

@@ -13,6 +13,7 @@ import {
   matchVintedSoldEntry,
   processVintedSoldReport,
   processVintedSoldTitleReport,
+  processVintedSoldTitleReportTokenMatchOnly,
   sanitizeVintedSoldEntries,
   markItemsSoldOnVinted,
   sanitizeManualSoldItemIds,
@@ -363,5 +364,48 @@ describe('markItemsSoldOnVinted / sanitizeManualSoldItemIds', () => {
   it('sanitizeManualSoldItemIds keeps unique non-empty strings only', () => {
     expect(sanitizeManualSoldItemIds(['a', ' a ', '', 5, null, 'b', 'x'.repeat(65)])).toEqual(['a', 'b']);
     expect(sanitizeManualSoldItemIds('nope')).toEqual([]);
+  });
+});
+
+describe('processVintedSoldTitleReportTokenMatchOnly -- safe replay of an already-processed sold e-mail', () => {
+  const items = [
+    { id: 'nickel', title: 'BCW Nickel Size Coin Tube Crystal Clear, Qty 1', status: 'AVAILABLE' },
+    { id: 'undone', title: 'Walnut Jewelry Box Vintage', status: 'AVAILABLE' },
+  ];
+  const jobs = [
+    { itemId: 'nickel', remoteListingId: null, action: 'POST', status: 'POSTED', createdAt: new Date('2026-10-10T00:00:00Z') },
+    { itemId: 'undone', remoteListingId: null, action: 'POST', status: 'POSTED', createdAt: new Date('2026-10-10T00:00:00Z') },
+  ];
+  function deps() {
+    return {
+      loadCandidateItems: jest.fn(async () => items),
+      loadVintedJobs: jest.fn(async () => jobs),
+      closeVintedListingRecord: jest.fn(async () => true),
+      commitSale: jest.fn(async () => ({ alreadyCommitted: false })),
+      getItemStatus: jest.fn(async () => 'SOLD'),
+    };
+  }
+
+  it('sells the one live item a re-worded title token-matches (the Nickel tube) and closes its Vinted record', async () => {
+    const d = deps();
+    const r = await processVintedSoldTitleReportTokenMatchOnly('org_1', 'BCW Nickel Coin Tubes, Each, Crystal Clear Storage', d);
+    expect(r).toMatchObject({ result: 'sold', itemId: 'nickel', via: 'titleTokens', vintedListingClosed: true });
+    expect(d.commitSale).toHaveBeenCalledTimes(1);
+  });
+
+  it('never replays an EXACT-title e-mail (that item may be back on sale): notFound, nothing committed', async () => {
+    const d = deps();
+    const r = await processVintedSoldTitleReportTokenMatchOnly('org_1', 'Walnut Jewelry Box Vintage', d);
+    expect(r).toMatchObject({ result: 'notFound', matched: false });
+    expect(d.commitSale).not.toHaveBeenCalled();
+    expect(d.closeVintedListingRecord).not.toHaveBeenCalled();
+  });
+
+  it('commits nothing when there is no safe token match, and refuses an unscoped call', async () => {
+    const d = deps();
+    const r = await processVintedSoldTitleReportTokenMatchOnly('org_1', 'Something Completely Different Title Here', d);
+    expect(r).toMatchObject({ result: 'notFound', matched: false });
+    expect(d.commitSale).not.toHaveBeenCalled();
+    await expect(processVintedSoldTitleReportTokenMatchOnly('', 'x', d)).rejects.toThrow();
   });
 });
