@@ -130,6 +130,13 @@ describe('POST vinted-bundle-orders/report', () => {
     expect(res.json).toHaveBeenCalledWith({ ok: true, status: 'resolved', resolved: 5, itemCount: 5, results: [] });
   });
 
+  it('passes the optional failReason through to the service', async () => {
+    mockReportOrder.mockResolvedValue({ status: 'partial', resolved: 0, itemCount: 5, attempts: 1, fallbackShown: false, results: [] });
+    const res = mockRes();
+    await reportVintedBundleOrderItems({ user: { id: 'u1' }, body: { noticeId: 'n1', conversationId: '900100200300', items: [], readFailed: true, failReason: 'http_403' } } as any, res);
+    expect(mockReportOrder).toHaveBeenCalledWith(expect.objectContaining({ readFailed: true, failReason: 'http_403' }));
+  });
+
   it('maps not-found to 404 and a refusal to 400', async () => {
     mockReportOrder.mockResolvedValueOnce({ status: 'notFound' });
     let res = mockRes();

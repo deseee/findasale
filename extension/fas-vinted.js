@@ -5076,15 +5076,30 @@
       const tok = m && m.getAttribute('content');
       if (tok) headers['X-CSRF-Token'] = tok;
     } catch (e) { /* none */ }
-    let last = { ok: false, why: 'fetch_error' };
+    const hasCsrf = !!headers['X-CSRF-Token'];
+    let last = { ok: false, why: 'network' };
     for (let attempt = 0; attempt < 2; attempt++) {
       if (attempt) await sleep(2500 + Math.floor(Math.random() * 1000));
       let res;
+      let timer = null;
       try {
-        res = await fetch(location.origin + path, { credentials: 'include', headers });
-      } catch (e) { last = { ok: false, why: 'fetch_error' }; continue; }
-      if (!res || !res.ok) { last = { ok: false, why: 'http_' + (res ? res.status : 'none') }; continue; }
-      try { return { ok: true, data: await res.json() }; } catch (e) { last = { ok: false, why: 'non_json' }; }
+        // 2026-10-12: bounded wait so a hung request reports 'timeout' instead of stalling the whole run.
+        const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+        if (ctrl) timer = setTimeout(() => { try { ctrl.abort(); } catch (e2) { /* ignore */ } }, 20000);
+        res = await fetch(location.origin + path, ctrl ? { credentials: 'include', headers, signal: ctrl.signal } : { credentials: 'include', headers });
+      } catch (e) {
+        last = { ok: false, why: (e && e.name === 'AbortError') ? 'timeout' : 'network' };
+        continue;
+      } finally { if (timer) clearTimeout(timer); }
+      if (!res || !res.ok) {
+        const st = res ? res.status : 0;
+        // Reason codes only (status number / fixed words): never cookies, tokens, URLs or response bodies.
+        if (st === 401) last = { ok: false, why: 'not_logged_in' };
+        else if (st === 403 && !hasCsrf) last = { ok: false, why: 'http_403_csrf_missing' };
+        else last = { ok: false, why: st ? 'http_' + st : 'network' };
+        continue;
+      }
+      try { return { ok: true, data: await res.json() }; } catch (e) { last = { ok: false, why: 'not_json' }; }
     }
     return last;
   }
@@ -5169,7 +5184,7 @@
       if (emb) sources.push(emb);
       pick = vintBundlePickItems(sources, itemCount);
     }
-    if (!pick) return { ok: false, why: sawHttp || 'no_items_found' };
+    if (!pick) return { ok: false, why: sawHttp || (sources.length ? 'items_incomplete' : 'no_items_found') };
     return { ok: true, source: pick.source, items: pick.items };
   }
 
@@ -5194,7 +5209,9 @@
         await vintRemStorageSet(VINT_BUNDLE_TRIES_KEY, tries);
         didWork = true;
         const read = await vintBundleReadOrder(order);
-        console.log('[FAS Vinted] bundle-order ' + order.conversationId + ': ' + (read.ok ? (read.items.length + ' of ' + order.itemCount + ' item(s) via ' + read.source) : ('could not read (' + read.why + ')')));
+        const failReason = read.ok ? '' : String(read.why || 'unknown').replace(/[^a-z0-9_:.-]/gi, '').slice(0, 120) || 'unknown';
+        if (read.ok) console.log('[FAS Vinted] bundle-order ' + order.conversationId + ': ' + read.items.length + ' of ' + order.itemCount + ' item(s) via ' + read.source);
+        else console.warn('[FAS Vinted] bundle order read failed: ' + failReason);
         let resp = null;
         try {
           resp = await chrome.runtime.sendMessage({
@@ -5203,6 +5220,7 @@
             conversationId: String(order.conversationId),
             items: read.ok ? read.items : [],
             readFailed: !read.ok,
+            failReason: read.ok ? undefined : failReason,
           });
         } catch (e) { resp = null; }
         // 2026-10-12: a report that never reached the backend must not burn this notice's 20-minute try window.

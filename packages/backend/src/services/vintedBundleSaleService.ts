@@ -106,6 +106,8 @@ export interface VintedBundleNoticeMeta {
   itemCount: number | null;
   amountText: string | null;
   attempts: number;
+  /** Sanitized reason of the last failed read (link param `lr`), or null. */
+  lastReason: string | null;
 }
 
 export function buildBundleNoticeLink(meta: {
@@ -113,12 +115,15 @@ export function buildBundleNoticeLink(meta: {
   itemCount: number;
   amountText?: string | null;
   attempts?: number;
+  lastReason?: string | null;
 }): string {
   const params = new URLSearchParams();
   if (meta.conversationId && /^\d{5,20}$/.test(meta.conversationId)) params.set('vc', meta.conversationId);
   params.set('ic', String(Math.max(1, Math.min(200, Math.floor(meta.itemCount)))));
   if (meta.amountText) params.set('at', String(meta.amountText).replace(/[^\w$€£¥.,\s]/g, '').trim().slice(0, 20));
   params.set('ta', String(Math.max(0, Math.floor(meta.attempts ?? 0))));
+  const lr = String(meta.lastReason ?? '').replace(/[^a-z0-9_:.-]/gi, '').slice(0, 120);
+  if (lr) params.set('lr', lr);
   return `${VINTED_BUNDLE_PAGE_PATH}?${params.toString()}`;
 }
 
@@ -148,6 +153,7 @@ export function parseBundleNoticeLink(link: string | null | undefined, body?: st
     itemCount: Number.isFinite(ic) && ic >= 1 && ic <= 200 ? ic : itemCountFromBundleBody(body),
     amountText: at ? at.slice(0, 20) : amountFromBundleBody(body),
     attempts: Number.isFinite(ta) && ta > 0 ? ta : 0,
+    lastReason: (sp.get('lr') ?? '').replace(/[^a-z0-9_:.-]/gi, '').slice(0, 120) || null,
   };
 }
 
@@ -370,13 +376,14 @@ export async function attachConversationToNotice(
 export async function recordBundleNoticeAttempt(
   notice: { id: string; link: string | null; body: string },
   organizerId: string,
+  failReason: string | null = null,
 ): Promise<{ attempts: number; fallbackShown: boolean }> {
   const meta = parseBundleNoticeLink(notice.link, notice.body);
   const attempts = meta.attempts + 1;
   try {
     const itemCount = meta.itemCount ?? 1;
     const data: { link: string; body?: string; title?: string } = {
-      link: buildBundleNoticeLink({ conversationId: meta.conversationId, itemCount, amountText: meta.amountText, attempts }),
+      link: buildBundleNoticeLink({ conversationId: meta.conversationId, itemCount, amountText: meta.amountText, attempts, lastReason: failReason ?? meta.lastReason }),
     };
     let fallbackShown = false;
     if (attempts === VINTED_BUNDLE_AUTO_MAX_ATTEMPTS) {

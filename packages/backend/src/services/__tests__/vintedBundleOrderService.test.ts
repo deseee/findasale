@@ -198,6 +198,31 @@ describe('reportVintedBundleOrder', () => {
     expect(mockPrisma.notification.update.mock.calls[0][0].data.body).toContain('Vinted bundle page');
   });
 
+  it('a failed read persists a sanitized reason in the notice link and logs it', async () => {
+    const { deps } = soldDeps();
+    mockPrisma.notification.findFirst.mockResolvedValue(notice({ link: buildBundleNoticeLink({ conversationId: CONV, itemCount: 3, amountText: '$5.00', attempts: 0 }) }));
+    const spy = console.log as unknown as jest.Mock;
+    await reportVintedBundleOrder(args([], { readFailed: true, failReason: 'http_403_csrf_missing; <b>cookie=abc</b>' + 'x'.repeat(300) }), deps);
+    const link = mockPrisma.notification.update.mock.calls[0][0].data.link;
+    const lr = parseBundleNoticeLink(link).lastReason as string;
+    expect(lr.startsWith('http_403_csrf_missingbcookieabc')).toBe(true);
+    expect(lr.length).toBeLessThanOrEqual(120);
+    expect(lr).not.toMatch(/[^a-z0-9_:.-]/i);
+    const logged = spy.mock.calls.map((c) => String(c[1] ?? c[0])).join('\n');
+    expect(logged).toContain('"readFailed":true');
+    expect(logged).toContain('"reason":"http_403_csrf_missing');
+  });
+
+  it('ignores a non-string failReason and a failReason without readFailed', async () => {
+    const { deps } = soldDeps();
+    mockPrisma.notification.findFirst.mockResolvedValue(notice({ link: buildBundleNoticeLink({ conversationId: CONV, itemCount: 3, amountText: '$5.00', attempts: 0 }) }));
+    await reportVintedBundleOrder(args([], { readFailed: true, failReason: { a: 1 } }), deps);
+    expect(parseBundleNoticeLink(mockPrisma.notification.update.mock.calls[0][0].data.link).lastReason).toBeNull();
+    mockPrisma.notification.update.mockClear();
+    await reportVintedBundleOrder(args([], { failReason: 'timeout' }), deps);
+    expect(parseBundleNoticeLink(mockPrisma.notification.update.mock.calls[0][0].data.link).lastReason).toBeNull();
+  });
+
   it('ignores malformed entries (non-numeric ids) and de-duplicates', async () => {
     const { commitSale, deps } = soldDeps();
     const r = await reportVintedBundleOrder(

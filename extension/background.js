@@ -2658,12 +2658,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               .slice(0, 200)
               .map((e) => ({ vintedId: String(e.vintedId), title: e.title.slice(0, 500) }))
           : [];
+        // Short failure code from the content script (e.g. http_403_csrf_missing); re-sanitized, never free text.
+        const failReason = msg.readFailed === true && typeof msg.failReason === 'string'
+          ? msg.failReason.replace(/[^a-z0-9_:.-]/gi, '').slice(0, 120) : '';
         if (!/^https:\/\/www\.vinted\.com\//.test(senderUrl) || !noticeId || !conversationId) {
           sendResponse({ ok: false, status: 400, error: 'invalid_request' });
         } else {
-          const r = await apiFetch('/extension/vinted-bundle-orders/report',
-            { method: 'POST', body: { noticeId, conversationId, items: entries, readFailed: msg.readFailed === true } });
-          console.log('[FAS reportVintedBundleOrder]', JSON.stringify({ sent: entries.length, status: r.status, outcome: r.data && r.data.status, resolved: r.data && r.data.resolved }));
+          const reportBody = { noticeId, conversationId, items: entries, readFailed: msg.readFailed === true };
+          if (failReason) reportBody.failReason = failReason;
+          if (failReason) fasLog('warn', 'vintedBundleOrderReadFailed', 'bundle order read failed: ' + failReason, { noticeId: noticeId, conversationId: conversationId });
+          const r = await apiFetch('/extension/vinted-bundle-orders/report', { method: 'POST', body: reportBody });
+          console.log('[FAS reportVintedBundleOrder]', JSON.stringify({ sent: entries.length, failReason: failReason || undefined, status: r.status, outcome: r.data && r.data.status, resolved: r.data && r.data.resolved }));
           // 2026-10-12: only an accepted, non-failed read starts the 30-minute no-reopen gap; a failed read or a
           // rejected report clears it so the next alarm can open a fresh tab (10-minute attempt guard still applies).
           try {

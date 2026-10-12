@@ -65,9 +65,9 @@ describe('buildVintedBundleNotificationBody / sanitizeBuyerHandle', () => {
 
 describe('notice link: conversation id + bundle fields', () => {
   it('round-trips conversation id, item count, price and attempts', () => {
-    const link = buildBundleNoticeLink({ conversationId: '900100200300', itemCount: 5, amountText: '$5.00', attempts: 2 });
+    const link = buildBundleNoticeLink({ conversationId: '900100200300', itemCount: 5, amountText: '$5.00', attempts: 2, lastReason: null });
     expect(link.startsWith(VINTED_BUNDLE_PAGE_PATH + '?')).toBe(true);
-    expect(parseBundleNoticeLink(link)).toEqual({ conversationId: '900100200300', itemCount: 5, amountText: '$5.00', attempts: 2 });
+    expect(parseBundleNoticeLink(link)).toEqual({ conversationId: '900100200300', itemCount: 5, amountText: '$5.00', attempts: 2, lastReason: null });
   });
   it('rejects a malformed conversation id and omits it from the link', () => {
     const link = buildBundleNoticeLink({ conversationId: 'abc;drop', itemCount: 2 });
@@ -77,8 +77,8 @@ describe('notice link: conversation id + bundle fields', () => {
   });
   it('a legacy notice (plain page link) has no conversation id; count and price come from its body', () => {
     const body = buildVintedBundleNotificationBody({ itemCount: 2, amountText: '$18.90', buyer: 'booradley90' });
-    expect(parseBundleNoticeLink(VINTED_BUNDLE_PAGE_PATH, body)).toEqual({ conversationId: null, itemCount: 2, amountText: '$18.90', attempts: 0 });
-    expect(parseBundleNoticeLink(null, 'unrelated')).toEqual({ conversationId: null, itemCount: null, amountText: null, attempts: 0 });
+    expect(parseBundleNoticeLink(VINTED_BUNDLE_PAGE_PATH, body)).toEqual({ conversationId: null, itemCount: 2, amountText: '$18.90', attempts: 0, lastReason: null });
+    expect(parseBundleNoticeLink(null, 'unrelated')).toEqual({ conversationId: null, itemCount: null, amountText: null, attempts: 0, lastReason: null });
   });
 });
 
@@ -110,7 +110,7 @@ describe('notifyOrganizerVintedBundleSale', () => {
     expect(mockCreateNotification).toHaveBeenCalledTimes(1);
     const arg = mockCreateNotification.mock.calls[0][0];
     expect(arg).toEqual(expect.objectContaining({ userId: 'u1', type: VINTED_BUNDLE_NOTIFICATION_TYPE, sendEmail: false }));
-    expect(parseBundleNoticeLink(arg.link)).toEqual({ conversationId: '900100200300', itemCount: 5, amountText: '$5.00', attempts: 0 });
+    expect(parseBundleNoticeLink(arg.link)).toEqual({ conversationId: '900100200300', itemCount: 5, amountText: '$5.00', attempts: 0, lastReason: null });
     expect(arg.body).toContain('automatically');
     expect(mockPrisma.marketplaceListingJob.findMany).not.toHaveBeenCalled();
     mockPrisma.organizer.findUnique.mockRejectedValue(new Error('db down'));
@@ -171,7 +171,7 @@ describe('retroactive conversation id attach', () => {
     expect(mockCreateNotification).not.toHaveBeenCalled();
     const upd = mockPrisma.notification.update.mock.calls[0][0];
     expect(upd.where).toEqual({ id: 'n9' });
-    expect(parseBundleNoticeLink(upd.data.link)).toEqual({ conversationId: '900100200301', itemCount: 2, amountText: '$18.90', attempts: 0 });
+    expect(parseBundleNoticeLink(upd.data.link)).toEqual({ conversationId: '900100200301', itemCount: 2, amountText: '$18.90', attempts: 0, lastReason: null });
   });
 
   it('is idempotent: a notice that already has an id, or an id already used, is left alone', async () => {

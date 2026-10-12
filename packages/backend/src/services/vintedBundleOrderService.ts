@@ -50,6 +50,15 @@ export interface VintedBundleOrderReportArgs {
   items: unknown;
   /** True when the extension could not read the order from Vinted at all (counts as an unresolved attempt). */
   readFailed?: boolean;
+  /** Optional short reason code for a failed read (untrusted: sanitized by sanitizeBundleFailReason). */
+  failReason?: unknown;
+}
+
+/** Keeps only [a-z0-9_:.-], max 120 chars; non-strings / empty -> null. Reason codes only, never free text. */
+export function sanitizeBundleFailReason(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const clean = raw.replace(/[^a-z0-9_:.-]/gi, '').slice(0, 120);
+  return clean || null;
 }
 
 export interface VintedBundleOrderDeps {
@@ -106,7 +115,8 @@ export async function reportVintedBundleOrder(
     return { status: 'resolved', resolved, itemCount, results };
   }
 
-  const attempt = await recordBundleNoticeAttempt(notice, args.organizerId);
+  const failReason = args.readFailed ? sanitizeBundleFailReason(args.failReason) : null;
+  const attempt = await recordBundleNoticeAttempt(notice, args.organizerId, failReason);
   console.log(
     '[VintedBundleOrder] PARTIAL -- notice stays open, next sold-check retries',
     JSON.stringify({
@@ -117,6 +127,7 @@ export async function reportVintedBundleOrder(
       resolved,
       attempts: attempt.attempts,
       readFailed: !!args.readFailed,
+      ...(args.readFailed ? { reason: failReason ?? 'unspecified' } : {}),
       // Per-entry outcome so the cause of an unresolved entry is visible (2026-10-12).
       entries: results.map((r) => ({
         vintedId: r.vintedId,

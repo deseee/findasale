@@ -2016,6 +2016,7 @@ export const reportVintedBundleOrderItems = async (req: AuthRequest, res: Respon
       conversationId,
       items: req.body?.items,
       readFailed: req.body?.readFailed === true,
+      failReason: req.body?.failReason,
     });
     if (outcome.status === 'notFound') { res.status(404).json({ message: 'Bundle notice not found', reason: 'not_found' }); return; }
     if (outcome.status === 'rejected') { res.status(400).json({ message: 'Bundle report refused', reason: outcome.reason }); return; }
