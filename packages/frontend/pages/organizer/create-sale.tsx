@@ -2779,7 +2779,7 @@ const CreateSalePage: React.FC = () => {
       const response = await api.post('/sales', payload);
       try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
       showToast('Sale created! Add items next.', 'success');
-      router.push(`/organizer/edit-sale/${response.data.id}`);
+      router.push(`/organizer/add-items/${response.data.id}`);
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } };
       showToast(err.response?.data?.message || 'Failed to save draft', 'error');
