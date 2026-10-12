@@ -11,6 +11,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildItemSavePayload,
+  remainingFromTotal,
+  totalFromRemainingText,
   type ItemFormData,
   type ItemSaveState,
   type ItemSaveTouched,
@@ -234,6 +236,23 @@ test('quantity and stockTotal are clamped from the raw text, minimum 1', () => {
     assert.equal(b.quantity, 1, `text ${JSON.stringify(t)}`);
     assert.equal(b.stockTotal, 1);
   }
+});
+
+test('stockTotal saves as entered remaining plus stockSold', () => {
+  const s = (text: string, sold: number) => wire(buildItemSavePayload({ ...stateOf(baseForm(), '1', text), stockSold: sold }, NONE)).stockTotal;
+  assert.equal(s('86', 13), 99);
+  assert.equal(s('0', 13), 13); // sold out: total equals sold, never below it
+  assert.equal(s('', 13), 13);
+  assert.equal(s('-4', 2), 2);
+  assert.equal(s('0', 0), 1); // nothing sold: keeps the server min of 1
+  assert.equal(s('5', 0), 5);
+});
+
+test('remainingFromTotal is total minus sold, never negative', () => {
+  assert.equal(remainingFromTotal(87, 13), 74);
+  assert.equal(remainingFromTotal(5, 9), 0);
+  assert.equal(remainingFromTotal(null, 0), 1);
+  assert.equal(totalFromRemainingText('86', 13), 99);
 });
 
 test('tags and other plain fields are spread through unchanged', () => {

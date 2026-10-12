@@ -476,13 +476,16 @@ const computeDraftStatus = (item: any): 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED'
 // the value it was LOADED with (the *Initial twin) so Save can send only what the organizer changed,
 // and never writes a default or stale value back over the real one.
 const buildRowCommerceState = (item: any) => {
-  const stockTotal = item.stockTotal != null ? String(item.stockTotal) : '1';
+  // The quick-edit "Units" field holds units LEFT in stock (stockTotal - stockSold); Save sends it back plus stockSold.
+  const stockSold = Number(item.stockSold) > 0 ? Math.floor(Number(item.stockSold)) : 0;
+  const stockTotal = String(Math.max(stockSold > 0 ? 0 : 1, (item.stockTotal != null ? Number(item.stockTotal) || 1 : 1) - stockSold));
   const costBasis = item.costBasis != null && item.costBasis !== '' ? String(item.costBasis) : '';
   const consignorId: string = item.consignorId || item.consignor?.id || '';
   const excludeFromMarkdown = item.excludeFromMarkdown === true;
   return {
     stockTotal,
     stockTotalInitial: stockTotal,
+    stockSold,
     costBasis,
     costBasisInitial: costBasis,
     consignorId,
@@ -719,7 +722,7 @@ const AddItemsDetailPage = () => {
 
   // Expandable item cards (like review & publish page)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
-  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; conditionGrade: string; conditionInitial: string; conditionGradeInitial: string; description: string; lotNumber: string; stockTotal: string; stockTotalInitial: string; costBasis: string; costBasisInitial: string; consignorId: string; consignorIdInitial: string; excludeFromMarkdown: boolean; excludeFromMarkdownInitial: boolean; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string; packageLengthIn: string; packageWidthIn: string; packageHeightIn: string }>>({});
+  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; conditionGrade: string; conditionInitial: string; conditionGradeInitial: string; description: string; lotNumber: string; stockTotal: string; stockTotalInitial: string; stockSold: number; costBasis: string; costBasisInitial: string; consignorId: string; consignorIdInitial: string; excludeFromMarkdown: boolean; excludeFromMarkdownInitial: boolean; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string; packageLengthIn: string; packageWidthIn: string; packageHeightIn: string }>>({});
   // Tracks which items had their Weight (oz) field directly edited in this card's inline
   // eBay & Shipping panel, so handleInlineItemSave knows to send packageConfirmedByOrganizer.
   // Mirrors review.tsx's weightTouched pattern exactly (scoped per-item id, only the weight
@@ -757,7 +760,9 @@ const AddItemsDetailPage = () => {
     const changed: Record<string, any> = {};
     if (state.stockTotal !== state.stockTotalInitial) {
       const parsedStock = parseInt(state.stockTotal, 10);
-      changed.stockTotal = Math.max(1, isNaN(parsedStock) ? 1 : parsedStock);
+      // The field is units left in stock; the server stores the pool total, so add back what already sold.
+      const minLeft = state.stockSold > 0 ? 0 : 1;
+      changed.stockTotal = Math.max(minLeft, isNaN(parsedStock) ? minLeft : parsedStock) + state.stockSold;
     }
     if (state.costBasis !== state.costBasisInitial) {
       const trimmedCost = state.costBasis.trim();
@@ -3481,7 +3486,7 @@ const AddItemsDetailPage = () => {
                   const isExpanded = expandedItemId === item.id;
                   const editState = getItemEditState(item);
                   const unitsSold = Number(item.stockSold) > 0 ? Number(item.stockSold) : 0;
-                  const minUnits = Math.max(1, unitsSold);
+                  const minUnits = unitsSold > 0 ? 0 : 1; // units left in stock; 0 allowed once something has sold
                   return (
                     <div key={item.id} className="bg-white dark:bg-gray-800">
                       {/* Collapsed row */}
@@ -3649,7 +3654,7 @@ const AddItemsDetailPage = () => {
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">
-                                Units available
+                                In stock now
                                 {unitsSold > 0 && (
                                   <span className="ml-1 font-normal text-warm-500 dark:text-warm-400">({unitsSold} sold)</span>
                                 )}
@@ -3667,7 +3672,7 @@ const AddItemsDetailPage = () => {
                                 className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
                               />
                               {unitsSold > 0 && (
-                                <p className="mt-1 text-[11px] text-warm-500 dark:text-warm-400">Cannot go below the {unitsSold} already sold.</p>
+                                <p className="mt-1 text-[11px] text-warm-500 dark:text-warm-400">{unitsSold} already sold; enter only what you still have.</p>
                               )}
                             </div>
                             <div>

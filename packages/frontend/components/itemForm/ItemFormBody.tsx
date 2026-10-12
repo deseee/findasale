@@ -48,6 +48,7 @@ import ItemFormSection from './ItemFormSection';
 import CardRecordPanel from '../CardRecordPanel'; // ADR-134 card details
 import CardConditionConfirm from '../cardRecord/CardConditionConfirm'; // trading card condition (NM/LP/MP/HP/DMG), one-tap confirm
 import { showCardCondition } from '../../lib/cardConditionVisibility';
+import { remainingFromTotal, totalFromRemainingText } from '../../lib/buildItemSavePayload';
 import EtsyListingStatus from '../etsy/EtsyListingStatus'; // ADR-135 Etsy listing section
 import { useEtsyConnection } from '../../lib/useEtsyConnection';
 import {
@@ -202,6 +203,9 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
   // go through an empty intermediate state while typing instead of snapping
   // back to 1 on every keystroke. Clamped to a valid integer (min 1) on blur.
   const [quantityText, setQuantityText] = useState(String(formData.quantity ?? 1));
+  // stockTotalText holds the units LEFT in stock (stockTotal - stockSold), what the organizer actually counts.
+  // The saved stockTotal is that number plus stockSold (see totalFromRemainingText). stockSold is server-owned.
+  const [stockSold, setStockSold] = useState(0);
   const [stockTotalText, setStockTotalText] = useState(String(formData.stockTotal ?? 1));
 
   useEffect(() => {
@@ -209,8 +213,8 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
   }, [formData.quantity]);
 
   useEffect(() => {
-    setStockTotalText(String(formData.stockTotal ?? 1));
-  }, [formData.stockTotal]);
+    setStockTotalText(String(remainingFromTotal(formData.stockTotal, stockSold)));
+  }, [formData.stockTotal, stockSold]);
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
@@ -354,7 +358,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
   // Snapshot of what Save would send. quantity/stockTotal use the clamped text inputs, so a value
   // typed but not yet blurred still counts as a change (and is what actually gets saved).
   const makeCurrentSnapshot = (): SaveSnapshot => ({
-    f: { ...formData, quantity: parseCount(quantityText), stockTotal: parseCount(stockTotalText) },
+    f: { ...formData, quantity: parseCount(quantityText), stockTotal: totalFromRemainingText(stockTotalText, stockSold) },
     w: weightTouched,
     s: shippingTouched,
     c: consignorTouched,
@@ -596,6 +600,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
       formData,
       quantityText,
       stockTotalText,
+      stockSold,
       touched: { weightTouched, shippingTouched, consignorTouched },
       conditionTouched,
       loadedCondition: item?.condition,
@@ -1081,7 +1086,9 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
       });
       // Keep the raw-text mirrors in step so the dirty baseline below is taken from consistent values.
       setQuantityText(String(item.quantity ?? 1));
-      setStockTotalText(String(item.stockTotal ?? 1));
+      const loadedSold = Math.max(0, Number(item.stockSold) || 0);
+      setStockSold(loadedSold);
+      setStockTotalText(String(remainingFromTotal(item.stockTotal, loadedSold)));
       // Re-baseline dirty tracking once these values have rendered.
       setBaselinePending(true);
     }
@@ -2889,7 +2896,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
               )}
             </ItemFormSection>
 
-            <ItemFormSection id="section-setup" title="Quantity & setup" defaultOpen summary={`${formData.quantity} in lot, ${formData.stockTotal} for sale`}>
+            <ItemFormSection id="section-setup" title="Quantity & setup" defaultOpen summary={`${formData.quantity} in lot, ${remainingFromTotal(formData.stockTotal, stockSold)} in stock`}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
@@ -2914,26 +2921,29 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                 {/* ADR-087 P1: "Units available" = the real independently-sellable stock pool (stockTotal). */}
                 <div>
                   <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                    How many you have for sale
+                    How many you have in stock now
                   </label>
                   <input
                     type="number"
-                    min="1"
+                    min={stockSold > 0 ? 0 : 1}
                     step="1"
                     value={stockTotalText}
                     onChange={(e) => setStockTotalText(e.target.value)}
                     onBlur={() => {
-                      const parsed = Math.max(1, parseInt(stockTotalText, 10) || 1);
-                      setStockTotalText(String(parsed));
-                      setFormData({ ...formData, stockTotal: parsed });
+                      const newTotal = totalFromRemainingText(stockTotalText, stockSold);
+                      setStockTotalText(String(newTotal - stockSold));
+                      setFormData({ ...formData, stockTotal: newTotal });
                     }}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                   />
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many separate units of this item you have to sell. Each sale (in person, at POS, or on a connected marketplace) draws one unit from this pool, and the item stays listed until every unit is gone. Leave at 1 for a single item.</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many units you have left to sell right now. Each sale (in person, at POS, or on a connected marketplace) takes one off this number, and the item stays listed until none are left. If your real count changes, type the new count here. Leave at 1 for a single item.</p>
+                  {stockSold > 0 && (
+                    <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Sold so far: {stockSold}</p>
+                  )}
                   {formData.quantity > 1 && (formData.stockTotal ?? 1) <= 1 && (
                     <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-start gap-1">
                       <span aria-hidden="true">&#9888;</span>
-                      <span>This item&apos;s stock pool isn&apos;t set. Shoppers and marketplaces will see only 1 available. Set &ldquo;How many you have for sale&rdquo; to your real number of units.</span>
+                      <span>This item&apos;s stock pool isn&apos;t set. Shoppers and marketplaces will see only 1 available. Set &ldquo;How many you have in stock now&rdquo; to your real number of units.</span>
                     </p>
                   )}
                 </div>

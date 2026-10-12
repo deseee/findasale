@@ -74,8 +74,13 @@ export interface ItemSaveState {
   formData: ItemFormData;
   /** Raw text of the quantity input (may be mid-typing). Clamped to an integer of at least 1. */
   quantityText: string;
-  /** Raw text of the stock total input (may be mid-typing). Clamped to an integer of at least 1. */
+  /**
+   * Raw text of the "in stock now" input (may be mid-typing). This is the units LEFT, not the pool total: the saved
+   * stockTotal is this value plus stockSold. Clamped to an integer of at least 1 (0 is allowed once something has sold).
+   */
   stockTotalText: string;
+  /** Units already sold on the loaded item (server-owned). Omitted/0 for a new item. */
+  stockSold?: number;
 }
 
 /** "Real edit vs incidental re-save" flags. Untouched means the gated keys are omitted. */
@@ -146,6 +151,21 @@ export type ItemSavePayload = Omit<
 /** Mirrors the page's parseCount: integer, never below 1. */
 const parseCount = (text: string): number => Math.max(1, parseInt(text, 10) || 1);
 
+/** Units left in a stock pool: stockTotal - stockSold, never negative. */
+export const remainingFromTotal = (total: number | null | undefined, sold: number | null | undefined): number =>
+  Math.max(0, (Number(total) || 1) - Math.max(0, Number(sold) || 0));
+
+/**
+ * The stockTotal to save for an "in stock now" entry: entered remaining + stockSold. The server rejects
+ * stockTotal < stockSold and stockTotal < 1, so remaining may be 0 only once at least one unit has sold.
+ */
+export const totalFromRemainingText = (text: string, sold: number | null | undefined): number => {
+  const s = Math.max(0, Math.floor(Number(sold) || 0));
+  const n = parseInt(text, 10);
+  const remaining = Math.max(s > 0 ? 0 : 1, Number.isFinite(n) ? n : s > 0 ? 0 : 1);
+  return remaining + s;
+};
+
 /** Positive integer or null (backend zod requires Int for package fields). */
 const toIntOrNull = (v: string): number | null => {
   const n = parseInt(String(v).trim(), 10);
@@ -157,7 +177,7 @@ export function buildItemSavePayload(
   touched: ItemSaveTouched,
   opts?: ItemSaveOptions,
 ): ItemSavePayload {
-  const { formData, quantityText, stockTotalText } = state;
+  const { formData, quantityText, stockTotalText, stockSold } = state;
   const { weightTouched, shippingTouched, consignorTouched } = touched;
 
   const price = parseFloat(String(formData.price)) || 0;
@@ -168,7 +188,7 @@ export function buildItemSavePayload(
     ...formData,
     // A value typed but not yet blurred must still be saved, so clamp the raw text here.
     quantity: parseCount(quantityText),
-    stockTotal: parseCount(stockTotalText),
+    stockTotal: totalFromRemainingText(stockTotalText, stockSold),
     // Package size is gated behind weightTouched: an unreviewed estimate must not overwrite the column
     // on an unrelated save. Omitted entirely when untouched.
     packageWeightOz: weightTouched ? toIntOrNull(formData.packageWeightOz) : undefined,
