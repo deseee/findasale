@@ -4877,6 +4877,8 @@
   const VINT_SOLD_REPORTED_KEY = 'fasVintedSoldReportedIds';
   const VINT_SOLD_LAST_OUTCOME_KEY = 'fasVintedSoldCheckLastOutcome';
   const VINT_SOLD_REPORTED_CAP = 2000;
+  const VINT_SOLD_LAST_FORCED_KEY = 'fasVintedSoldCheckLastForcedAt'; // S-VINTED-BUNDLE-SALE
+  const VINT_SOLD_FORCED_MIN_GAP_MS = 2 * 60 * 60 * 1000;
   const VINT_SOLD_PER_PAGE = 96;
   const VINT_SOLD_MAX_PAGES = 30;
 
@@ -4922,7 +4924,24 @@
     if (vintRemRunning) return; // a removal run owns this tab's wardrobe reads; a later load checks
     try {
       const last = Number(await vintRemStorageGet(VINT_SOLD_LAST_CHECK_KEY)) || 0;
-      if (Date.now() - last < VINT_SOLD_CHECK_INTERVAL_MS) return;
+      if (Date.now() - last < VINT_SOLD_CHECK_INTERVAL_MS) {
+        // S-VINTED-BUNDLE-SALE (2026-10-11): a Vinted bundle-sale email names no items, so the backend
+        // flags the organizer (getPendingSoldChecks.vintedSoldCheckRequested, armed for 48h by the
+        // unread bundle notification). Inside the 24h safety-net window, honor that flag at most once
+        // per VINT_SOLD_FORCED_MIN_GAP_MS so the bundled items are found by this same id-based wardrobe
+        // read instead of waiting a day. Fails closed: any error/odd response -> normal gate applies.
+        let forced = false;
+        try {
+          const lastForced = Number(await vintRemStorageGet(VINT_SOLD_LAST_FORCED_KEY)) || 0;
+          if (Date.now() - lastForced >= VINT_SOLD_FORCED_MIN_GAP_MS) {
+            const flagResp = await chrome.runtime.sendMessage({ type: 'getFacebookSoldChecks' });
+            forced = !!(flagResp && flagResp.ok && flagResp.data && flagResp.data.vintedSoldCheckRequested === true);
+            if (forced) await vintRemStorageSet(VINT_SOLD_LAST_FORCED_KEY, Date.now());
+          }
+        } catch (e) { forced = false; }
+        if (!forced) return;
+        console.log('[FAS Vinted] sold-check: bundle sale pending -- running an early wardrobe check.');
+      }
       const memberId = await vintCapOwnMemberId();
       if (!memberId) {
         console.log('[FAS Vinted] sold-check: own member id not cached yet -- skipped.');

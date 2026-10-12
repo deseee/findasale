@@ -65,6 +65,7 @@ import { processPoshmarkSoldEmail, type PoshmarkSoldEmailResult } from './poshma
 import { processGrailedSoldEmail, type GrailedSoldEmailResult } from './grailedSoldEmailDetection';
 import { prisma } from '../lib/prisma';
 import { createNotification } from '../lib/notificationService';
+import { notifyOrganizerVintedBundleSale } from './vintedBundleSaleService';
 
 /**
  * S-VINTED-BCW-AMBIGUOUS-SILENT-DROP (2026-10-10, Patrick live report: "BCW tubes and pages"
@@ -150,10 +151,10 @@ const FACEBOOK_ORDER_EMAIL_SEARCH_QUERY =
   '(from:noreply@marketplace.facebook.com (subject:"New Marketplace order for" OR subject:"Shipping label for your Marketplace order")) is:unread -in:spam -in:trash';
 
 // Vinted branch: same shape and the same Spam/Trash exclusion. Gmail's subject: is a word match,
-// so this also catches look-alikes; processVintedSoldEmail re-checks the exact subject
+// so this also catches look-alikes and the bundle subject ("You sold" prefix, 2026-10-11); processVintedSoldEmail re-checks the exact subject
 // ("You sold an item on Vinted") and sender, and only that email can mark anything sold.
 const VINTED_SOLD_EMAIL_SEARCH_QUERY =
-  '(from:no-reply@vinted.com subject:"You sold an item") is:unread -in:spam -in:trash';
+  '(from:no-reply@vinted.com subject:"You sold") is:unread -in:spam -in:trash';
 
 // Mercari branch: "You've made a sale: <title>" from no-reply@alerts.us.mercari.com. Gmail's
 // subject: is a word match, so "Transaction canceled" and other siblings can still come back;
@@ -400,6 +401,21 @@ async function processTitleEmailBatch(
           outcome.title,
           `its title matches ${outcome.candidateCount ?? 'more than one'} of your listings, so we couldn't tell which one actually sold`
         );
+        break;
+      case 'bundle':
+        // S-VINTED-BUNDLE-SALE (2026-10-11): Vinted bundle email (no item titles). Nothing is
+        // marked sold from the email; the organizer is notified and the extension's wardrobe
+        // sold-check is armed (vintedBundleSaleService.ts). Counted as 'ambiguous'.
+        counts.ambiguous++;
+        console.warn(
+          `[facebookMarketplaceEmailPollService] BUNDLE ${label} sold email -- items not named, routed to wardrobe sold-check`,
+          { uid, organizerId: outcome.organizerId, itemCount: outcome.itemCount, amountText: outcome.amountText }
+        );
+        await notifyOrganizerVintedBundleSale(outcome.organizerId, {
+          itemCount: outcome.itemCount,
+          amountText: outcome.amountText,
+          buyer: outcome.buyer,
+        });
         break;
       case 'ignored':
         counts.ignored++;

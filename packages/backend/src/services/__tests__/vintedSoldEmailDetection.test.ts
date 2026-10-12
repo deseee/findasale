@@ -20,6 +20,8 @@ jest.mock('../organizerEmailForwardingService', () => ({
 import {
   processVintedSoldEmail,
   parseVintedSoldEmailTitle,
+  parseVintedSoldEmail,
+  parseVintedBundleItemCount,
   htmlToPlainText,
   decodeHtmlEntities,
   VINTED_SOLD_EMAIL_SENDER,
@@ -365,5 +367,73 @@ describe('parseImapMessageToInboundEmail + processVintedSoldEmail on a Gmail aut
     const r = await processVintedSoldEmail(email, { processTitleReport });
     expect(processTitleReport).toHaveBeenCalledWith('organizer_1', TITLE_SINGLE);
     expect(r.kind).toBe('matched');
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------
+// S-VINTED-BUNDLE-SALE (2026-10-11): live email "duck212 has bought Bundle 5 items ... $5.00"
+// ---------------------------------------------------------------------------------------------
+describe('Vinted bundle sale email', () => {
+  const BUNDLE_TEXT =
+    "Hello artifactm, duck212 has bought  Bundle 5 items / 5 / Bundle 5 items / $5.00. We will transfer the buyer's payment to your Vinted Wallet once the order is completed. Please send this order within 5 days. Here's what you need to do: Go to the message thread between you and the buyer to generate your shipping label.";
+  const bundleHtml = () =>
+    soldHtml('Bundle 5 items', '$5.00', 'duck212').replace('>Bundle 5 items</div>', '>Bundle 5 items</div><div>5</div><div>Bundle 5 items</div>');
+
+  it('parses the exact reported text: buyer, amount (trailing period dropped) and a bundle label', () => {
+    const p = parseVintedSoldEmail(BUNDLE_TEXT);
+    expect(p).not.toBeNull();
+    expect(p!.buyer).toBe('duck212');
+    expect(p!.amountText).toBe('$5.00');
+    expect(parseVintedBundleItemCount(p!.title)).toBe(5);
+  });
+
+  it('parses the HTML shape too', () => {
+    const p = parseVintedSoldEmail(bundleHtml());
+    expect(p!.amountText).toBe('$5.00');
+    expect(parseVintedBundleItemCount(p!.title)).toBe(5);
+  });
+
+  it('recognizes bundle label variants and rejects ordinary titles', () => {
+    expect(parseVintedBundleItemCount('Bundle 5 items')).toBe(5);
+    expect(parseVintedBundleItemCount('bundle of 12 items')).toBe(12);
+    expect(parseVintedBundleItemCount('Bundle 1 item')).toBe(1);
+    expect(parseVintedBundleItemCount('3 items bundle')).toBe(3);
+    expect(parseVintedBundleItemCount(TITLE_SINGLE)).toBeNull();
+    expect(parseVintedBundleItemCount('')).toBeNull();
+    expect(parseVintedBundleItemCount(null)).toBeNull();
+  });
+
+  it('routes a bundle email (matcher finds no listing) to kind "bundle" and never marks anything sold', async () => {
+    const processTitleReport = soldReport('notFound', { reason: 'no_match' });
+    const r = await processVintedSoldEmail(soldEmail({ rawBody: bundleHtml() }), { processTitleReport });
+    expect(r).toEqual(expect.objectContaining({ kind: 'bundle', organizerId: 'organizer_1', itemCount: 5, amountText: '$5.00', buyer: 'duck212' }));
+  });
+
+  it('the plain-text bundle body routes the same way', async () => {
+    const r = await processVintedSoldEmail(soldEmail({ rawBody: BUNDLE_TEXT }), { processTitleReport: soldReport('notFound', { reason: 'no_match' }) });
+    expect(r.kind).toBe('bundle');
+  });
+
+  it('a real single listing whose title looks like a bundle label still sells through the normal path', async () => {
+    const processTitleReport = soldReport('sold', { itemId: 'item_bundle_titled' });
+    const r = await processVintedSoldEmail(soldEmail({ rawBody: soldHtml('Bundle 3 items Comics Lot', '$9.00') }), { processTitleReport });
+    expect(r).toEqual(expect.objectContaining({ kind: 'matched', itemId: 'item_bundle_titled' }));
+  });
+
+  it('accepts bundle subject phrasings but still ignores look-alikes', async () => {
+    for (const subject of ['You sold a bundle on Vinted', 'You sold 5 items on Vinted', 'You sold a bundle of 5 items on Vinted']) {
+      const r = await processVintedSoldEmail(soldEmail({ subject, rawBody: bundleHtml() }), { processTitleReport: soldReport('notFound') });
+      expect(r.kind).toBe('bundle');
+    }
+    for (const subject of ['You sold a bundle on Vinted!!', 'You sold a bundle', 'You sold an item on Vinted today']) {
+      const r = await processVintedSoldEmail(soldEmail({ subject, rawBody: bundleHtml() }), { processTitleReport: soldReport('notFound') });
+      expect(r.kind).toBe('ignored');
+    }
+  });
+
+  it('a bundle email still needs sender auth (fails closed)', async () => {
+    const r = await processVintedSoldEmail(soldEmail({ rawBody: bundleHtml(), authenticationResults: undefined }), { processTitleReport: soldReport('notFound') });
+    expect(r.kind).toBe('ignored');
   });
 });

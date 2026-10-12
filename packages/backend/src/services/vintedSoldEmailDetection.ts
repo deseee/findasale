@@ -57,7 +57,11 @@ export type VintedSoldEmailResult =
   | { kind: 'ignored'; reason: string }
   | { kind: 'matched'; organizerId: string; itemId: string; title: string; soldVia: typeof SOLD_VIA_VINTED; alreadySold: boolean; result: VintedSoldEntryResult['result'] }
   | { kind: 'ambiguous'; organizerId: string; title: string; candidateCount: number | null; reason: string }
-  | { kind: 'unmatched'; organizerId: string; title: string | null; reason: string };
+  | { kind: 'unmatched'; organizerId: string; title: string | null; reason: string }
+  // S-VINTED-BUNDLE-SALE (2026-10-11): a multi-item bundle sale. The email names no items, so
+  // nothing is marked sold here; the poller notifies the organizer and arms the extension's
+  // id-based wardrobe sold-check (vintedBundleSaleService.ts).
+  | { kind: 'bundle'; organizerId: string; itemCount: number; amountText: string | null; buyer: string | null; title: string };
 
 export interface VintedSoldEmailDeps {
   resolveOrganizerIdByToken?: (token: string) => Promise<string | null>;
@@ -108,11 +112,20 @@ const PRICE = String.raw`(?:(?:US|CA|AU)?[$€£¥]\s?\d[\d.,]*|\d[\d.,]*\s?(?:[
 const SOLD_BODY_RE = new RegExp(String.raw`\S+ has bought (.+?) We(?: will|'ll|’ll) transfer\b`, 'i');
 const TRAILING_PRICE_RE = new RegExp(String.raw`\s*${PRICE}\s*$`);
 
+export interface ParsedVintedSoldEmail {
+  /** Text between "<buyer> has bought " and the trailing price token. */
+  title: string;
+  /** The trailing price token as written ("$5.00"); display only, never used for matching. */
+  amountText: string | null;
+  /** The single-token buyer handle; untrusted, display only. */
+  buyer: string | null;
+}
+
 /**
- * Extracts the sold item's title from a Vinted "You sold an item" body (HTML or text).
- * Returns null when the expected sentence or a price token is not found (fail closed).
+ * Parses a Vinted "You sold ..." body (HTML or text). Returns null when the expected sentence or
+ * a price token is not found (fail closed).
  */
-export function parseVintedSoldEmailTitle(body: string | null | undefined): string | null {
+export function parseVintedSoldEmail(body: string | null | undefined): ParsedVintedSoldEmail | null {
   if (!body) return null;
   const text = htmlToPlainText(body);
   const m = SOLD_BODY_RE.exec(text);
@@ -122,15 +135,49 @@ export function parseVintedSoldEmailTitle(body: string | null | undefined): stri
   if (!pm || pm.index === 0) return null; // no price token, or nothing before it
   const title = segment.slice(0, pm.index).trim();
   if (!title) return null;
-  return title.slice(0, MAX_TITLE_LEN);
+  const buyerMatch = /(\S+) has bought\b/i.exec(text);
+  return {
+    title: title.slice(0, MAX_TITLE_LEN),
+    amountText: pm[0].trim().replace(/[.,\s]+$/, '') || null,
+    buyer: buyerMatch ? buyerMatch[1].slice(0, 60) : null,
+  };
+}
+
+/**
+ * Extracts the sold item's title from a Vinted "You sold an item" body (HTML or text).
+ * Returns null when the expected sentence or a price token is not found (fail closed).
+ */
+export function parseVintedSoldEmailTitle(body: string | null | undefined): string | null {
+  return parseVintedSoldEmail(body)?.title ?? null;
+}
+
+// "Bundle 5 items", "Bundle of 5 items", "5 items bundle" anywhere in the parsed title.
+// Vinted's bundle email shows the bundle label instead of an item title (live 2026-10-11:
+// "duck212 has bought Bundle 5 items ... $5.00"). Only consulted AFTER a normal title match has
+// failed, so a real single listing whose title happens to start "Bundle 3 items ..." still sells
+// through the normal path.
+const BUNDLE_TITLE_RE = /\bbundle\s+(?:of\s+)?(\d{1,3})\s+items?\b|\b(\d{1,3})\s+items?\s+bundle\b/i;
+
+/** Item count of a Vinted bundle label, or null when the title is not a bundle label. */
+export function parseVintedBundleItemCount(title: string | null | undefined): number | null {
+  const m = BUNDLE_TITLE_RE.exec(String(title ?? ''));
+  if (!m) return null;
+  const n = parseInt(m[1] ?? m[2], 10);
+  return Number.isFinite(n) && n >= 1 && n <= 200 ? n : null;
 }
 
 function isExactSender(from: string): boolean {
   return String(from ?? '').trim().toLowerCase() === VINTED_SOLD_EMAIL_SENDER;
 }
 
+// "You sold an item on Vinted" (single item, observed) plus bundle phrasings (PROVISIONAL: the
+// bundle subject has not been observed; sender + DKIM + the "has bought" body sentence still gate
+// everything). Look-alikes with trailing text ("...Vinted!!") and bare prefixes stay ignored.
+const SOLD_SUBJECT_RE = /^You sold (?:an item|a bundle|\d{1,3} items|a bundle of \d{1,3} items) on Vinted$/;
+
 function isSoldSubject(subject: string): boolean {
-  return String(subject ?? '').trim() === VINTED_SOLD_EMAIL_SUBJECT;
+  const s = String(subject ?? '').trim();
+  return s === VINTED_SOLD_EMAIL_SUBJECT || SOLD_SUBJECT_RE.test(s);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -183,8 +230,9 @@ export async function processVintedSoldEmail(
   }
   const organizerId = [...organizerIds][0];
 
-  const title = parseVintedSoldEmailTitle(email.rawBody);
-  if (!title) {
+  const parsed = parseVintedSoldEmail(email.rawBody);
+  const title = parsed?.title ?? null;
+  if (!parsed || !title) {
     console.warn('[VintedSoldEmailDetection] unmatched sold email -- could not parse the item title', { organizerId });
     return { kind: 'unmatched', organizerId, title: null, reason: 'could not parse the item title from the email body' };
   }
@@ -211,8 +259,15 @@ export async function processVintedSoldEmail(
         candidateCount: r.candidateCount ?? null,
         reason: r.reason ?? `title matches ${r.candidateCount ?? 'several'} items`,
       };
-    case 'notFound':
+    case 'notFound': {
+      // No listing carries this title. If it is a bundle label, route to bundle handling instead
+      // of a dead-end "unmatched" (nothing is marked sold either way).
+      const itemCount = parseVintedBundleItemCount(title);
+      if (itemCount !== null) {
+        return { kind: 'bundle', organizerId, itemCount, amountText: parsed.amountText, buyer: parsed.buyer, title };
+      }
       return { kind: 'unmatched', organizerId, title, reason: r.reason ?? 'no_match' };
+    }
     case 'error':
     default:
       // Leave the message unread so the next poll retries (same as a Facebook processing throw).

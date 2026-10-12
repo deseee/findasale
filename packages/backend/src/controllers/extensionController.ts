@@ -6,6 +6,7 @@ import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import { applyNeverShippableOverride, computeEffectivePackageWeight } from './ebayController';
 import { commitFacebookNativeSale } from '../services/facebookNativeSaleService';
 import { processVintedSoldReport, sanitizeVintedSoldEntries, VINTED_SOLD_MAX_ENTRIES, normalizeListingTitle } from '../services/vintedSoldDetectionService';
+import { hasPendingVintedBundleSale, acknowledgeVintedBundleSale } from '../services/vintedBundleSaleService';
 import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility } from '../services/marketplaceEligibilityRules';
 import { resolveVintedCategory } from '../services/vintedCategoryResolver';
@@ -1958,6 +1959,8 @@ export const reportVintedSold = async (req: AuthRequest, res: Response): Promise
     const results = await processVintedSoldReport(organizer.id, entries);
     const summary: Record<string, number> = { sold: 0, alreadySold: 0, notAvailable: 0, ambiguous: 0, notFound: 0, error: 0 };
     for (const r of results) summary[r.result] = (summary[r.result] || 0) + 1;
+    // S-VINTED-BUNDLE-SALE: a bundle-sale notice is resolved once the wardrobe check really sold something.
+    if (summary.sold) await acknowledgeVintedBundleSale(userId);
     if (summary.sold || summary.ambiguous || summary.error) {
       console.log('[VintedSoldDetection]', JSON.stringify({ organizerId: organizer.id, received: raw.length, accepted: entries.length, summary }));
     }
@@ -2076,14 +2079,18 @@ export const getPendingSoldChecks = async (req: AuthRequest, res: Response): Pro
   const organizer = await prisma.organizer.findUnique({ where: { userId } });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
+  // S-VINTED-BUNDLE-SALE (2026-10-11): extra flag the Vinted content script reads (via the
+  // getFacebookSoldChecks passthrough) to force an early wardrobe sold-check after a bundle email.
+  const vintedSoldCheckRequested = await hasPendingVintedBundleSale(userId);
+
   // 2026-09-30 per-marketplace pause: this is the Facebook sold-detection poll.
-  if (isPlatformPaused((organizer as any).pausedMarketplaces, 'FACEBOOK')) { res.json({ items: [], paused: true }); return; }
+  if (isPlatformPaused((organizer as any).pausedMarketplaces, 'FACEBOOK')) { res.json({ items: [], paused: true, vintedSoldCheckRequested }); return; }
 
   const availableItems = await prisma.item.findMany({
     where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE', draftStatus: 'PUBLISHED' }, // 2026-10-11: unpublished items are never re-renewed / re-checked on a marketplace
     select: { id: true, title: true },
   });
-  if (!availableItems.length) { res.json({ items: [] }); return; }
+  if (!availableItems.length) { res.json({ items: [], vintedSoldCheckRequested }); return; }
 
   const itemIds = availableItems.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
@@ -2101,7 +2108,7 @@ export const getPendingSoldChecks = async (req: AuthRequest, res: Response): Pro
     .filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id))
     .map((i) => ({ id: i.id, title: i.title }));
 
-  res.json({ items });
+  res.json({ items, vintedSoldCheckRequested });
 };
 
 // GET /api/extension/pending-renewals -- ADR-100 (2026-08-06/07): items this extension posted
