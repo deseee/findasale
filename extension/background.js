@@ -1468,11 +1468,15 @@ async function checkPendingRemovals(opts) {
 // ---- Vinted bundle orders: make sure a Vinted tab exists to reconcile them (2026-10-12) ----------------
 // A Vinted bundle sale is reconciled automatically by fas-vinted.js (it reads the order from Vinted with the
 // organizer's own session). That content script only runs inside a vinted.com tab, so when the backend reports
-// an open bundle order and no Vinted tab is open, this opens ONE inactive vinted.com tab (at most once per 3 hours,
+// an open bundle order and no Vinted tab is open, this opens ONE inactive vinted.com tab (at most once per 30 minutes after a successful report,
 // never while Vinted is paused) and the content script closes it again when it has finished (closeAutoOpenedVintedTab).
 const FAS_VINTED_BUNDLE_OPEN_KEY = 'fasVintedBundleAutoOpenAt';
 const FAS_VINTED_BUNDLE_TAB_KEY = 'fasVintedBundleAutoTabId';
-const FAS_VINTED_BUNDLE_OPEN_GAP_MS = 3 * 60 * 60 * 1000;
+const FAS_VINTED_BUNDLE_OPEN_GAP_MS = 30 * 60 * 1000;
+// 2026-10-12: FAS_VINTED_BUNDLE_OPEN_KEY is now stamped only when a bundle report was ACCEPTED by the backend
+// (see reportVintedBundleOrder); an auto-opened tab that produced no report only arms a short re-open guard.
+const FAS_VINTED_BUNDLE_ATTEMPT_KEY = 'fasVintedBundleAutoAttemptAt';
+const FAS_VINTED_BUNDLE_ATTEMPT_GUARD_MS = 10 * 60 * 1000;
 async function maybeOpenVintedForBundleOrders() {
   try {
     if (await fasIsPlatformPaused('VINTED')) return 'vinted_paused';
@@ -1481,10 +1485,11 @@ async function maybeOpenVintedForBundleOrders() {
     if (!orders.length) return 'no_bundle_orders';
     const existing = await chrome.tabs.query({ url: 'https://www.vinted.com/*' });
     if (existing && existing.length) return 'vinted_tab_already_open';
-    const st = await chrome.storage.local.get([FAS_VINTED_BUNDLE_OPEN_KEY]);
-    if (Date.now() - (Number(st[FAS_VINTED_BUNDLE_OPEN_KEY]) || 0) < FAS_VINTED_BUNDLE_OPEN_GAP_MS) return 'recently_opened';
+    const st = await chrome.storage.local.get([FAS_VINTED_BUNDLE_OPEN_KEY, FAS_VINTED_BUNDLE_ATTEMPT_KEY]);
+    if (Date.now() - (Number(st[FAS_VINTED_BUNDLE_OPEN_KEY]) || 0) < FAS_VINTED_BUNDLE_OPEN_GAP_MS) return 'recently_reported';
+    if (Date.now() - (Number(st[FAS_VINTED_BUNDLE_ATTEMPT_KEY]) || 0) < FAS_VINTED_BUNDLE_ATTEMPT_GUARD_MS) return 'recently_opened';
     const tab = await chrome.tabs.create({ url: 'https://www.vinted.com/', active: false });
-    await chrome.storage.local.set({ [FAS_VINTED_BUNDLE_OPEN_KEY]: Date.now(), [FAS_VINTED_BUNDLE_TAB_KEY]: tab && typeof tab.id === 'number' ? tab.id : null });
+    await chrome.storage.local.set({ [FAS_VINTED_BUNDLE_ATTEMPT_KEY]: Date.now(), [FAS_VINTED_BUNDLE_TAB_KEY]: tab && typeof tab.id === 'number' ? tab.id : null });
     return 'opened_vinted_tab';
   } catch (e) {
     return 'error:' + String((e && e.message) || e);
@@ -2659,6 +2664,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const r = await apiFetch('/extension/vinted-bundle-orders/report',
             { method: 'POST', body: { noticeId, conversationId, items: entries, readFailed: msg.readFailed === true } });
           console.log('[FAS reportVintedBundleOrder]', JSON.stringify({ sent: entries.length, status: r.status, outcome: r.data && r.data.status, resolved: r.data && r.data.resolved }));
+          // 2026-10-12: only an accepted, non-failed read starts the 30-minute no-reopen gap; a failed read or a
+          // rejected report clears it so the next alarm can open a fresh tab (10-minute attempt guard still applies).
+          try {
+            if (r.ok && msg.readFailed !== true) await chrome.storage.local.set({ [FAS_VINTED_BUNDLE_OPEN_KEY]: Date.now() });
+            else await chrome.storage.local.remove([FAS_VINTED_BUNDLE_OPEN_KEY]);
+          } catch (e) { /* best-effort */ }
           sendResponse(r);
           if (r.ok && r.data && r.data.results && r.data.results.some((x) => x && x.result === 'sold')) {
             throttledCheckPendingRemovals().catch(() => {});

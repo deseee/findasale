@@ -5068,12 +5068,25 @@
   }
 
   async function vintBundleGetJson(path) {
-    let res;
+    // 2026-10-12: a freshly auto-opened tab may not have its session/CSRF ready yet, so one retry after a pause;
+    // the CSRF header is sent only when the page itself exposes one (same-origin, the organizer's own session).
+    const headers = { Accept: 'application/json' };
     try {
-      res = await fetch(location.origin + path, { credentials: 'include', headers: { Accept: 'application/json' } });
-    } catch (e) { return { ok: false, why: 'fetch_error' }; }
-    if (!res || !res.ok) return { ok: false, why: 'http_' + (res ? res.status : 'none') };
-    try { return { ok: true, data: await res.json() }; } catch (e) { return { ok: false, why: 'non_json' }; }
+      const m = document.querySelector('meta[name="csrf-token"]');
+      const tok = m && m.getAttribute('content');
+      if (tok) headers['X-CSRF-Token'] = tok;
+    } catch (e) { /* none */ }
+    let last = { ok: false, why: 'fetch_error' };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt) await sleep(2500 + Math.floor(Math.random() * 1000));
+      let res;
+      try {
+        res = await fetch(location.origin + path, { credentials: 'include', headers });
+      } catch (e) { last = { ok: false, why: 'fetch_error' }; continue; }
+      if (!res || !res.ok) { last = { ok: false, why: 'http_' + (res ? res.status : 'none') }; continue; }
+      try { return { ok: true, data: await res.json() }; } catch (e) { last = { ok: false, why: 'non_json' }; }
+    }
+    return last;
   }
 
   // The node (object) inside an embedded JSON blob whose id is this conversation id -- only that subtree is trusted.
@@ -5192,6 +5205,8 @@
             readFailed: !read.ok,
           });
         } catch (e) { resp = null; }
+        // 2026-10-12: a report that never reached the backend must not burn this notice's 20-minute try window.
+        if (!(resp && resp.ok)) { delete tries[order.noticeId]; await vintRemStorageSet(VINT_BUNDLE_TRIES_KEY, tries); }
         const d = resp && resp.data;
         console.log('[FAS Vinted] bundle-order ' + order.conversationId + ' report: ' + (resp && resp.ok && d ? (d.status + ' resolved=' + d.resolved + '/' + d.itemCount) : ('not accepted (' + ((resp && (resp.error || resp.status)) || 'no response') + ')')));
         await sleep(500 + Math.floor(Math.random() * 500));
@@ -5205,7 +5220,8 @@
     } finally {
       vintBundleBusy = false;
       // A tab the extension opened by itself just for this closes again (background.js checks it is that tab).
-      if (didWork) { try { chrome.runtime.sendMessage({ type: 'closeAutoOpenedVintedTab' }); } catch (e) { /* ignore */ } }
+      // Awaited so the close only happens after every report above has finished.
+      if (didWork) { try { await chrome.runtime.sendMessage({ type: 'closeAutoOpenedVintedTab' }); } catch (e) { /* ignore */ } }
     }
   }
 
