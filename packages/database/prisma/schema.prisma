@@ -7109,6 +7109,91 @@ model CardIntakeBatch {
   @@index([saleId])
 }
 
+// ADR-138: card scan staging. Rows hold identity text only (no images, no vendor prices).
+model CardScanSession {
+  id                   String   @id @default(cuid())
+  organizerId          String
+  saleId               String
+  source               String   @default("PHOTO")   // PHOTO | DELVER
+  label                String?  @db.VarChar(60)     // internal session tag, never shown to shoppers
+  status               String   @default("OPEN")    // OPEN | COMMITTING | CLOSED | DISCARDED
+  defaultGame          String   @default("MTG")
+  defaultConditionCode String?                      // organizer-chosen session default (D5); null = none
+  defaultFinish        String?                      // organizer-chosen session default (3.6); null = none
+  nextSeq              Int      @default(0)
+  commitMode           String?                      // ADD | REPLACE while COMMITTING
+  commitManifestSha256 String?
+  lastActivityAt       DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  entries              CardScanEntry[]
+
+  @@index([organizerId, saleId, status])
+  @@index([lastActivityAt])
+}
+
+model CardScanEntry {
+  id                     String   @id @default(cuid())
+  sessionId              String
+  organizerId            String                      // denormalized for tenant-isolation queries
+  seq                    Int                         // per-session ascending row number (used as the planner row)
+  source                 String                      // PHOTO | UPLOAD | DELVER | MANUAL
+  clientEntryId          String?                     // client uuid, or "delver:<uuid>"
+  placementId            String?                     // client-issued per physical placement
+  imageSha256            String?  @db.VarChar(64)
+  providerId             String?
+  attempts               Int      @default(1)
+  // As read (never edited by the organizer)
+  readGame               String?
+  readName               String?  @db.VarChar(200)
+  readSetCode            String?  @db.VarChar(20)
+  readSetName            String?  @db.VarChar(120)
+  readCollectorNumber    String?  @db.VarChar(20)
+  readLanguage           String?
+  readFinish             String?
+  readScryfallId         String?  @db.VarChar(64)
+  readConfidence         Float?
+  readQuantity           Int?
+  suggestedConditionCode String?
+  suggestedGrader        String?
+  suggestedGrade         String?
+  suggestedCertNumber    String?  @db.VarChar(30)
+  suggestionSource       String?                     // HAIKU | DELVER
+  // Resolution (recomputed on read; stored for filtering and audit)
+  resolution             String   @default("UNMATCHED")  // EXACT | AMBIGUOUS | UNMATCHED
+  resolutionNote         String?                     // NAME_MISMATCH | NAME_ONLY | GAME_NOT_SERVED | CATALOG_OFF
+  // Organizer decisions (these are what commit uses)
+  game                   String   @default("MTG")
+  printingId             String?                     // CardPrinting.id, e.g. SCRYFALL:<uuid>
+  acceptAsTyped          Boolean  @default(false)
+  cardName               String?  @db.VarChar(200)
+  setCode                String?  @db.VarChar(20)
+  setName                String?  @db.VarChar(120)
+  collectorNumber        String?  @db.VarChar(20)
+  language               String?
+  finish                 String?
+  conditionCode          String?
+  grader                 String?
+  grade                  String?
+  certNumber             String?  @db.VarChar(30)
+  quantity               Int      @default(1)
+  price                  Decimal? @db.Decimal(10, 2)
+  status                 String   @default("NEEDS_REVIEW") // NEEDS_REVIEW | READY | SKIPPED | COMMITTING | COMMITTED | ERROR
+  errorCode              String?
+  suspectDuplicateOf     String?
+  committedBatchId       String?                     // CardIntakeBatch.id
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  session                CardScanSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, seq])
+  @@unique([sessionId, clientEntryId])
+  @@unique([sessionId, placementId])
+  @@unique([sessionId, imageSha256])
+  @@index([sessionId, status])
+  @@index([organizerId])
+}
+
 // Feature #602 (2026-08-05): AI Message-Reply Autosend -- Price + Availability.
 // Decision log for every buyer message the extension ran through the price/availability
 // autosend engine (messageAutosendService.ts), whether or not it actually autosent.

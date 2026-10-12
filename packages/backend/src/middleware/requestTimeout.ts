@@ -29,7 +29,10 @@ export const requestTimeout = (timeoutMs: number = 30000) => {
       // registration in index.ts, same pattern as the reanalyze line above.
       /^\/api\/card-intake\/[^/]+\/(preview|confirm)$/.test(req.path) ||
       // ADR-137 #660: TCGplayer export reconcile (preview and apply), same reasoning and same route-level timeout.
-      /^\/api\/card-tcgplayer\/[^/]+\/reconcile\/(preview|apply)$/.test(req.path)
+      /^\/api\/card-tcgplayer\/[^/]+\/reconcile\/(preview|apply)$/.test(req.path) ||
+      // ADR-138 B9: card scan commit writes every ready card in one request; excluded here and given
+      // requestTimeout(180000) at the route registration in index.ts.
+      /^\/api\/card-scan\/sessions\/[^/]+\/commit$/.test(req.path)
     ) {
       return next();
     }

@@ -206,6 +206,7 @@ import reverbRoutes from './routes/reverb';                   // Universal Cross
 import cardCatalogRoutes from './routes/cardCatalog';         // ADR-134 B3: card catalog lookup (kill switch CARD_CATALOG_ENABLED inside the router)
 import itemCardRoutes from './routes/itemCard';               // ADR-134 B2: per-item card record
 import cardIntakeRoutes from './routes/cardIntake';           // ADR-134 B4: spreadsheet-first card intake
+import cardScanRoutes from './routes/cardScan';               // ADR-138 B9: card scan intake (the frame route answers 503 unless CARD_SCAN_ENABLED is true; GET /status always answers)
 import cardTcgplayerRoutes from './routes/cardTcgplayer';     // ADR-137 #660: TCGplayer round trip for card shops (writing routes answer 404 unless CARD_TCGPLAYER_SYNC_ENABLED and CARD_CATALOG_ENABLED are true)
 import bulkLotRoutes from './routes/bulkLots';                // ADR-136 #659: bulk lots for card shops (answers 404 BULK_DISABLED unless CARD_BULK_LOTS_ENABLED is true)
 import bulkLotEbayRoutes from './routes/bulkLotEbay';          // ADR-136 Addendum C #659: eBay bundles of bulk lots (404 BUNDLE_DISABLED unless CARD_BULK_EBAY_ENABLED is true)
@@ -757,6 +758,7 @@ app.post('/api/items/:id/reanalyze', requestTimeout(90000));
 // longer route-level timeout here, same pattern as the reanalyze line above.
 app.post('/api/card-intake/:saleId/preview', requestTimeout(180000));
 app.post('/api/card-intake/:saleId/confirm', requestTimeout(180000));
+app.post('/api/card-scan/sessions/:id/commit', requestTimeout(180000)); // ADR-138 B9: scan commit can run past 30s on a big session
 // ADR-137 #660: a TCGplayer export reconcile (parse, read the sale's cards, one write per changed card) can run past 30s on a big file.
 app.post('/api/card-tcgplayer/:saleId/reconcile/preview', requestTimeout(180000));
 app.post('/api/card-tcgplayer/:saleId/reconcile/apply', requestTimeout(180000));
@@ -910,6 +912,7 @@ app.use('/api/discogs', discogsRoutes);                                     // U
 app.use('/api/cards', cardCatalogRoutes);                                   // ADR-134 B3: card catalog (GET /status answers 200 catalogReady:false while the catalog is off)
 app.use('/api/item-cards', itemCardRoutes);                                 // ADR-134 B2: per-item card record
 app.use('/api/card-intake', cardIntakeRoutes);                              // ADR-134 B4: spreadsheet-first card intake
+app.use('/api/card-scan', cardScanRoutes);                                  // ADR-138 B9: card scan intake (flag CARD_SCAN_ENABLED, default off)
 app.use('/api/card-tcgplayer', cardTcgplayerRoutes);                        // ADR-137 #660: TCGplayer round trip (flag CARD_TCGPLAYER_SYNC_ENABLED, default off)
 app.use('/api/bulk-lots/ebay', bulkLotEbayRoutes);                      // ADR-136 Addendum C #659: eBay bundles (flag CARD_BULK_EBAY_ENABLED, default off); before /api/bulk-lots so its paths are never shadowed
 app.use('/api/bulk-lots', bulkLotRoutes);                                // ADR-136 #659: bulk lots (flag CARD_BULK_LOTS_ENABLED, default off)

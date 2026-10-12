@@ -39,6 +39,7 @@ import {
 } from './normalizeCells';
 import { ROW_ERROR_MESSAGES } from './messages';
 import { streamRecords } from './parseSpreadsheet';
+import type { StreamedRecord } from './parseSpreadsheet';
 import type {
   CandidateDto,
   ColumnMapping,
@@ -444,11 +445,12 @@ function buildPlanned(
 export type RowVisitor = (row: PlannedRow) => void | Promise<void>;
 
 /**
- * Streams the file, plans every row in file order and hands each PlannedRow to the visitor.
- * Throws IntakeFileError (TOO_MANY_ROWS, PARSE_ERROR, NOT_A_CSV_FILE) from the reader.
+ * Plans every record of a record source in order and hands each PlannedRow to the visitor.
+ * The source is any async iterable of StreamedRecord: the file reader (see planFile) or an in-memory
+ * list (the card scan commit). An error thrown by the source propagates unchanged.
  */
-export async function planFile(
-  filePath: string,
+export async function planRecords(
+  source: AsyncIterable<StreamedRecord>,
   opts: PlanOptions,
   deps: PlanDeps,
   visitor: RowVisitor
@@ -517,7 +519,7 @@ export async function planFile(
     }
   };
 
-  for await (const streamed of streamRecords(filePath, { maxRows: opts.maxRows })) {
+  for await (const streamed of source) {
     batch.push(streamed);
     if (batch.length >= RESOLVE_BATCH_SIZE) await flush();
   }
@@ -528,6 +530,19 @@ export async function planFile(
     return { ...line, proposed: proposal.proposed, proposedLabel: proposal.label, confidence: proposal.confidence };
   });
   return { rowsTotal, conditionLines };
+}
+
+/**
+ * Streams the file, plans every row in file order and hands each PlannedRow to the visitor.
+ * Throws IntakeFileError (TOO_MANY_ROWS, PARSE_ERROR, NOT_A_CSV_FILE) from the reader.
+ */
+export async function planFile(
+  filePath: string,
+  opts: PlanOptions,
+  deps: PlanDeps,
+  visitor: RowVisitor
+): Promise<PlanResult> {
+  return planRecords(streamRecords(filePath, { maxRows: opts.maxRows }), opts, deps, visitor);
 }
 
 function proposeFor(opts: PlanOptions, sourceValue: string) {

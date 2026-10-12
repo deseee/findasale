@@ -432,6 +432,28 @@ export async function resolveRefs(refs: ResolveRef[], db: CatalogDb = getCatalog
 }
 
 // ---------------------------------------------------------------------------------------------
+// Load by id (used by the card scan commit and queue)
+// ---------------------------------------------------------------------------------------------
+
+const LOAD_BY_ID_CHUNK = 500;
+
+/**
+ * Loads printings by their catalog ids (for example SCRYFALL:<uuid>). Unknown ids are simply absent from the
+ * result, so the caller decides what a missing printing means. Duplicate and blank ids are ignored. Reads local
+ * tables only, in chunks of 500, and has no list-all form: it only answers for ids the caller already holds.
+ */
+export async function loadPrintingsByIds(ids: string[], db: CatalogDb = getCatalogDb()): Promise<PrintingDto[]> {
+  const unique = Array.from(new Set(ids.map((id) => String(id ?? '').trim()).filter((id) => id.length > 0)));
+  const out: PrintingDto[] = [];
+  for (let start = 0; start < unique.length; start += LOAD_BY_ID_CHUNK) {
+    const chunk = unique.slice(start, start + LOAD_BY_ID_CHUNK);
+    const rows = await db.cardPrinting.findMany({ where: { id: { in: chunk } }, select: PRINTING_SELECT, take: chunk.length });
+    for (const row of rows) out.push(toPrintingDto(row));
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Suggested price
 // ---------------------------------------------------------------------------------------------
 
