@@ -734,6 +734,27 @@
     // full context and is now rejected (returns null) instead of silently clicked; pickCategory's
     // existing "no result matched" warning path handles it from there, same report-don't-guess
     // discipline already used for Size.
+    // 2026-10-11 (S-EXT-MERCARI-PRODUCT-TYPE-GUARD, Patrick's golf hat filed under Sports & outdoors > Golf >
+    // Golf balls): the scoring above lets a SPORT word that is only in the eBay breadcrumb (or an ancestor of
+    // the Mercari row, like "Golf") carry a row that names a different product type. productWords are the words
+    // of the item's OWN leaf category + title; a result row is trusted only when its LEAF segment shares a word
+    // with them that is NOT just an ancestor segment of that same row (or, for a bare row with no breadcrumb,
+    // when its last word is one of them). A rejected row is skipped, so the organizer picks (never a sibling leaf).
+    const fasSing = (w) => (w.length > 3 && /s$/.test(w) && !/ss$/.test(w)) ? w.replace(/ies$/, 'y').replace(/s$/, '') : w;
+    const fasClean = (t) => norm(t).replace(/[^a-z0-9' -]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const productWords = new Set(wordize(fasClean((categoryText || '') + ' ' + ((item && item.title) || ''))).map(fasSing));
+    function rowNamesOurProduct(text) {
+      if (productWords.size === 0) return true; // nothing to compare against: keep the old behaviour
+      const segs = text.split('>').map((x) => x.trim()).filter(Boolean);
+      if (segs.length === 0) return true;
+      const leafWords = wordize(fasClean(segs[segs.length - 1])).map(fasSing);
+      if (segs.length === 1) {
+        return leafWords.length === 0 || productWords.has(leafWords[leafWords.length - 1]);
+      }
+      const ancestorWords = new Set();
+      segs.slice(0, -1).forEach((sg) => wordize(fasClean(sg)).forEach((w) => ancestorWords.add(fasSing(w))));
+      return leafWords.some((w) => productWords.has(w) && !ancestorWords.has(w));
+    }
     function bestScoringOptionWithGenderHint(options, wantText, contextWords, strictGenericMatch) {
       const want = norm(wantText);
       const scoringWords = (contextWords && contextWords.length) ? contextWords : wordize(want);
@@ -751,6 +772,7 @@
             if (textWords.indexOf(scoringWords[i]) !== -1) weighted += (scoringWords.length - i) * 100;
           }
           if (weighted === 0) continue;
+          if (!rowNamesOurProduct(text)) continue; // sport/ancestor word only: wrong product type, never a sibling-leaf guess
           score = weighted - text.length * 0.01;
         }
         if (genderHint && wordize(text).indexOf(genderHint.replace(/'s$/, '')) !== -1) score += 5000; // tiebreak only -- smaller than any real word-match delta

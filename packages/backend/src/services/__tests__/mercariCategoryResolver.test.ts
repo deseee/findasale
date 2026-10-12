@@ -217,6 +217,33 @@ describe('mercariCategoryResolver: regressions', () => {
     expect(idOf({ title: 'Acme golf stand bag 14 way' })).toBe(738);
   });
 
+  // S-EXT-MERCARI-PRODUCT-TYPE-GUARD (2026-10-11): a signed Titleist golf hat was filed under Golf balls.
+  // The product type (hat / cap / visor / club / bag / ball) decides the leaf within the sport.
+  it('golf headwear is Golf apparel, even when signed or carrying a golf ball brand name', () => {
+    expect(idOf({ title: 'Titleist Pro 98 Plus Golf Hat, Signed by Chi Chi Rodriguez and Billy Casper', brand: 'Titleist' })).toBe(736);
+    expect(idOf({ title: 'Acme golf cap adjustable white black' })).toBe(736);
+    expect(idOf({ title: 'Acme golf visor ladies' })).toBe(736);
+    expect(idOf({ title: 'Titleist Pro V1 hat adjustable', brand: 'Titleist' })).toBe(736);
+    expect(idOf({ title: 'Acme hat', categoryBreadcrumb: 'Sporting Goods:Golf:Golf Clothing, Shoes & Accs:Hats' })).toBe(736);
+  });
+
+  it('golf balls, clubs, bags still map to their own leaves and never to a sibling', () => {
+    expect(idOf({ title: 'Titleist Pro V1 golf balls dozen', brand: 'Titleist' })).toBe(739);
+    expect(idOf({ title: "Men's Acme driver golf club right hand", ebayCategoryId: '115280' })).toBe(734);
+    expect(idOf({ title: 'Acme golf stand bag 14 way' })).toBe(738);
+    expect(idOf({ title: 'Titleist Pro V1 golf polo shirt', brand: 'Titleist' })).not.toBe(739);
+  });
+
+  it('an unknown golf item resolves to nothing rather than an arbitrary golf leaf', () => {
+    expect(idOf({ title: 'Acme golf scorecard holder leather' })).toBeNull();
+    expect(idOf({ title: 'Acme golf course yardage book' })).toBeNull();
+  });
+
+  it('mini golf hat clips and golf hat ornaments are not golf apparel', () => {
+    expect(idOf({ title: 'Acme golf hat clip ball marker' })).toBe(741);
+    expect(idOf({ title: 'Acme mini golf cap toy' })).not.toBe(736);
+  });
+
   it('a bare camera lens is not a camera and a film camera is not a digital one', () => {
     expect(idOf({ title: 'Acme 50mm camera lens f1.8' })).toBe(2135);
     expect(idOf({ title: 'Acme 35mm film camera body' })).toBe(767);
