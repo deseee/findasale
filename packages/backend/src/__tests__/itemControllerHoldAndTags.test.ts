@@ -182,3 +182,44 @@ describe('analyzeItemTags: SSRF guard on the stored photo URL', () => {
     expect(res.json).toHaveBeenCalledWith({ suggestedTags: [] });
   });
 });
+
+describe('undoItemSoldOffPlatform: leaves live marketplace listing rows alone (2026-10-12)', () => {
+  const { undoItemSoldOffPlatform } = require('../controllers/itemController');
+  const makeRes = () => {
+    const res: any = {};
+    res.status = jest.fn(() => res);
+    res.json = jest.fn(() => res);
+    return res;
+  };
+  const req = (): any => ({ user: { id: 'u1', role: 'ORGANIZER', roles: ['ORGANIZER'] }, params: { id: 'item1' } });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockPrisma.item.findUnique.mockResolvedValue({
+      id: 'item1', status: 'SOLD', lastSoldVia: 'OFF_PLATFORM_MANUAL',
+      sale: { organizer: { userId: 'u1' } },
+    });
+    mockPrisma.item.update = jest.fn().mockResolvedValue({ id: 'item1', status: 'AVAILABLE' });
+    mockPrisma.offPlatformSale = {
+      findFirst: jest.fn().mockResolvedValue({ id: 'ops1', invoiceId: null }),
+      delete: jest.fn().mockResolvedValue({}),
+    };
+    mockPrisma.marketplaceListingJob = { findMany: jest.fn().mockResolvedValue([]), create: jest.fn() };
+    mockPrisma.$transaction = jest.fn(async (cb: any) => cb(mockPrisma));
+  });
+
+  it('reverts to AVAILABLE without writing any REMOVE/REMOVED row, even when a CRAIGSLIST POST/POSTED is the latest job', async () => {
+    mockPrisma.marketplaceListingJob.findMany.mockResolvedValue([
+      { action: 'POST', status: 'POSTED', platform: 'CRAIGSLIST', createdAt: new Date('2026-10-11T23:48:42Z') },
+    ]);
+    const res = makeRes();
+    await undoItemSoldOffPlatform(req(), res);
+    expect(mockPrisma.marketplaceListingJob.create).not.toHaveBeenCalled();
+    expect(mockPrisma.item.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'item1' }, data: expect.objectContaining({ status: 'AVAILABLE', lastSoldVia: null }) })
+    );
+    expect(mockPrisma.offPlatformSale.delete).toHaveBeenCalledWith({ where: { id: 'ops1' } });
+    expect(res.json).toHaveBeenCalledWith({ ok: true, item: { id: 'item1', status: 'AVAILABLE' } });
+  });
+});
