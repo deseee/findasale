@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { SquareError } from 'square';
+import { describeSquareError } from './squareErrorReasons'; // 2026-10-11: specific, safe reason per Square error code
 import { getSquareClientForMerchant } from '../utils/square';
 import { prisma } from '../lib/prisma';
 import { decryptToken, encryptToken } from '../utils/tokenCrypto';
@@ -204,7 +205,7 @@ export interface SquareChargeFailure {
    *  shown verbatim to the buyer (same "don't leak processor internals" posture the
    *  Stripe paths already follow). */
   code: string;
-  /** Buyer-facing, deliberately generic. */
+  /** Buyer-facing: a mapped, safe reason (squareErrorReasons.ts), never raw processor text. */
   message: string;
 }
 
@@ -255,7 +256,9 @@ export async function createSquareCharge(params: SquareChargeParams): Promise<Sq
       const first = err.errors?.[0];
       const code = first?.code || 'SQUARE_ERROR';
       console.warn(`[squarePaymentService] Square decline/error: ${code} -- ${first?.detail || err.message}`);
-      return { ok: false, code, message: DECLINE_MESSAGE };
+      // 2026-10-11: the message names the real reason (insufficient funds, wrong CVV, INVALID_FEES ...) instead of always
+      // saying "declined". Only mapped, safe text reaches the buyer (see squareErrorReasons.ts).
+      return { ok: false, code, message: describeSquareError(first).message };
     }
     throw err;
   }

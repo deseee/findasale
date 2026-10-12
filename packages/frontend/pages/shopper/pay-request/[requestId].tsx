@@ -133,6 +133,14 @@ export default function PaymentRequestPage() {
       } catch (err: any) {
         // Log error but still redirect — webhook fallback may catch it
         console.error('[pos-payment] confirm endpoint failed:', err);
+        // 2026-10-11: a refusal the server explained (decline, wrong CVV, insufficient funds, sale too small ...) is
+        // shown as is and the shopper stays here. Only an unexplained failure (network drop, bare 5xx) keeps the
+        // webhook fallback below, because there the charge may really have gone through.
+        const failureData = err?.response?.data;
+        if (typeof failureData?.message === 'string' && (failureData?.squareCode || failureData?.code === 'CARD_DECLINED')) {
+          showToast(failureData.message, 'error');
+          return;
+        }
         showToast('Payment processing... (fallback to webhook)', 'info');
         setTimeout(() => {
           router.push('/shopper/history?view=receipts&paid=1');

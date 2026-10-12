@@ -1,4 +1,5 @@
 import { SquareError } from 'square';
+import { describeSquareError } from './squareErrorReasons'; // 2026-10-11: specific, safe reason per Square error code
 import { prisma } from '../lib/prisma';
 import { getSquareClientForMerchant, getSquarePlatformClient } from '../utils/square';
 import { decryptToken, encryptToken } from '../utils/tokenCrypto';
@@ -380,7 +381,7 @@ export async function authorizeSquareBoothCartLeg(
     if (err instanceof SquareError) {
       const first = (err as any).errors?.[0];
       console.warn(`[squareVendorBoothCartService] Square CreatePayment decline/error: ${first?.code || 'SQUARE_ERROR'} -- ${first?.detail || err.message}`);
-      return { ok: false, code: first?.code || 'SQUARE_ERROR', message: DECLINE_MESSAGE };
+      return { ok: false, code: first?.code || 'SQUARE_ERROR', message: describeSquareError(first).message };
     }
     throw err;
   }
@@ -601,7 +602,7 @@ export async function chargeVendorBoothFeeOnHubOwnerAccount(
       console.warn(
         `[squareVendorBoothCartService] Square CreatePayment decline/error (booth-fee): ${first?.code || 'SQUARE_ERROR'} -- ${first?.detail || err.message}`
       );
-      return { ok: false, code: first?.code || 'SQUARE_ERROR', message: DECLINE_MESSAGE };
+      return { ok: false, code: first?.code || 'SQUARE_ERROR', message: describeSquareError(first).message };
     }
     throw err;
   }

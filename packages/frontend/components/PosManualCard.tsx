@@ -88,9 +88,9 @@ const CNP_FEE_RATE_ESTIMATE = 0;
 const CNP_FEE_FIXED_DOLLARS_ESTIMATE = 0;
 const CNP_FEE_FIXED_CENTS_ESTIMATE = 0;
 const CNP_FEE_ENABLED = CNP_FEE_RATE_ESTIMATE > 0 || CNP_FEE_FIXED_CENTS_ESTIMATE > 0;
-// Square refuses a payment whose application fee is (nearly) the whole charge; mirrors
-// cashFeeService.MAX_APP_FEE_SHARE_OF_CARD_LEG on the backend, which re-checks authoritatively.
-const MAX_APP_FEE_SHARE_OF_CHARGE = 0.9;
+// Square refuses a payment whose application fee exceeds 60% of the amount (live INVALID_FEES error,
+// 2026-10-11); mirrors cashFeeService.MAX_APP_FEE_SHARE_OF_CARD_LEG on the backend, which re-checks authoritatively.
+const MAX_APP_FEE_SHARE_OF_CHARGE = 0.6;
 
 interface ManualCardPaymentResponse {
   success: boolean;
@@ -154,6 +154,8 @@ export default function PosManualCard({
 }: PosManualCardProps) {
   const [state, setState] = useState<ManualCardState>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  // Server failure code (posPaymentFailureBody): CARD_DECLINED marks a real card/bank refusal, so the headline can be exact.
+  const [errorCode, setErrorCode] = useState<string>('');
   const feeEstimate = cartTotal * CNP_FEE_RATE_ESTIMATE + CNP_FEE_FIXED_DOLLARS_ESTIMATE;
   const [totalWithFee, setTotalWithFee] = useState<number>(cartTotal + feeEstimate);
   const [cnpFeeAmount, setCnpFeeAmount] = useState<number>(feeEstimate);
@@ -183,7 +185,10 @@ export default function PosManualCard({
     } else if (chargeCents < minChargeCents) {
       blockedReason = `The card amount ($${(chargeCents / 100).toFixed(2)}) is below the $${(minChargeCents / 100).toFixed(2)} minimum a card can be charged. ${way}`;
     } else if (platformFeeCents !== null && platformFeeCents > Math.floor(chargeCents * MAX_APP_FEE_SHARE_OF_CHARGE)) {
-      blockedReason = `The card amount ($${(chargeCents / 100).toFixed(2)}) is too small to cover the $${(platformFeeCents / 100).toFixed(2)} minimum platform fee. ${way}`;
+      let minOkCents = Math.ceil((platformFeeCents * 5) / 3);
+      while (Math.floor(minOkCents * MAX_APP_FEE_SHARE_OF_CHARGE) < platformFeeCents) minOkCents += 1;
+      minOkCents = Math.max(minOkCents, minChargeCents);
+      blockedReason = `The card amount ($${(chargeCents / 100).toFixed(2)}) is too small to cover the $${(platformFeeCents / 100).toFixed(2)} minimum platform fee. A card sale must be at least $${(minOkCents / 100).toFixed(2)}. ${way}`;
     }
   }
   const [successTimestamp, setSuccessTimestamp] = useState<string>('');
@@ -197,6 +202,7 @@ export default function PosManualCard({
   const handleSquareSourceId = async (sourceId: string) => {
     setState('processing');
     setErrorMessage('');
+    setErrorCode('');
 
     try {
       const items = cart.map((item) => ({
@@ -257,6 +263,7 @@ export default function PosManualCard({
         err?.response?.data?.message ||
         (err instanceof Error ? err.message : 'An error occurred processing the payment.');
       setErrorMessage(errorMsg);
+      setErrorCode(typeof err?.response?.data?.code === 'string' ? err.response.data.code : '');
       setState('error');
       onError(errorMsg);
     }
@@ -265,6 +272,7 @@ export default function PosManualCard({
   const handleRetry = () => {
     setState('idle');
     setErrorMessage('');
+    setErrorCode('');
   };
 
   // ─── Render States ────────────────────────────────────────────────────────────
@@ -467,7 +475,7 @@ export default function PosManualCard({
           <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700">
             <p className="text-3xl mb-2">✗</p>
             <p className="text-sm font-bold text-red-900 dark:text-red-100 mb-1">
-              {isActualCardDecline(errorMessage) ? 'Card Was Declined' : "Payment Couldn't Be Completed"}
+              {errorCode === 'CARD_DECLINED' || (!errorCode && isActualCardDecline(errorMessage)) ? 'Card Was Declined' : "Payment Couldn't Be Completed"}
             </p>
             <p className="text-xs text-red-700 dark:text-red-300 mt-2">
               {errorMessage || 'Something went wrong processing this payment. Please check with the customer before trying again.'}

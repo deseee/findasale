@@ -38,6 +38,8 @@ import {
   isValidCents,
   validateSplitTender,
   cardLegProblem,
+  minCardCentsForAppFee,
+  MAX_APP_FEE_SHARE_OF_CARD_LEG,
   allocateCentsProportionally,
   resolveSplitRefund,
   accrueCashFeeOnce,
@@ -110,6 +112,30 @@ describe('cardLegProblem', () => {
   it('blocks when the platform fee would be almost the whole card leg', () => {
     // $0.75 minimum fee on a $0.80 card leg
     expect(cardLegProblem({ cardCents: 80, appFeeCents: 75, isSplit: true })).toMatch(/minimum platform fee/);
+  });
+  it("uses Square's verified 60% app-fee ceiling (live INVALID_FEES, 2026-10-11)", () => {
+    expect(MAX_APP_FEE_SHARE_OF_CARD_LEG).toBe(0.6);
+  });
+  it('lets a $1.25 card leg carry the $0.75 minimum fee (75 is exactly 60% of 125)', () => {
+    expect(cardLegProblem({ cardCents: 125, appFeeCents: 75, isSplit: false })).toBeNull();
+  });
+  it('refuses a $1.24 card leg with the $0.75 fee, and the $1.00 sale that failed live', () => {
+    expect(cardLegProblem({ cardCents: 124, appFeeCents: 75, isSplit: false })).toMatch(/minimum platform fee/);
+    expect(cardLegProblem({ cardCents: 100, appFeeCents: 75, isSplit: false })).toMatch(/minimum platform fee/);
+  });
+  it('tells the cashier the smallest card amount that works', () => {
+    const msg = cardLegProblem({ cardCents: 100, appFeeCents: 75, isSplit: false });
+    expect(msg).toContain('The card amount ($1.00) is too small to cover the $0.75 minimum platform fee.');
+    expect(msg).toContain('A card sale must be at least $1.25.');
+    expect(msg).toMatch(/Take this sale in cash instead\./);
+  });
+  it('minCardCentsForAppFee is the smallest amount cardLegProblem accepts', () => {
+    for (const fee of [75, 100, 133, 480]) {
+      const min = minCardCentsForAppFee(fee);
+      expect(cardLegProblem({ cardCents: min, appFeeCents: fee, isSplit: false })).toBeNull();
+      expect(cardLegProblem({ cardCents: min - 1, appFeeCents: fee, isSplit: false })).not.toBeNull();
+    }
+    expect(minCardCentsForAppFee(75)).toBe(125);
   });
   it('allows a normal split', () => {
     expect(cardLegProblem({ cardCents: 6000, appFeeCents: 480, isSplit: true })).toBeNull();

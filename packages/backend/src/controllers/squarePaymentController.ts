@@ -23,6 +23,7 @@ import { sellItemUnits, InsufficientStockError } from '../services/itemStockServ
 import { fanOutItemSoldWithdrawals } from '../services/soldFanOutService'; // 2026-09-23: eBay/Shopify/Discogs/FB withdraw on sell-out
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { assertSaleCanAcceptSquarePayment } from '../services/squarePaymentEligibilityService';
+import { describeSquareError } from '../services/squareErrorReasons'; // 2026-10-11: specific, safe card-failure reason
 import { checkGuestCheckoutVelocity, recordGuestCheckoutFailure, hashForVelocity } from '../services/guestCheckoutVelocityGuard'; // 2026-09-06 carding incident guard, ported as-is per fraud-hardening build tenet
 import { getClientIp } from '../utils/getClientIp';
 import { repriceNativeShippingForDestination, ShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-110 Track 1
@@ -1185,7 +1186,7 @@ export const createAlaCarteSquarePayment = async (req: AuthRequest, res: Respons
           `[squarePaymentController] Square CreatePayment decline/error (ala-carte): ${first?.code || 'SQUARE_ERROR'} -- ${first?.detail || err.message}`
         );
         return res.status(402).json({
-          message: 'Your card was declined. Please check your card details or try a different card.',
+          message: describeSquareError(first).message, // 2026-10-11: specific, safe reason (squareErrorReasons.ts)
         });
       }
       console.error('[squarePaymentController] Square CreatePayment failed (ala-carte):', err);

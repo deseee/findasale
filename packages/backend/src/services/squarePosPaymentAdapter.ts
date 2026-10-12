@@ -1,4 +1,5 @@
 import { SquareError } from 'square';
+import { describeSquareError } from './squareErrorReasons'; // 2026-10-11: specific, safe reason per Square error code
 import * as Sentry from '@sentry/node';
 import { getSquareClientForMerchant, getSquareSandboxClient, getSquareSandboxLocationId } from '../utils/square';
 import { prisma } from '../lib/prisma';
@@ -305,6 +306,9 @@ export interface CreateAndCapturePaymentFailure {
   ok: false;
   status: number;
   message: string;
+  /** Square's own error code (errors[0].code) when Square refused the charge; posPaymentFailureBody maps it to the
+   *  cashier-facing reason. Absent for failures that did not come from a thrown SquareError. */
+  squareCode?: string;
 }
 export type CreateAndCapturePaymentResult =
   | CreateAndCapturePaymentSuccess
@@ -386,7 +390,8 @@ export async function createAndCapturePayment(
         console.warn(
           `[squarePosPaymentAdapter] Square CreatePayment decline/error: ${first?.code || 'SQUARE_ERROR'} -- ${first?.detail || err.message}`
         );
-        return { ok: false, status: 400, message: DECLINE_MESSAGE };
+        const reason = describeSquareError(first);
+        return { ok: false, status: reason.kind === 'RETRY' ? 502 : 400, message: reason.message, squareCode: reason.squareCode };
       }
       console.error('[squarePosPaymentAdapter] Square CreatePayment failed:', err);
       return { ok: false, status: 500, message: 'Failed to create Square payment' };
@@ -506,7 +511,8 @@ export async function createAndCaptureSandboxPayment(
         console.warn(
           `[squarePosPaymentAdapter] Square sandbox CreatePayment decline/error: ${first?.code || 'SQUARE_ERROR'} -- ${first?.detail || err.message}`
         );
-        return { ok: false, status: 400, message: DECLINE_MESSAGE };
+        const reason = describeSquareError(first);
+        return { ok: false, status: reason.kind === 'RETRY' ? 502 : 400, message: reason.message, squareCode: reason.squareCode };
       }
       console.error('[squarePosPaymentAdapter] Square sandbox CreatePayment failed:', err);
       return { ok: false, status: 500, message: 'Failed to create Square payment' };
