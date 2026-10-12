@@ -44,6 +44,7 @@ import HighValueTrackerWidget from '../../components/HighValueTrackerWidget';
 import EfficiencyCoachingWidget from '../../components/EfficiencyCoachingWidget';
 import WeatherStrip from '../../components/WeatherStrip';
 import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
+import FirstSaleActivationCard, { getActivationTarget } from '../../components/FirstSaleActivationCard';
 import MyTeamsCard from '../../components/MyTeamsCard';
 import MyVendorBoothsCard from '../../components/MyVendorBoothsCard';
 import SellingToolsCard from '../../components/SellingToolsCard';
@@ -88,6 +89,7 @@ interface Sale {
   state: string;
   description?: string;
   items?: Array<{ id: string; title: string; price?: number; status: string; organizerDiscountAmount?: number }>;
+  stats?: { itemCount?: number; holdCount?: number; visitorCount?: number }; // from GET /sales/mine
 }
 
 const OrganizerDashboard = () => {
@@ -559,6 +561,10 @@ const OrganizerDashboard = () => {
   };
 
   const activeSale = _activeSale;
+
+  // First-sale activation: one clear next step (live sale with 0 items, or a draft with
+  // items that was never published). Uses the /sales/mine data already loaded above.
+  const activationTarget = getActivationTarget(salesData, activeSale?.id);
 
   // Helper: Check if sale is ending soon (<24h)
   const isEndingSoon = (sale: Sale): boolean => {
@@ -1175,6 +1181,10 @@ const OrganizerDashboard = () => {
           {dashboardState === 'active' && activeSale && (
             // STATE 2: Active Organizer (DRAFT or PUBLISHED sale)
             <div className="space-y-6 mb-8">
+              {/* First-sale activation card: shown above everything else when the organizer
+                  has a live sale with no items, or a draft with items that is not published. */}
+              <FirstSaleActivationCard target={activationTarget} />
+
               {/* Sale Status Widget (HIGHEST PRIORITY): Enhanced with urgency + dynamic CTA */}
               {activeSale && (
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 overflow-hidden">
@@ -1454,7 +1464,8 @@ const OrganizerDashboard = () => {
               )}
 
               {/* Next Action Zone: 6-condition logic tree */}
-              {statsData?.activeSale && (() => {
+              {/* Suppressed while the activation card is showing so there is one next step, not two. */}
+              {statsData?.activeSale && !activationTarget && (() => {
                 const { status, id, holdCount } = statsData.activeSale;
                 const { draft, available } = statsData.items;
                 const hoursUntilEnd = getHoursRemaining(activeSale);

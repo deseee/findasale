@@ -13,6 +13,7 @@ import { useAuth } from '../../components/AuthContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useToast } from '../../components/ToastContext';
 import OrganizerSaleCard from '../../components/OrganizerSaleCard';
+import FirstSaleActivationCard, { getActivationTarget } from '../../components/FirstSaleActivationCard';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../components/Skeleton';
@@ -194,6 +195,11 @@ const OrganizerSalesPage = () => {
                 Retry
               </button>
             </div>
+          )}
+
+          {/* First-sale activation: live sale with no items, or an unpublished draft with items */}
+          {!salesError && (
+            <FirstSaleActivationCard target={getActivationTarget(sales)} className="mb-8" />
           )}
 
           {/* Sales Grid */}

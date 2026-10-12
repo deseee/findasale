@@ -2266,7 +2266,7 @@ function SuccessState({ c, saleTitle, saleId, onAddItems }: SuccessStateProps) {
             fontSize: 15, color: c.textDim, marginTop: 12, lineHeight: 1.55,
             maxWidth: 520, margin: '12px auto 0',
           }}>
-            Shoppers can now see it on the map. Share the link to drive more traffic.
+            Shoppers can find it on the map now. Add a few items so they have something to browse.
           </p>
         </div>
 
@@ -2275,6 +2275,7 @@ function SuccessState({ c, saleTitle, saleId, onAddItems }: SuccessStateProps) {
           marginTop: 28, padding: 22,
           background: c.accentSoft, border: `1px solid ${c.accentSoft}`,
           borderRadius: 14, display: 'flex', alignItems: 'center', gap: 16,
+          flexWrap: 'wrap',
         }}>
           <div style={{
             width: 44, height: 44, borderRadius: 10,
@@ -2282,11 +2283,11 @@ function SuccessState({ c, saleTitle, saleId, onAddItems }: SuccessStateProps) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0, fontSize: 20,
           }}>🛒</div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: '1 1 200px', minWidth: 0 }}>
             <div style={{
               fontFamily: '"Inter Tight", "Inter", sans-serif',
               fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em', color: c.text,
-            }}>Now add your items</div>
+            }}>Next step: add your first item</div>
             <div style={{ fontSize: 13, color: c.textDim, marginTop: 3 }}>
               Snap a photo. Smart will suggest a title &amp; price. Review, save, repeat. About 15 seconds per item.
             </div>
@@ -2299,14 +2300,15 @@ function SuccessState({ c, saleTitle, saleId, onAddItems }: SuccessStateProps) {
               background: c.accent, color: c.accentInk,
               border: 'none', fontWeight: 600, fontSize: 14,
               cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-              flexShrink: 0,
+              flex: '0 0 auto', minHeight: 44,
             }}
-          >Add items →</button>
+          >Add your first item →</button>
         </div>
 
         <div style={{
           marginTop: 18, display: 'flex', alignItems: 'center', gap: 16,
           justifyContent: 'center', fontSize: 13, color: c.textFaint,
+          flexWrap: 'wrap', textAlign: 'center',
         }}>
           <Link href="/organizer/dashboard" style={{ color: c.textFaint }}>
             Skip for now. Go to dashboard
@@ -2778,8 +2780,11 @@ const CreateSalePage: React.FC = () => {
       const payload = buildPayload();
       const response = await api.post('/sales', payload);
       try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
-      showToast('Sale created! Add items next.', 'success');
-      router.push(`/organizer/edit-sale/${response.data.id}`);
+      // Copy and destination now match: the toast says "add items next", so land on the
+      // add-items page (works for DRAFT sales). Publishing still happens on edit-sale, and
+      // the dashboard's FirstSaleActivationCard nudges there once the draft has items.
+      showToast('Draft saved. Add your items next, then publish when you are ready.', 'success');
+      router.push(`/organizer/add-items/${response.data.id}`);
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } };
       showToast(err.response?.data?.message || 'Failed to save draft', 'error');
