@@ -8,7 +8,8 @@
  *
  * Backend: GET /api/organizer/vinted-bundle and POST /api/organizer/vinted-bundle/mark-sold
  * (controllers/vintedBundleController.ts). Types are local on purpose (a @findasale/shared import breaks
- * the Vercel build). Linked from the bundle notification and from the marketplace-extension page.
+ * the Vercel build). FALLBACK ONLY (2026-10-12): bundles reconcile automatically (vintedBundleOrderService.ts);
+ * the bundle notice links here and only asks for manual help after automatic attempts failed.
  */
 
 import React, { useState } from 'react';
@@ -130,8 +131,10 @@ const VintedBundlePage = () => {
           </Link>
           <h1 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-2">Vinted bundle sale</h1>
           <p className="text-sm text-warm-600 dark:text-gray-300 mb-4">
-            Vinted does not say which listings were in a bundle. Tick the items that sold and FindA.Sale will mark them
-            sold and take them down from your other channels. Nothing is changed until you press the button.
+            Vinted bundle sales are reconciled automatically: FindA.Sale reads the order from your Vinted account and
+            marks the items sold. You only need this page if a bundle notice says some items could not be matched.
+            In that case tick the items that sold and FindA.Sale will mark them sold and take them down from your
+            other channels. Nothing is changed until you press the button.
           </p>
 
           {data && data.notices.length > 0 && (

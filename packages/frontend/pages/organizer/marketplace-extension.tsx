@@ -257,18 +257,6 @@ const MarketplaceExtensionPage = () => {
           {/* Facebook sold alerts (ADR-131): per-organizer forwarding address + Gmail steps.
               See components/FacebookSoldAlertsCard.tsx. */}
           <FacebookSoldAlertsCard />
-
-          {/* Vinted bundle sale: manual reconciliation when Vinted's email names no items. */}
-          <div className="border-t border-warm-200 dark:border-gray-700 pt-6 mt-6">
-            <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Vinted bundle sold?</h3>
-            <p className="text-sm text-warm-500 dark:text-gray-400 mb-2">
-              Vinted&apos;s bundle emails do not say which listings were in the bundle. Pick them yourself and
-              FindA.Sale will mark them sold and remove them from your other channels.
-            </p>
-            <Link href="/organizer/vinted-bundle" className="text-amber-600 hover:underline text-sm font-medium">
-              Open the Vinted bundle page
-            </Link>
-          </div>
         </div>
       </div>
     </>

@@ -6,7 +6,8 @@ import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import { applyNeverShippableOverride, computeEffectivePackageWeight } from './ebayController';
 import { commitFacebookNativeSale } from '../services/facebookNativeSaleService';
 import { processVintedSoldReport, sanitizeVintedSoldEntries, VINTED_SOLD_MAX_ENTRIES, normalizeListingTitle } from '../services/vintedSoldDetectionService';
-import { hasPendingVintedBundleSale, acknowledgeVintedBundleSale } from '../services/vintedBundleSaleService';
+import { hasPendingVintedBundleSale, acknowledgeLegacyVintedBundleSales, listOpenVintedBundleOrders } from '../services/vintedBundleSaleService';
+import { reportVintedBundleOrder } from '../services/vintedBundleOrderService';
 import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility } from '../services/marketplaceEligibilityRules';
 import { resolveVintedCategory } from '../services/vintedCategoryResolver';
@@ -1959,8 +1960,10 @@ export const reportVintedSold = async (req: AuthRequest, res: Response): Promise
     const results = await processVintedSoldReport(organizer.id, entries);
     const summary: Record<string, number> = { sold: 0, alreadySold: 0, notAvailable: 0, ambiguous: 0, notFound: 0, error: 0 };
     for (const r of results) summary[r.result] = (summary[r.result] || 0) + 1;
-    // S-VINTED-BUNDLE-SALE: a bundle-sale notice is resolved once the wardrobe check really sold something.
-    if (summary.sold) await acknowledgeVintedBundleSale(userId);
+    // S-VINTED-BUNDLE-SALE: only LEGACY bundle notices (no Vinted conversation id) are closed by a wardrobe report.
+    // A notice that carries a conversation id is closed solely by POST /extension/vinted-bundle-orders/report, once
+    // every item of that bundle has been resolved (a wardrobe report alone cannot prove that).
+    if (summary.sold) await acknowledgeLegacyVintedBundleSales(userId);
     if (summary.sold || summary.ambiguous || summary.error) {
       console.log('[VintedSoldDetection]', JSON.stringify({ organizerId: organizer.id, received: raw.length, accepted: entries.length, summary }));
     }
@@ -1968,6 +1971,40 @@ export const reportVintedSold = async (req: AuthRequest, res: Response): Promise
   } catch (err: any) {
     console.error('[VintedSoldDetection] report failed:', err?.message || err);
     res.status(500).json({ message: 'Vinted sold report failed' });
+  }
+};
+
+// POST /api/extension/vinted-bundle-orders/report -- automatic Vinted BUNDLE reconciliation (2026-10-12).
+// fas-vinted.js reads the bundle order from Vinted itself (the conversation id served by pending-sold-checks as
+// vintedBundleOrders[]) and reports the Vinted item ids here: { noticeId, conversationId, items: [{ vintedId, title }],
+// readFailed? }. Each item is matched ONLY against the caller's own items (VINTED job remoteListingId, then unique
+// title) and committed through the same sale path as a single Vinted sale; the notice closes only when every item of
+// the bundle (the email's item count) resolved, otherwise it stays open and the next sold-check retries.
+// See services/vintedBundleOrderService.ts. Idempotent.
+export const reportVintedBundleOrderItems = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  const noticeId = typeof req.body?.noticeId === 'string' ? req.body.noticeId.trim().slice(0, 64) : '';
+  if (!noticeId) { res.status(400).json({ message: 'noticeId required', reason: 'invalid_notice' }); return; }
+  const conversationId = typeof req.body?.conversationId === 'string' ? req.body.conversationId.trim().slice(0, 24) : null;
+  try {
+    const outcome = await reportVintedBundleOrder({
+      userId,
+      organizerId: organizer.id,
+      noticeId,
+      conversationId,
+      items: req.body?.items,
+      readFailed: req.body?.readFailed === true,
+    });
+    if (outcome.status === 'notFound') { res.status(404).json({ message: 'Bundle notice not found', reason: 'not_found' }); return; }
+    if (outcome.status === 'rejected') { res.status(400).json({ message: 'Bundle report refused', reason: outcome.reason }); return; }
+    res.json({ ok: true, ...outcome });
+  } catch (err: any) {
+    console.error('[VintedBundleOrder] report failed:', err?.message || err);
+    res.status(500).json({ message: 'Vinted bundle report failed' });
   }
 };
 
@@ -2082,15 +2119,18 @@ export const getPendingSoldChecks = async (req: AuthRequest, res: Response): Pro
   // S-VINTED-BUNDLE-SALE (2026-10-11): extra flag the Vinted content script reads (via the
   // getFacebookSoldChecks passthrough) to force an early wardrobe sold-check after a bundle email.
   const vintedSoldCheckRequested = await hasPendingVintedBundleSale(userId);
+  // 2026-10-12: open bundle orders (notice id + Vinted order conversation id + price + item count) the extension
+  // reconciles automatically from Vinted's own order data. See vintedBundleOrderService.ts.
+  const vintedBundleOrders = await listOpenVintedBundleOrders(userId);
 
   // 2026-09-30 per-marketplace pause: this is the Facebook sold-detection poll.
-  if (isPlatformPaused((organizer as any).pausedMarketplaces, 'FACEBOOK')) { res.json({ items: [], paused: true, vintedSoldCheckRequested }); return; }
+  if (isPlatformPaused((organizer as any).pausedMarketplaces, 'FACEBOOK')) { res.json({ items: [], paused: true, vintedSoldCheckRequested, vintedBundleOrders }); return; }
 
   const availableItems = await prisma.item.findMany({
     where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE', draftStatus: 'PUBLISHED' }, // 2026-10-11: unpublished items are never re-renewed / re-checked on a marketplace
     select: { id: true, title: true },
   });
-  if (!availableItems.length) { res.json({ items: [], vintedSoldCheckRequested }); return; }
+  if (!availableItems.length) { res.json({ items: [], vintedSoldCheckRequested, vintedBundleOrders }); return; }
 
   const itemIds = availableItems.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
@@ -2108,7 +2148,7 @@ export const getPendingSoldChecks = async (req: AuthRequest, res: Response): Pro
     .filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id))
     .map((i) => ({ id: i.id, title: i.title }));
 
-  res.json({ items, vintedSoldCheckRequested });
+  res.json({ items, vintedSoldCheckRequested, vintedBundleOrders });
 };
 
 // GET /api/extension/pending-renewals -- ADR-100 (2026-08-06/07): items this extension posted

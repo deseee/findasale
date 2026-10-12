@@ -1465,6 +1465,32 @@ async function checkPendingRemovals(opts) {
   return 'notified:' + facebookItems.length + '_soldchecks:' + soldCheckCount;
 }
 
+// ---- Vinted bundle orders: make sure a Vinted tab exists to reconcile them (2026-10-12) ----------------
+// A Vinted bundle sale is reconciled automatically by fas-vinted.js (it reads the order from Vinted with the
+// organizer's own session). That content script only runs inside a vinted.com tab, so when the backend reports
+// an open bundle order and no Vinted tab is open, this opens ONE inactive vinted.com tab (at most once per 3 hours,
+// never while Vinted is paused) and the content script closes it again when it has finished (closeAutoOpenedVintedTab).
+const FAS_VINTED_BUNDLE_OPEN_KEY = 'fasVintedBundleAutoOpenAt';
+const FAS_VINTED_BUNDLE_TAB_KEY = 'fasVintedBundleAutoTabId';
+const FAS_VINTED_BUNDLE_OPEN_GAP_MS = 3 * 60 * 60 * 1000;
+async function maybeOpenVintedForBundleOrders() {
+  try {
+    if (await fasIsPlatformPaused('VINTED')) return 'vinted_paused';
+    const r = await apiFetch('/extension/pending-sold-checks');
+    const orders = r && r.ok && r.data && Array.isArray(r.data.vintedBundleOrders) ? r.data.vintedBundleOrders : [];
+    if (!orders.length) return 'no_bundle_orders';
+    const existing = await chrome.tabs.query({ url: 'https://www.vinted.com/*' });
+    if (existing && existing.length) return 'vinted_tab_already_open';
+    const st = await chrome.storage.local.get([FAS_VINTED_BUNDLE_OPEN_KEY]);
+    if (Date.now() - (Number(st[FAS_VINTED_BUNDLE_OPEN_KEY]) || 0) < FAS_VINTED_BUNDLE_OPEN_GAP_MS) return 'recently_opened';
+    const tab = await chrome.tabs.create({ url: 'https://www.vinted.com/', active: false });
+    await chrome.storage.local.set({ [FAS_VINTED_BUNDLE_OPEN_KEY]: Date.now(), [FAS_VINTED_BUNDLE_TAB_KEY]: tab && typeof tab.id === 'number' ? tab.id : null });
+    return 'opened_vinted_tab';
+  } catch (e) {
+    return 'error:' + String((e && e.message) || e);
+  }
+}
+
 // Shared 30s throttle for on-demand checks (popup open, startup/install, mode change) so
 // rapid reloads can't spawn duplicate removal tabs. The recurring 20-min alarm path below stays
 // unguarded so the steady-state poll always runs.
@@ -1475,6 +1501,7 @@ async function throttledCheckPendingRemovals() {
     await chrome.storage.local.set({ fasLastRemovalCheckAt: Date.now() });
     const removalOutcome = await checkPendingRemovals().catch((e) => 'error:' + String((e && e.message) || e));
     const updateOutcome = await checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e));
+    await maybeOpenVintedForBundleOrders(); // never throws
     // (2026-07-21) Same instrumentation as the alarm path, under separate keys -- lets the popup
     // tell "an automatic 20-min alarm tick did this" apart from "a manual/opportunistic trigger
     // (popup open, window refocus) did this", which is exactly the distinction needed to diagnose
@@ -1987,6 +2014,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   const removalOutcome = await checkPendingRemovals().catch((e) => 'error:' + String((e && e.message) || e));
   const updateOutcome = await checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e));
   const priceSyncOutcome = await checkPriceSyncQueue().catch((e) => 'error:' + String((e && e.message) || e));
+  await maybeOpenVintedForBundleOrders(); // 2026-10-12: never throws
   await chrome.storage.local.set({
     fasLastAlarmFiredAt: Date.now(),
     fasLastAlarmRemovalOutcome: removalOutcome,
@@ -2609,6 +2637,44 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             throttledCheckPendingRemovals().catch(() => {});
           }
         }
+      } else if (msg.type === 'reportVintedBundleOrder') {
+        // 2026-10-12 (automatic Vinted bundle reconciliation): fas-vinted.js read the bundle order from Vinted
+        // (conversation id served by pending-sold-checks as vintedBundleOrders) and reports the Vinted item ids.
+        // Only a vinted.com content script may send it; the backend resolves every id strictly within this
+        // organizer's own items, commits each sale like a normal Vinted sale, and closes the notice only when the
+        // whole bundle resolved. Anything newly sold -> run the pending-removals check now so the items' other
+        // live listings come down right away.
+        const senderUrl = String((sender && (sender.url || (sender.tab && sender.tab.url))) || '');
+        const noticeId = typeof msg.noticeId === 'string' ? msg.noticeId.slice(0, 64) : '';
+        const conversationId = typeof msg.conversationId === 'string' && /^\d{5,20}$/.test(msg.conversationId) ? msg.conversationId : '';
+        const entries = Array.isArray(msg.items)
+          ? msg.items
+              .filter((e) => e && /^\d{1,20}$/.test(String(e.vintedId)) && typeof e.title === 'string')
+              .slice(0, 200)
+              .map((e) => ({ vintedId: String(e.vintedId), title: e.title.slice(0, 500) }))
+          : [];
+        if (!/^https:\/\/www\.vinted\.com\//.test(senderUrl) || !noticeId || !conversationId) {
+          sendResponse({ ok: false, status: 400, error: 'invalid_request' });
+        } else {
+          const r = await apiFetch('/extension/vinted-bundle-orders/report',
+            { method: 'POST', body: { noticeId, conversationId, items: entries, readFailed: msg.readFailed === true } });
+          console.log('[FAS reportVintedBundleOrder]', JSON.stringify({ sent: entries.length, status: r.status, outcome: r.data && r.data.status, resolved: r.data && r.data.resolved }));
+          sendResponse(r);
+          if (r.ok && r.data && r.data.results && r.data.results.some((x) => x && x.result === 'sold')) {
+            throttledCheckPendingRemovals().catch(() => {});
+          }
+        }
+      } else if (msg.type === 'closeAutoOpenedVintedTab') {
+        // Closes the Vinted tab THIS extension opened for bundle reconciliation (never one the organizer opened).
+        try {
+          const st = await chrome.storage.local.get([FAS_VINTED_BUNDLE_TAB_KEY]);
+          const tabId = st[FAS_VINTED_BUNDLE_TAB_KEY];
+          if (sender && sender.tab && typeof tabId === 'number' && sender.tab.id === tabId) {
+            await chrome.storage.local.remove([FAS_VINTED_BUNDLE_TAB_KEY]);
+            chrome.tabs.remove(tabId, () => { void chrome.runtime.lastError; });
+          }
+        } catch (e) { /* best-effort */ }
+        sendResponse({ ok: true });
       } else if (msg.type === 'markRemoved') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
           { method: 'POST', body: {} }));

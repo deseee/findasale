@@ -4991,6 +4991,220 @@
     }
   }
 
+  // ------------------------------------------------------------------------------------------
+  // VINTED BUNDLE ORDERS (2026-10-12) -- automatic reconciliation of a bundle sale.
+  // A Vinted bundle sold email names no items, but it links to the order's conversation. The backend serves
+  // each open bundle as pending-sold-checks.vintedBundleOrders[] ({ noticeId, conversationId, priceText,
+  // itemCount, emailAt }). Here, with the organizer's own signed-in Vinted session (same-origin fetch, exactly
+  // like the wardrobe reads above), the order is read from Vinted's own API to get the Vinted ids of the items
+  // in the bundle, and they are reported to the backend (background.js reportVintedBundleOrder ->
+  // POST /extension/vinted-bundle-orders/report), which commits each sale through the normal Vinted sold path
+  // and closes the notice only when ALL items of the bundle resolved; otherwise it stays open and this retries.
+  // Read order: conversation (its transaction first, then the whole conversation), the transaction endpoint,
+  // then the conversation page's embedded JSON (only nodes bound to this conversation id). A source is only
+  // trusted when it names no MORE items than the email's item count (the backend refuses more, too). Read-only
+  // on Vinted, opens no tabs, clicks nothing. If nothing usable is found the failure is reported so the
+  // backend counts the attempt (and eventually shows the manual fallback page).
+  const VINT_BUNDLE_TRIES_KEY = 'fasVintedBundleOrderTries';
+  const VINT_BUNDLE_MIN_GAP_MS = 20 * 60 * 1000;
+  const VINT_BUNDLE_MAX_NODES = 20000;
+  const VINT_BUNDLE_ITEM_KEYS = /^(items|order_items|bundle_items|transaction_items|line_items)$/i;
+  let vintBundleBusy = false;
+
+  function vintBundleIdOf(v) {
+    if (typeof v === 'number' && Number.isSafeInteger(v) && v > 0) return String(v);
+    if (typeof v === 'string' && /^\d{1,20}$/.test(v.trim())) return v.trim();
+    return null;
+  }
+
+  // One element of an items array (or a transaction that carries a single item) -> { vintedId, title } or null.
+  function vintBundleItemFromEntry(el) {
+    if (!el || typeof el !== 'object') return null;
+    const inner = (el.item && typeof el.item === 'object') ? el.item : el;
+    const id = vintBundleIdOf(el.item_id != null ? el.item_id : (inner.item_id != null ? inner.item_id : inner.id));
+    const titles = [inner.title, el.title, el.item_title, inner.item_title, inner.name];
+    let title = '';
+    for (const t of titles) { if (typeof t === 'string' && t.trim()) { title = t.trim(); break; } }
+    if (!id || !title) return null;
+    return { vintedId: id, title: title.slice(0, 500) };
+  }
+
+  // Every item-like element of every items-style array below `root` (depth/size bounded), de-duplicated by id.
+  function vintBundleCollectItems(root) {
+    const found = new Map();
+    let nodes = 0;
+    (function walk(node, depth) {
+      if (!node || typeof node !== 'object' || depth > 8 || ++nodes > VINT_BUNDLE_MAX_NODES) return;
+      if (Array.isArray(node)) { for (const n of node) walk(n, depth + 1); return; }
+      for (const k of Object.keys(node)) {
+        const v = node[k];
+        if (Array.isArray(v) && VINT_BUNDLE_ITEM_KEYS.test(k)) {
+          for (const el of v) {
+            const it = vintBundleItemFromEntry(el);
+            if (it && !found.has(it.vintedId)) found.set(it.vintedId, it);
+          }
+        }
+        walk(v, depth + 1);
+      }
+    })(root, 0);
+    return Array.from(found.values());
+  }
+
+  // Trust rule: a source naming exactly itemCount items wins; otherwise the largest source that names fewer
+  // (a partial read, the backend keeps the notice open); a source naming MORE than the email says is never used.
+  function vintBundlePickItems(sources, itemCount) {
+    let best = null;
+    for (const src of sources) {
+      const n = src.items.length;
+      if (n === 0 || n > itemCount) continue;
+      if (n === itemCount) return src;
+      if (!best || n > best.items.length) best = src;
+    }
+    return best;
+  }
+
+  async function vintBundleGetJson(path) {
+    let res;
+    try {
+      res = await fetch(location.origin + path, { credentials: 'include', headers: { Accept: 'application/json' } });
+    } catch (e) { return { ok: false, why: 'fetch_error' }; }
+    if (!res || !res.ok) return { ok: false, why: 'http_' + (res ? res.status : 'none') };
+    try { return { ok: true, data: await res.json() }; } catch (e) { return { ok: false, why: 'non_json' }; }
+  }
+
+  // The node (object) inside an embedded JSON blob whose id is this conversation id -- only that subtree is trusted.
+  function vintBundleFindConversationNode(root, conv) {
+    let nodes = 0;
+    let hit = null;
+    (function walk(node, depth) {
+      if (hit || !node || typeof node !== 'object' || depth > 12 || ++nodes > VINT_BUNDLE_MAX_NODES) return;
+      if (Array.isArray(node)) { for (const n of node) walk(n, depth + 1); return; }
+      if (vintBundleIdOf(node.id) === conv && (node.transaction || node.items || node.order)) { hit = node; return; }
+      for (const k of Object.keys(node)) walk(node[k], depth + 1);
+    })(root, 0);
+    return hit;
+  }
+
+  async function vintBundleReadEmbedded(conv) {
+    let html;
+    try {
+      const res = await fetch(location.origin + '/inbox/' + encodeURIComponent(conv), { credentials: 'include', headers: { Accept: 'text/html' } });
+      if (!res || !res.ok) return null;
+      html = await res.text();
+    } catch (e) { return null; }
+    let doc;
+    try { doc = new DOMParser().parseFromString(html, 'text/html'); } catch (e) { return null; }
+    const scripts = doc.querySelectorAll('script[type="application/json"], script#__NEXT_DATA__');
+    for (const sc of scripts) {
+      let json;
+      try { json = JSON.parse(sc.textContent || ''); } catch (e) { continue; }
+      const node = vintBundleFindConversationNode(json, conv);
+      if (!node) continue;
+      const items = vintBundleCollectItems(node);
+      if (items.length) return { source: 'embedded_json', items };
+    }
+    return null;
+  }
+
+  // -> { ok: true, source, items } | { ok: false, why }
+  async function vintBundleReadOrder(order) {
+    const conv = String(order.conversationId);
+    const itemCount = Number(order.itemCount) || 0;
+    if (!/^\d{5,20}$/.test(conv) || itemCount < 1) return { ok: false, why: 'bad_order' };
+    const sources = [];
+    let transactionId = null;
+    let sawHttp = null;
+    const r1 = await vintBundleGetJson('/api/v2/conversations/' + encodeURIComponent(conv));
+    if (r1.ok) {
+      const body = r1.data && typeof r1.data === 'object' ? r1.data : {};
+      const c = (body.conversation && typeof body.conversation === 'object') ? body.conversation : body;
+      const cid = vintBundleIdOf(c.id);
+      if (!cid || cid === conv) {
+        const txn = (c.transaction && typeof c.transaction === 'object') ? c.transaction
+          : ((body.transaction && typeof body.transaction === 'object') ? body.transaction
+          : ((c.order && typeof c.order === 'object') ? c.order : null));
+        if (txn) {
+          transactionId = vintBundleIdOf(txn.id);
+          const fromTxn = vintBundleCollectItems(txn);
+          const single = vintBundleItemFromEntry(txn);
+          if (single && !fromTxn.some((x) => x.vintedId === single.vintedId)) fromTxn.push(single);
+          sources.push({ source: 'conversation.transaction', items: fromTxn });
+        }
+        sources.push({ source: 'conversation', items: vintBundleCollectItems(c) });
+      }
+    } else { sawHttp = r1.why; }
+    if (transactionId) {
+      await sleep(300 + Math.floor(Math.random() * 300));
+      const r2 = await vintBundleGetJson('/api/v2/transactions/' + encodeURIComponent(transactionId));
+      if (r2.ok) {
+        const body = r2.data && typeof r2.data === 'object' ? r2.data : {};
+        const txn = (body.transaction && typeof body.transaction === 'object') ? body.transaction : body;
+        const items = vintBundleCollectItems(txn);
+        const single = vintBundleItemFromEntry(txn);
+        if (single && !items.some((x) => x.vintedId === single.vintedId)) items.push(single);
+        sources.push({ source: 'transaction', items });
+      } else if (!sawHttp) { sawHttp = r2.why; }
+    }
+    let pick = vintBundlePickItems(sources, itemCount);
+    if (!pick || pick.items.length < itemCount) {
+      await sleep(300 + Math.floor(Math.random() * 300));
+      const emb = await vintBundleReadEmbedded(conv);
+      if (emb) sources.push(emb);
+      pick = vintBundlePickItems(sources, itemCount);
+    }
+    if (!pick) return { ok: false, why: sawHttp || 'no_items_found' };
+    return { ok: true, source: pick.source, items: pick.items };
+  }
+
+  async function vintBundleOrdersMaybeRun() {
+    if (!fasContextAlive()) return;
+    if (vintBundleBusy || vintRemRunning) return;
+    if (looksLikeVintedListingPage()) return; // never alongside a listing fill
+    vintBundleBusy = true;
+    let didWork = false;
+    try {
+      let flagResp = null;
+      try { flagResp = await chrome.runtime.sendMessage({ type: 'getVintedSoldCheckRequested' }); } catch (e) { flagResp = null; }
+      const orders = flagResp && flagResp.ok && flagResp.data && Array.isArray(flagResp.data.vintedBundleOrders)
+        ? flagResp.data.vintedBundleOrders.filter((o) => o && typeof o.noticeId === 'string' && /^\d{5,20}$/.test(String(o.conversationId)) && Number(o.itemCount) >= 1).slice(0, 5)
+        : [];
+      if (!orders.length) return;
+      const tries = (await vintRemStorageGet(VINT_BUNDLE_TRIES_KEY)) || {};
+      const now = Date.now();
+      for (const order of orders) {
+        if (now - (Number(tries[order.noticeId]) || 0) < VINT_BUNDLE_MIN_GAP_MS) continue;
+        tries[order.noticeId] = Date.now();
+        await vintRemStorageSet(VINT_BUNDLE_TRIES_KEY, tries);
+        didWork = true;
+        const read = await vintBundleReadOrder(order);
+        console.log('[FAS Vinted] bundle-order ' + order.conversationId + ': ' + (read.ok ? (read.items.length + ' of ' + order.itemCount + ' item(s) via ' + read.source) : ('could not read (' + read.why + ')')));
+        let resp = null;
+        try {
+          resp = await chrome.runtime.sendMessage({
+            type: 'reportVintedBundleOrder',
+            noticeId: order.noticeId,
+            conversationId: String(order.conversationId),
+            items: read.ok ? read.items : [],
+            readFailed: !read.ok,
+          });
+        } catch (e) { resp = null; }
+        const d = resp && resp.data;
+        console.log('[FAS Vinted] bundle-order ' + order.conversationId + ' report: ' + (resp && resp.ok && d ? (d.status + ' resolved=' + d.resolved + '/' + d.itemCount) : ('not accepted (' + ((resp && (resp.error || resp.status)) || 'no response') + ')')));
+        await sleep(500 + Math.floor(Math.random() * 500));
+      }
+      // forget tries of notices that are no longer open
+      const open = new Set(orders.map((o) => o.noticeId));
+      for (const k of Object.keys(tries)) { if (!open.has(k)) delete tries[k]; }
+      await vintRemStorageSet(VINT_BUNDLE_TRIES_KEY, tries);
+    } catch (e) {
+      console.warn('[FAS Vinted] bundle-order check threw:', e && e.message);
+    } finally {
+      vintBundleBusy = false;
+      // A tab the extension opened by itself just for this closes again (background.js checks it is that tab).
+      if (didWork) { try { chrome.runtime.sendMessage({ type: 'closeAutoOpenedVintedTab' }); } catch (e) { /* ignore */ } }
+    }
+  }
+
   // Runs on every load and on every SPA path change (watchForVintedNavigationAway), once per path.
   async function vintCapMaybeCapture() {
     const path = location.pathname + location.search;
@@ -5578,6 +5792,13 @@
     vintCapMaybeCapture(); // fire-and-forget; no-op unless this tab filled a listing in the last 15 min
     // S-EXT-VINTED-SOLD-DETECT: fire-and-forget, read-only, throttled to once per 30 min across tabs.
     setTimeout(() => { vintSoldMaybeCheck(); }, 3000 + Math.floor(Math.random() * 4000));
+    // 2026-10-12: automatic Vinted bundle reconciliation (reads the order from Vinted; see vintBundleOrdersMaybeRun).
+    // Once shortly after load, then every 10 minutes while this tab lives (each order is throttled to once per 20 min).
+    setTimeout(() => { vintBundleOrdersMaybeRun(); }, 9000 + Math.floor(Math.random() * 5000));
+    const vintBundleTimer = setInterval(() => {
+      if (!fasContextAlive()) { clearInterval(vintBundleTimer); return; }
+      vintBundleOrdersMaybeRun();
+    }, 10 * 60 * 1000);
     const ranRemoval = await maybeRunVintedRemoval();
     if (!ranRemoval) start();
     watchForVintedNavigationAway();

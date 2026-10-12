@@ -173,7 +173,7 @@ async function commitPlatformUnitSale(
     const live = await tx.marketplaceListingJob.findFirst({
       where: { itemId, platform, NOT: { action: 'REMOVE', status: 'SKIPPED' } },
       orderBy: { createdAt: 'desc' },
-      select: { action: true, status: true, remoteListingId: true },
+      select: { action: true, status: true, remoteListingId: true, createdAt: true },
     });
     if (!live || live.action !== 'POST' || live.status !== 'POSTED') return { kind: 'noop' } as UnitSaleOutcome;
 
@@ -181,11 +181,34 @@ async function commitPlatformUnitSale(
       if (live.remoteListingId) {
         if (live.remoteListingId !== reportedId) return { kind: 'noop' } as UnitSaleOutcome;
       } else {
+        // Any row (POST or the REMOVE row a unit sale writes, see below) that already carries this listing id
+        // means the reported sale belongs to an earlier listing, not the live one.
         const older = await tx.marketplaceListingJob.findFirst({
-          where: { itemId, platform, action: 'POST', remoteListingId: reportedId },
+          where: { itemId, platform, remoteListingId: reportedId },
           select: { id: true },
         });
         if (older) return { kind: 'noop' } as UnitSaleOutcome;
+        // RELIST-AFTER-SALE GUARD (2026-10-12, Dime Tube): the live row has no recorded Vinted id and a unit
+        // sale was already consumed (sold_on_<platform> REMOVE row) BEFORE this live row was created, i.e. the
+        // organizer relisted (or marked it posted by hand) after a sale. The wardrobe keeps reporting the OLD
+        // sold listing, whose id was never recorded, so the report cannot be told apart from a sale of the
+        // new listing. Without this guard that stale report consumed the freshly relisted row (and a second
+        // unit), flipping the item back to "not listed" so it was offered for push again while it was live.
+        // The email path (no id) and a captured id still sell the new listing normally.
+        if (live.createdAt) {
+          const priorUnitSale = await tx.marketplaceListingJob.findFirst({
+            where: {
+              itemId,
+              platform,
+              action: 'REMOVE',
+              status: 'REMOVED',
+              lastErrorMessage: { startsWith: 'sold_on_' },
+              createdAt: { lt: live.createdAt },
+            },
+            select: { id: true },
+          });
+          if (priorUnitSale) return { kind: 'noop' } as UnitSaleOutcome;
+        }
       }
     }
 
@@ -197,6 +220,8 @@ async function commitPlatformUnitSale(
         platform,
         lastAttemptAt: new Date(),
         lastErrorMessage: `sold_on_${platform.toLowerCase()}`,
+        // Remember WHICH listing sold (when reported) so a repeat report of it is recognised as already counted.
+        remoteListingId: reportedId || null,
       },
     });
     const r = await sellItemUnits(itemId, 1, tx);

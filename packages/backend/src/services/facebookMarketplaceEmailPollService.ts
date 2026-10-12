@@ -59,13 +59,19 @@ import {
   type FacebookOrderEmailResult,
 } from './facebookMarketplaceEmailSoldDetection';
 import { headerValues, extractAddresses, type RawHeaderLine } from './inboundEmailAuthService';
-import { processVintedSoldEmail, type VintedSoldEmailResult } from './vintedSoldEmailDetection';
+import { processVintedSoldEmail, inspectVintedBundleEmail, type VintedSoldEmailResult } from './vintedSoldEmailDetection';
 import { processMercariSoldEmail, type MercariSoldEmailResult } from './mercariSoldEmailDetection';
 import { processPoshmarkSoldEmail, type PoshmarkSoldEmailResult } from './poshmarkSoldEmailDetection';
 import { processGrailedSoldEmail, type GrailedSoldEmailResult } from './grailedSoldEmailDetection';
 import { prisma } from '../lib/prisma';
 import { createNotification } from '../lib/notificationService';
-import { notifyOrganizerVintedBundleSale } from './vintedBundleSaleService';
+import {
+  notifyOrganizerVintedBundleSale,
+  listBundleNoticesMissingConversation,
+  attachConversationToNotice,
+  parseBundleNoticeLink,
+  type BundleNoticeRow,
+} from './vintedBundleSaleService';
 
 /**
  * S-VINTED-BCW-AMBIGUOUS-SILENT-DROP (2026-10-10, Patrick live report: "BCW tubes and pages"
@@ -512,13 +518,14 @@ async function processTitleEmailBatch(
         counts.ambiguous++;
         console.warn(
           `[facebookMarketplaceEmailPollService] BUNDLE ${label} sold email -- items not named, routed to wardrobe sold-check and the manual selection page`,
-          { uid, organizerId: outcome.organizerId, itemCount: outcome.itemCount, amountText: outcome.amountText }
+          { uid, organizerId: outcome.organizerId, itemCount: outcome.itemCount, amountText: outcome.amountText, conversationId: outcome.conversationId }
         );
         if (await claimProcessed(key)) {
           await notifyOrganizerVintedBundleSale(outcome.organizerId, {
             itemCount: outcome.itemCount,
             amountText: outcome.amountText,
             buyer: outcome.buyer,
+            conversationId: outcome.conversationId ?? null,
           });
         }
         break;
@@ -538,6 +545,88 @@ export async function processVintedBatch(client: ImapFlow, result: FacebookSoldE
   await processTitleEmailBatch(client, result, 'Vinted', VINTED_SOLD_EMAIL_SEARCH_QUERY, result.vinted, (email) =>
     processVintedSoldEmail(email),
   );
+}
+
+/** Gmail search for the retroactive pass: a wider window than the normal 3 days, Vinted mail only. */
+const VINTED_RETRO_SEARCH_QUERY = '(from:no-reply@vinted.com) newer_than:7d -in:spam -in:trash';
+const VINTED_RETRO_MAX_UIDS = 200;
+const VINTED_RETRO_BACKOFF_MS = 3 * 60 * 60 * 1000;
+
+/** Deterministic backoff marker so an unmatched notice is not re-scanned on every 20-minute poll. Exported for tests. */
+export function vintedRetroEventKey(noticeId: string, now: number = Date.now()): string {
+  return `vinted-bundle-retro:${noticeId}:${Math.floor(now / VINTED_RETRO_BACKOFF_MS)}`;
+}
+
+/** True when `notice` is the notice created for a bundle email with this item count / amount. */
+function noticeMatchesBundleEmail(notice: BundleNoticeRow, info: { itemCount: number; amountText: string | null }): boolean {
+  const meta = parseBundleNoticeLink(notice.link, notice.body);
+  if (meta.itemCount !== info.itemCount) return false;
+  if (info.amountText && meta.amountText && meta.amountText !== info.amountText) return false;
+  return true;
+}
+
+/**
+ * RETROACTIVE conversation-id attach (2026-10-12). Bundle sales already processed before conversation ids were
+ * extracted (marker "sold-email:Vinted:<Message-ID>" exists, so processVintedBatch never looks at them again) have
+ * an open notice with no Vinted conversation id, which the extension needs to reconcile them automatically. While
+ * such notices exist this pass re-reads the last 7 days of Vinted mail READ-ONLY (inspectVintedBundleEmail: same
+ * sender / DKIM / organizer-token guards, nothing sold, no markers, no \Seen flags), and attaches the decoded
+ * conversation id to the matching open notice. Idempotent: a notice that has an id, or an id already used by
+ * another notice, is never touched, and no notice is ever created here. Never throws.
+ */
+export async function reattachVintedBundleConversations(client: ImapFlow, result: FacebookSoldEmailPollResult): Promise<number> {
+  let attached = 0;
+  try {
+    const now = Date.now();
+    let orphans = await listBundleNoticesMissingConversation(now);
+    if (orphans.length === 0) return 0;
+    // Backoff: notices already scanned in the current 3-hour bucket are skipped.
+    const keys = orphans.map((o) => vintedRetroEventKey(o.id, now));
+    const done = await loadProcessedKeys(keys);
+    orphans = orphans.filter((o) => !done.has(vintedRetroEventKey(o.id, now)));
+    if (orphans.length === 0) return 0;
+
+    const found = await searchUnread(client, VINTED_RETRO_SEARCH_QUERY, 'VintedRetro', result);
+    const uids = (found ?? []).slice(-VINTED_RETRO_MAX_UIDS);
+    const organizerUserCache = new Map<string, string | null>();
+    let remaining = orphans.slice();
+    for (const uid of uids) {
+      if (remaining.length === 0) break;
+      try {
+        const msg: any = await client.fetchOne(uid, { source: true }, { uid: true });
+        if (!msg || !msg.source) continue;
+        const email = await parseImapMessageToInboundEmail(msg.source as Buffer);
+        const info = await inspectVintedBundleEmail(email);
+        if (!info || !info.conversationId) continue;
+        if (!organizerUserCache.has(info.organizerId)) {
+          const org = await prisma.organizer.findUnique({ where: { id: info.organizerId }, select: { userId: true } });
+          organizerUserCache.set(info.organizerId, org?.userId ?? null);
+        }
+        const userId = organizerUserCache.get(info.organizerId);
+        if (!userId) continue;
+        const target = remaining.find((n) => n.userId === userId && noticeMatchesBundleEmail(n, info));
+        if (!target) continue;
+        const ok = await attachConversationToNotice(target, {
+          conversationId: info.conversationId,
+          itemCount: info.itemCount,
+          amountText: info.amountText,
+        });
+        remaining = remaining.filter((n) => n.id !== target.id);
+        if (ok) {
+          attached++;
+          console.log(`[facebookMarketplaceEmailPollService] VintedRetro: attached conversation ${info.conversationId} to bundle notice ${target.id}`);
+        }
+      } catch (err: any) {
+        console.warn(`[facebookMarketplaceEmailPollService] VintedRetro UID ${uid} skipped:`, err?.message || err);
+      }
+    }
+    // Whatever is left unmatched is not re-scanned for a few hours.
+    for (const n of remaining) await claimProcessed(vintedRetroEventKey(n.id, now));
+  } catch (err: any) {
+    result.errors.push(`VintedRetro: ${err?.message || err}`);
+    console.error('[facebookMarketplaceEmailPollService] VintedRetro pass failed:', err?.message || err);
+  }
+  return attached;
 }
 
 /** Mercari branch (2026-09-23): every not-yet-processed "You've made a sale: ..." email. */
@@ -667,6 +756,7 @@ export async function pollFacebookMarketplaceSoldEmails(): Promise<FacebookSoldE
     }
 
     await processVintedBatch(client, result);
+    await reattachVintedBundleConversations(client, result);
     await processMercariBatch(client, result);
     await processPoshmarkBatch(client, result);
     await processGrailedBatch(client, result);

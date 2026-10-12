@@ -23,6 +23,10 @@ import {
   parseVintedSoldEmail,
   parseVintedBundleItemCount,
   parseVintedBundleFromBody,
+  extractVintedConversationId,
+  decodeQuotedPrintable,
+  decodeVintedTrackedLink,
+  inspectVintedBundleEmail,
   htmlToPlainText,
   decodeHtmlEntities,
   VINTED_SOLD_EMAIL_SENDER,
@@ -251,7 +255,7 @@ describe('processVintedSoldEmail -- match and sell', () => {
     const processTitleReport = soldReport('sold', { itemId: 'item_mr', via: 'title' });
     const r = await processVintedSoldEmail(soldEmail(), { processTitleReport });
     expect(processTitleReport).toHaveBeenCalledWith('organizer_1', TITLE_SINGLE);
-    expect(r).toEqual({ kind: 'matched', organizerId: 'organizer_1', itemId: 'item_mr', title: TITLE_SINGLE, soldVia: 'VINTED', alreadySold: false, result: 'sold' });
+    expect(r).toEqual({ kind: 'matched', organizerId: 'organizer_1', itemId: 'item_mr', title: TITLE_SINGLE, soldVia: 'VINTED', alreadySold: false, result: 'sold', conversationId: null });
   });
 
   it('reports alreadySold when the extension wardrobe path got there first', async () => {
@@ -266,7 +270,7 @@ describe('processVintedSoldEmail -- match and sell', () => {
 
   it('reports unmatched for notFound (incl. too-short titles)', async () => {
     const r = await processVintedSoldEmail(soldEmail(), { processTitleReport: soldReport('notFound', { reason: 'no_match' }) });
-    expect(r).toEqual({ kind: 'unmatched', organizerId: 'organizer_1', title: TITLE_SINGLE, reason: 'no_match' });
+    expect(r).toEqual({ kind: 'unmatched', organizerId: 'organizer_1', title: TITLE_SINGLE, reason: 'no_match', conversationId: null });
   });
 
   it('reports unmatched without calling the matcher when the title cannot be parsed', async () => {
@@ -507,5 +511,117 @@ describe('Vinted bundle email under an unknown subject (2026-10-12)', () => {
     }
     const r = await processVintedSoldEmail(soldEmail({ subject: "You've sold an item on Vinted!!", rawBody: soldHtml() }), { processTitleReport: soldReport('sold', { itemId: 'x' }) });
     expect(r.kind).toBe('ignored');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 2026-10-12: order conversation id from the tracked "message thread" link (synthetic fixture built from the
+// real structure: links.vinted.com/t/<base64url of "https://www.vinted.com/inbox/<id>?l=email.body.new_msg.view&
+// login=true&source=email&t=in&type=conversation|<correlation uuid>|<binary tail>">). Ids/hashes are made up.
+// ---------------------------------------------------------------------------------------------
+describe('Vinted order conversation id', () => {
+  const CONV = '900100200300';
+  const OTHER = '900100200999';
+  const trackedUrl = (conv: string, ref = 'links.vinted.com/t') =>
+    'https://' +
+    ref +
+    '/' +
+    Buffer.concat([
+      Buffer.from(`https://www.vinted.com/inbox/${conv}?l=email.body.new_msg.view&login=true&source=email&t=in&type=conversation|00000000-1111-2222-3333-444444444444|`),
+      Buffer.from([0xff, 0x00, 0x9c, 0x01, 0xfe]),
+    ]).toString('base64url');
+
+  // RFC 2045 quoted-printable with 76-column soft line breaks (never splits an =XX escape).
+  function toQuotedPrintable(text: string): string {
+    let out = '';
+    let line = 0;
+    for (const ch of text) {
+      if (ch === '\n') { out += '\r\n'; line = 0; continue; }
+      const token = ch === '=' || ch.charCodeAt(0) > 126 ? '=' + ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0') : ch;
+      if (line + token.length > 75) { out += '=\r\n'; line = 0; }
+      out += token;
+      line += token.length;
+    }
+    return out;
+  }
+
+  const withLink = (html: string, conv: string) => html.replace('https://links.vinted.com/t/aHR0">', `${trackedUrl(conv)}">`);
+  const bundleBody = (conv = CONV) =>
+    withLink(soldHtml('Bundle 5 items', '$5.00', 'duck212').replace('>Bundle 5 items</div>', '>Bundle 5 items</div><div>5</div><div>Bundle 5 items</div>'), conv);
+
+  it('decodes the tracked link payload up to the conversation URL, ignoring the binary tail', () => {
+    const decoded = decodeVintedTrackedLink(trackedUrl(CONV));
+    expect(decoded).toContain(`https://www.vinted.com/inbox/${CONV}?l=email.body.new_msg.view`);
+    expect(decodeVintedTrackedLink('https://example.com/nothing')).toBeNull();
+  });
+
+  it('extracts the id from a parsed <a href> list', () => {
+    expect(extractVintedConversationId({ links: ['https://links.vinted.com/t/aHR0cHM6', trackedUrl(CONV)] })).toBe(CONV);
+  });
+
+  it('extracts the id from an HTML body (single item and bundle)', () => {
+    expect(extractVintedConversationId({ rawBody: withLink(soldHtml(), CONV) })).toBe(CONV);
+    expect(extractVintedConversationId({ rawBody: bundleBody() })).toBe(CONV);
+  });
+
+  it('extracts the id from a raw quoted-printable body with soft line breaks and =3D escapes', () => {
+    const qp = toQuotedPrintable(bundleBody());
+    expect(qp).toContain('=3D');
+    expect(qp).toMatch(/=\r\n/);
+    expect(decodeQuotedPrintable(qp)).toContain(trackedUrl(CONV));
+    expect(extractVintedConversationId({ rawBody: qp })).toBe(CONV);
+  });
+
+  it('also accepts a plain vinted.com/inbox/<id> link and the /e/t/ tracked variant', () => {
+    expect(extractVintedConversationId({ links: [`https://www.vinted.com/inbox/${CONV}?x=1`] })).toBe(CONV);
+    expect(extractVintedConversationId({ links: [trackedUrl(CONV, 'links.vinted.com/e/t')] })).toBe(CONV);
+  });
+
+  it('returns null when there is no conversation link, or when the email points at two different conversations', () => {
+    expect(extractVintedConversationId({ rawBody: soldHtml() })).toBeNull();
+    expect(extractVintedConversationId({ links: [] })).toBeNull();
+    expect(extractVintedConversationId({ links: [trackedUrl(CONV), trackedUrl(OTHER)] })).toBeNull();
+    expect(extractVintedConversationId({ links: [trackedUrl(CONV), `https://www.vinted.com/inbox/${CONV}`] })).toBe(CONV);
+  });
+
+  it('a bundle email result carries the conversation id', async () => {
+    const r = await processVintedSoldEmail(soldEmail({ rawBody: bundleBody() }), { processTitleReport: soldReport('notFound', { reason: 'no_match' }) });
+    expect(r).toEqual(expect.objectContaining({ kind: 'bundle', itemCount: 5, conversationId: CONV }));
+  });
+
+  it('a bundle email arriving as parsed links only (quoted-printable already decoded upstream) also resolves', async () => {
+    const r = await processVintedSoldEmail(soldEmail({ rawBody: soldHtml('Bundle 5 items', '$5.00', 'duck212'), links: [trackedUrl(CONV)] }), {
+      processTitleReport: soldReport('notFound', { reason: 'no_match' }),
+    });
+    expect(r).toEqual(expect.objectContaining({ kind: 'bundle', conversationId: CONV }));
+  });
+
+  it('a single-item sale result carries the conversation id too', async () => {
+    const r = await processVintedSoldEmail(soldEmail({ rawBody: withLink(soldHtml(), CONV) }), { processTitleReport: soldReport('sold', { itemId: 'item_x' }) });
+    expect(r).toEqual(expect.objectContaining({ kind: 'matched', itemId: 'item_x', conversationId: CONV }));
+  });
+
+  it('a bundle email with no usable link has conversationId null (never undefined)', async () => {
+    const r = await processVintedSoldEmail(soldEmail({ rawBody: soldHtml('Bundle 5 items', '$5.00', 'duck212') }), { processTitleReport: soldReport('notFound') });
+    expect(r).toEqual(expect.objectContaining({ kind: 'bundle', conversationId: null }));
+  });
+
+  describe('inspectVintedBundleEmail (read-only retro re-parse)', () => {
+    it('reports organizer, bundle size, amount and conversation id for an authentic bundle email', async () => {
+      const info = await inspectVintedBundleEmail(soldEmail({ rawBody: bundleBody() }));
+      expect(info).toEqual({ organizerId: 'organizer_1', itemCount: 5, amountText: '$5.00', buyer: 'duck212', conversationId: CONV });
+    });
+    it('works under an unrecognized subject (the bundle subject was never observed)', async () => {
+      const info = await inspectVintedBundleEmail(soldEmail({ subject: 'Something else', rawBody: bundleBody() }));
+      expect(info?.conversationId).toBe(CONV);
+    });
+    it('is null for an ordinary single-item sale', async () => {
+      expect(await inspectVintedBundleEmail(soldEmail({ rawBody: withLink(soldHtml(), CONV) }))).toBeNull();
+    });
+    it('keeps every guard: wrong sender, failed authentication, unknown organizer token', async () => {
+      expect(await inspectVintedBundleEmail(soldEmail({ from: 'someone@else.com', rawBody: bundleBody() }))).toBeNull();
+      expect(await inspectVintedBundleEmail(soldEmail({ authenticationResults: undefined, rawBody: bundleBody() }))).toBeNull();
+      expect(await inspectVintedBundleEmail(soldEmail({ recipientAddresses: ['artifactmi@gmail.com'], rawBody: bundleBody() }))).toBeNull();
+    });
   });
 });

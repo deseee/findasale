@@ -154,6 +154,51 @@ describe('soldOnPlatform unit sale (multi-quantity items)', () => {
     expect(sellItemUnits).not.toHaveBeenCalled();
   });
 
+  it('the REMOVE row a unit sale writes remembers WHICH listing sold (so a repeat report of it is recognised)', async () => {
+    multi(); live('111');
+    (sellItemUnits as jest.Mock).mockResolvedValueOnce({ fullySoldOut: false, remainingStock: 2 });
+    await commitFacebookNativeSale('bcw', 'VINTED', opts('111'));
+    expect(mockTx.marketplaceListingJob.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: 'REMOVE', status: 'REMOVED', remoteListingId: '111', lastErrorMessage: 'sold_on_vinted' }),
+    }));
+  });
+
+  // Dime Tube (2026-10-12): unit 1 sold by email (REMOVE sold_on_vinted written), the organizer relisted / marked the item
+  // posted by hand (new live POST row, no Vinted id yet), then the wardrobe check re-reported the OLD sold listing. That stale
+  // report used to consume the freshly relisted row, flipping the item back to "not listed" so it was offered for push again.
+  it('stale wardrobe report of an old sold listing does NOT consume a relisted live row that has no id (relist-after-sale guard)', async () => {
+    multi();
+    mockTx.marketplaceListingJob.findFirst
+      .mockResolvedValueOnce({ action: 'POST', status: 'POSTED', remoteListingId: null, createdAt: new Date('2026-10-11T22:30:00Z') }) // live row
+      .mockResolvedValueOnce(null) // no row carries the reported id
+      .mockResolvedValueOnce({ id: 'earlier_unit_sale' }); // a sold_on_vinted REMOVE row older than the live row
+    const r = await commitFacebookNativeSale('bcw', 'VINTED', opts('555'));
+    expect(r).toEqual({ ok: true, alreadyCommitted: true });
+    expect(sellItemUnits).not.toHaveBeenCalled();
+    expect(mockTx.marketplaceListingJob.create).not.toHaveBeenCalled();
+    const guardWhere = mockTx.marketplaceListingJob.findFirst.mock.calls[2][0].where;
+    expect(guardWhere).toEqual(expect.objectContaining({ action: 'REMOVE', status: 'REMOVED', lastErrorMessage: { startsWith: 'sold_on_' }, createdAt: { lt: new Date('2026-10-11T22:30:00Z') } }));
+  });
+
+  it('with no earlier unit sale the same id-less live row IS consumed (normal first sale is unaffected)', async () => {
+    multi();
+    mockTx.marketplaceListingJob.findFirst
+      .mockResolvedValueOnce({ action: 'POST', status: 'POSTED', remoteListingId: null, createdAt: new Date('2026-10-11T22:30:00Z') })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    (sellItemUnits as jest.Mock).mockResolvedValueOnce({ fullySoldOut: false, remainingStock: 2 });
+    const r = await commitFacebookNativeSale('bcw', 'VINTED', opts('555'));
+    expect(r).toEqual({ ok: true, alreadyCommitted: false, partial: true, remainingStock: 2 });
+  });
+
+  it('an email sale (no reported id) still consumes the relisted live row', async () => {
+    multi();
+    mockTx.marketplaceListingJob.findFirst.mockResolvedValueOnce({ action: 'POST', status: 'POSTED', remoteListingId: null, createdAt: new Date('2026-10-11T22:30:00Z') });
+    (sellItemUnits as jest.Mock).mockResolvedValueOnce({ fullySoldOut: false, remainingStock: 1 });
+    const r = await commitFacebookNativeSale('bcw', 'VINTED', opts());
+    expect(r.partial).toBe(true);
+  });
+
   it('single-unit item ignores soldOnPlatform and takes the legacy whole-item SOLD path', async () => {
     multi('AVAILABLE', 1);
     const r = await commitFacebookNativeSale('one', 'VINTED', opts('1'));

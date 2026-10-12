@@ -55,13 +55,15 @@ export interface InboundVintedSoldEmail {
 
 export type VintedSoldEmailResult =
   | { kind: 'ignored'; reason: string }
-  | { kind: 'matched'; organizerId: string; itemId: string; title: string; soldVia: typeof SOLD_VIA_VINTED; alreadySold: boolean; result: VintedSoldEntryResult['result'] }
-  | { kind: 'ambiguous'; organizerId: string; title: string; candidateCount: number | null; reason: string }
-  | { kind: 'unmatched'; organizerId: string; title: string | null; reason: string }
+  | { kind: 'matched'; organizerId: string; itemId: string; title: string; soldVia: typeof SOLD_VIA_VINTED; alreadySold: boolean; result: VintedSoldEntryResult['result']; conversationId?: string | null }
+  | { kind: 'ambiguous'; organizerId: string; title: string; candidateCount: number | null; reason: string; conversationId?: string | null }
+  | { kind: 'unmatched'; organizerId: string; title: string | null; reason: string; conversationId?: string | null }
   // S-VINTED-BUNDLE-SALE (2026-10-11): a multi-item bundle sale. The email names no items, so
   // nothing is marked sold here; the poller notifies the organizer and arms the extension's
   // id-based wardrobe sold-check (vintedBundleSaleService.ts).
-  | { kind: 'bundle'; organizerId: string; itemCount: number; amountText: string | null; buyer: string | null; title: string };
+  // 2026-10-12: conversationId is the Vinted order conversation (inbox) id decoded from the email's tracked
+  // "message thread" link; the extension uses it to read the bundle's item ids from Vinted itself.
+  | { kind: 'bundle'; organizerId: string; itemCount: number; amountText: string | null; buyer: string | null; title: string; conversationId: string | null };
 
 export interface VintedSoldEmailDeps {
   resolveOrganizerIdByToken?: (token: string) => Promise<string | null>;
@@ -218,6 +220,115 @@ function isSoldSubject(subject: string): boolean {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Order conversation id (2026-10-12)
+//
+// Vinted's sold emails (single item AND bundle) contain a tracked "message thread" link:
+//   https://links.vinted.com/t/<base64url>
+// whose payload decodes to  https://www.vinted.com/inbox/<CONVERSATION_ID>?l=email.body.new_msg.view&login=true&...
+// followed by "|<correlation uuid>|<binary tail>". That conversation is the order's thread; the
+// extension reads the order's item ids from it. Everything here is pure and tolerant of quoted-printable
+// bodies ("=3D", "=\r\n" soft breaks) and of the binary tail after the URL.
+// ---------------------------------------------------------------------------------------------
+
+/** Quoted-printable -> text (soft line breaks removed, =XX decoded as latin1). */
+export function decodeQuotedPrintable(s: string): string {
+  return String(s ?? '')
+    .replace(/=\r?\n/g, '')
+    .replace(/=([0-9A-Fa-f]{2})/g, (_m, h: string) => String.fromCharCode(parseInt(h, 16)));
+}
+
+/** Decodes a links.vinted.com tracked link to the text its base64url payload carries, or null. */
+export function decodeVintedTrackedLink(url: string): string | null {
+  const m = /\/t\/([A-Za-z0-9_-]{16,})/.exec(String(url ?? ''));
+  if (!m) return null;
+  try {
+    // Node's base64 decoder tolerates missing padding and a ragged tail.
+    return Buffer.from(m[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('latin1');
+  } catch {
+    return null;
+  }
+}
+
+function collectConversationIds(text: string, out: Set<string>): void {
+  const direct = /vinted\.[a-z.]+\/inbox\/(\d{5,20})/gi;
+  let dm: RegExpExecArray | null;
+  while ((dm = direct.exec(text)) !== null) out.add(dm[1]);
+  const tracked = /https?:\/\/links\.vinted\.[a-z.]+\/(?:e\/)?t\/[A-Za-z0-9_-]{16,}/gi;
+  let tm: RegExpExecArray | null;
+  while ((tm = tracked.exec(text)) !== null) {
+    const decoded = decodeVintedTrackedLink(tm[0]);
+    if (!decoded) continue;
+    const inner = /vinted\.[a-z.]+\/inbox\/(\d{5,20})/i.exec(decoded);
+    if (inner) out.add(inner[1]);
+  }
+}
+
+/**
+ * The Vinted order conversation id from a sold email, or null when there is none or when the email
+ * points at more than one conversation (never guessed). Looks at the parsed <a href> list first and
+ * the raw body (quoted-printable decoded if needed) second.
+ */
+export function extractVintedConversationId(email: { links?: string[]; rawBody?: string | null }): string | null {
+  const ids = new Set<string>();
+  for (const l of email.links ?? []) {
+    if (typeof l === 'string') collectConversationIds(decodeHtmlEntities(l), ids);
+  }
+  const body = String(email.rawBody ?? '');
+  if (body) {
+    collectConversationIds(body, ids);
+    if (/=3D|=\r?\n/i.test(body)) collectConversationIds(decodeQuotedPrintable(body), ids);
+  }
+  return ids.size === 1 ? [...ids][0] : null;
+}
+
+export interface VintedBundleOrderInfo {
+  organizerId: string;
+  itemCount: number;
+  amountText: string | null;
+  buyer: string | null;
+  conversationId: string | null;
+}
+
+/**
+ * Read-only variant used to re-evaluate an already-processed email (retroactive conversation id
+ * attach): runs the same sender, DKIM/DMARC and organizer-token guards as processVintedSoldEmail,
+ * then reports bundle details + conversation id. Never matches or sells anything. Returns null for
+ * anything that is not an authentic bundle sale email for exactly one organizer.
+ */
+export async function inspectVintedBundleEmail(
+  email: InboundVintedSoldEmail,
+  deps: Pick<VintedSoldEmailDeps, 'resolveOrganizerIdByToken'> = {},
+): Promise<VintedBundleOrderInfo | null> {
+  const resolveOrganizerIdByToken = deps.resolveOrganizerIdByToken ?? resolveOrganizerIdByForwardingToken;
+  if (!isExactSender(email.from)) return null;
+  const parsed = parseVintedSoldEmail(email.rawBody);
+  const countFromTitle = parsed ? parseVintedBundleItemCount(parsed.title) : null;
+  const lenient = countFromTitle === null ? parseVintedBundleFromBody(email.rawBody) : null;
+  const itemCount = countFromTitle ?? lenient?.itemCount ?? null;
+  if (itemCount === null) return null;
+  const auth = verifyInboundEmailAuthentication(email, VINTED_DKIM_DOMAINS);
+  if (!auth.ok) return null;
+  const tokens = new Map<string, string>();
+  for (const addr of email.recipientAddresses ?? []) {
+    const token = extractForwardingTokenFromAddress(addr);
+    if (token && !tokens.has(token.toLowerCase())) tokens.set(token.toLowerCase(), token);
+  }
+  const organizerIds = new Set<string>();
+  for (const token of tokens.values()) {
+    const id = await resolveOrganizerIdByToken(token);
+    if (id) organizerIds.add(id);
+  }
+  if (organizerIds.size !== 1) return null;
+  return {
+    organizerId: [...organizerIds][0],
+    itemCount,
+    amountText: parsed?.amountText ?? lenient?.amountText ?? null,
+    buyer: parsed?.buyer ?? lenient?.buyer ?? null,
+    conversationId: extractVintedConversationId(email),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
 // Processing
 // ---------------------------------------------------------------------------------------------
 
@@ -280,6 +391,7 @@ export async function processVintedSoldEmail(
     return { kind: 'ignored', reason };
   }
   const organizerId = [...organizerIds][0];
+  const conversationId = extractVintedConversationId(email);
 
   if (bundleViaBody) {
     return {
@@ -289,6 +401,7 @@ export async function processVintedSoldEmail(
       amountText: bundleViaBody.amountText,
       buyer: bundleViaBody.buyer,
       title: `Bundle ${bundleViaBody.itemCount} items`,
+      conversationId,
     };
   }
 
@@ -304,10 +417,11 @@ export async function processVintedSoldEmail(
         amountText: lenientBundle.amountText,
         buyer: lenientBundle.buyer,
         title: `Bundle ${lenientBundle.itemCount} items`,
+        conversationId,
       };
     }
     console.warn('[VintedSoldEmailDetection] unmatched sold email -- could not parse the item title', { organizerId });
-    return { kind: 'unmatched', organizerId, title: null, reason: 'could not parse the item title from the email body' };
+    return { kind: 'unmatched', organizerId, title: null, reason: 'could not parse the item title from the email body', conversationId };
   }
 
   const r = await processTitleReport(organizerId, title);
@@ -323,6 +437,7 @@ export async function processVintedSoldEmail(
         soldVia: SOLD_VIA_VINTED,
         alreadySold: r.result !== 'sold',
         result: r.result,
+        conversationId,
       };
     case 'ambiguous':
       return {
@@ -331,15 +446,16 @@ export async function processVintedSoldEmail(
         title,
         candidateCount: r.candidateCount ?? null,
         reason: r.reason ?? `title matches ${r.candidateCount ?? 'several'} items`,
+        conversationId,
       };
     case 'notFound': {
       // No listing carries this title. If it is a bundle label, route to bundle handling instead
       // of a dead-end "unmatched" (nothing is marked sold either way).
       const itemCount = parseVintedBundleItemCount(title);
       if (itemCount !== null) {
-        return { kind: 'bundle', organizerId, itemCount, amountText: parsed.amountText, buyer: parsed.buyer, title };
+        return { kind: 'bundle', organizerId, itemCount, amountText: parsed.amountText, buyer: parsed.buyer, title, conversationId };
       }
-      return { kind: 'unmatched', organizerId, title, reason: r.reason ?? 'no_match' };
+      return { kind: 'unmatched', organizerId, title, reason: r.reason ?? 'no_match', conversationId };
     }
     case 'error':
     default:
