@@ -47,6 +47,8 @@ export interface PricingResult {
   };
   deprecationCurveApplied?: string; // category name
   compsFound: number;
+  // 2026-10-11: only present when the request set compRelevanceFilter and the eBay adapter measured it. See SourceResult.
+  compSpreadRatio?: number;
   dataFreshness: Date;
   debugInfo?: {
     tier1Results: SourceResult[];
@@ -76,6 +78,9 @@ export interface SourceResult {
   sampleSize?: number; // raw comp count this result is based on (e.g. Discogs num_for_sale,
   // eBay listing count). Optional — adapters that don't set it fall back to a safe default
   // in weighting.ts rather than poisoning the weight with NaN (2026-08-24 bug fix).
+  // 2026-10-11: set only by the eBay adapter under compRelevanceFilter. p75/p25 of the relevant comp prices before the
+  // outlier trim (see ebayRelevance.priceSpreadRatio). Absent everywhere else (audio path included).
+  compSpreadRatio?: number;
   askingPriceAdjustment?: number; // 0.6 multiplier if asking price
   recencyDecayFactor?: number; // e^(-λt)
   sampleSizeBoost?: number; // log(n+1) — derived from sampleSize, computed in weighting.ts

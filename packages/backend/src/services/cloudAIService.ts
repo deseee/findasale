@@ -21,6 +21,7 @@ import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled, Ca
 import { getEbayImageMatch, buildEbayMatchContext, EbayImageMatch } from './ebayImageSearchService';
 import { estimatePrice } from './pricingEngine';
 import { isAudioFormatMatch } from './pricingEngine/adapters/discogs';
+import { isSpreadTooWide, stableShadowQuery } from './pricingEngine/adapters/ebayRelevance';
 import { applyCharmPricing } from '../utils/charmPricing';
 import type { AIRecordIdentity } from './marketplace/recordIdentity';
 import { normalizeAiCard, AICardResult } from './cardAiSuggestion'; // card-aware tagging: validates the optional `card` block
@@ -352,7 +353,10 @@ export function applyCardAwareness(parsed: AITagResult): void {
 
 /** Shadow Market estimate minimum evidence (2026-10-11): tier 1, at least this many post-filter comps, confidence not LOW. */
 export const SHADOW_MIN_COMPS = 3;
-export function hasShadowEvidence(r: { tier: number; compsFound: number; confidence: string }): boolean {
+export function hasShadowEvidence(r: { tier: number; compsFound: number; confidence: string; compSpreadRatio?: number | null }): boolean {
+  // Spread check (2026-10-11): comps whose interquartile price ratio exceeds MAX_SPREAD_RATIO are a mixed bag
+  // (e.g. $19 to $1,144), so their median is not an estimate of this item. A missing ratio is not judged.
+  if (isSpreadTooWide(r.compSpreadRatio)) return false;
   return r.tier === 1 && r.compsFound >= SHADOW_MIN_COMPS && r.confidence !== 'LOW';
 }
 
@@ -363,19 +367,25 @@ export function hasShadowEvidence(r: { tier: number; compsFound: number; confide
  * through shadowPricingStore). Never throws. FLOOR / non-positive / timeout / error leave the fields undefined.
  * Logs one line per item so a week of logs can be compared by title.
  */
-async function recordShadowEnginePrice(parsed: AITagResult, aiGuess: number, timeoutMs: number): Promise<void> {
+async function recordShadowEnginePrice(parsed: AITagResult, aiGuess: number, timeoutMs: number, priorTitle?: string | null): Promise<void> {
   let reason = 'ok';
+  let spreadLog = 'none';
   let confidence = 'none';
   let tier = 'none';
   let compsFound = 'none';
   let enginePriceLog = 'none';
+  let queryLog = '';
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<null>(resolve => {
       timer = setTimeout(() => resolve(null), timeoutMs);
     });
+    // Re-analyze title drift guard: with a prior title, search eBay with only the tokens both titles share.
+    // parsed.title itself is untouched (Re-analyze still writes the regenerated title); only the lookup query changes.
+    const queryTitle = stableShadowQuery(parsed.title, priorTitle);
+    if (queryTitle !== parsed.title) queryLog = queryTitle;
     const lookup = estimatePrice({
-      title: parsed.title,
+      title: queryTitle,
       category: parsed.category || '',
       condition: parsed.condition,
       conditionGrade: parsed.suggestedConditionGrade,
@@ -391,6 +401,7 @@ async function recordShadowEnginePrice(parsed: AITagResult, aiGuess: number, tim
       confidence = String(result.confidence);
       tier = String(result.tier);
       compsFound = String(result.compsFound);
+      if (typeof result.compSpreadRatio === 'number' && isFinite(result.compSpreadRatio)) spreadLog = result.compSpreadRatio.toFixed(2);
       if (result.confidence === 'FLOOR') {
         reason = 'FLOOR';
       } else if (!(typeof result.estimatedPrice === 'number' && isFinite(result.estimatedPrice) && result.estimatedPrice > 0)) {
@@ -415,7 +426,7 @@ async function recordShadowEnginePrice(parsed: AITagResult, aiGuess: number, tim
   }
   try {
     const titleLog = String(parsed.title ?? '').slice(0, 60);
-    console.log(`[pricing] shadow engine: title="${titleLog}" aiGuess=${aiGuess} enginePrice=${enginePriceLog} confidence=${confidence} tier=${tier} compsFound=${compsFound} reason=${reason}`);
+    console.log(`[pricing] shadow engine: title="${titleLog}" aiGuess=${aiGuess} enginePrice=${enginePriceLog} confidence=${confidence} tier=${tier} compsFound=${compsFound} reason=${reason} spread=${spreadLog}${queryLog ? ` query="${queryLog.slice(0, 60)}"` : ''}`);
   } catch {
     // logging must never throw
   }
@@ -443,7 +454,7 @@ async function recordShadowEnginePrice(parsed: AITagResult, aiGuess: number, tim
  * pressing happened to come back first.
  * See claude_docs/feature-notes/ADR-charm-pricing-discogs-comp-wiring-2026-08-24.md
  */
-export async function finalizePricing(parsed: AITagResult): Promise<void> {
+export async function finalizePricing(parsed: AITagResult, opts?: { priorTitle?: string | null }): Promise<void> {
   if (typeof parsed.suggestedPrice !== 'number' || !isFinite(parsed.suggestedPrice)) {
     return;
   }
@@ -486,7 +497,7 @@ export async function finalizePricing(parsed: AITagResult): Promise<void> {
     }
   } else {
     // Non-audio: shadow mode. Never changes suggestedPrice or priceSource; never throws.
-    await recordShadowEnginePrice(parsed, rawAiGuess, PRICING_ENGINE_TIMEOUT_MS);
+    await recordShadowEnginePrice(parsed, rawAiGuess, PRICING_ENGINE_TIMEOUT_MS, opts?.priorTitle);
   }
 
   if (parsed.priceSource !== 'engine') {
@@ -1359,7 +1370,10 @@ export async function analyzeItemImages(
   buffers: Buffer[],
   mimeTypes: string[] = [],
   comps?: ComparableSale[],
-  clusterPhotos?: ClusterPhoto[]
+  clusterPhotos?: ClusterPhoto[],
+  // Re-analyze only: the item's existing title, so the shadow Market estimate searches eBay with a stable query
+  // (tokens common to old and new title) instead of the freshly regenerated, drift-prone title.
+  options?: { priorTitle?: string | null }
 ): Promise<AITagResult | null> {
   if (!isCloudAIAvailable()) return null;
 
@@ -1711,7 +1725,7 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
 
     // FCC ID: keep only a well-formed model-read value (6-19 alphanumerics with a letter and a digit); anything else is dropped.
     parsed.fccId = normalizeFccIdStrict(parsed.fccId) ?? undefined;
-    await finalizePricing(parsed);
+    await finalizePricing(parsed, { priorTitle: options?.priorTitle });
     // ADR ROUND 3 (2026-08-29): pass eBay's listing-title majority consensus alongside
     // Vision OCR tokens -- second zero-cost candidate-word source (see
     // ADR-ai-title-transcription-fidelity-2026-08-29-round3.md). Same non-blocking

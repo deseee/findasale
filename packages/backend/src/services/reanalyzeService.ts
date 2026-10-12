@@ -202,7 +202,10 @@ export async function reanalyzeItem(
 
   let result;
   try {
-    result = await analyzeItemImages(buffers, mimeTypes);
+    // Shadow Market estimate query stability: pass the item's existing title so the eBay lookup uses only the tokens the
+    // old and regenerated titles share. Never for test-image runs (those photos are not this item). Affects the lookup
+    // query only; the regenerated title is still what Re-analyze writes.
+    result = await analyzeItemImages(buffers, mimeTypes, undefined, undefined, usingTestImages ? undefined : { priorTitle: item.title });
   } catch (err: any) {
     console.error('[Reanalyze] analyzeItemImages threw:', err?.message || err);
     return { ok: false, code: 'AI_UNAVAILABLE' };

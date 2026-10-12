@@ -287,6 +287,77 @@ describe('(4b) minimum evidence rule: tier 1 + compsFound >= 3 + confidence not 
   });
 });
 
+describe('(4c) spread check and stable re-analyze query (2026-10-11)', () => {
+  const logs = () => logSpy.mock.calls.map(c => String(c[0])).join('\n');
+
+  it('hasShadowEvidence rejects a wide comp spread and ignores a missing one', () => {
+    expect(hasShadowEvidence({ tier: 1, compsFound: 6, confidence: 'MEDIUM', compSpreadRatio: 4.3 })).toBe(false);
+    expect(hasShadowEvidence({ tier: 1, compsFound: 6, confidence: 'MEDIUM', compSpreadRatio: 3 })).toBe(true);
+    expect(hasShadowEvidence({ tier: 1, compsFound: 6, confidence: 'MEDIUM', compSpreadRatio: 1.6 })).toBe(true);
+    expect(hasShadowEvidence({ tier: 1, compsFound: 6, confidence: 'MEDIUM' })).toBe(true);
+  });
+
+  it('saloon doors: tier 1, 6 comps, MEDIUM but spread 4.3 records nothing and logs spread=', async () => {
+    mockEstimatePrice.mockResolvedValue(engineResult({ tier: 1, compsFound: 6, estimatedPrice: 38249, compSpreadRatio: 4.3 }));
+    const p = tag();
+    await finalizePricing(p);
+    expect(p.shadowEnginePrice).toBeUndefined();
+    expect(p.shadowEngineConfidence).toBeUndefined();
+    expect(p.shadowEngineTier).toBeUndefined();
+    expect(p.shadowEngineCompsFound).toBeUndefined();
+    expect(p.suggestedPrice).toBe(84.99);
+    expect(p.priceSource).toBe('ai-guess');
+    expect(logs()).toContain('reason=insufficient-evidence');
+    expect(logs()).toContain('spread=4.30');
+  });
+
+  it('a tight set (spread 1.6) still records and logs its spread', async () => {
+    mockEstimatePrice.mockResolvedValue(engineResult({ tier: 1, compsFound: 8, compSpreadRatio: 1.63 }));
+    const p = tag();
+    await finalizePricing(p);
+    expect(p.shadowEnginePrice).toBe(129.99);
+    expect(logs()).toContain('reason=ok');
+    expect(logs()).toContain('spread=1.63');
+  });
+
+  it('a wide-spread run clears an older shadow row (persist with no shadow price)', async () => {
+    mockFindUnique.mockResolvedValue({ pricingResultJson: { shadowEngine: true, smartPrice: 84.99 } });
+    mockEstimatePrice.mockResolvedValue(engineResult({ tier: 1, compsFound: 6, compSpreadRatio: 4.3 }));
+    const p = tag();
+    await finalizePricing(p);
+    await persistShadowPricing('it1', p.suggestedPrice, p);
+    expect(mockDeleteMany).toHaveBeenCalledWith({ where: { itemId: 'it1' } });
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it('re-analyze: the lookup query keeps only tokens shared with the prior title, but parsed.title is untouched', async () => {
+    mockEstimatePrice.mockResolvedValue(engineResult());
+    const p = tag({ title: 'Vintage Wood Partition Divider Shutters, Staff Only, Set of 2' });
+    await finalizePricing(p, { priorTitle: 'Wooden Staff Only Partition Divider, Vintage Wood Shutters' });
+    expect(mockEstimatePrice.mock.calls[0][0].title).toBe('wood partition divider shutter');
+    expect(mockEstimatePrice.mock.calls[0][0].compRelevanceFilter).toBe(true);
+    expect(p.title).toBe('Vintage Wood Partition Divider Shutters, Staff Only, Set of 2');
+    expect(p.suggestedPrice).toBe(84.99);
+    expect(logs()).toContain('query="wood partition divider shutter"');
+  });
+
+  it('no prior title (first analysis) searches with the fresh title exactly as before', async () => {
+    mockEstimatePrice.mockResolvedValue(engineResult());
+    await finalizePricing(tag({ title: 'Antique saloon doors' }));
+    expect(mockEstimatePrice.mock.calls[0][0].title).toBe('Antique saloon doors');
+    expect(logs()).not.toContain('query="');
+  });
+
+  it('audio path ignores priorTitle and never sets the relevance flag', async () => {
+    mockIsAudio.mockReturnValue(true);
+    mockEstimatePrice.mockResolvedValue(engineResult({ tier: 1, compsFound: 5 }));
+    const p = tag({ title: 'Sweet Maya LP', suggestedPrice: 40 });
+    await finalizePricing(p, { priorTitle: 'Sweet Maya Vinyl Record' });
+    expect(mockEstimatePrice.mock.calls[0][0].title).toBe('Sweet Maya LP');
+    expect(mockEstimatePrice.mock.calls[0][0]).not.toHaveProperty('compRelevanceFilter');
+  });
+});
+
 describe('(5) shadowPricingStore', () => {
   const shadow = { shadowEnginePrice: 129.99, shadowEngineConfidence: 'MEDIUM', shadowEngineTier: 2, shadowEngineCompsFound: 7 };
 

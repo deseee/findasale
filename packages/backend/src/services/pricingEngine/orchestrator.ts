@@ -247,6 +247,11 @@ async function finalizeResult(
     compsFound: weighted.length,
     dataFreshness: new Date(),
   };
+  // Shadow Market estimate only (compRelevanceFilter): surface the adapter's pre-trim comp price spread.
+  if (request.compRelevanceFilter) {
+    const spreads = results.map(r => r.compSpreadRatio).filter((x): x is number => typeof x === 'number' && isFinite(x));
+    if (spreads.length > 0) result.compSpreadRatio = Math.max(...spreads);
+  }
 
   // 14. Cache result (skipped when the caller sent persist:false: an ephemeral estimate writes nothing keyed to itemId)
   // 2026-08-24: the manual re-trigger (PriceSuggestion.tsx -> POST /pricing/estimate) makes

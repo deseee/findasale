@@ -20,6 +20,13 @@
  *      [0.4 x median, 2.5 x median] of the surviving set (median of the sorted prices, mean of the middle two for an
  *      even count). With fewer than 3 there is no robust median, so nothing is trimmed.
  *
+ * Dispersion (2026-10-11, second pass): the trim above keeps a band up to 6.25x wide, so a junk set can survive it
+ * (saloon doors: $19-$1,144, median $450, kept 6, engine said $382 vs a true ~$130). `spreadRatio` is therefore measured
+ * on the relevant set BEFORE the trim: p75/p25 (interquartile ratio, linear interpolation). Quartiles are used instead
+ * of min/max or p90/p10 so a single bulk-lot outlier among otherwise tight comps (which the trim is meant to absorb)
+ * does not condemn the set, while a genuinely mixed set (several cheap AND several expensive listings) does.
+ * Callers reject the estimate when the ratio exceeds MAX_SPREAD_RATIO (3).
+ *
  * Fewer than MIN_RELEVANT_COMPS (3) kept comps is flagged via `sparse` so callers can log it. The result is never
  * back-filled with the unfiltered set; callers' compsFound is the post-filter count.
  */
@@ -28,6 +35,8 @@ export const MIN_RELEVANT_COMPS = 3;
 export const OUTLIER_LOW_RATIO = 0.4;
 export const OUTLIER_HIGH_RATIO = 2.5;
 export const TOKEN_OVERLAP_RATIO = 0.4;
+/** Max allowed p75/p25 of the pre-trim relevant comp prices; above this the comp set is too mixed to price from. */
+export const MAX_SPREAD_RATIO = 3;
 
 const STOPWORDS = new Set([
   'a', 'an', 'the', 'and', 'or', 'of', 'for', 'with', 'in', 'on', 'at', 'to', 'by', 'from', 'as', 'is', 'are',
@@ -68,6 +77,8 @@ export interface RelevanceStats {
   kept: number;
   /** True when fewer than MIN_RELEVANT_COMPS comps survived. */
   sparse: boolean;
+  /** p75/p25 of the relevant prices before the outlier trim; null when fewer than 3 relevant comps. */
+  spreadRatio: number | null;
 }
 
 export interface RelevanceResult<T extends RelevanceComp> {
@@ -132,6 +143,47 @@ export function medianOf(values: number[]): number {
   return s.length % 2 === 1 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
+/** Linear-interpolated percentile (p in [0,1]) of numbers. NaN for an empty list. */
+export function percentileOf(values: number[], p: number): number {
+  if (values.length === 0) return NaN;
+  const s = [...values].sort((a, b) => a - b);
+  const idx = Math.min(Math.max(p, 0), 1) * (s.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.min(lo + 1, s.length - 1);
+  return s[lo] + (s[hi] - s[lo]) * (idx - lo);
+}
+
+/** Interquartile price ratio p75/p25. Null with fewer than MIN_RELEVANT_COMPS positive finite prices. */
+export function priceSpreadRatio(prices: number[]): number | null {
+  const ok = (Array.isArray(prices) ? prices : []).filter(p => typeof p === 'number' && isFinite(p) && p > 0);
+  if (ok.length < MIN_RELEVANT_COMPS) return null;
+  const q1 = percentileOf(ok, 0.25);
+  const q3 = percentileOf(ok, 0.75);
+  if (!(q1 > 0) || !isFinite(q3)) return null;
+  return q3 / q1;
+}
+
+/** True when a measured spread ratio is above MAX_SPREAD_RATIO. A missing / non-finite ratio is not judged (false). */
+export function isSpreadTooWide(ratio: number | null | undefined): boolean {
+  return typeof ratio === 'number' && isFinite(ratio) && ratio > MAX_SPREAD_RATIO;
+}
+
+/**
+ * Stable eBay query for a RE-ANALYZED item (title drift guard). The model rewrites the title on every run and can
+ * invent details ("Set of 2"). When the item already had a title, the query keeps only the distinctive tokens of the
+ * NEW title that also appear in the PRIOR title, in the new title's order. Fewer than 2 common tokens means the
+ * identification genuinely changed, so the new title is used as is. No prior title, or nothing to drop: new title as is.
+ */
+export function stableShadowQuery(newTitle: string, priorTitle?: string | null): string {
+  const fresh = typeof newTitle === 'string' ? newTitle : '';
+  if (typeof priorTitle !== 'string' || priorTitle.trim() === '') return fresh;
+  const prior = new Set(tokenizeTitle(priorTitle));
+  const freshTokens = tokenizeTitle(fresh);
+  const common = freshTokens.filter(t => prior.has(t));
+  if (common.length < 2 || common.length === freshTokens.length) return fresh;
+  return common.join(' ');
+}
+
 /** Keep prices within [0.4 x median, 2.5 x median]. Fewer than 3 comps: returned untouched (no robust median). */
 export function trimPriceOutliers<T extends { price: number }>(comps: T[]): T[] {
   if (comps.length < MIN_RELEVANT_COMPS) return comps;
@@ -157,6 +209,7 @@ export function filterRelevantComps<T extends RelevanceComp>(itemTitle: string, 
       afterExclusions: clean.length,
       kept: kept.length,
       sparse: kept.length < MIN_RELEVANT_COMPS,
+      spreadRatio: priceSpreadRatio(clean.map(c => c.price)),
     },
   };
 }

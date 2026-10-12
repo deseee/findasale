@@ -53,6 +53,7 @@ export class EbayAdapter implements PricingAdapter {
       // compsFound downstream is the post-filter count; the list is never back-filled with dropped comps.
       let listings = result.listings.filter(listing => listing.price > 0);
       let sampleSize = result.count;
+      let compSpreadRatio: number | undefined;
       if (request.compRelevanceFilter) {
         const filtered = filterRelevantComps(request.title, listings);
         console.log(`[eBay] Relevance filter for "${String(request.title).slice(0, 60)}": input=${filtered.stats.input} overlap=${filtered.stats.afterOverlap} clean=${filtered.stats.afterExclusions} kept=${filtered.stats.kept}`);
@@ -61,6 +62,7 @@ export class EbayAdapter implements PricingAdapter {
         }
         listings = filtered.kept;
         sampleSize = filtered.kept.length;
+        if (filtered.stats.spreadRatio !== null) compSpreadRatio = filtered.stats.spreadRatio;
       }
 
       const results: SourceResult[] = listings
@@ -72,6 +74,7 @@ export class EbayAdapter implements PricingAdapter {
           confidence: 0.75,
           comparabilityScore: 0.75,
           sampleSize,
+          ...(compSpreadRatio !== undefined ? { compSpreadRatio } : {}),
         }));
 
       if (results.length > 0) {

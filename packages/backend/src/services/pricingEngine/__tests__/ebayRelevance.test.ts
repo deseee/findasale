@@ -12,6 +12,11 @@ import {
   trimPriceOutliers,
   filterRelevantComps,
   MIN_RELEVANT_COMPS,
+  MAX_SPREAD_RATIO,
+  percentileOf,
+  priceSpreadRatio,
+  isSpreadTooWide,
+  stableShadowQuery,
 } from '../adapters/ebayRelevance';
 
 const c = (title: string, price: number) => ({ title, price });
@@ -149,5 +154,90 @@ describe('filterRelevantComps', () => {
     expect(filterRelevantComps('Saloon Doors', [c('Saloon Doors', 0), c('Saloon Doors', NaN as number)]).kept).toEqual([]);
     expect(filterRelevantComps('', [c('Saloon Doors', 100)]).kept).toEqual([]);
     expect(filterRelevantComps('Saloon Doors', undefined as unknown as { title: string; price: number }[]).kept).toEqual([]);
+  });
+});
+
+// ---- Dispersion check (2026-10-11). Price sets are reconstructed from the live 2026-10-11 comp sets. ----
+const MOUSE_TRAP_PRICES = [10, 14, 17, 20, 22, 24, 26, 30, 35, 50]; // median 23, tight
+const BANKERS_LAMP_PRICES = [30, 36, 42, 48, 52, 58, 65, 72, 80, 90]; // median 55, tight
+const SALOON_PRICES = [18.99, 60, 150, 260, 400, 500, 650, 800, 950, 1144]; // median 450, mixed junk
+
+describe('percentileOf / priceSpreadRatio / isSpreadTooWide', () => {
+  it('interpolates percentiles and is order independent', () => {
+    expect(percentileOf([4, 1, 3, 2], 0.5)).toBe(2.5);
+    expect(percentileOf([1, 2, 3, 4, 5], 0.25)).toBe(2);
+    expect(percentileOf([1, 2, 3, 4, 5], 0.75)).toBe(4);
+    expect(percentileOf([], 0.5)).toBeNaN();
+  });
+  it('MAX_SPREAD_RATIO is 3', () => {
+    expect(MAX_SPREAD_RATIO).toBe(3);
+  });
+  it('Mouse Trap and banker lamp sets pass', () => {
+    expect(priceSpreadRatio(MOUSE_TRAP_PRICES) as number).toBeCloseTo(1.63, 1);
+    expect(priceSpreadRatio(BANKERS_LAMP_PRICES) as number).toBeCloseTo(1.61, 1);
+    expect(isSpreadTooWide(priceSpreadRatio(MOUSE_TRAP_PRICES))).toBe(false);
+    expect(isSpreadTooWide(priceSpreadRatio(BANKERS_LAMP_PRICES))).toBe(false);
+  });
+  it('the saloon doors set ($19 to $1,144, median $450) fails', () => {
+    expect(priceSpreadRatio(SALOON_PRICES) as number).toBeCloseTo(4.3, 1);
+    expect(isSpreadTooWide(priceSpreadRatio(SALOON_PRICES))).toBe(true);
+  });
+  it('one bulk-lot outlier among tight comps does not fail the set (the trim absorbs it)', () => {
+    expect(isSpreadTooWide(priceSpreadRatio([10, 14, 17, 20, 22, 24, 26, 30, 35, 250]))).toBe(false);
+  });
+  it('is null with fewer than 3 usable prices and never judges a missing ratio', () => {
+    expect(priceSpreadRatio([10, 40])).toBeNull();
+    expect(priceSpreadRatio([10, 0, NaN, 40])).toBeNull();
+    expect(isSpreadTooWide(null)).toBe(false);
+    expect(isSpreadTooWide(undefined)).toBe(false);
+    expect(isSpreadTooWide(NaN)).toBe(false);
+    expect(isSpreadTooWide(MAX_SPREAD_RATIO)).toBe(false);
+    expect(isSpreadTooWide(MAX_SPREAD_RATIO + 0.01)).toBe(true);
+  });
+});
+
+describe('filterRelevantComps reports the pre-trim spread', () => {
+  it('saloon doors: the trim keeps a mid band but spreadRatio (pre-trim) still flags the set', () => {
+    const comps = SALOON_PRICES.map(p => c('Wood Partition Divider Shutters Panel', p));
+    const r = filterRelevantComps('Vintage Wood Partition Divider Shutters, Staff Only, Set of 2', comps);
+    expect(r.stats.afterExclusions).toBe(10);
+    expect(r.kept.length).toBeLessThan(10);
+    expect(r.stats.spreadRatio as number).toBeGreaterThan(MAX_SPREAD_RATIO);
+  });
+  it('Mouse Trap and banker lamp sets: spreadRatio stays under the limit', () => {
+    const mt = filterRelevantComps('Mouse Trap Board Game Milton Bradley', MOUSE_TRAP_PRICES.map(p => c('Mouse Trap Board Game Milton Bradley', p)));
+    const lamp = filterRelevantComps('Banker Lamp Green Glass Shade', BANKERS_LAMP_PRICES.map(p => c('Banker Lamp Green Glass Shade', p)));
+    expect(mt.stats.spreadRatio as number).toBeLessThanOrEqual(MAX_SPREAD_RATIO);
+    expect(lamp.stats.spreadRatio as number).toBeLessThanOrEqual(MAX_SPREAD_RATIO);
+    expect(mt.kept.length).toBe(10);
+    expect(lamp.kept.length).toBe(10);
+  });
+  it('is null when fewer than 3 relevant comps', () => {
+    expect(filterRelevantComps('Saloon Doors', [c('Saloon Doors', 100)]).stats.spreadRatio).toBeNull();
+    expect(filterRelevantComps('Anything', []).stats.spreadRatio).toBeNull();
+  });
+});
+
+describe('stableShadowQuery', () => {
+  it('drops details the prior title did not have ("Set of 2") and keeps the shared tokens in the new order', () => {
+    expect(stableShadowQuery(
+      'Vintage Wood Partition Divider Shutters, Staff Only, Set of 2',
+      'Wooden Staff Only Partition Divider, Vintage Wood Shutters',
+    )).toBe('wood partition divider shutter');
+  });
+  it('is deterministic', () => {
+    const a = stableShadowQuery('Vintage Wood Partition Divider Shutters, Set of 2', 'Wood Partition Divider Shutters');
+    const b = stableShadowQuery('Vintage Wood Partition Divider Shutters, Set of 2', 'Wood Partition Divider Shutters');
+    expect(a).toBe(b);
+  });
+  it('returns the new title unchanged with no prior title, an empty prior, or nothing to drop', () => {
+    expect(stableShadowQuery('Mouse Trap Board Game', undefined)).toBe('Mouse Trap Board Game');
+    expect(stableShadowQuery('Mouse Trap Board Game', null)).toBe('Mouse Trap Board Game');
+    expect(stableShadowQuery('Mouse Trap Board Game', '  ')).toBe('Mouse Trap Board Game');
+    expect(stableShadowQuery('Mouse Trap Board Game', 'Mouse Trap Board Game, Milton Bradley')).toBe('Mouse Trap Board Game');
+  });
+  it('uses the new title when fewer than 2 tokens are shared (the item was genuinely re-identified)', () => {
+    expect(stableShadowQuery('Banker Lamp Green Glass Shade', 'Saloon Doors Wood')).toBe('Banker Lamp Green Glass Shade');
+    expect(stableShadowQuery('Banker Lamp Green Glass Shade', 'Green Cup')).toBe('Banker Lamp Green Glass Shade');
   });
 });
