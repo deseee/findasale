@@ -49,7 +49,7 @@ import { sellItemUnits } from './itemStockService';
 import { syncMarketplaceStock } from './marketplaceStockSyncService';
 import { lotChannelRefusal } from './bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a bulk lot is never marked SOLD by a sale seen elsewhere
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
-import { soldEmailStaleReason, soldEmailAlreadyApplied, soldRowMessage } from './soldEmailSourceGuard'; // 2026-10-12: an e-mail replayed after marker loss / relist must not consume a unit twice
+import { soldEmailStaleReason, soldEmailAlreadyApplied, soldRowMessage, getSoldEmailSource, parseSoldRowSentAtMs } from './soldEmailSourceGuard'; // 2026-10-12: an e-mail replayed after marker loss / relist must not consume a unit twice
 import { isReportOfCancelledReopenedSale } from './saleReopenGuard'; // reopen-sale (2026-10-10): a sold signal for a sale the organizer reopened must not re-sell it
 
 export interface CommitFacebookNativeSaleResult {
@@ -121,6 +121,10 @@ export interface CommitFacebookNativeSaleOptions {
 
 /** Window used for the closed-by-email-sale rule when the order carries no creation time. */
 const CLOSED_BY_EMAIL_SALE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** Relist-without-POSTED-row rule: an e-mail sent more than this after the last sold_on_<platform> REMOVE row's reference time is a new sale. Also
+ * the slack that keeps a bundle notice / e-mail pair for the SAME sale (sent a little after the row) from counting twice. */
+export const NEW_EMAIL_SALE_TOLERANCE_MS = 10 * 60 * 1000;
 
 /** True when the item holds more than one unit, i.e. a sale elsewhere is a unit sale, not a SOLD. */
 export async function isMultiStockItem(itemId: string): Promise<boolean> {
@@ -204,7 +208,28 @@ async function commitPlatformUnitSale(
       orderBy: { createdAt: 'desc' },
       select: { action: true, status: true, remoteListingId: true, createdAt: true, lastErrorMessage: true },
     });
-    if (!live || live.action !== 'POST' || live.status !== 'POSTED') {
+    // NEW-SALE-AFTER-LAST-REMOVE (2026-10-12, Nickel Coin Tube / dragonballzdad): a multi-unit listing can sell again on the platform with NO
+    // POSTED row recorded (relisted on Vinted without the app writing a POST). The latest row is then the previous unit sale's sold_on_<platform>
+    // REMOVE row, and the old rule read that as "already counted" and dropped a genuine new sale. Only for a sold E-MAIL (sent date known, not a
+    // trustedOrder bundle): if the e-mail was sent more than the tolerance AFTER that REMOVE row's reference time (the sent date recorded on it by
+    // an earlier e-mail sale, else its createdAt), it cannot be the sale that row recorded, so it consumes a unit exactly once (the REMOVE row
+    // written below carries this e-mail's sent date + source tag, which the next e-mail is compared against and the replay guard recognises).
+    const emailSentMs = getSoldEmailSource()?.sentAt?.getTime();
+    let newEmailSaleAfterLastRemove = false;
+    if (
+      !sold.trustedOrder &&
+      emailSentMs !== undefined &&
+      !Number.isNaN(emailSentMs) &&
+      live &&
+      live.action === 'REMOVE' &&
+      live.status === 'REMOVED' &&
+      String(live.lastErrorMessage ?? '').startsWith(`sold_on_${platform.toLowerCase()}`) &&
+      live.createdAt
+    ) {
+      const refMs = parseSoldRowSentAtMs(live.lastErrorMessage) ?? new Date(live.createdAt).getTime();
+      if (!Number.isNaN(refMs) && emailSentMs > refMs + NEW_EMAIL_SALE_TOLERANCE_MS) newEmailSaleAfterLastRemove = true;
+    }
+    if (!newEmailSaleAfterLastRemove && (!live || live.action !== 'POST' || live.status !== 'POSTED')) {
       // CLOSED-BY-EMAIL-SALE (2026-10-12, Nickel Coin Tube bundle): for a fresh ORDER (trustedOrder) the sold-email retry may have
       // already recorded this very sale and closed the listing (latest row = REMOVE/REMOVED sold_on_<platform>, no Vinted id on it),
       // so exactReported-id counting cannot see it. Treat it as already counted: no stock change, no row. A genuine second sale
@@ -224,7 +249,7 @@ async function commitPlatformUnitSale(
       return { kind: 'noop', reason: 'no_live_posted_row', counted: await alreadyCountedFor() } as UnitSaleOutcome;
     }
 
-    if (reportedId) {
+    if (reportedId && live && !newEmailSaleAfterLastRemove) {
       if (live.remoteListingId) {
         if (live.remoteListingId !== reportedId) {
           return { kind: 'noop', reason: 'reported_id_differs_from_live_row_id', counted: await alreadyCountedFor() } as UnitSaleOutcome;

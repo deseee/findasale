@@ -48,10 +48,23 @@ export function soldEmailSourceHash(key: string): string {
 
 export const SOLD_EMAIL_SRC_TAG = '|src:';
 
-/** lastErrorMessage for the unit-sale REMOVE row: `base` alone with no e-mail context, `base|src:<hash>` with one. */
+export const SOLD_EMAIL_SENT_TAG = '|sent:';
+
+/**
+ * lastErrorMessage for the unit-sale REMOVE row: `base` alone with no e-mail context, `base|sent:<ms>|src:<hash>` with one
+ * (`|sent:` only when the e-mail's sent date is known). The existing startsWith('sold_on_') and endsWith('|src:<hash>') checks still match.
+ */
 export function soldRowMessage(base: string): string {
   const src = getSoldEmailSource();
-  return src ? `${base}${SOLD_EMAIL_SRC_TAG}${soldEmailSourceHash(src.key)}` : base;
+  if (!src) return base;
+  const sentMs = src.sentAt && !Number.isNaN(src.sentAt.getTime()) ? src.sentAt.getTime() : null;
+  return `${base}${sentMs !== null ? `${SOLD_EMAIL_SENT_TAG}${sentMs}` : ''}${SOLD_EMAIL_SRC_TAG}${soldEmailSourceHash(src.key)}`;
+}
+
+/** The sent date (epoch ms) of the e-mail that wrote a unit-sale REMOVE row, or null for a row without one (bundle / wardrobe / older rows). */
+export function parseSoldRowSentAtMs(message: string | null | undefined): number | null {
+  const m = /\|sent:(\d{10,15})(?:\||$)/.exec(String(message ?? ''));
+  return m ? Number(m[1]) : null;
 }
 
 type Reason = 'predates_live_listing' | 'already_applied_by_this_email';

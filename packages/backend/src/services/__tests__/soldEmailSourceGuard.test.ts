@@ -27,7 +27,7 @@ import { commitItemSale } from '../itemSaleGuard';
 import { prisma } from '../../lib/prisma';
 import { sellItemUnits } from '../itemStockService';
 import { closePlatformListingRecord } from '../platformSoldDetectionService';
-import { runWithSoldEmailSource, soldRowMessage, soldEmailSourceHash, soldEmailStaleReason, soldEmailAlreadyApplied } from '../soldEmailSourceGuard';
+import { runWithSoldEmailSource, soldRowMessage, soldEmailSourceHash, soldEmailStaleReason, soldEmailAlreadyApplied, parseSoldRowSentAtMs } from '../soldEmailSourceGuard';
 
 const KEY = 'sold-email:Vinted:<abc@mail.example>';
 const SENT = new Date('2026-10-11T21:52:00Z');
@@ -77,7 +77,7 @@ describe('predates-live-listing guard', () => {
     const r = await runWithSoldEmailSource({ key: KEY, sentAt: SENT }, () => commitFacebookNativeSale('bcw', 'VINTED', opts));
     expect(r).toEqual({ ok: true, alreadyCommitted: false, partial: true, remainingStock: 2 });
     expect(mockTx.marketplaceListingJob.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ lastErrorMessage: `sold_on_vinted|src:${soldEmailSourceHash(KEY)}` }),
+      data: expect.objectContaining({ lastErrorMessage: `sold_on_vinted|sent:${SENT.getTime()}|src:${soldEmailSourceHash(KEY)}` }),
     });
   });
 
@@ -138,5 +138,76 @@ describe('guard is scoped to the e-mail context only', () => {
     const r = await commitFacebookNativeSale('one', 'VINTED', opts);
     expect(r.alreadyCommitted).toBe(false);
     expect(mockJob.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+// Nickel Coin Tube (2026-10-12): a multi-unit listing sold again on Vinted with NO POSTED row recorded after the previous unit sale
+// (latest row = that sale's sold_on_vinted REMOVE row). A sold e-mail sent AFTER that row is a new sale; one sent at/near it is the same sale.
+describe('new sale after the last sold_on REMOVE row (no POSTED row recorded)', () => {
+  const at = (iso: string) => new Date(iso);
+  const removeRow = (createdAt: string, lastErrorMessage = 'sold_on_vinted') =>
+    mockTx.marketplaceListingJob.findFirst.mockResolvedValueOnce({ action: 'REMOVE', status: 'REMOVED', remoteListingId: null, lastErrorMessage, createdAt: at(createdAt) });
+  const multi = () => mockTx.$queryRaw.mockResolvedValueOnce([{ status: 'AVAILABLE', stockTotal: 93 }]);
+  const run = (sentAt: Date | null, o: any = opts) => runWithSoldEmailSource({ key: KEY, sentAt }, () => commitFacebookNativeSale('nickel', 'VINTED', o));
+
+  it('e-mail sent 2h after an untagged (bundle) REMOVE row: counts exactly one unit and tags the new row with its sent date + source', async () => {
+    multi(); removeRow('2026-10-12T13:32:42Z');
+    (sellItemUnits as jest.Mock).mockResolvedValueOnce({ fullySoldOut: false, remainingStock: 86 });
+    const sent = at('2026-10-12T15:32:45Z');
+    const r = await run(sent);
+    expect(r).toEqual({ ok: true, alreadyCommitted: false, partial: true, remainingStock: 86 });
+    expect(sellItemUnits).toHaveBeenCalledTimes(1);
+    expect(mockTx.marketplaceListingJob.create).toHaveBeenCalledTimes(1);
+    expect(mockTx.marketplaceListingJob.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: 'REMOVE', status: 'REMOVED', lastErrorMessage: `sold_on_vinted|sent:${sent.getTime()}|src:${soldEmailSourceHash(KEY)}` }),
+    });
+  });
+
+  it('e-mail sent BEFORE / within tolerance of the untagged row (the same sale the bundle path counted): no-op', async () => {
+    multi(); removeRow('2026-10-12T13:32:42Z');
+    expect(await run(at('2026-10-12T13:30:00Z'))).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'no_live_posted_row' });
+    multi(); removeRow('2026-10-12T13:32:42Z');
+    expect(await run(at('2026-10-12T13:40:00Z'))).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'no_live_posted_row' }); // +7.3 min < 10
+    expect(sellItemUnits).not.toHaveBeenCalled();
+    expect(mockTx.marketplaceListingJob.create).not.toHaveBeenCalled();
+  });
+
+  it('row written by an earlier e-mail is compared by THAT e-mail\'s sent date, not its (later) createdAt', async () => {
+    const prevSent = at('2026-10-12T12:04:40Z');
+    const tagged = `sold_on_vinted|sent:${prevSent.getTime()}|src:abcdef0123456789`;
+    // polled together at 12:40: a second e-mail sent 12:30 is later than prev.sent+10min but earlier than the row's createdAt -> still a new sale
+    multi(); removeRow('2026-10-12T12:40:02Z', tagged);
+    (sellItemUnits as jest.Mock).mockResolvedValueOnce({ fullySoldOut: false, remainingStock: 80 });
+    expect((await run(at('2026-10-12T12:30:00Z'))).alreadyCommitted).toBe(false);
+    // a duplicate notice for the first sale (sent 5 min after it) is not
+    multi(); removeRow('2026-10-12T12:40:02Z', tagged);
+    expect(await run(at('2026-10-12T12:09:00Z'))).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'no_live_posted_row' });
+    expect(sellItemUnits).toHaveBeenCalledTimes(1);
+  });
+
+  it('unknown e-mail date, a trustedOrder bundle, or no prior sold_on row: unchanged no-op', async () => {
+    multi(); removeRow('2026-10-12T13:32:42Z');
+    expect(await run(null)).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'no_live_posted_row' });
+    multi(); removeRow('2026-10-12T13:32:42Z');
+    expect((await run(at('2026-10-12T15:32:45Z'), { soldOnPlatform: { platform: 'VINTED', remoteListingId: '', trustedOrder: true } })).alreadyCommitted).toBe(true);
+    multi(); mockTx.marketplaceListingJob.findFirst.mockResolvedValueOnce(null); // never listed
+    expect((await run(at('2026-10-12T15:32:45Z'))).alreadyCommitted).toBe(true);
+    multi(); removeRow('2026-10-12T13:32:42Z', 'removed_by_organizer'); // a REMOVE that was not a sale
+    expect((await run(at('2026-10-12T15:32:45Z'))).alreadyCommitted).toBe(true);
+    expect(sellItemUnits).not.toHaveBeenCalled();
+  });
+
+  it('single-unit item is unaffected (legacy whole-item path)', async () => {
+    mockTx.$queryRaw.mockResolvedValueOnce([{ status: 'AVAILABLE', stockTotal: 1 }]);
+    const r = await run(at('2026-10-12T15:32:45Z'));
+    expect(r.alreadyCommitted).toBe(false);
+    expect(commitItemSale).toHaveBeenCalled();
+  });
+
+  it('parseSoldRowSentAtMs reads the tag and ignores rows without one', () => {
+    expect(parseSoldRowSentAtMs('sold_on_vinted|sent:1791806680000|src:abc')).toBe(1791806680000);
+    expect(parseSoldRowSentAtMs('sold_on_vinted|src:abc')).toBeNull();
+    expect(parseSoldRowSentAtMs('sold_on_vinted')).toBeNull();
+    expect(parseSoldRowSentAtMs(null)).toBeNull();
   });
 });
