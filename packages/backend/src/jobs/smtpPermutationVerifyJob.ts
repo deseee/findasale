@@ -190,7 +190,7 @@ function getDomain(websiteUrl: string): string | null {
   }
 }
 
-function isBlockedMxHost(mxHost: string): boolean {
+export function isBlockedMxHost(mxHost: string): boolean {
   const lower = mxHost.toLowerCase();
   for (const blocked of BLOCKED_MX_HOSTS) {
     if (lower === blocked || lower.endsWith(`.${blocked}`)) return true;
@@ -218,7 +218,7 @@ async function processWithConcurrency<T>(
 
 const mxCache = new Map<string, string | null>();
 
-async function getMxHost(domain: string): Promise<string | null> {
+export async function getMxHost(domain: string): Promise<string | null> {
   if (mxCache.has(domain)) return mxCache.get(domain)!;
 
   try {
@@ -240,9 +240,9 @@ async function getMxHost(domain: string): Promise<string | null> {
 
 // ---- SMTP verification -----------------------------------------------------
 
-type SmtpResult = 'accepted' | 'rejected' | 'timeout' | 'error';
+export type SmtpResult = 'accepted' | 'rejected' | 'timeout' | 'error';
 
-function smtpCheck(email: string, mxHost: string): Promise<SmtpResult> {
+export function smtpCheck(email: string, mxHost: string): Promise<SmtpResult> {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     let buffer = '';
@@ -319,7 +319,7 @@ function smtpCheck(email: string, mxHost: string): Promise<SmtpResult> {
  * Returns null if catch-all detected (can't verify).
  * Returns false if rejected.
  */
-async function verifyEmail(
+export async function verifyEmail(
   email: string,
   domain: string,
   mxHost: string

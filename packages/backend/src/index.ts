@@ -114,6 +114,7 @@ import organizerDigestRoutes from './routes/organizerDigest'; // Organizer weekl
 import buyingPoolRoutes from './routes/buyingPools'; // Group Buying Pools
 import adminRoutes from './routes/admin'; // Admin panel
 import adminAffiliateRoutes from './routes/adminAffiliate'; // Admin: Creator/Affiliate management
+import adminRecruitRoutes from './routes/adminRecruit'; // Admin: organizer-recruitment cold-send channel
 import devRoutes from './routes/dev'; // Dev utilities
 import notificationInboxRoutes from './routes/notificationInbox'; // Notification inbox
 import waitlistRoutes from './routes/waitlist'; // Item Waitlist / "Notify Me"
@@ -187,6 +188,7 @@ import indexMetrosRoutes from './routes/index-metros';          // Weekend Sale 
 import reportsRoutes from './routes/reports';                   // #442: Monthly trend report pages
 import unsubscribeRoutes from './routes/unsubscribe';           // Unsubscribe / Preferences
 import outreachRoutes from './routes/outreach';                      // Phase 1: Cold outreach email pipeline
+import recruitRoutes from './routes/recruit';                        // Organizer-recruitment cold-send channel (unsubscribe + provider webhook)
 import earningsPdfRoutes from './routes/earningsPdf';           // Payout PDF Export
 import abTestRoutes from './routes/abTest';                     // A/B Testing Infrastructure
 import feedbackRoutes from './routes/feedback';                 // User Feedback
@@ -609,6 +611,8 @@ app.use('/api/etsy/webhook', express.raw({ type: '*/*' }));
 // Resend webhook: svix signature verification needs the raw body, so capture it
 // before the global json parser consumes the stream (same pattern as Stripe above).
 app.use('/api/outreach/resend-webhook', express.raw({ type: 'application/json' }));
+// Recruit channel's own Resend account webhook: same svix raw-body requirement as the outreach webhook above.
+app.use('/api/recruit/resend-webhook', express.raw({ type: 'application/json' }));
 // MailerLite snooze webhook: the HMAC Signature header is computed over the exact bytes sent, so the
 // handler (controllers/snoozeController.ts) needs the raw Buffer before express.json re-serializes it.
 app.use('/api/snooze/webhook', express.raw({ type: 'application/json' }));
@@ -806,6 +810,7 @@ app.use('/api/buying-pools', buyingPoolRoutes); // Group Buying Pools
 app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly digest manual trigger
 app.use('/api/admin', adminRoutes); // Admin panel
 app.use('/api/admin/affiliate', adminAffiliateRoutes); // Admin: Creator/Affiliate management
+app.use('/api/admin/recruit', adminRecruitRoutes); // Admin: organizer-recruitment cold-send channel
 if (process.env.NODE_ENV !== 'production') {
   app.use('/api/dev', devRoutes); // Dev utilities — NOT in production (privilege escalation risk)
 }
@@ -891,6 +896,7 @@ app.use('/api/widget', (req, res, next) => {
   next();
 }, widgetRoutes);                                                          // Public embeddable widget (embed feature)
 app.use('/api/outreach', outreachRoutes);                             // Phase 1: Cold outreach email pipeline
+app.use('/api/recruit', recruitRoutes);                               // Organizer-recruitment cold-send channel (public unsubscribe + webhook)
 app.use('/api/unsubscribe', unsubscribeRoutes);                        // Unsubscribe / Preferences
 app.use('/api/earnings', earningsPdfRoutes);                           // Payout PDF Export (/api/earnings/pdf)
 app.use('/api/ab', abTestRoutes);                                      // A/B Testing Infrastructure

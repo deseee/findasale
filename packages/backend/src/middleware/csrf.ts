@@ -119,6 +119,7 @@ const CSRF_EXEMPT_EXACT_PATHS: ReadonlySet<string> = new Set([
   '/api/square/webhook',
   '/api/snooze/webhook', // MailerLite HMAC
   '/api/outreach/resend-webhook', // svix signature
+  '/api/recruit/resend-webhook', // svix signature (recruit channel's own Resend account)
   '/api/notifications/sms-webhook', // inbound SMS (Twilio signature)
   '/api/ebay/account-deletion',
   '/api/ebay/notifications',
@@ -129,6 +130,7 @@ const CSRF_EXEMPT_EXACT_PATHS: ReadonlySet<string> = new Set([
   // Anonymous callers with no browser session
   '/api/outreach/page-view',
   '/api/outreach/unsubscribe', // RFC 8058 one-click from mail servers
+  '/api/recruit/unsubscribe', // RFC 8058 one-click for the recruit channel (signed JWT in the URL)
   '/api/shopper/waitlist/unsubscribe', // RFC 8058 one-click for Notify Me emails (HMAC token in the URL)
   '/api/notifications/guest-unsubscribe', // RFC 8058 one-click for guest sale-reminder emails (HMAC token in the URL)
   '/api/notifications/confirm-email-subscription', // guest double opt-in confirm: single-use token in the body, no session

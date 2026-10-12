@@ -609,6 +609,7 @@ model Organizer {
   websiteEnrichmentExhausted      Boolean                        @default(false) // set when its website domain reaches TERMINAL fetch state
   isHiddenFromDirectory           Boolean                        @default(false) // True = hidden from public directory/search; set for scraped orgs, cleared on claim
   claimEmails                     DirectoryClaimEmail[]
+  recruitLeads                    RecruitLead[] // Organizer-recruitment cold-send channel (z20261012000000)
   // ADR-073: Verified Organizer autofill sources (migration 20260430300000)
   verificationSource              String?
   googlePlaceId                   String?                        @unique
@@ -6603,6 +6604,8 @@ model EmailSuppression {
   retryAfter       DateTime? // temp-suppression cutoff for recoverable categories
   classifiedAt     DateTime?
 
+  source String? // which channel wrote the row: recruit | outreach | transactional (null = legacy / unknown)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -6742,6 +6745,74 @@ model OutreachQuotaLog {
   date      String   @id // YYYY-MM-DD
   count     Int      @default(0)
   updatedAt DateTime @updatedAt
+}
+
+// ── Organizer-recruitment cold-send channel (z20261012000000) ──────────────────
+// Separate from the Gmail OUTREACH_* pipeline: own Resend account, own sending
+// subdomain, own suppression tagging (EmailSuppression.source = 'recruit'), own
+// daily stats and own pause flag (FeatureFlag key 'recruit_send_paused').
+enum RecruitLeadStatus {
+  NEW
+  VERIFIED
+  RISKY
+  INVALID
+  QUEUED
+  SENT
+  REPLIED
+  SUPPRESSED
+  DONE
+}
+
+model RecruitLead {
+  id           String            @id @default(cuid())
+  email        String            @unique // always stored lowercase
+  businessName String
+  contactName  String?
+  city         String?
+  state        String?
+  organizerId  String?
+  organizer    Organizer?        @relation(fields: [organizerId], references: [id], onDelete: SetNull)
+  source       String // csv_import | organizer_directory
+  sourceUrl    String // provenance: where this address was found
+  status       RecruitLeadStatus @default(NEW)
+  verifyReason String?
+  verifiedAt   DateTime?
+  touchCount   Int               @default(0)
+  lastSentAt   DateTime?
+  nextSendAt   DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  sends        RecruitSend[]
+
+  @@index([status, nextSendAt])
+  @@index([organizerId])
+}
+
+model RecruitSend {
+  id            String      @id @default(cuid())
+  leadId        String
+  lead          RecruitLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  touchNumber   Int
+  resendEmailId String?     @unique
+  subject       String
+  sentAt        DateTime    @default(now())
+  deliveredAt   DateTime?
+  bouncedAt     DateTime?
+  bounceType    String? // Permanent | Transient | Undetermined
+  complainedAt  DateTime?
+
+  @@index([leadId])
+  @@index([sentAt])
+}
+
+model RecruitDailyStat {
+  date        String   @id // YYYY-MM-DD (UTC)
+  attempted   Int      @default(0)
+  sent        Int      @default(0)
+  hardBounced Int      @default(0)
+  softBounced Int      @default(0)
+  complained  Int      @default(0)
+  updatedAt   DateTime @updatedAt
 }
 
 // Calculated-shipping package estimation — global lookup table of common secondary-sale

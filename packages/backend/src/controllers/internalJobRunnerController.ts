@@ -34,6 +34,7 @@ import { runDeliverabilityMonitor, runSpamBlockTripwire } from '../jobs/delivera
 import { runOrganizerOnboardingDrip } from '../jobs/organizerOnboardingDripJob';
 import { bounceSuppressService } from '../services/bounceSuppressService';
 import { runSmtpPermutationVerify } from '../jobs/smtpPermutationVerifyJob';
+import { runRecruitSend, runRecruitVerify } from '../jobs/recruitSendJob';
 
 /**
  * Allowlisted job-name → job logic function.
@@ -71,6 +72,9 @@ const JOB_MAP: Record<string, () => Promise<unknown>> = {
   // (Patrick-authorized) -- see src/jobs/smtpPermutationVerifyJob.ts for why the
   // original CLI script is untouched rather than imported directly.
   'smtp-permutation-verify': runSmtpPermutationVerify,
+  // Organizer-recruitment cold-send channel. Both no-op unless RECRUIT_SEND_ENABLED === 'true'.
+  'recruit-send': runRecruitSend,
+  'recruit-verify': runRecruitVerify,
 };
 
 /**
