@@ -176,7 +176,7 @@ describe('getCompSummary: owner matrix (B1)', () => {
       const res = makeRes();
       await getCompSummary({ user: asUser(c.userId), params: { id: 'i1' } }, res);
       expect(res.statusCode).toBe(c.owns ? 200 : 403);
-      if (c.owns) expect(res.body).toEqual({ sourceCount: 0, medianLow: null, medianHigh: null, lastUpdated: null });
+      if (c.owns) expect(res.body).toMatchObject({ sourceCount: 0, medianLow: null, medianHigh: null, lastUpdated: null }); // toMatchObject: the response also carries isAudioFormat (f7fc6e2d4)
       else expect(mockPrisma.itemCompLookup.findUnique).not.toHaveBeenCalled();
     });
   }
