@@ -351,6 +351,12 @@ test('payload: never contains price, draftStatus, status or skipMarketplaceSync,
   assert.deepEqual(buildAutosavePayload(state, ['price'], true), {});
 });
 
+test('payload: consignorId sends the id, and null when cleared', () => {
+  assert.deepEqual(buildAutosavePayload({ ...state, consignorId: 'c1' }, ['consignorId'], false), { consignorId: 'c1' });
+  assert.deepEqual(buildAutosavePayload({ ...state, consignorId: '' }, ['consignorId'], false), { consignorId: null });
+  assert.equal(isAutosaveField('consignorId'), true);
+});
+
 test('payload: blank title and blank condition are never sent', () => {
   assert.deepEqual(buildAutosavePayload({ ...state, title: '  ' }, ['title'], false), {});
   assert.deepEqual(buildAutosavePayload({ ...state, condition: '' }, ['condition'], false), {});

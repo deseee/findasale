@@ -342,6 +342,7 @@ export const AUTOSAVE_FIELDS: readonly string[] = [
   'fccId',
   'upc',
   'ebayShippingOverride',
+  'consignorId',
   'packageWeightOz',
   'packageLengthIn',
   'packageWidthIn',
@@ -373,6 +374,7 @@ export interface AutosaveEditState {
   fccId?: string;
   upc?: string;
   ebayShippingOverride?: string | null;
+  consignorId?: string; // '' = none; only ever touched on TEAMS (the server enforces the tier too)
   packageWeightOz?: number;
   packageLengthIn?: number;
   packageWidthIn?: number;
@@ -445,6 +447,9 @@ export function buildAutosavePayload(
         break;
       case 'ebayShippingOverride':
         out.ebayShippingOverride = state.ebayShippingOverride ?? null;
+        break;
+      case 'consignorId':
+        out.consignorId = state.consignorId ? state.consignorId : null; // null clears
         break;
       case 'packageWeightOz':
       case 'packageLengthIn':

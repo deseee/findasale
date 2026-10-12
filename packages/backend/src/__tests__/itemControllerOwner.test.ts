@@ -666,4 +666,15 @@ describe('updateItem: expanded-row fields (2026-10-08)', () => {
     expect(mockPrisma.consignor.findFirst.mock.calls[0][0].where).toEqual({ id: 'foreign', workspaceId: 'ws_mine' });
     expect(mockPrisma.item.update).not.toHaveBeenCalled();
   });
+
+  it('rejects attaching a consignor on a non-TEAMS tier with 403 (server-side gate behind the TEAMS-only review dropdown)', async () => {
+    mockPrisma.item.findUnique.mockResolvedValue(sale({ sale: { id: 's1', status: 'PUBLISHED', purchaseModel: 'SUBSCRIPTION', organizerId: 'org_sale', zip: '49000', organizer: saleOrganizer({ subscriptionTier: 'PRO' }) } }));
+    mockPrisma.sale.findUnique.mockResolvedValue({ organizerId: 'org_sale' });
+    mockPrisma.consignor.findFirst.mockClear();
+    const res = makeRes();
+    await updateItem({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { consignorId: 'c1' } }, res);
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.consignor.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+  });
 });

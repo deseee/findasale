@@ -35,6 +35,7 @@ import ConfirmDialog from '../../../../components/ConfirmDialog';
 import { CURATED_TAGS } from '../../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
 import RapidCapture, { RapidItem } from '../../../../components/RapidCapture';
 import EbayCategoryPicker from '../../../../components/EbayCategoryPicker';
+import ConsignorSearchSelect from '../../../../components/ConsignorSearchSelect'; // TEAMS-only per-item consignor picker
 import { CATEGORIES, CONDITIONS, CONDITION_LABELS, CONDITION_MAP, formatCondition } from '../../../../lib/itemConstants';
 import { decodeHtmlEntities } from '../../../../utils/textUtils';
 import { computeItemReadiness } from '../../../../lib/itemReadiness';
@@ -120,6 +121,7 @@ interface ItemEditState {
   mpn?: string;
   fccId?: string;
   upc?: string;
+  consignorId?: string; // '' = none (TEAMS only)
 }
 
 interface HealthBreakdown {
@@ -176,6 +178,8 @@ interface Item {
   packageWidthIn?: number | null;
   packageHeightIn?: number | null;
   ebayShippingOverride?: string | null;
+  consignorId?: string | null;
+  consignor?: { id: string; name: string } | null;
   // Whether the organizer has confirmed a real (non-estimated) weight: required by
   // validateItemForEbayPublish before a shippable item can push to eBay.
   packageConfirmedByOrganizer?: boolean | null;
@@ -310,6 +314,7 @@ function buildEditStateFromItem(item: Item): ItemEditState {
     packageWidthIn: item.packageWidthIn ?? undefined,
     packageHeightIn: item.packageHeightIn ?? undefined,
     ebayShippingOverride: item.ebayShippingOverride ?? null,
+    consignorId: item.consignorId || item.consignor?.id || '',
     // eBay product identifiers: seed from DB (default to '')
     brand: item.brand ?? '',
     mpn: item.mpn ?? '',
@@ -558,6 +563,23 @@ const ReviewPage = () => {
     },
     enabled: !!saleId,
     refetchOnMount: 'always',
+  });
+
+  // Consignors for the per-item picker: ONE shared query for the page (never per row), TEAMS only.
+  // Same query key and endpoint as the Add Items page, so the cache is shared.
+  const {
+    data: consignorOptions,
+    isLoading: consignorsLoading,
+    isError: consignorsError,
+    refetch: refetchConsignors,
+  } = useQuery({
+    queryKey: ['consignors-for-item-picker'],
+    queryFn: async () => {
+      const response = await api.get('/consignors');
+      return response.data as Array<{ id: string; name: string }>;
+    },
+    enabled: tier === 'TEAMS',
+    staleTime: 60 * 1000,
   });
 
   // Bug 3 fix: seed price inputs whenever items array changes
@@ -2662,6 +2684,25 @@ const ReviewPage = () => {
                                 className="w-full border border-black/18 dark:border-[#3A3A3C] bg-white dark:bg-[#3A3A3C] rounded-lg px-3 py-2 text-sm text-[#1A1814] dark:text-[#F5F5F0] focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40"
                               />
                             </div>
+
+                            {/* Consignor (TEAMS only; same gate as the Add Items page). Saved with the draft autosave. */}
+                            {tier === 'TEAMS' && (
+                              <div>
+                                <label htmlFor={`review-consignor-${item.id}`} className="block text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-1">
+                                  Consignor <span className="font-normal text-warm-400 dark:text-warm-500">(optional)</span>
+                                </label>
+                                <ConsignorSearchSelect
+                                  inputId={`review-consignor-${item.id}`}
+                                  value={editState.consignorId ?? ''}
+                                  onChange={(id) => handleEditChange(item.id, 'consignorId', id)}
+                                  options={consignorOptions}
+                                  loading={consignorsLoading}
+                                  error={consignorsError}
+                                  onRetry={() => refetchConsignors()}
+                                  fallbackName={item.consignor?.name ?? null}
+                                />
+                              </div>
+                            )}
 
                             {/* Package weight & dimensions (2026-08-13, moved here per Patrick: general item data, not eBay-only -- also used for eBay fulfillment-policy selection) */}
                             <div>
