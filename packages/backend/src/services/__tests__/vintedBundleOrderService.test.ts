@@ -126,6 +126,20 @@ describe('reportVintedBundleOrder', () => {
     expect(commitSale).toHaveBeenCalledWith('i1', 'VINTED', '1001', { trustedOrder: true });
   });
 
+  it('passes the notice creation time to the committer and resolves when the email path already closed the sale (closed_by_email_sale)', async () => {
+    const createdAt = new Date('2026-10-12T10:00:00Z');
+    mockPrisma.notification.findFirst.mockResolvedValue(notice({ createdAt }));
+    const commitSale = jest.fn(async () => ({ alreadyCommitted: true, alreadyCounted: true, noopReason: 'closed_by_email_sale' }));
+    const deps = { soldDeps: { loadCandidateItems: async () => ITEMS, loadVintedJobs: async () => JOBS, closeVintedListingRecord: async () => false, commitSale, getItemStatus: async () => 'AVAILABLE' } };
+    const r: any = await reportVintedBundleOrder(
+      args([{ vintedId: '1001', title: 'a' }, { vintedId: '1002', title: 'b' }, { vintedId: '1003', title: 'c' }]),
+      deps,
+    );
+    expect(r.status).toBe('resolved');
+    expect(r.results.every((x: any) => x.result === 'alreadySold' && x.reason === 'closed_by_email_sale')).toBe(true);
+    expect(commitSale).toHaveBeenCalledWith('i1', 'VINTED', '1001', { trustedOrder: true, orderCreatedAt: createdAt });
+  });
+
   it('PARTIAL log line lists every entry with result, via, reason, itemId and itemStatus', async () => {
     const log = console.log as jest.Mock;
     const commitSale = jest.fn(async () => ({ alreadyCommitted: true, noopReason: 'relist_after_sale_guard' }));

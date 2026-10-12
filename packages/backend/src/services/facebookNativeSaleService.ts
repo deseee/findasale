@@ -113,8 +113,14 @@ export interface CommitFacebookNativeSaleOptions {
      * not from a wardrobe that keeps re-reporting old sold listings. Skips ONLY the relist-after-sale guard below,
      * which exists to tell a stale wardrobe re-report from a new sale; an order names exactly the listings that sold. */
     trustedOrder?: boolean;
+    /** Only with trustedOrder: creation time of the order's notice. A sold_on_<platform> REMOVE row written at/after it (e.g. by the
+     * sold-email retry) is treated as this order's own sale already counted. Absent = any such row within the last 14 days. */
+    orderCreatedAt?: Date;
   };
 }
+
+/** Window used for the closed-by-email-sale rule when the order carries no creation time. */
+const CLOSED_BY_EMAIL_SALE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 /** True when the item holds more than one unit, i.e. a sale elsewhere is a unit sale, not a SOLD. */
 export async function isMultiStockItem(itemId: string): Promise<boolean> {
@@ -196,9 +202,25 @@ async function commitPlatformUnitSale(
     const live = await tx.marketplaceListingJob.findFirst({
       where: { itemId, platform, NOT: { action: 'REMOVE', status: 'SKIPPED' } },
       orderBy: { createdAt: 'desc' },
-      select: { action: true, status: true, remoteListingId: true, createdAt: true },
+      select: { action: true, status: true, remoteListingId: true, createdAt: true, lastErrorMessage: true },
     });
     if (!live || live.action !== 'POST' || live.status !== 'POSTED') {
+      // CLOSED-BY-EMAIL-SALE (2026-10-12, Nickel Coin Tube bundle): for a fresh ORDER (trustedOrder) the sold-email retry may have
+      // already recorded this very sale and closed the listing (latest row = REMOVE/REMOVED sold_on_<platform>, no Vinted id on it),
+      // so exactReported-id counting cannot see it. Treat it as already counted: no stock change, no row. A genuine second sale
+      // of a relisted item has a live POSTED row as the latest row and never reaches this branch.
+      if (
+        sold.trustedOrder &&
+        live &&
+        live.action === 'REMOVE' &&
+        live.status === 'REMOVED' &&
+        String(live.lastErrorMessage ?? '').startsWith(`sold_on_${platform.toLowerCase()}`) &&
+        live.createdAt &&
+        new Date(live.createdAt).getTime() >=
+          (sold.orderCreatedAt ? new Date(sold.orderCreatedAt).getTime() : Date.now() - CLOSED_BY_EMAIL_SALE_WINDOW_MS)
+      ) {
+        return { kind: 'noop', reason: 'closed_by_email_sale', counted: true } as UnitSaleOutcome;
+      }
       return { kind: 'noop', reason: 'no_live_posted_row', counted: await alreadyCountedFor() } as UnitSaleOutcome;
     }
 

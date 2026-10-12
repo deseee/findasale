@@ -208,6 +208,56 @@ describe('soldOnPlatform unit sale (multi-quantity items)', () => {
     }));
   });
 
+  describe('closed_by_email_sale (trustedOrder, latest row is the email path\'s sold_on_vinted REMOVE row)', () => {
+    const trusted = (extra: Record<string, any> = {}) => ({ soldOnPlatform: { platform: 'VINTED' as const, remoteListingId: '10340561494', trustedOrder: true, ...extra } });
+    const emailRow = (createdAt: Date, msg = 'sold_on_vinted') =>
+      mockTx.marketplaceListingJob.findFirst.mockResolvedValueOnce({ action: 'REMOVE', status: 'REMOVED', remoteListingId: null, lastErrorMessage: msg, createdAt });
+
+    it('row written after the order: no-op flagged alreadyCounted, no stock change, no row', async () => {
+      multi(); emailRow(new Date('2026-10-12T10:51:00Z'));
+      const r = await commitFacebookNativeSale('bcw', 'VINTED', trusted({ orderCreatedAt: new Date('2026-10-12T10:00:00Z') }));
+      expect(r).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'closed_by_email_sale', alreadyCounted: true });
+      expect(sellItemUnits).not.toHaveBeenCalled();
+      expect(mockTx.marketplaceListingJob.create).not.toHaveBeenCalled();
+    });
+
+    it('row written BEFORE the order (an older sale): not counted for this order', async () => {
+      multi(); emailRow(new Date('2026-10-11T10:51:00Z')); mockTx.marketplaceListingJob.findFirst.mockResolvedValueOnce(null);
+      const r = await commitFacebookNativeSale('bcw', 'VINTED', trusted({ orderCreatedAt: new Date('2026-10-12T10:00:00Z') }));
+      expect(r).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'no_live_posted_row' });
+    });
+
+    it('no order time: a row within 14 days counts, an older one does not', async () => {
+      multi(); emailRow(new Date(Date.now() - 3 * 86400000));
+      expect(await commitFacebookNativeSale('bcw', 'VINTED', trusted())).toEqual(expect.objectContaining({ alreadyCounted: true, noopReason: 'closed_by_email_sale' }));
+      multi(); emailRow(new Date(Date.now() - 20 * 86400000)); mockTx.marketplaceListingJob.findFirst.mockResolvedValueOnce(null);
+      expect(await commitFacebookNativeSale('bcw', 'VINTED', trusted())).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'no_live_posted_row' });
+    });
+
+    it('not trustedOrder (wardrobe report): rule does not apply', async () => {
+      multi(); emailRow(new Date());
+      const r = await commitFacebookNativeSale('bcw', 'VINTED', opts('10340561494'));
+      expect(r).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'no_live_posted_row' });
+    });
+
+    it('a REMOVE row that is not a sold_on_vinted sale (plain withdrawal) is not counted', async () => {
+      multi(); emailRow(new Date(), 'manual_remove'); mockTx.marketplaceListingJob.findFirst.mockResolvedValueOnce(null);
+      const r = await commitFacebookNativeSale('bcw', 'VINTED', trusted());
+      expect(r).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'no_live_posted_row' });
+    });
+
+    it('a relisted item (live POSTED row after the REMOVED row) still sells normally', async () => {
+      multi();
+      mockTx.marketplaceListingJob.findFirst
+        .mockResolvedValueOnce({ action: 'POST', status: 'POSTED', remoteListingId: null, lastErrorMessage: null, createdAt: new Date('2026-10-12T12:00:00Z') })
+        .mockResolvedValueOnce(null);
+      (sellItemUnits as jest.Mock).mockResolvedValueOnce({ fullySoldOut: false, remainingStock: 5 });
+      const r = await commitFacebookNativeSale('bcw', 'VINTED', trusted({ orderCreatedAt: new Date('2026-10-12T10:00:00Z') }));
+      expect(r).toEqual({ ok: true, alreadyCommitted: false, partial: true, remainingStock: 5 });
+      expect(sellItemUnits).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('trustedOrder keeps the other guards: id already on a REMOVE sold_on_ row (older) is a no-op flagged alreadyCounted', async () => {
     multi();
     mockTx.marketplaceListingJob.findFirst

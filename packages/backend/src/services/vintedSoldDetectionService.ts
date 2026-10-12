@@ -251,6 +251,8 @@ export interface VintedSoldDeps {
 export interface VintedCommitOpts {
   /** Ids come from a fresh Vinted ORDER (bundle), not a wardrobe re-report; see CommitFacebookNativeSaleOptions.soldOnPlatform. */
   trustedOrder?: boolean;
+  /** Creation time of the bundle notice (see CommitFacebookNativeSaleOptions.soldOnPlatform.orderCreatedAt). */
+  orderCreatedAt?: Date;
 }
 export interface VintedCommitOutcome {
   alreadyCommitted: boolean;
@@ -316,7 +318,7 @@ async function defaultCloseVintedListingRecord(itemId: string): Promise<boolean>
 
 async function defaultCommitSale(itemId: string, soldVia: string, remoteListingId?: string, opts: VintedCommitOpts = {}): Promise<VintedCommitOutcome> {
   const r = await commitFacebookNativeSale(itemId, soldVia, {
-    soldOnPlatform: { platform: 'VINTED', remoteListingId: remoteListingId || null, ...(opts.trustedOrder ? { trustedOrder: true } : {}) },
+    soldOnPlatform: { platform: 'VINTED', remoteListingId: remoteListingId || null, ...(opts.trustedOrder ? { trustedOrder: true, ...(opts.orderCreatedAt ? { orderCreatedAt: opts.orderCreatedAt } : {}) } : {}) },
   });
   return { alreadyCommitted: r.alreadyCommitted, partial: r.partial === true, alreadyCounted: r.alreadyCounted === true, noopReason: r.noopReason };
 }
@@ -416,7 +418,7 @@ export async function processVintedSoldReport(
       via: m.via,
       itemStatus: status ?? undefined,
       vintedListingClosed,
-      ...(alreadyCounted ? { reason: 'listing_already_counted' } : noopReason && status !== 'SOLD' ? { reason: noopReason } : {}),
+      ...(alreadyCounted ? { reason: noopReason === 'closed_by_email_sale' ? 'closed_by_email_sale' : 'listing_already_counted' } : noopReason && status !== 'SOLD' ? { reason: noopReason } : {}),
     });
   }
   return results;
