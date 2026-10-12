@@ -114,6 +114,31 @@ describe('reportVintedBundleOrder', () => {
     expect(r.status).toBe('resolved');
   });
 
+  it('a retry where the multi-unit sales were already counted per Vinted id resolves the notice (alreadyCounted -> alreadySold)', async () => {
+    const commitSale = jest.fn(async () => ({ alreadyCommitted: true, alreadyCounted: true, noopReason: 'no_live_posted_row' }));
+    const deps = { soldDeps: { loadCandidateItems: async () => ITEMS, loadVintedJobs: async () => JOBS, closeVintedListingRecord: async () => false, commitSale, getItemStatus: async () => 'AVAILABLE' } };
+    const r = await reportVintedBundleOrder(
+      args([{ vintedId: '1001', title: 'a' }, { vintedId: '1002', title: 'b' }, { vintedId: '1003', title: 'c' }]),
+      deps,
+    );
+    expect(r.status).toBe('resolved');
+    // The bundle path marks its commits as coming from a fresh order.
+    expect(commitSale).toHaveBeenCalledWith('i1', 'VINTED', '1001', { trustedOrder: true });
+  });
+
+  it('PARTIAL log line lists every entry with result, via, reason, itemId and itemStatus', async () => {
+    const log = console.log as jest.Mock;
+    const commitSale = jest.fn(async () => ({ alreadyCommitted: true, noopReason: 'relist_after_sale_guard' }));
+    const deps = { soldDeps: { loadCandidateItems: async () => ITEMS, loadVintedJobs: async () => JOBS, closeVintedListingRecord: async () => false, commitSale, getItemStatus: async () => 'AVAILABLE' } };
+    await reportVintedBundleOrder(args([{ vintedId: '1001', title: 'Alpha Widget Large' }, { vintedId: '9999', title: 'Not ours' }]), deps);
+    const line = log.mock.calls.find((c: any[]) => String(c[0]).includes('PARTIAL'))!;
+    const payload = JSON.parse(line[1]);
+    expect(payload.entries).toEqual([
+      { vintedId: '1001', title: 'Alpha Widget Large', result: 'notAvailable', via: 'remoteId', reason: 'relist_after_sale_guard', itemId: 'i1', itemStatus: 'AVAILABLE' },
+      { vintedId: '9999', title: 'Not ours', result: 'notFound', via: null, reason: 'no_match', itemId: null, itemStatus: null },
+    ]);
+  });
+
   it('a notice that is already closed is a no-op (nothing is committed)', async () => {
     mockPrisma.notification.findFirst.mockResolvedValue(notice({ read: true }));
     const { commitSale, deps } = soldDeps();

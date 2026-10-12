@@ -11,7 +11,7 @@
  * normalized title second, never guessed), which commits the sale exactly like a single-item Vinted sale
  * (commitFacebookNativeSale, soldVia VINTED: closes the Vinted record, marks the item SOLD, withdraws every
  * other channel). The notice is closed ONLY when the number of items sold/already sold reaches the bundle's
- * item count from the email. Fewer -> the notice stays open, the attempt is counted, and the next extension
+ * item count from the email (a retry of a unit already counted for that exact Vinted id reports alreadySold). Fewer -> the notice stays open, the attempt is counted, and the next extension
  * sold-check retries (everything already committed is idempotent). After
  * VINTED_BUNDLE_AUTO_MAX_ATTEMPTS unresolved attempts the notice switches to the manual-page fallback wording.
  *
@@ -64,7 +64,7 @@ export async function reportVintedBundleOrder(
 ): Promise<VintedBundleOrderOutcome> {
   if (!args.userId || !args.organizerId) throw new Error('userId and organizerId required'); // never unscoped
   const processReport =
-    deps.processReport ?? ((orgId: string, entries: VintedSoldEntry[]) => processVintedSoldReport(orgId, entries, deps.soldDeps));
+    deps.processReport ?? ((orgId: string, entries: VintedSoldEntry[]) => processVintedSoldReport(orgId, entries, deps.soldDeps, { trustedOrder: true }));
 
   const notice = await prisma.notification.findFirst({
     where: { id: String(args.noticeId || ''), userId: args.userId, type: VINTED_BUNDLE_NOTIFICATION_TYPE },
@@ -109,7 +109,25 @@ export async function reportVintedBundleOrder(
   const attempt = await recordBundleNoticeAttempt(notice, args.organizerId);
   console.log(
     '[VintedBundleOrder] PARTIAL -- notice stays open, next sold-check retries',
-    JSON.stringify({ noticeId: notice.id, conversationId: meta.conversationId, itemCount, reported: entries.length, resolved, attempts: attempt.attempts, readFailed: !!args.readFailed }),
+    JSON.stringify({
+      noticeId: notice.id,
+      conversationId: meta.conversationId,
+      itemCount,
+      reported: entries.length,
+      resolved,
+      attempts: attempt.attempts,
+      readFailed: !!args.readFailed,
+      // Per-entry outcome so the cause of an unresolved entry is visible (2026-10-12).
+      entries: results.map((r) => ({
+        vintedId: r.vintedId,
+        title: String(r.title ?? '').slice(0, 80),
+        result: r.result,
+        via: r.via ?? null,
+        reason: r.reason ?? null,
+        itemId: r.itemId ?? null,
+        itemStatus: r.itemStatus ?? null,
+      })),
+    }),
   );
   return { status: 'partial', resolved, itemCount, attempts: attempt.attempts, fallbackShown: attempt.fallbackShown, results };
 }

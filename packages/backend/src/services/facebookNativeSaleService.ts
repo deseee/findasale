@@ -65,6 +65,11 @@ export interface CommitFacebookNativeSaleResult {
   /** ADR-136 Addendum B (#659): true when the item is a bulk lot. Nothing was changed (alreadyCommitted is true so every
    * caller treats it as a no-op); the sale is not countable against a card count from here. */
   bulkLotIgnored?: boolean;
+  /** true (with alreadyCommitted) when THIS exact marketplace listing id already consumed a unit earlier (a REMOVE/REMOVED
+   * sold_on_<platform> row carries it). The sale IS counted, so a bundle/wardrobe retry may treat it as resolved. */
+  alreadyCounted?: boolean;
+  /** Why a unit-sale call changed nothing (diagnostics only; never changes behavior). */
+  noopReason?: string;
 }
 
 /** Platforms whose listings are tracked as MarketplaceListingJob rows, so a live POST/POSTED row
@@ -101,7 +106,14 @@ export interface CommitFacebookNativeSaleOptions {
    * unit comes off stock, only THIS platform's listing row is closed, and the item stays AVAILABLE
    * (other platforms keep their listings; the sold platform reads as not-listed so it re-queues).
    * The full SOLD cascade runs only when the last unit sells. Single-unit items ignore it. */
-  soldOnPlatform?: { platform: UnitSalePlatform; remoteListingId?: string | null };
+  soldOnPlatform?: {
+    platform: UnitSalePlatform;
+    remoteListingId?: string | null;
+    /** The sold listing id was read from the marketplace's own ORDER for a fresh sold notice (Vinted bundle order),
+     * not from a wardrobe that keeps re-reporting old sold listings. Skips ONLY the relist-after-sale guard below,
+     * which exists to tell a stale wardrobe re-report from a new sale; an order names exactly the listings that sold. */
+    trustedOrder?: boolean;
+  };
 }
 
 /** True when the item holds more than one unit, i.e. a sale elsewhere is a unit sale, not a SOLD. */
@@ -140,7 +152,7 @@ function fanOutWithdrawals(itemId: string, soldVia: string, skip: Set<string>): 
 
 type UnitSaleOutcome =
   | { kind: 'single' }
-  | { kind: 'noop' }
+  | { kind: 'noop'; reason: string; counted?: boolean }
   | { kind: 'sold'; fullySoldOut: boolean; remainingStock: number };
 
 /**
@@ -169,26 +181,43 @@ async function commitPlatformUnitSale(
     `;
     const row = rows[0];
     if (!row || (row.stockTotal ?? 1) <= 1) return { kind: 'single' } as UnitSaleOutcome;
-    if (!['AVAILABLE', 'RESERVED', 'INVOICE_ISSUED'].includes(row.status)) return { kind: 'noop' } as UnitSaleOutcome;
+    if (!['AVAILABLE', 'RESERVED', 'INVOICE_ISSUED'].includes(row.status)) return { kind: 'noop', reason: `item_status_${row.status}` } as UnitSaleOutcome;
+
+    // Did THIS listing id already consume a unit? (REMOVE/REMOVED sold_on_* row stamped with it by a previous unit sale.)
+    const alreadyCountedFor = async (): Promise<boolean> => {
+      if (!reportedId) return false;
+      const hit = await tx.marketplaceListingJob.findFirst({
+        where: { itemId, platform, action: 'REMOVE', status: 'REMOVED', remoteListingId: reportedId, lastErrorMessage: { startsWith: 'sold_on_' } },
+        select: { id: true },
+      });
+      return !!hit;
+    };
 
     const live = await tx.marketplaceListingJob.findFirst({
       where: { itemId, platform, NOT: { action: 'REMOVE', status: 'SKIPPED' } },
       orderBy: { createdAt: 'desc' },
       select: { action: true, status: true, remoteListingId: true, createdAt: true },
     });
-    if (!live || live.action !== 'POST' || live.status !== 'POSTED') return { kind: 'noop' } as UnitSaleOutcome;
+    if (!live || live.action !== 'POST' || live.status !== 'POSTED') {
+      return { kind: 'noop', reason: 'no_live_posted_row', counted: await alreadyCountedFor() } as UnitSaleOutcome;
+    }
 
     if (reportedId) {
       if (live.remoteListingId) {
-        if (live.remoteListingId !== reportedId) return { kind: 'noop' } as UnitSaleOutcome;
+        if (live.remoteListingId !== reportedId) {
+          return { kind: 'noop', reason: 'reported_id_differs_from_live_row_id', counted: await alreadyCountedFor() } as UnitSaleOutcome;
+        }
       } else {
         // Any row (POST or the REMOVE row a unit sale writes, see below) that already carries this listing id
         // means the reported sale belongs to an earlier listing, not the live one.
         const older = await tx.marketplaceListingJob.findFirst({
           where: { itemId, platform, remoteListingId: reportedId },
-          select: { id: true },
+          select: { id: true, action: true, status: true, lastErrorMessage: true },
         });
-        if (older) return { kind: 'noop' } as UnitSaleOutcome;
+        if (older) {
+          const counted = older.action === 'REMOVE' && older.status === 'REMOVED' && String(older.lastErrorMessage ?? '').startsWith('sold_on_');
+          return { kind: 'noop', reason: 'reported_id_on_older_row', counted } as UnitSaleOutcome;
+        }
         // RELIST-AFTER-SALE GUARD (2026-10-12, Dime Tube): the live row has no recorded Vinted id and a unit
         // sale was already consumed (sold_on_<platform> REMOVE row) BEFORE this live row was created, i.e. the
         // organizer relisted (or marked it posted by hand) after a sale. The wardrobe keeps reporting the OLD
@@ -196,7 +225,9 @@ async function commitPlatformUnitSale(
         // new listing. Without this guard that stale report consumed the freshly relisted row (and a second
         // unit), flipping the item back to "not listed" so it was offered for push again while it was live.
         // The email path (no id) and a captured id still sell the new listing normally.
-        if (live.createdAt) {
+        // trustedOrder (2026-10-12, Vinted bundle orders): the id comes from the order of a fresh sold notice, so it cannot be a
+        // stale wardrobe re-report; every other guard (live-id mismatch, id already on a row, count refusal) still applies.
+        if (live.createdAt && !sold.trustedOrder) {
           const priorUnitSale = await tx.marketplaceListingJob.findFirst({
             where: {
               itemId,
@@ -208,7 +239,7 @@ async function commitPlatformUnitSale(
             },
             select: { id: true },
           });
-          if (priorUnitSale) return { kind: 'noop' } as UnitSaleOutcome;
+          if (priorUnitSale) return { kind: 'noop', reason: 'relist_after_sale_guard' } as UnitSaleOutcome;
         }
       }
     }
@@ -231,7 +262,9 @@ async function commitPlatformUnitSale(
   });
 
   if (outcome.kind === 'single') return null;
-  if (outcome.kind === 'noop') return { ok: true, alreadyCommitted: true };
+  if (outcome.kind === 'noop') {
+    return { ok: true, alreadyCommitted: true, noopReason: outcome.reason, ...(outcome.counted ? { alreadyCounted: true } : {}) };
+  }
 
   if (!outcome.fullySoldOut) {
     // Stock remains: keep the item AVAILABLE, shrink eBay's count, leave every other listing live.

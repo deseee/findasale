@@ -134,9 +134,21 @@ describe('soldOnPlatform unit sale (multi-quantity items)', () => {
   it('no live row for the platform (sale already counted): no-op, stock untouched', async () => {
     multi(); mockTx.marketplaceListingJob.findFirst.mockResolvedValueOnce({ action: 'REMOVE', status: 'REMOVED', remoteListingId: null });
     const r = await commitFacebookNativeSale('bcw', 'VINTED', opts('111'));
-    expect(r).toEqual({ ok: true, alreadyCommitted: true });
+    expect(r).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'no_live_posted_row' });
     expect(sellItemUnits).not.toHaveBeenCalled();
     expect(mockTx.marketplaceListingJob.create).not.toHaveBeenCalled();
+  });
+
+  it('no live row but a sold_on_vinted REMOVE row already carries THIS listing id: no-op flagged alreadyCounted (retry of a committed sale)', async () => {
+    multi(); mockTx.marketplaceListingJob.findFirst
+      .mockResolvedValueOnce({ action: 'REMOVE', status: 'REMOVED', remoteListingId: '111' }) // latest = the sale's own REMOVE row
+      .mockResolvedValueOnce({ id: 'sale_row' }); // the counted-listing lookup
+    const r = await commitFacebookNativeSale('bcw', 'VINTED', opts('111'));
+    expect(r).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'no_live_posted_row', alreadyCounted: true });
+    expect(mockTx.marketplaceListingJob.findFirst.mock.calls[1][0].where).toEqual(
+      expect.objectContaining({ action: 'REMOVE', status: 'REMOVED', remoteListingId: '111', lastErrorMessage: { startsWith: 'sold_on_' } }),
+    );
+    expect(sellItemUnits).not.toHaveBeenCalled();
   });
 
   it('report for an OLDER listing id than the relisted live row: no-op (no double count)', async () => {
@@ -173,11 +185,44 @@ describe('soldOnPlatform unit sale (multi-quantity items)', () => {
       .mockResolvedValueOnce(null) // no row carries the reported id
       .mockResolvedValueOnce({ id: 'earlier_unit_sale' }); // a sold_on_vinted REMOVE row older than the live row
     const r = await commitFacebookNativeSale('bcw', 'VINTED', opts('555'));
-    expect(r).toEqual({ ok: true, alreadyCommitted: true });
+    expect(r).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'relist_after_sale_guard' });
     expect(sellItemUnits).not.toHaveBeenCalled();
     expect(mockTx.marketplaceListingJob.create).not.toHaveBeenCalled();
     const guardWhere = mockTx.marketplaceListingJob.findFirst.mock.calls[2][0].where;
     expect(guardWhere).toEqual(expect.objectContaining({ action: 'REMOVE', status: 'REMOVED', lastErrorMessage: { startsWith: 'sold_on_' }, createdAt: { lt: new Date('2026-10-11T22:30:00Z') } }));
+  });
+
+  // Bundle order (2026-10-12): BCW multi-unit items sold before and relisted (live row without a recorded id). The ids come from
+  // the order of a fresh sold notice, so the relist-after-sale guard (a wardrobe-staleness heuristic) must not block them.
+  it('trustedOrder: a relisted id-less live row IS consumed even though an earlier unit sale exists (bundle order)', async () => {
+    multi();
+    mockTx.marketplaceListingJob.findFirst
+      .mockResolvedValueOnce({ action: 'POST', status: 'POSTED', remoteListingId: null, createdAt: new Date('2026-10-11T22:30:00Z') })
+      .mockResolvedValueOnce(null); // no row carries the reported id; the prior-sale lookup is never made
+    (sellItemUnits as jest.Mock).mockResolvedValueOnce({ fullySoldOut: false, remainingStock: 40 });
+    const r = await commitFacebookNativeSale('bcw', 'VINTED', { soldOnPlatform: { platform: 'VINTED', remoteListingId: '555', trustedOrder: true } });
+    expect(r).toEqual({ ok: true, alreadyCommitted: false, partial: true, remainingStock: 40 });
+    expect(mockTx.marketplaceListingJob.findFirst).toHaveBeenCalledTimes(2);
+    expect(mockTx.marketplaceListingJob.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: 'REMOVE', status: 'REMOVED', remoteListingId: '555' }),
+    }));
+  });
+
+  it('trustedOrder keeps the other guards: id already on a REMOVE sold_on_ row (older) is a no-op flagged alreadyCounted', async () => {
+    multi();
+    mockTx.marketplaceListingJob.findFirst
+      .mockResolvedValueOnce({ action: 'POST', status: 'POSTED', remoteListingId: null, createdAt: new Date('2026-10-11T22:30:00Z') })
+      .mockResolvedValueOnce({ id: 'r', action: 'REMOVE', status: 'REMOVED', lastErrorMessage: 'sold_on_vinted' });
+    const r = await commitFacebookNativeSale('bcw', 'VINTED', { soldOnPlatform: { platform: 'VINTED', remoteListingId: '555', trustedOrder: true } });
+    expect(r).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'reported_id_on_older_row', alreadyCounted: true });
+    expect(sellItemUnits).not.toHaveBeenCalled();
+  });
+
+  it('trustedOrder does not bypass a live row id that differs from the reported id', async () => {
+    multi(); live('222');
+    const r = await commitFacebookNativeSale('bcw', 'VINTED', { soldOnPlatform: { platform: 'VINTED', remoteListingId: '111', trustedOrder: true } });
+    expect(r).toEqual({ ok: true, alreadyCommitted: true, noopReason: 'reported_id_differs_from_live_row_id' });
+    expect(sellItemUnits).not.toHaveBeenCalled();
   });
 
   it('with no earlier unit sale the same id-less live row IS consumed (normal first sale is unaffected)', async () => {

@@ -75,6 +75,84 @@ describe('matchVintedSoldEntry', () => {
   });
 });
 
+// 2026-10-12: live-row aware matching and token-overlap fallback (Nickel coin tube / multi-unit BCW relists).
+describe('live-listing aware matching', () => {
+  const T0 = new Date('2026-10-01T00:00:00Z');
+  const T1 = new Date('2026-10-05T00:00:00Z');
+  const T2 = new Date('2026-10-10T00:00:00Z');
+  const items = [
+    { id: 'nickel', title: 'BCW Nickel Size Coin Tube Crystal Clear, Qty 1', status: 'AVAILABLE' },
+    { id: 'dime', title: 'BCW Dime Size Coin Tube Crystal Clear, Qty 1', status: 'AVAILABLE' },
+    { id: 'penny', title: 'BCW Penny Size Coin Tube Crystal Clear, Qty 1', status: 'AVAILABLE' },
+    { id: 'relisted', title: 'BCW Quarter Size Coin Tube Crystal Clear Qty 48', status: 'AVAILABLE' },
+    { id: 'notlive', title: 'BCW Half Dollar Coin Tube Crystal Clear Qty 1', status: 'AVAILABLE' },
+    { id: 'comic2', title: 'Mr Natural Comic Book Underground Crumb Issue 2', status: 'AVAILABLE' },
+    { id: 'comic3', title: 'Mr Natural Comic Book Underground Crumb Issue 3', status: 'AVAILABLE' },
+  ];
+  const jobs = [
+    { itemId: 'nickel', remoteListingId: '10324289174', action: 'POST', status: 'POSTED', createdAt: T1 },
+    { itemId: 'dime', remoteListingId: null, action: 'POST', status: 'POSTED', createdAt: T1 },
+    { itemId: 'penny', remoteListingId: null, action: 'POST', status: 'POSTED', createdAt: T1 },
+    // quarter: old sold listing 111 (REMOVE row carries it), relisted live row with NO recorded id
+    { itemId: 'relisted', remoteListingId: null, action: 'POST', status: 'POSTED', createdAt: T0 },
+    { itemId: 'relisted', remoteListingId: '111', action: 'REMOVE', status: 'REMOVED', createdAt: T1 },
+    { itemId: 'relisted', remoteListingId: null, action: 'POST', status: 'POSTED', createdAt: T2 },
+    { itemId: 'notlive', remoteListingId: null, action: 'REMOVE', status: 'REMOVED', createdAt: T1 },
+    { itemId: 'comic2', remoteListingId: null, action: 'POST', status: 'POSTED', createdAt: T1 },
+    { itemId: 'comic3', remoteListingId: null, action: 'POST', status: 'POSTED', createdAt: T1 },
+  ];
+  const ctx = buildVintedSoldMatchContext(items, jobs);
+
+  it('Nickel case: the re-worded sold e-mail title matches the ONE live item by token overlap (title-only entry)', () => {
+    expect(matchVintedSoldEntry({ vintedId: '', title: 'BCW Nickel Coin Tubes, Each, Crystal Clear Storage' }, ctx))
+      .toEqual({ kind: 'matched', itemId: 'nickel', via: 'titleTokens' });
+  });
+
+  it('a sibling product is never matched: Dime e-mail goes to the Dime item, not Nickel/Penny; no live Dime item -> no match', () => {
+    expect(matchVintedSoldEntry({ vintedId: '', title: 'BCW Dime Coin Tubes, Each, Crystal Clear Storage' }, ctx))
+      .toEqual({ kind: 'matched', itemId: 'dime', via: 'titleTokens' });
+    const noDime = buildVintedSoldMatchContext(items, jobs.filter((j) => j.itemId !== 'dime'));
+    expect(matchVintedSoldEntry({ vintedId: '', title: 'BCW Dime Coin Tubes, Each, Crystal Clear Storage' }, noDime))
+      .toEqual({ kind: 'notFound', reason: 'no_match' });
+  });
+
+  it('only items with a LIVE Vinted listing are token candidates (Half Dollar has only a REMOVE row)', () => {
+    expect(matchVintedSoldEntry({ vintedId: '', title: 'BCW Half Dollar Coin Tubes Each Crystal Clear Storage' }, ctx))
+      .toEqual({ kind: 'notFound', reason: 'no_match' });
+  });
+
+  it('two equally good live candidates are ambiguous, never guessed', () => {
+    const dup = buildVintedSoldMatchContext(
+      [...items, { id: 'nickel2', title: 'BCW Nickel Coin Tubes Crystal Clear', status: 'AVAILABLE' }],
+      [...jobs, { itemId: 'nickel2', remoteListingId: null, action: 'POST', status: 'POSTED', createdAt: T1 }],
+    );
+    expect(matchVintedSoldEntry({ vintedId: '', title: 'BCW Nickel Coin Tubes, Each, Crystal Clear Storage' }, dup))
+      .toEqual({ kind: 'ambiguous', candidateCount: 2, via: 'titleTokens' });
+  });
+
+  it('numbers must agree: Issue 2 vs Issue 3 never cross-match', () => {
+    expect(matchVintedSoldEntry({ vintedId: '', title: 'Mr Natural Comic Book Underground Crumb Issue 3 NM' }, ctx))
+      .toEqual({ kind: 'matched', itemId: 'comic3', via: 'titleTokens' });
+  });
+
+  it('with an id: a live row recorded with a DIFFERENT id excludes the token candidate', () => {
+    expect(matchVintedSoldEntry({ vintedId: '999', title: 'BCW Nickel Coin Tubes, Each, Crystal Clear Storage' }, ctx))
+      .toEqual({ kind: 'notFound', reason: 'no_match' });
+    expect(matchVintedSoldEntry({ vintedId: '10324289174', title: 'BCW Nickel Coin Tubes, Each, Crystal Clear Storage' }, ctx))
+      .toEqual({ kind: 'matched', itemId: 'nickel', via: 'remoteId' });
+  });
+
+  it('a relisted multi-unit item: old sold ids on earlier rows do NOT veto a title match when the live row has no recorded id (NULL tolerated)', () => {
+    expect(matchVintedSoldEntry({ vintedId: '222', title: 'BCW Quarter Size Coin Tube Crystal Clear Qty 48' }, ctx))
+      .toEqual({ kind: 'matched', itemId: 'relisted', via: 'title' });
+  });
+
+  it('a live row WITH a different recorded id still refuses the exact-title match', () => {
+    expect(matchVintedSoldEntry({ vintedId: '999', title: 'BCW Nickel Size Coin Tube Crystal Clear, Qty 1' }, ctx))
+      .toEqual({ kind: 'notFound', reason: 'title_match_has_different_vinted_id' });
+  });
+});
+
 describe('sanitizeVintedSoldEntries', () => {
   it('keeps numeric ids only and de-duplicates', () => {
     expect(sanitizeVintedSoldEntries([
@@ -137,6 +215,30 @@ describe('processVintedSoldReport', () => {
       { vintedId: '6', title: 'Nothing Like This Here' },
     ], d);
     expect(r.map((x) => x.result)).toEqual(['error', 'notFound']);
+  });
+
+  it('a retry of a unit already counted for this Vinted id (alreadyCounted) is alreadySold even though the item stays AVAILABLE', async () => {
+    const d = deps({
+      commitSale: jest.fn(async () => ({ alreadyCommitted: true, alreadyCounted: true, noopReason: 'no_live_posted_row' })),
+      getItemStatus: jest.fn(async () => 'AVAILABLE'),
+    });
+    const r = await processVintedSoldReport('org_1', [{ vintedId: '9879473979', title: MR_NATURAL }], d);
+    expect(r[0]).toEqual(expect.objectContaining({ result: 'alreadySold', itemStatus: 'AVAILABLE', reason: 'listing_already_counted' }));
+  });
+
+  it('a guard no-op on an AVAILABLE item stays notAvailable and carries the no-op reason (visible in logs)', async () => {
+    const d = deps({
+      commitSale: jest.fn(async () => ({ alreadyCommitted: true, noopReason: 'relist_after_sale_guard' })),
+      getItemStatus: jest.fn(async () => 'AVAILABLE'),
+    });
+    const r = await processVintedSoldReport('org_1', [{ vintedId: '9879473979', title: MR_NATURAL }], d);
+    expect(r[0]).toEqual(expect.objectContaining({ result: 'notAvailable', reason: 'relist_after_sale_guard' }));
+  });
+
+  it('trustedOrder is passed to the commit only when requested (wardrobe reports keep the 3-argument call)', async () => {
+    const d = deps();
+    await processVintedSoldReport('org_1', [{ vintedId: '9879473979', title: MR_NATURAL }], d, { trustedOrder: true });
+    expect(d.commitSale).toHaveBeenCalledWith('item_mr', SOLD_VIA_VINTED, '9879473979', { trustedOrder: true });
   });
 
   it('refuses to run without an organizer scope', async () => {

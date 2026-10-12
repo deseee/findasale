@@ -4981,7 +4981,11 @@
         // permanently blacklisting the vintedId here only stops a correction from ever being
         // retried, e.g. after the organizer renames a title collision. Only a genuinely resolved
         // outcome (sold / alreadySold / notAvailable) is ever marked reported.
-        const isResolved = r && (r.result === 'sold' || r.result === 'alreadySold' || r.result === 'notAvailable');
+        // 2026-10-12: 'notAvailable' is NOT handled either. For a multi-unit item it is what a no-op'd guard returns
+        // (commitFacebookNativeSale alreadyCommitted while the item is still AVAILABLE) -- the sale was never counted and
+        // the Vinted row never closed, so marking the id reported hid it from every later check forever (Nickel tube
+        // 10324289174). A truly counted repeat comes back 'alreadySold' (server recognises the listing id on its REMOVE row).
+        const isResolved = r && (r.result === 'sold' || r.result === 'alreadySold');
         if (isResolved && r.vintedId) reported.add(String(r.vintedId));
       }
       await vintRemStorageSet(VINT_SOLD_REPORTED_KEY, Array.from(reported).slice(-VINT_SOLD_REPORTED_CAP));
