@@ -442,6 +442,10 @@ export const estimateSquareProcessingCents = (amountCents: number): number =>
 export const squareAppFeeNetOfProcessingCents = (inclusiveFeeCents: number, amountCents: number): number =>
   inclusiveFeeCents > 0 ? Math.max(0, Math.round(inclusiveFeeCents) - estimateSquareProcessingCents(amountCents)) : 0;
 
+/** Smallest CARD sale the platform will take anywhere a card charge is gated (POS, QR/phone request, payment link, booth cart, guest invoice, online checkout, bulk packs), in cents.
+ *  Patrick's decision 2026-10-12: $0.99. Cash has NO minimum. The Square 60% app-fee rule (cardLegFeeFits) stays as a safety net for any fee that needs a higher floor. */
+export const MIN_CARD_SALE_CENTS = 99;
+
 /**
  * Square refuses a payment whose application fee is more than this share of the payment amount.
  * VERIFIED by Square's live production error on 2026-10-11 (a $1.00 hand-keyed card sale carrying

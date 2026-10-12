@@ -287,12 +287,26 @@ describe('manualCardPayment -- split tender', () => {
   });
 
   it('refuses a card leg below the minimum (cash leaves too little to charge)', async () => {
-    // total $10.00, cash $9.80 -> card subtotal $0.20, below the $0.50 minimum
+    // total $10.00, cash $9.80 -> card subtotal $0.20, below the $0.99 minimum card sale (Patrick 2026-10-12)
     const res = makeRes();
     await manualCardPayment({ body: manualBody({ items: [{ amount: 10 }], cashAmountCents: 980 }), headers: {}, user: { id: 'owner1' } } as any, res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json.mock.calls[0][0].code).toBe('CARD_AMOUNT_TOO_SMALL');
     expect(mockCreateAndCapturePayment).not.toHaveBeenCalled();
+  });
+
+  it('2026-10-12: a 98 cent card leg is refused and a 99 cent card leg is accepted (cash has no minimum)', async () => {
+    const low = makeRes();
+    await manualCardPayment({ body: manualBody({ items: [{ amount: 10 }], cashAmountCents: 902 }), headers: {}, user: { id: 'owner1' } } as any, low);
+    expect(low.status).toHaveBeenCalledWith(400);
+    expect(low.json.mock.calls[0][0].code).toBe('CARD_AMOUNT_TOO_SMALL');
+    expect(low.json.mock.calls[0][0].message).toContain('A card sale must be at least $0.99');
+    expect(mockCreateAndCapturePayment).not.toHaveBeenCalled();
+    const ok = makeRes();
+    await manualCardPayment({ body: manualBody({ items: [{ amount: 10 }], cashAmountCents: 901 }), headers: {}, user: { id: 'owner1' } } as any, ok);
+    expect(ok.status).not.toHaveBeenCalledWith(400);
+    expect(mockCreateAndCapturePayment).toHaveBeenCalledTimes(1);
+    expect(mockCreateAndCapturePayment.mock.calls[0][0].amountCents).toBe(99);
   });
 
   it('refuses when the cash-fee exposure cap would be exceeded, before any Square call', async () => {

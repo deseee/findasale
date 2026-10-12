@@ -105,11 +105,11 @@ describe('squareAppFeeNetOfProcessingCents', () => {
 });
 
 describe('minimum card sale from the adjusted fee', () => {
-  it('75c fee needs a 72c card (was $1.25) and never goes below the $0.50 floor', () => {
-    expect(minCardCentsForAppFee(75)).toBe(72);
+  it('75c fee: Square limit alone is 72c, but the platform minimum card sale is 99c (2026-10-12), which governs', () => {
+    expect(minCardCentsForAppFee(75)).toBe(99);
     expect(cardLegFeeFits(72, 75)).toBe(true);
     expect(cardLegFeeFits(71, 75)).toBe(false);
-    expect(minCardCentsForAppFee(0)).toBe(50);
+    expect(minCardCentsForAppFee(0)).toBe(99);
   });
   it('every sale the minimum accepts keeps the SENT fee at or under 60% of the sale', () => {
     for (const cents of [72, 125, 500, 1000, 6246]) {
@@ -128,15 +128,16 @@ describe('bulk lot pack gate uses the same minimum as the POS', () => {
       return false;
     }
   };
-  it('the smallest sellable pack for the 75c fee is minCardCentsForAppFee(75) = 72c, not $1.25', () => {
-    expect(minCardCentsForAppFee(75)).toBe(72);
-    expect(packOk(71, 75)).toBe(false);
-    expect(packOk(72, 75)).toBe(true);
+  it('the smallest sellable pack for the 75c fee is minCardCentsForAppFee(75) = 99c (the platform minimum card sale), not $1.25', () => {
+    expect(minCardCentsForAppFee(75)).toBe(99);
+    expect(packOk(72, 75)).toBe(false);
+    expect(packOk(98, 75)).toBe(false);
+    expect(packOk(99, 75)).toBe(true);
     expect(packOk(124, 75)).toBe(true);
   });
-  it('agrees with cardLegFeeFits for every pack size from the $0.50 floor to $10.00', () => {
+  it('agrees with max(99c floor, cardLegFeeFits) for every pack size from 50 cents to $10.00', () => {
     for (const fee of [75, 120, 468]) {
-      for (let cents = 50; cents <= 1000; cents += 1) expect(packOk(cents, fee)).toBe(cardLegFeeFits(cents, fee));
+      for (let cents = 50; cents <= 1000; cents += 1) expect(packOk(cents, fee)).toBe(cents >= 99 && cardLegFeeFits(cents, fee));
     }
   });
 });

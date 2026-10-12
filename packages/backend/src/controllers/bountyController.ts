@@ -5,7 +5,7 @@ import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../services/notificationService';
 import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
 import { awardXp, spendXp, getSpendableXp, XP_AWARDS } from '../services/xpService';
-import { getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator'; // Fee-precedence bug fix (2026-08-24): this file had its OWN local getPlatformFeeRate; inclusive-fee migration (2026-09-24, Patrick ruling) -- bounty Square purchase is buyer-initiated online checkout
+import { getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, MIN_CARD_SALE_CENTS, SubscriptionTier } from '../utils/feeCalculator'; // Fee-precedence bug fix (2026-08-24): this file had its OWN local getPlatformFeeRate; inclusive-fee migration (2026-09-24, Patrick ruling) -- bounty Square purchase is buyer-initiated online checkout
 // shadow (hardcoded 0.10 for PRO/TEAMS too) that was never touched by the 2026-08-22 fee-precedence
 // fix applied everywhere else (stripeController.ts, terminalController.ts, jobs/auctionJob.ts,
 // services/cashFeeService.ts, services/nativeShippingSuggestionService.ts). Every bounty-fulfillment
@@ -944,9 +944,9 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
     }
 
     const priceCents = Math.round(itemPrice * 100);
-    const minPrice = 50; // $0.50 minimum
+    const minPrice = MIN_CARD_SALE_CENTS; // $0.99 minimum card sale (Patrick 2026-10-12)
     if (priceCents < minPrice) {
-      return res.status(400).json({ message: 'Item price must be at least $0.50.' });
+      return res.status(400).json({ message: `A card sale must be at least $${(MIN_CARD_SALE_CENTS / 100).toFixed(2)}.` });
     }
 
     const { stripeConnectId, subscriptionTier, squareMerchantId, squareOnboarded, squareLocationId } = submission.item.sale!.organizer;

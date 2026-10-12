@@ -122,12 +122,16 @@ describe('fees and refusals', () => {
     expect(codeOf(() => assertPackSellableOnline({ ...ok, organizerDiscountAmount: 2 }))).toBe('BULK_PACK_NO_DISCOUNT');
     expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: PACK_MIN_CHARGE_CENTS - 1, platformFeeCents: 0 }))).toBe('BULK_PACK_TOO_CHEAP');
     // The fee SENT to Square is the platform fee minus Square's estimated cost (2.9% + 30c; the platform bears it, 2026-10-11) and must fit
-    // under 60% of the pack (cardLegFeeFits). A 75 cent fee is sent as 43 cents on a 70 to 72 cent pack, so the smallest pack is 72 cents
-    // (the same minimum as the POS, minCardCentsForAppFee(75) = 72), not the old $1.25. There is no 90% rule from $5.00.
-    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 70, platformFeeCents: 75 }))).toBe('BULK_PACK_TOO_CHEAP'); // sent 43c > 60% of 70c (42c)
-    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 71, platformFeeCents: 75 }))).toBe('BULK_PACK_TOO_CHEAP'); // sent 43c > 42c
-    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 72, platformFeeCents: 75 }))).toBe('NO_ERROR'); // sent 43c <= 43c
-    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 80, platformFeeCents: 75 }))).toBe('NO_ERROR');
+    // under 60% of the pack (cardLegFeeFits). On top of that the platform minimum card sale is 99 cents (Patrick 2026-10-12), so the smallest
+    // pack is 99 cents (the same minimum as the POS, minCardCentsForAppFee(75) = 99). There is no 90% rule from $5.00.
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 70, platformFeeCents: 75 }))).toBe('BULK_PACK_TOO_CHEAP');
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 72, platformFeeCents: 75 }))).toBe('BULK_PACK_TOO_CHEAP'); // was the old Square-limit minimum
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 98, platformFeeCents: 75 }))).toBe('BULK_PACK_TOO_CHEAP'); // 98c rejected
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 99, platformFeeCents: 75 }))).toBe('NO_ERROR'); // 99c accepted
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 98, platformFeeCents: 0 }))).toBe('BULK_PACK_TOO_CHEAP');
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 99, platformFeeCents: 0 }))).toBe('NO_ERROR');
+    expect(PACK_MIN_CHARGE_CENTS).toBe(99);
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 100, platformFeeCents: 75 }))).toBe('NO_ERROR');
     expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 124, platformFeeCents: 75 }))).toBe('NO_ERROR'); // was refused before the net-of-Square-cost rule
     expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 125, platformFeeCents: 75 }))).toBe('NO_ERROR');
     expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 499, platformFeeCents: 75 }))).toBe('NO_ERROR');
@@ -141,11 +145,11 @@ describe('fees and refusals', () => {
     expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 100, platformFeeCents: 0 }))).toBe('NO_ERROR'); // referral-discounted: no fee, nothing to cap
   });
 
-  it('the gate is exactly the Square-net 60% rule (cardLegFeeFits) for every pack from 50 cents to $5.00', () => {
+  it('the gate is exactly the 99c floor plus the Square-net 60% rule (cardLegFeeFits) for every pack from 50 cents to $5.00', () => {
     const ok = { platformFeeCents: 75, shippingRequested: false, couponCode: undefined, organizerDiscountAmount: 0 };
     for (const fee of [75, 120, 300]) {
       for (let cents = PACK_MIN_CHARGE_CENTS; cents <= 500; cents += 1) {
-        const expected = cardLegFeeFits(cents, fee) ? 'NO_ERROR' : 'BULK_PACK_TOO_CHEAP';
+        const expected = cents >= PACK_MIN_CHARGE_CENTS && cardLegFeeFits(cents, fee) ? 'NO_ERROR' : 'BULK_PACK_TOO_CHEAP';
         expect(codeOf(() => assertPackSellableOnline({ ...ok, cents, platformFeeCents: fee }))).toBe(expected);
       }
     }

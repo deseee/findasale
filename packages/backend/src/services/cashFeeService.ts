@@ -1,8 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate, getInclusivePlatformFeeRate, squareAppFeeNetOfProcessingCents, MAX_APP_FEE_SHARE_OF_CARD_LEG, cardLegFeeFits, SubscriptionTier } from '../utils/feeCalculator';
+import { getPlatformFeeRate, getInclusivePlatformFeeRate, squareAppFeeNetOfProcessingCents, MAX_APP_FEE_SHARE_OF_CARD_LEG, cardLegFeeFits, MIN_CARD_SALE_CENTS, SubscriptionTier } from '../utils/feeCalculator';
 // MAX_APP_FEE_SHARE_OF_CARD_LEG and cardLegFeeFits are defined in feeCalculator (pure; the bulk lot pack gate shares them) and re-exported here so existing importers are unchanged.
-export { MAX_APP_FEE_SHARE_OF_CARD_LEG, cardLegFeeFits };
+export { MAX_APP_FEE_SHARE_OF_CARD_LEG, cardLegFeeFits, MIN_CARD_SALE_CENTS };
 
 /**
  * ── CASH / OFF-PLATFORM COMMISSION ACCRUAL ───────────────────────────────────────────────
@@ -347,23 +347,22 @@ export async function releaseCashDebtClaim(params: {
 export const MAX_POS_AMOUNT_CENTS = 10_000_000;
 
 /**
- * Smallest card charge the POS will send to Square, in cents. UNKNOWN AS A CONFIRMED SQUARE
- * LIMIT: no Square minimum is documented anywhere in this repo, so this reuses the only
- * precedent that is (squarePaymentController.ts rejects an item below $0.50 with "Item price
- * must be at least $0.50 to process payment"). Raise it here, in one place, if Square rejects
- * anything larger in live use.
+ * Smallest card charge the POS will send to Square, in cents: the platform-wide minimum card sale,
+ * $0.99 (Patrick, 2026-10-12; MIN_CARD_SALE_CENTS in utils/feeCalculator.ts is the single source).
+ * Cash has no minimum. Square's own floor is $0.50 and its 60% app-fee rule is still enforced on top
+ * of this by cardLegFeeFits, so a higher fee can still raise the minimum above $0.99.
  */
-export const MIN_SPLIT_CARD_LEG_CENTS = 50;
+export const MIN_SPLIT_CARD_LEG_CENTS = MIN_CARD_SALE_CENTS;
 
 /**
  * Square's 60% app-fee ceiling (MAX_APP_FEE_SHARE_OF_CARD_LEG) and cardLegFeeFits now live in utils/feeCalculator.ts (re-exported above).
  * VERIFIED by Square's live production error on 2026-10-11: `INVALID_FEES -- app_fee_money must be less than or equal to 60% of the
  * payment amount.` Only the fee SENT to Square (net of Square's processing cost) must fit under it, so the $0.75 minimum fee needs a
- * card charge of at least $0.72 (see minCardCentsForAppFee), not the old $1.25.
+ * card charge of at least $0.72 (see minCardCentsForAppFee). Since 2026-10-12 the platform minimum card sale is $0.99, which sits above that.
  */
 
 /** Smallest card charge (cents) that can carry the inclusive `appFeeCents` once the Square-net adjustment is applied
- *  (never below MIN_SPLIT_CARD_LEG_CENTS). For the 75c minimum fee this is 72c (the sent fee is 43c, under 60% of 72c). */
+ *  (never below MIN_CARD_SALE_CENTS = 99c). This is max(99c, the smallest charge whose Square-net fee fits under 60%); for the 75c minimum fee the Square-limit minimum is 72c, so the 99c floor governs. */
 export const minCardCentsForAppFee = (appFeeCents: number): number => {
   // The adjusted fee is never larger than the inclusive fee, so the old fee / 0.6 amount always fits: a safe upper bound.
   const bound = Math.max(MIN_SPLIT_CARD_LEG_CENTS, Math.ceil((appFeeCents * 5) / 3) + 1);
@@ -420,7 +419,7 @@ export function cardLegProblem(p: { cardCents: number; appFeeCents: number; isSp
     ? 'Collect more of this sale in cash, or take the whole sale in cash.'
     : 'Take this sale in cash instead.';
   if (p.cardCents < MIN_SPLIT_CARD_LEG_CENTS) {
-    return `The card amount (${dollars(p.cardCents)}) is below the ${dollars(MIN_SPLIT_CARD_LEG_CENTS)} minimum a card can be charged. ${way}`;
+    return `The card amount (${dollars(p.cardCents)}) is too small. A card sale must be at least ${dollars(MIN_CARD_SALE_CENTS)}. ${way}`;
   }
   // `p.appFeeCents` is the INCLUSIVE platform fee; the fee actually sent to Square is that minus Square's processing cost.
   if (!cardLegFeeFits(p.cardCents, p.appFeeCents)) {

@@ -52,7 +52,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { createNotification } from '../lib/notificationService';
-import { calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): guest invoice is a hosted Square checkout link completed by the buyer remotely -- ONLINE channel
+import { calculateInclusiveCommissionCents, MIN_CARD_SALE_CENTS, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): guest invoice is a hosted Square checkout link completed by the buyer remotely -- ONLINE channel
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth';
 import { createHoldInvoiceSquareCheckout, generateHoldInvoiceId } from '../services/holdInvoiceSquareCheckoutHelper';
@@ -61,7 +61,7 @@ import { getDefaultAddress, findGuestPromotionAddress } from '../services/addres
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ZIP_RE = /^\d{5}(-\d{4})?$/; // same US-ZIP shape squarePaymentController.ts's shipping capture already validates against
-const MIN_TOTAL_CENTS = 50; // Square's own per-charge floor -- mirrors squarePaymentController.ts's $0.50 item-price floor.
+const MIN_TOTAL_CENTS = MIN_CARD_SALE_CENTS; // platform minimum card sale, $0.99 (Patrick 2026-10-12); the invoice is paid by card via a Square checkout link.
 const DEFAULT_EXPIRY_DAYS = 7;
 const MAX_EXPIRY_DAYS = 30;
 
@@ -341,7 +341,7 @@ export const createGuestInvoice = async (req: AuthRequest, res: Response) => {
     const lineItemsTotalCents = (lineItems ?? []).reduce((sum, li) => sum + Math.round(li.amount * 100), 0);
     const grandTotal = baseAmountCents + lineItemsTotalCents;
     if (grandTotal < MIN_TOTAL_CENTS) {
-      return res.status(400).json({ message: `Total must be at least $${(MIN_TOTAL_CENTS / 100).toFixed(2)}` });
+      return res.status(400).json({ message: `A card sale must be at least $${(MIN_TOTAL_CENTS / 100).toFixed(2)}` });
     }
     const platformFeeAmount = calculateInclusiveCommissionCents(grandTotal, organizer.subscriptionTier as SubscriptionTier, 'ONLINE');
 

@@ -26,7 +26,7 @@ import PosTierGates from '../../components/PosTierGates';
 import PosInvoiceModal from '../../components/PosInvoiceModal';
 import PosOpenCarts from '../../components/PosOpenCarts';
 import PosPaymentQr from '../../components/PosPaymentQr';
-import PosManualCard from '../../components/PosManualCard';
+import PosManualCard, { MIN_CARD_SALE_CENTS } from '../../components/PosManualCard';
 import { parsePosTagUrl, type ParsedPosTag } from '../../utils/posTagUrl'; // consignor price tags (signed QR)
 import TcgplayerRegisterNotice from '../../components/TcgplayerRegisterNotice'; // ADR-137 (#660): TCGplayer warning at the counter
 import { registerIds } from '../../lib/cardTcgplayer';
@@ -464,7 +464,7 @@ export default function POSPage() {
   // fee text and card-amount floor shown here cannot drift from what is actually charged. Null
   // until /pos/context has loaded.
   const [posFee, setPosFee] = useState<{ tier: string | null; inPersonRate: number; minimumFeeCents: number; referralDiscountActive: boolean } | null>(null);
-  const [minCardChargeCents, setMinCardChargeCents] = useState(50);
+  const [minCardChargeCents, setMinCardChargeCents] = useState(MIN_CARD_SALE_CENTS); // $0.99 platform minimum card sale (Patrick 2026-10-12); /pos/context overrides
 
   // ─── Venue mode (S1178, Priority 1) ────────────────────────────────────────────────
   // Entered via ?venue=<hubId>. STAFF/OWNER only in this pass -- both auth branches ride

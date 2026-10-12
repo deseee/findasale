@@ -17,6 +17,7 @@ import {
   applyInclusiveFloor,
   snapshotForCommissionOnly,
   snapshotFromBreakdown,
+  MIN_CARD_SALE_CENTS,
   SubscriptionTier,
 } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): all 3 sites in this file are buyer-initiated online checkout except createSquareTestTransaction, which mirrors the POS path and uses IN_PERSON
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
@@ -245,8 +246,8 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
     if (isNaN(price) || price <= 0) {
       return res.status(400).json({ message: 'Invalid price value' });
     }
-    if (price < 0.5) {
-      return res.status(400).json({ message: 'Item price must be at least $0.50 to process payment' });
+    if (Math.round(price * 100) < MIN_CARD_SALE_CENTS) { // platform minimum card sale $0.99 (Patrick 2026-10-12)
+      return res.status(400).json({ message: `A card sale must be at least $${(MIN_CARD_SALE_CENTS / 100).toFixed(2)}` });
     }
 
     // ADR-110 Track 1: server-computed shipping only -- same posture as the Stripe path.

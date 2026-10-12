@@ -11,7 +11,7 @@
  *
  * Covers:
  *   - isValidCents / validateSplitTender: integer cents, bounds, EXACT cash + card = total
- *   - cardLegProblem: $0.50 minimum card leg and the app-fee ceiling
+ *   - cardLegProblem: $0.99 minimum card sale (Patrick 2026-10-12) and the app-fee ceiling
  *   - allocateCentsProportionally: always sums exactly to the total
  *   - resolveSplitRefund: card-first processor refund, cash-by-hand remainder + message
  *   - accrueCashFeeOnce: exactly-once (duplicate ledger row -> no balance increment)
@@ -39,6 +39,7 @@ import {
   validateSplitTender,
   cardLegProblem,
   minCardCentsForAppFee,
+  MIN_CARD_SALE_CENTS,
   MAX_APP_FEE_SHARE_OF_CARD_LEG,
   allocateCentsProportionally,
   resolveSplitRefund,
@@ -104,14 +105,22 @@ describe('validateSplitTender', () => {
 
 describe('cardLegProblem', () => {
   it('blocks a card leg below the minimum', () => {
-    expect(cardLegProblem({ cardCents: MIN_SPLIT_CARD_LEG_CENTS - 1, appFeeCents: 0, isSplit: true })).toMatch(/minimum/);
+    expect(cardLegProblem({ cardCents: MIN_SPLIT_CARD_LEG_CENTS - 1, appFeeCents: 0, isSplit: true })).toMatch(/must be at least \$0\.99/);
+  });
+  it('2026-10-12: the minimum card sale is 99 cents: 98c is rejected, 99c is accepted (75c fee), cash has no such rule', () => {
+    expect(MIN_CARD_SALE_CENTS).toBe(99);
+    expect(MIN_SPLIT_CARD_LEG_CENTS).toBe(99);
+    expect(cardLegProblem({ cardCents: 98, appFeeCents: 75, isSplit: false })).toMatch(/A card sale must be at least \$0\.99\./);
+    expect(cardLegProblem({ cardCents: 99, appFeeCents: 75, isSplit: false })).toBeNull();
+    expect(cardLegProblem({ cardCents: 98, appFeeCents: 0, isSplit: false })).not.toBeNull();
+    expect(cardLegProblem({ cardCents: 99, appFeeCents: 0, isSplit: false })).toBeNull();
   });
   it('allows exactly the minimum when the fee fits', () => {
     expect(cardLegProblem({ cardCents: MIN_SPLIT_CARD_LEG_CENTS, appFeeCents: 0, isSplit: false })).toBeNull();
   });
   it('blocks when the platform fee would be almost the whole card leg', () => {
-    // $0.75 minimum fee on a $0.60 card leg: Square's cost is 32c, so the 43c sent fee is over 60% of 60c (36c)
-    expect(cardLegProblem({ cardCents: 60, appFeeCents: 75, isSplit: true })).toMatch(/minimum platform fee/);
+    // A fee big enough that the Square-net fee does not fit under 60% even at 99c: the Square rule is still the safety net.
+    expect(cardLegProblem({ cardCents: 99, appFeeCents: 480, isSplit: true })).toMatch(/minimum platform fee/);
   });
   it("uses Square's verified 60% app-fee ceiling (live INVALID_FEES, 2026-10-11)", () => {
     expect(MAX_APP_FEE_SHARE_OF_CARD_LEG).toBe(0.6);
@@ -124,14 +133,15 @@ describe('cardLegProblem', () => {
     expect(cardLegProblem({ cardCents: 100, appFeeCents: 75, isSplit: false })).toBeNull();
     expect(cardLegProblem({ cardCents: 124, appFeeCents: 75, isSplit: false })).toBeNull();
   });
-  it('refuses a card leg where even the Square-net fee is over 60% (71c with the 75c fee) and passes 72c', () => {
-    expect(cardLegProblem({ cardCents: 71, appFeeCents: 75, isSplit: false })).toMatch(/minimum platform fee/);
-    expect(cardLegProblem({ cardCents: 72, appFeeCents: 75, isSplit: false })).toBeNull();
+  it('refuses a card leg under 99c with the 75c fee (the old 72c Square-limit minimum no longer applies) and passes 99c', () => {
+    expect(cardLegProblem({ cardCents: 71, appFeeCents: 75, isSplit: false })).toMatch(/must be at least \$0\.99/);
+    expect(cardLegProblem({ cardCents: 72, appFeeCents: 75, isSplit: false })).toMatch(/must be at least \$0\.99/);
+    expect(cardLegProblem({ cardCents: 99, appFeeCents: 75, isSplit: false })).toBeNull();
   });
   it('tells the cashier the smallest card amount that works', () => {
     const msg = cardLegProblem({ cardCents: 60, appFeeCents: 75, isSplit: false });
-    expect(msg).toContain('The card amount ($0.60) is too small to cover the $0.75 minimum platform fee.');
-    expect(msg).toContain('A card sale must be at least $0.72.');
+    expect(msg).toContain('The card amount ($0.60) is too small.');
+    expect(msg).toContain('A card sale must be at least $0.99.');
     expect(msg).toMatch(/Take this sale in cash instead\./);
   });
   it('minCardCentsForAppFee is the smallest amount cardLegProblem accepts', () => {
@@ -140,8 +150,9 @@ describe('cardLegProblem', () => {
       expect(cardLegProblem({ cardCents: min, appFeeCents: fee, isSplit: false })).toBeNull();
       expect(cardLegProblem({ cardCents: min - 1, appFeeCents: fee, isSplit: false })).not.toBeNull();
     }
-    expect(minCardCentsForAppFee(75)).toBe(72); // was 125 before the platform started bearing Square's cost
-    expect(minCardCentsForAppFee(0)).toBe(MIN_SPLIT_CARD_LEG_CENTS); // never below the $0.50 floor
+    expect(minCardCentsForAppFee(75)).toBe(99); // max(99c platform minimum, 72c Square 60% limit)
+    expect(minCardCentsForAppFee(480)).toBeGreaterThan(99); // a higher fee still raises it via the Square limit
+    expect(minCardCentsForAppFee(0)).toBe(MIN_SPLIT_CARD_LEG_CENTS); // never below the $0.99 floor
   });
   it('allows a normal split', () => {
     expect(cardLegProblem({ cardCents: 6000, appFeeCents: 480, isSplit: true })).toBeNull();

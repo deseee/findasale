@@ -27,15 +27,16 @@
 import crypto from 'crypto';
 import { SellUnitsInTx, bulkLotError, isBulkLotError, lockBulkSaleKey, sellBulkLinesInTransaction } from './bulkLotService';
 import type { PackPlan } from './bulkLotPackService';
-import { ApplicationFeeBreakdown, applyInclusiveFloor, calculateApplicationFee, cardLegFeeFits, snapshotFromBreakdown } from '../../utils/feeCalculator';
+import { ApplicationFeeBreakdown, applyInclusiveFloor, calculateApplicationFee, cardLegFeeFits, MIN_CARD_SALE_CENTS, snapshotFromBreakdown } from '../../utils/feeCalculator';
 
-/** Square's own floor for a card charge. A pack under this cannot be charged. */
-export const PACK_MIN_CHARGE_CENTS = 50;
+/** The platform minimum card sale ($0.99, Patrick 2026-10-12, MIN_CARD_SALE_CENTS). A pack under this cannot be sold online (Square's own floor is $0.50). */
+export const PACK_MIN_CHARGE_CENTS = MIN_CARD_SALE_CENTS;
 // FEE GATE (assertPackSellableOnline): Square refuses a payment whose application fee is more than 60% of the payment amount (verified
 // live 2026-10-11). The fee SENT to Square is the inclusive platform fee MINUS Square's estimated processing cost (the platform bears it,
 // 2026-10-11 decision), so the gate is feeCalculator.cardLegFeeFits on the platform fee, the same rule the POS minimum uses
-// (cashFeeService.minCardCentsForAppFee): with the 75 cent fee floor the smallest pack is 72 cents (sent fee 43 cents, under 60% of 72),
-// not the old $1.25. There is no separate "90% from $5.00" rule.
+// (cashFeeService.minCardCentsForAppFee): with the 75 cent fee floor the Square-limit minimum is 72 cents (sent fee 43 cents, under 60% of 72),
+// but the platform minimum card sale is 99 cents (PACK_MIN_CHARGE_CENTS), so the smallest pack is 99 cents; the 60% rule stays as a safety net
+// for any higher fee. There is no separate "90% from $5.00" rule.
 export const PACK_TOKEN_MIN_LENGTH = 8;
 export const PACK_TOKEN_MAX_LENGTH = 100;
 
@@ -79,7 +80,7 @@ export function computePackFees(args: { cents: number; feePercent: number }): Pa
 /**
  * Throws BulkLotError when a pack cannot be sold online as asked:
  *   BULK_PACK_PICKUP_ONLY (shipping requested: a pack has no confirmed shipping weight), BULK_PACK_NO_DISCOUNT (a coupon or an
- *   item discount: both assume one unit), BULK_PACK_TOO_CHEAP (under Square's $0.50, or the fee Square would be sent -- the platform
+ *   item discount: both assume one unit), BULK_PACK_TOO_CHEAP (under the $0.99 minimum card sale, or the fee Square would be sent -- the platform
  *   fee net of Square's processing cost -- is above 60% of the payment; see cardLegFeeFits).
  */
 export function assertPackSellableOnline(args: { cents: number; platformFeeCents: number; shippingRequested: unknown; couponCode: unknown; organizerDiscountAmount: unknown }): void {

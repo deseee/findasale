@@ -17,7 +17,7 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { sellItemUnits, sellItemUnitsInTransaction, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { generateReceipt, sendBoothCartReceiptEmail } from '../services/receiptService';
-import { calculateInclusiveCommissionCents, squareAppFeeNetOfProcessingCents } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula; inclusive-fee migration (2026-09-24, Patrick ruling) -- booth-cart legs (cash and card) are always IN_PERSON, collected at the physical booth
+import { calculateInclusiveCommissionCents, squareAppFeeNetOfProcessingCents, MIN_CARD_SALE_CENTS } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula; inclusive-fee migration (2026-09-24, Patrick ruling) -- booth-cart legs (cash and card) are always IN_PERSON, collected at the physical booth
 import { allocateCentsProportionally } from '../services/cashFeeService'; // 2026-10-12: split a Square leg's actually-sent app fee across its Purchase rows
 import { notifyVendorOfBoothSale } from '../services/vendorBoothSaleNotificationService'; // per-vendor "your item sold" notification
 import {
@@ -2041,8 +2041,8 @@ export const authorizeBoothCartSquareLegs = async (req: BoothAuthRequest, res: R
       // every read -- see resolveBoothLegItems' own comment). This is the ACTUAL amount
       // charged to the shopper's card for this leg.
       const amountCents = items.reduce((sum, i) => sum + i.netPriceCents, 0);
-      if (amountCents < 50) {
-        failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message: `Booth "${booth.vendorName}"'s subtotal must be at least $0.50` };
+      if (amountCents < MIN_CARD_SALE_CENTS) { // platform minimum card sale $0.99 (Patrick 2026-10-12)
+        failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message: `Booth "${booth.vendorName}"'s subtotal must be at least $${(MIN_CARD_SALE_CENTS / 100).toFixed(2)} to pay by card` };
         break;
       }
 
