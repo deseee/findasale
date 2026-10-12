@@ -63,15 +63,15 @@ export async function reportVintedBundleOrder(
   deps: VintedBundleOrderDeps = {},
 ): Promise<VintedBundleOrderOutcome> {
   if (!args.userId || !args.organizerId) throw new Error('userId and organizerId required'); // never unscoped
-  const processReport =
-    deps.processReport ?? ((orgId: string, entries: VintedSoldEntry[]) => processVintedSoldReport(orgId, entries, deps.soldDeps, { trustedOrder: true, ...(notice.createdAt ? { orderCreatedAt: notice.createdAt } : {}) }));
-
   const notice = await prisma.notification.findFirst({
     where: { id: String(args.noticeId || ''), userId: args.userId, type: VINTED_BUNDLE_NOTIFICATION_TYPE },
     select: { id: true, link: true, body: true, read: true, createdAt: true },
   });
   if (!notice) return { status: 'notFound' };
   if (notice.read) return { status: 'alreadyResolved' };
+  const orderCreatedAt = notice.createdAt;
+  const processReport =
+    deps.processReport ?? ((orgId: string, entries: VintedSoldEntry[]) => processVintedSoldReport(orgId, entries, deps.soldDeps, { trustedOrder: true, ...(orderCreatedAt ? { orderCreatedAt } : {}) }));
 
   const meta = parseBundleNoticeLink(notice.link, notice.body);
   if (!meta.conversationId) return { status: 'rejected', reason: 'no_conversation' };
