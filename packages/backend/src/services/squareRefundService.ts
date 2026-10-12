@@ -1513,17 +1513,12 @@ export async function handleSquareDisputeWebhook(event: SquareDisputeWebhookEven
       console.log(`[squareRefundService] Square dispute ${dispute.state} for payment ${paymentId} (dispute ${dispute.id}, ${claim.count} row(s)) -- no platform-side principal reversal needed, liability already on the organizer's own Square account.`);
 
       if (squareDisputeClawbackEnabled()) {
-        // GENUINELY UNRESEARCHED, NOT INVENTED (see handoff item 5): Square's own docs confirm
-        // `app_fee_money` is refunded proportionally and automatically on a REFUND
-        // (developer.squareup.com/docs/payments-api/collect-fees/payment-with-app-fee-refund)
-        // but say nothing about what happens to an already-paid `app_fee_money` cut when the
-        // underlying payment is LOST to a dispute instead of refunded -- that could mean
-        // FindA.Sale keeps a small windfall on every lost Square dispute with no automatic
-        // reconciliation. Rather than guess at an unconfirmed Square API call to claw back the
-        // platform's own app_fee_money share, this flag (when on) raises a clear, actionable
-        // signal for manual/product review instead of attempting unverified money movement.
-        console.error(`[squareRefundService] SQUARE_DISPUTE_LIVE_CLAWBACK is on but the app_fee_money clawback mechanism for a lost Square dispute is UNRESEARCHED -- no automated action taken for payment ${paymentId} (dispute ${dispute.id}). Needs manual review: does FindA.Sale's platform fee for this sale need to be manually returned?`);
-        Sentry.captureMessage('Square dispute LOST -- app_fee_money clawback mechanism unresearched, manual review needed', {
+        // RESEARCHED 2026-10-12: Square's collect-fees doc says that for a payment dispute where the seller is
+        // liable for the entire sales amount, the developer keeps their portion of the payment. So FindA.Sale keeps
+        // its app fee on a lost dispute and there is no clawback API to call. This flag (default OFF) therefore only
+        // raises a review signal for the cases the doc does not cover (partial liability, dispute fees); it moves no money.
+        console.error(`[squareRefundService] SQUARE_DISPUTE_LIVE_CLAWBACK is on but the a lost Square dispute leaves the platform fee with FindA.Sale per Square's doc -- no automated action taken for payment ${paymentId} (dispute ${dispute.id}). Review only if the dispute was partial-liability or carried a dispute fee.`);
+        Sentry.captureMessage('Square dispute LOST -- platform fee kept per Square doc; review only partial-liability or dispute-fee cases', {
           tags: { area: 'square-dispute-clawback' },
           extra: { disputeId: dispute.id, paymentId, purchaseIds: rows.map((r: any) => r.id), amountMoney: dispute.amount_money },
         });
