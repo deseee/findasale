@@ -150,28 +150,40 @@ export type ParsedInboundEmail = InboundFacebookOrderEmail & {
 const FACEBOOK_ORDER_EMAIL_SEARCH_QUERY =
   '(from:noreply@marketplace.facebook.com (subject:"New Marketplace order for" OR subject:"Shipping label for your Marketplace order")) is:unread -in:spam -in:trash';
 
-// Vinted branch: same shape and the same Spam/Trash exclusion. Gmail's subject: is a word match,
-// so this also catches look-alikes and the bundle subject ("You sold" prefix, 2026-10-11); processVintedSoldEmail re-checks the exact subject
-// ("You sold an item on Vinted") and sender, and only that email can mark anything sold.
+// 2026-10-12 (Vinted bundle sale never processed): the four title-matched branches below (Vinted, Mercari,
+// Poshmark, Grailed) no longer depend on "is:unread". An email a human already opened in Gmail was invisible to
+// the poller forever, and the first live Vinted bundle sale produced "No unread Vinted sold emails found". They now
+// search a recent window regardless of read state and dedupe on a persisted marker instead: one
+// ProcessedWebhookEvent row (eventId "sold-email:<Label>:<Message-ID>", status COMPLETED, pruned after 30 days by
+// webhookEventPruneJob) per handled message. No schema change. A message whose processing THREW has no marker, so
+// the next poll retries it. The Facebook branch above is unchanged (still is:unread).
+export const SOLD_EMAIL_WINDOW_DAYS = 3;
+const SOLD_EMAIL_WINDOW_TERM = `newer_than:${SOLD_EMAIL_WINDOW_DAYS}d`;
+export const SOLD_EMAIL_EVENT_PREFIX = 'sold-email:';
+
+// Vinted branch: same shape and the same Spam/Trash exclusion. 2026-10-12: NO subject filter any more -- the real
+// bundle subject was never observed, and a subject: word match that misses it hides the email completely. Every
+// Vinted email in the window is looked at ONCE (then marked processed); processVintedSoldEmail re-checks the exact
+// subject and sender and logs the subject of every email it rejects. Only the sold / bundle emails can do anything.
 const VINTED_SOLD_EMAIL_SEARCH_QUERY =
-  '(from:no-reply@vinted.com subject:"You sold") is:unread -in:spam -in:trash';
+  `(from:no-reply@vinted.com) ${SOLD_EMAIL_WINDOW_TERM} -in:spam -in:trash`;
 
 // Mercari branch: "You've made a sale: <title>" from no-reply@alerts.us.mercari.com. Gmail's
 // subject: is a word match, so "Transaction canceled" and other siblings can still come back;
 // processMercariSoldEmail re-checks the exact sender and subject prefix.
 const MERCARI_SOLD_EMAIL_SEARCH_QUERY =
-  '(from:no-reply@alerts.us.mercari.com subject:"made a sale") is:unread -in:spam -in:trash';
+  `(from:no-reply@alerts.us.mercari.com subject:"made a sale") ${SOLD_EMAIL_WINDOW_TERM} -in:spam -in:trash`;
 
 // Poshmark branch: '"<title>" just sold to <buyer> on Poshmark!' from orders@poshmark.com.
 // processPoshmarkSoldEmail re-checks the exact sender and the full subject shape, so shipping
 // reminders, offers and promos that slip through the word match are ignored there.
 const POSHMARK_SOLD_EMAIL_SEARCH_QUERY =
-  '(from:orders@poshmark.com subject:"just sold to") is:unread -in:spam -in:trash';
+  `(from:orders@poshmark.com subject:"just sold to") ${SOLD_EMAIL_WINDOW_TERM} -in:spam -in:trash`;
 
 // Grailed branch (PROVISIONAL): the sale subject is not known yet, so this is wide on purpose;
 // processGrailedSoldEmail applies the real subject gate and only commits on a parsed body title.
 const GRAILED_SOLD_EMAIL_SEARCH_QUERY =
-  '(from:help@grailed.com (subject:sold OR subject:sale)) is:unread -in:spam -in:trash';
+  `(from:help@grailed.com (subject:sold OR subject:sale)) ${SOLD_EMAIL_WINDOW_TERM} -in:spam -in:trash`;
 
 // Safety cap, same idea as bounceSuppressService's 2000-UID cap — pure defense-in-depth.
 // Real volume here is roughly one email every few weeks per ADR-131, so this should never
@@ -328,11 +340,79 @@ type TitleEmailOutcome =
   | PoshmarkSoldEmailResult
   | GrailedSoldEmailResult;
 
+export interface WindowMessageInfo {
+  uid: number;
+  /** Gmail/RFC822 Message-ID header (envelope), null when absent. */
+  messageId: string | null;
+  seen: boolean;
+}
+
+/** Deterministic idempotency key for one message of one branch. Exported for tests. */
+export function soldEmailEventKey(label: string, info: Pick<WindowMessageInfo, 'uid' | 'messageId'>): string {
+  const id = info.messageId ? String(info.messageId).trim().slice(0, 400) : '';
+  return `${SOLD_EMAIL_EVENT_PREFIX}${label}:${id || `uid:${info.uid}`}`;
+}
+
+/** Envelope + flags for the searched UIDs (one IMAP FETCH, no bodies). Returns null on failure. */
+async function fetchWindowMessageInfo(
+  client: ImapFlow,
+  uids: number[],
+  label: string,
+  result: FacebookSoldEmailPollResult,
+): Promise<WindowMessageInfo[] | null> {
+  try {
+    const out: WindowMessageInfo[] = [];
+    for await (const msg of client.fetch(uids, { uid: true, envelope: true, flags: true }, { uid: true })) {
+      const m: any = msg;
+      out.push({
+        uid: Number(m.uid),
+        messageId: m.envelope?.messageId ? String(m.envelope.messageId) : null,
+        seen: m.flags instanceof Set ? m.flags.has('\\Seen') : Array.isArray(m.flags) ? m.flags.includes('\\Seen') : false,
+      });
+    }
+    // A UID the FETCH did not return is still processed (keyed by UID), never silently dropped.
+    const got = new Set(out.map((o) => o.uid));
+    for (const uid of uids) if (!got.has(uid)) out.push({ uid, messageId: null, seen: false });
+    return out.sort((a, b) => a.uid - b.uid);
+  } catch (err: any) {
+    result.errors.push(`${label} IMAP envelope fetch failed: ${err.message}`);
+    console.error(`[facebookMarketplaceEmailPollService] ${label} IMAP envelope fetch error:`, err.message);
+    return null;
+  }
+}
+
+/** Which of `keys` already have a processed marker. Throws on a DB failure (the caller then processes nothing). */
+async function loadProcessedKeys(keys: string[]): Promise<Set<string>> {
+  if (!keys.length) return new Set();
+  const rows = await prisma.processedWebhookEvent.findMany({ where: { eventId: { in: keys } }, select: { eventId: true } });
+  return new Set(rows.map((r: { eventId: string }) => r.eventId));
+}
+
+/** Writes the processed marker. true = this call created it, false = it already existed (or could not be written). */
+async function claimProcessed(key: string): Promise<boolean> {
+  try {
+    await prisma.processedWebhookEvent.create({ data: { eventId: key, status: 'COMPLETED' } });
+    return true;
+  } catch (err: any) {
+    if (err?.code === 'P2002') return false; // unique violation: already marked
+    console.warn(`[facebookMarketplaceEmailPollService] Could not write processed marker ${key} -- message may be re-examined next poll:`, err?.message || err);
+    return false;
+  }
+}
+
 /**
- * One title-matched marketplace branch of the same pass (Vinted, Mercari). Every unread message
- * matching `query` goes through `process`. Same per-message isolation and \Seen rules as the
- * Facebook loop: a throw (including a failed commit) leaves the message unread for retry;
- * matched / unmatched / ambiguous / ignored all mark it \Seen so it is never processed twice.
+ * One title-matched marketplace branch of the same pass (Vinted, Mercari, ...). Every message in the
+ * recent window matching `query` (read OR unread) goes through `process` exactly once: handled
+ * messages get a persisted processed marker (claimProcessed) and are skipped on later polls. Same
+ * per-message isolation as the Facebook loop: a throw (including a failed commit) leaves NO marker so
+ * the next poll retries; matched / unmatched / ambiguous / bundle / ignored all mark the message so it
+ * is never processed twice. Notifications are claimed BEFORE they are sent, so a crash between the two
+ * can never produce a second notification for the same email.
+ *
+ * A message that was already \Seen and has no marker predates this change (the old unread-only flow
+ * handled it, or a human opened it): it is processed once so a missed sale is caught, but an
+ * unmatched / ambiguous outcome for it is only logged, not notified, to avoid re-notifying the last
+ * days of old reconciliation notices on first deploy. A bundle outcome is always notified.
  */
 async function processTitleEmailBatch(
   client: ImapFlow,
@@ -342,15 +422,33 @@ async function processTitleEmailBatch(
   counts: VintedSoldEmailPollCounts,
   process: (email: ParsedInboundEmail) => Promise<TitleEmailOutcome>,
 ): Promise<void> {
-  const uids = await searchUnread(client, query, label, result);
-  if (!uids) return;
-  if (uids.length === 0) {
-    console.log(`[facebookMarketplaceEmailPollService] No unread ${label} sold emails found.`);
+  const found = await searchUnread(client, query, label, result);
+  if (!found) return;
+  if (found.length === 0) {
+    console.log(`[facebookMarketplaceEmailPollService] No ${label} sold-candidate emails in the last ${SOLD_EMAIL_WINDOW_DAYS} days.`);
     return;
   }
-  console.log(`[facebookMarketplaceEmailPollService] Found ${uids.length} unread ${label} sold email(s) to process.`);
+  const infos = await fetchWindowMessageInfo(client, found, label, result);
+  if (!infos) return;
+  let done: Set<string>;
+  try {
+    done = await loadProcessedKeys(infos.map((i) => soldEmailEventKey(label, i)));
+  } catch (err: any) {
+    // Fail closed: without the marker table we cannot tell new from handled, so process nothing this run.
+    result.errors.push(`${label} processed-marker lookup failed: ${err.message}`);
+    console.error(`[facebookMarketplaceEmailPollService] ${label} processed-marker lookup failed -- skipping this run:`, err.message);
+    return;
+  }
+  const fresh = infos.filter((i) => !done.has(soldEmailEventKey(label, i)));
+  if (fresh.length === 0) {
+    console.log(`[facebookMarketplaceEmailPollService] No new ${label} sold-candidate emails (${found.length} in window, all already processed).`);
+    return;
+  }
+  console.log(`[facebookMarketplaceEmailPollService] Found ${fresh.length} new ${label} sold-candidate email(s) to process (${found.length} in window).`);
 
-  for (const uid of uids) {
+  for (const info of fresh) {
+    const uid = info.uid;
+    const key = soldEmailEventKey(label, info);
     counts.processed++;
     let outcome: TitleEmailOutcome;
     try {
@@ -363,10 +461,10 @@ async function processTitleEmailBatch(
     } catch (err: any) {
       result.errors.push(`${label} UID ${uid}: ${err.message}`);
       console.error(
-        `[facebookMarketplaceEmailPollService] Error processing ${label} UID ${uid} -- leaving unread for retry on next poll:`,
+        `[facebookMarketplaceEmailPollService] Error processing ${label} UID ${uid} -- no processed marker written, retrying on next poll:`,
         err.message
       );
-      continue; // do NOT mark \Seen -- next poll retries this message
+      continue; // no marker -> next poll retries this message
     }
 
     switch (outcome.kind) {
@@ -380,42 +478,49 @@ async function processTitleEmailBatch(
         counts.unmatched++;
         console.warn(
           `[facebookMarketplaceEmailPollService] UNMATCHED ${label} sold email -- needs manual reconciliation`,
-          { uid, organizerId: outcome.organizerId, itemTitleFromBody: outcome.title, reason: outcome.reason }
+          { uid, organizerId: outcome.organizerId, itemTitleFromBody: outcome.title, reason: outcome.reason, previouslySeen: info.seen }
         );
-        await notifyOrganizerVintedReconciliationNeeded(
-          label,
-          outcome.organizerId,
-          outcome.title,
-          "we couldn't find a matching listing for it in your account"
-        );
+        if (!info.seen && (await claimProcessed(key))) {
+          await notifyOrganizerVintedReconciliationNeeded(
+            label,
+            outcome.organizerId,
+            outcome.title,
+            "we couldn't find a matching listing for it in your account"
+          );
+        }
         break;
       case 'ambiguous':
         counts.ambiguous++;
         console.warn(
           `[facebookMarketplaceEmailPollService] AMBIGUOUS ${label} sold email -- title matches more than one item, needs manual reconciliation`,
-          { uid, organizerId: outcome.organizerId, itemTitleFromBody: outcome.title, candidateCount: outcome.candidateCount, reason: outcome.reason }
+          { uid, organizerId: outcome.organizerId, itemTitleFromBody: outcome.title, candidateCount: outcome.candidateCount, reason: outcome.reason, previouslySeen: info.seen }
         );
-        await notifyOrganizerVintedReconciliationNeeded(
-          label,
-          outcome.organizerId,
-          outcome.title,
-          `its title matches ${outcome.candidateCount ?? 'more than one'} of your listings, so we couldn't tell which one actually sold`
-        );
+        if (!info.seen && (await claimProcessed(key))) {
+          await notifyOrganizerVintedReconciliationNeeded(
+            label,
+            outcome.organizerId,
+            outcome.title,
+            `its title matches ${outcome.candidateCount ?? 'more than one'} of your listings, so we couldn't tell which one actually sold`
+          );
+        }
         break;
       case 'bundle':
         // S-VINTED-BUNDLE-SALE (2026-10-11): Vinted bundle email (no item titles). Nothing is
-        // marked sold from the email; the organizer is notified and the extension's wardrobe
-        // sold-check is armed (vintedBundleSaleService.ts). Counted as 'ambiguous'.
+        // marked sold from the email; the organizer is notified (with a link to the manual
+        // selection page, 2026-10-12) and the extension's wardrobe sold-check is armed
+        // (vintedBundleSaleService.ts). Counted as 'ambiguous'.
         counts.ambiguous++;
         console.warn(
-          `[facebookMarketplaceEmailPollService] BUNDLE ${label} sold email -- items not named, routed to wardrobe sold-check`,
+          `[facebookMarketplaceEmailPollService] BUNDLE ${label} sold email -- items not named, routed to wardrobe sold-check and the manual selection page`,
           { uid, organizerId: outcome.organizerId, itemCount: outcome.itemCount, amountText: outcome.amountText }
         );
-        await notifyOrganizerVintedBundleSale(outcome.organizerId, {
-          itemCount: outcome.itemCount,
-          amountText: outcome.amountText,
-          buyer: outcome.buyer,
-        });
+        if (await claimProcessed(key)) {
+          await notifyOrganizerVintedBundleSale(outcome.organizerId, {
+            itemCount: outcome.itemCount,
+            amountText: outcome.amountText,
+            buyer: outcome.buyer,
+          });
+        }
         break;
       case 'ignored':
         counts.ignored++;
@@ -423,18 +528,19 @@ async function processTitleEmailBatch(
         break;
     }
 
-    await markSeen(client, uid);
+    await claimProcessed(key); // no-op when a notifying branch above already claimed it
+    if (!info.seen) await markSeen(client, uid);
   }
 }
 
-/** Vinted branch: every unread "You sold an item" email from no-reply@vinted.com. */
+/** Vinted branch: every not-yet-processed email from no-reply@vinted.com in the recent window (read or unread). */
 export async function processVintedBatch(client: ImapFlow, result: FacebookSoldEmailPollResult): Promise<void> {
   await processTitleEmailBatch(client, result, 'Vinted', VINTED_SOLD_EMAIL_SEARCH_QUERY, result.vinted, (email) =>
     processVintedSoldEmail(email),
   );
 }
 
-/** Mercari branch (2026-09-23): every unread "You've made a sale: ..." email. */
+/** Mercari branch (2026-09-23): every not-yet-processed "You've made a sale: ..." email. */
 export async function processMercariBatch(client: ImapFlow, result: FacebookSoldEmailPollResult): Promise<void> {
   await processTitleEmailBatch(client, result, 'Mercari', MERCARI_SOLD_EMAIL_SEARCH_QUERY, result.mercari, (email) =>
     processMercariSoldEmail(email),

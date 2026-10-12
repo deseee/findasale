@@ -22,6 +22,7 @@ import {
   parseVintedSoldEmailTitle,
   parseVintedSoldEmail,
   parseVintedBundleItemCount,
+  parseVintedBundleFromBody,
   htmlToPlainText,
   decodeHtmlEntities,
   VINTED_SOLD_EMAIL_SENDER,
@@ -426,14 +427,85 @@ describe('Vinted bundle sale email', () => {
       const r = await processVintedSoldEmail(soldEmail({ subject, rawBody: bundleHtml() }), { processTitleReport: soldReport('notFound') });
       expect(r.kind).toBe('bundle');
     }
+    // Look-alike subjects stay ignored for an ordinary single-item sale body (a bundle BODY is a separate,
+    // notify-only route, covered in the 2026-10-12 block below).
     for (const subject of ['You sold a bundle on Vinted!!', 'You sold a bundle', 'You sold an item on Vinted today']) {
-      const r = await processVintedSoldEmail(soldEmail({ subject, rawBody: bundleHtml() }), { processTitleReport: soldReport('notFound') });
+      const r = await processVintedSoldEmail(soldEmail({ subject, rawBody: soldHtml() }), { processTitleReport: soldReport('notFound') });
       expect(r.kind).toBe('ignored');
     }
   });
 
   it('a bundle email still needs sender auth (fails closed)', async () => {
     const r = await processVintedSoldEmail(soldEmail({ rawBody: bundleHtml(), authenticationResults: undefined }), { processTitleReport: soldReport('notFound') });
+    expect(r.kind).toBe('ignored');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 2026-10-12: the first live bundle sale produced no log line at all. The real bundle subject is
+// unknown, so a rejected subject is logged, and a bundle BODY is accepted under any subject.
+// ---------------------------------------------------------------------------------------------
+describe('Vinted bundle email under an unknown subject (2026-10-12)', () => {
+  const bundleHtml = () =>
+    soldHtml('Bundle 5 items', '$5.00', 'duck212').replace('>Bundle 5 items</div>', '>Bundle 5 items</div><div>5</div><div>Bundle 5 items</div>');
+
+  it('logs the actual subject (info level, once) of an email whose subject is not accepted', async () => {
+    const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      await processVintedSoldEmail(soldEmail({ subject: 'New message about\u0007your item', rawBody: '<p>hi</p>' }), { processTitleReport: soldReport('notFound') });
+      const lines = log.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('subject not accepted'));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('"New message about your item"');
+      expect(lines[0]).toContain('ignored');
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('accepts a bundle body under an unrecognized subject and routes it to kind "bundle" (nothing sold)', async () => {
+    const processTitleReport = soldReport('sold', { itemId: 'must_not_be_used' });
+    const r = await processVintedSoldEmail(soldEmail({ subject: 'Your bundle has been bought!', rawBody: bundleHtml() }), { processTitleReport });
+    expect(r).toEqual(expect.objectContaining({ kind: 'bundle', organizerId: 'organizer_1', itemCount: 5, amountText: '$5.00', buyer: 'duck212' }));
+    expect(processTitleReport).not.toHaveBeenCalled();
+  });
+
+  it('the body route still needs sender authentication, a known sender and an organizer token', async () => {
+    const subject = 'Something unexpected';
+    const noAuth = await processVintedSoldEmail(soldEmail({ subject, rawBody: bundleHtml(), authenticationResults: undefined }), { processTitleReport: soldReport('notFound') });
+    expect(noAuth.kind).toBe('ignored');
+    const badSender = await processVintedSoldEmail(soldEmail({ subject, from: 'someone@example.com', rawBody: bundleHtml() }), { processTitleReport: soldReport('notFound') });
+    expect(badSender.kind).toBe('ignored');
+    const noToken = await processVintedSoldEmail(soldEmail({ subject, rawBody: bundleHtml(), recipientAddresses: ['artifactmi@gmail.com'] }), { processTitleReport: soldReport('notFound') });
+    expect(noToken.kind).toBe('ignored');
+  });
+
+  it('a non-bundle sale body under an unrecognized subject is still ignored (never marks a single item sold)', async () => {
+    const processTitleReport = soldReport('sold', { itemId: 'item_mr' });
+    const r = await processVintedSoldEmail(soldEmail({ subject: 'Your item sold', rawBody: soldHtml() }), { processTitleReport });
+    expect(r.kind).toBe('ignored');
+    expect(processTitleReport).not.toHaveBeenCalled();
+  });
+
+  it('a bundle body whose "We will transfer" sentence is missing is still recognized (lenient parse)', async () => {
+    const body = '<p>Hello artifactm, duck212 has bought Bundle 5 items 5 Bundle 5 items $5.00 Thanks, Team Vinted</p>';
+    expect(parseVintedSoldEmail(body)).toBeNull();
+    expect(parseVintedBundleFromBody(body)).toEqual({ itemCount: 5, amountText: '$5.00', buyer: 'duck212' });
+    const r = await processVintedSoldEmail(soldEmail({ rawBody: body }), { processTitleReport: soldReport('notFound') });
+    expect(r).toEqual(expect.objectContaining({ kind: 'bundle', itemCount: 5 }));
+  });
+
+  it('parseVintedBundleFromBody rejects ordinary sales and unrelated text', () => {
+    expect(parseVintedBundleFromBody(soldHtml())).toBeNull();
+    expect(parseVintedBundleFromBody('<p>Bundle 5 items on sale</p>')).toBeNull();
+    expect(parseVintedBundleFromBody(null)).toBeNull();
+  });
+
+  it('accepts the extra plausible bundle subject wordings but not look-alikes', async () => {
+    for (const subject of ["You've sold a bundle on Vinted", 'You sold your bundle on Vinted', 'You sold 3 items in a bundle on Vinted']) {
+      const r = await processVintedSoldEmail(soldEmail({ subject, rawBody: bundleHtml() }), { processTitleReport: soldReport('notFound') });
+      expect(r.kind).toBe('bundle');
+    }
+    const r = await processVintedSoldEmail(soldEmail({ subject: "You've sold an item on Vinted!!", rawBody: soldHtml() }), { processTitleReport: soldReport('sold', { itemId: 'x' }) });
     expect(r.kind).toBe('ignored');
   });
 });

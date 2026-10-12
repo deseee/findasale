@@ -195,6 +195,7 @@ import bidsRoutes from './routes/bids';                         // Shopper bids 
 import xpController from './controllers/xpController';          // Phase 2a: Explorer's Guild XP system
 import supportRoutes from './routes/support';                  // #128: Automated Support Stack
 import posTiersRoutes from './routes/posTiers';               // POS Tier Status tracking
+import vintedBundleRoutes from './routes/vintedBundle';       // Vinted bundle sale manual reconciliation (2026-10-12)
 import settlementRoutes from './routes/settlement';           // Feature #228: Settlement Hub
 import consignorSettlementRoutes from './routes/consignorSettlement'; // Feature #239: Multi-Consignor Estate Settlement
 import posRoutes from './routes/pos';                         // POS Upgrade: Open Cart & Payment Links
@@ -797,6 +798,7 @@ app.use('/api/flash-deals', flashDealRoutes); // Flash Deals & Promotions
 app.use('/api/wishlists', wishlistRoutes); // Wishlist / Registry feature
 app.use('/api/tiers', tierRoutes); // Phase 31: Organizer Tier Rewards
 app.use('/api/organizer/pos-tiers', posTiersRoutes); // POS Tier Status tracking
+app.use('/api/organizer/vinted-bundle', vintedBundleRoutes); // Vinted bundle sale manual reconciliation (2026-10-12)
 app.use('/api/pos', posRoutes);                       // POS Upgrade: Open Cart & Payment Links
 app.use('/api/guest-invoices', guestInvoiceRoutes);   // Guest/no-account emailed invoice (PRO/TEAMS), 2026-09-16
 app.use('/api/planner', plannerRoutes); // Planning assistant chatbot

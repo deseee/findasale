@@ -166,6 +166,42 @@ export function parseVintedBundleItemCount(title: string | null | undefined): nu
   return Number.isFinite(n) && n >= 1 && n <= 200 ? n : null;
 }
 
+export interface ParsedVintedBundleBody {
+  itemCount: number;
+  amountText: string | null;
+  buyer: string | null;
+}
+
+const ANY_PRICE_RE = new RegExp(PRICE);
+
+/**
+ * Lenient bundle detector for a body that parseVintedSoldEmail could not parse (e.g. the "We will
+ * transfer" sentence is worded differently in the bundle email): finds "<buyer> has bought <...>"
+ * and requires a bundle label within the next ~200 characters. Returns null for anything else, so a
+ * single-item sale or an unrelated email never qualifies. Display fields only; nothing derived here
+ * is ever used to mark an item sold.
+ */
+export function parseVintedBundleFromBody(body: string | null | undefined): ParsedVintedBundleBody | null {
+  if (!body) return null;
+  const text = htmlToPlainText(body);
+  const m = /(\S+) has bought\s+(.*)$/i.exec(text);
+  if (!m) return null;
+  const seg = m[2].slice(0, 200);
+  const itemCount = parseVintedBundleItemCount(seg);
+  if (itemCount === null) return null;
+  const pm = ANY_PRICE_RE.exec(seg);
+  return {
+    itemCount,
+    amountText: pm ? pm[0].trim().replace(/[.,\s]+$/, '') || null : null,
+    buyer: m[1].slice(0, 60),
+  };
+}
+
+/** Subject text for logs only: untrusted, so control characters are dropped and the length capped. */
+function subjectForLog(subject: string): string {
+  return String(subject ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 200);
+}
+
 function isExactSender(from: string): boolean {
   return String(from ?? '').trim().toLowerCase() === VINTED_SOLD_EMAIL_SENDER;
 }
@@ -173,7 +209,8 @@ function isExactSender(from: string): boolean {
 // "You sold an item on Vinted" (single item, observed) plus bundle phrasings (PROVISIONAL: the
 // bundle subject has not been observed; sender + DKIM + the "has bought" body sentence still gate
 // everything). Look-alikes with trailing text ("...Vinted!!") and bare prefixes stay ignored.
-const SOLD_SUBJECT_RE = /^You sold (?:an item|a bundle|\d{1,3} items|a bundle of \d{1,3} items) on Vinted$/;
+const SOLD_SUBJECT_RE =
+  /^(?:You sold|You've sold|You have sold) (?:an item|a bundle|your bundle|\d{1,3} items|a bundle of \d{1,3} items|\d{1,3} items in a bundle|an item bundle) on Vinted$/;
 
 function isSoldSubject(subject: string): boolean {
   const s = String(subject ?? '').trim();
@@ -194,8 +231,22 @@ export async function processVintedSoldEmail(
   if (!isExactSender(email.from)) {
     return { kind: 'ignored', reason: `sender "${email.from}" is not ${VINTED_SOLD_EMAIL_SENDER}` };
   }
+  // 2026-10-12: the real bundle email's subject was never observed (the first bundle sale produced
+  // no log line at all), so every Vinted email whose subject is not accepted is logged ONCE here
+  // (info level) with its actual subject. A rejected subject is still accepted when the BODY is
+  // unmistakably a bundle sale ("<buyer> has bought ... Bundle N items ..."): that route can only
+  // ever notify the organizer (kind 'bundle' marks nothing sold), and it still has to pass the
+  // sender + DKIM + organizer-token guards below.
+  let bundleViaBody: ParsedVintedBundleBody | null = null;
   if (!isSoldSubject(email.subject)) {
-    return { kind: 'ignored', reason: `subject is not "${VINTED_SOLD_EMAIL_SUBJECT}"` };
+    bundleViaBody = parseVintedBundleFromBody(email.rawBody);
+    console.log(
+      `[VintedSoldEmailDetection] subject not accepted as a sold subject: "${subjectForLog(email.subject)}"` +
+        (bundleViaBody ? ' -- but the body is a bundle sale, continuing to the guards' : ' -- ignored'),
+    );
+    if (!bundleViaBody) {
+      return { kind: 'ignored', reason: `subject is not "${VINTED_SOLD_EMAIL_SUBJECT}"` };
+    }
   }
 
   const auth = verifyInboundEmailAuthentication(email, VINTED_DKIM_DOMAINS);
@@ -230,9 +281,31 @@ export async function processVintedSoldEmail(
   }
   const organizerId = [...organizerIds][0];
 
+  if (bundleViaBody) {
+    return {
+      kind: 'bundle',
+      organizerId,
+      itemCount: bundleViaBody.itemCount,
+      amountText: bundleViaBody.amountText,
+      buyer: bundleViaBody.buyer,
+      title: `Bundle ${bundleViaBody.itemCount} items`,
+    };
+  }
+
   const parsed = parseVintedSoldEmail(email.rawBody);
   const title = parsed?.title ?? null;
   if (!parsed || !title) {
+    const lenientBundle = parseVintedBundleFromBody(email.rawBody);
+    if (lenientBundle) {
+      return {
+        kind: 'bundle',
+        organizerId,
+        itemCount: lenientBundle.itemCount,
+        amountText: lenientBundle.amountText,
+        buyer: lenientBundle.buyer,
+        title: `Bundle ${lenientBundle.itemCount} items`,
+      };
+    }
     console.warn('[VintedSoldEmailDetection] unmatched sold email -- could not parse the item title', { organizerId });
     return { kind: 'unmatched', organizerId, title: null, reason: 'could not parse the item title from the email body' };
   }

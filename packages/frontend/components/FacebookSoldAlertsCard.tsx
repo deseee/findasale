@@ -33,9 +33,11 @@ interface FacebookSoldEmailResponse {
 // in the "Has the words" box. Poshmark (research-built, not yet seen live) and Grailed
 // (PROVISIONAL: subject not known yet, so sold OR sale) were added 2026-09-23; the backend only
 // acts on their exact sale notices and ignores everything else these clauses let through.
+// 2026-10-12: the Vinted clause is now sold OR bought OR bundle (was the exact phrase "You sold an item"): a Vinted
+// bundle sale email carries a different, unobserved subject, and a filter that does not match it never forwards it.
 const SOLD_EMAIL_FILTER_QUERY =
   '(from:noreply@marketplace.facebook.com (subject:"New Marketplace order for" OR subject:"Shipping label for your Marketplace order")) OR ' +
-  '(from:no-reply@vinted.com subject:"You sold an item") OR ' +
+  '(from:no-reply@vinted.com (subject:sold OR subject:bought OR subject:bundle)) OR ' +
   '(from:no-reply@alerts.us.mercari.com subject:"made a sale") OR ' +
   '(from:orders@poshmark.com subject:"just sold to") OR ' +
   '(from:help@grailed.com (subject:sold OR subject:sale))';

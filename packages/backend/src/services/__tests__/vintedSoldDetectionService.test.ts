@@ -14,6 +14,9 @@ import {
   processVintedSoldReport,
   processVintedSoldTitleReport,
   sanitizeVintedSoldEntries,
+  markItemsSoldOnVinted,
+  sanitizeManualSoldItemIds,
+  VINTED_MANUAL_SOLD_MAX_ITEMS,
   SOLD_VIA_VINTED,
 } from '../vintedSoldDetectionService';
 
@@ -189,5 +192,74 @@ describe('title-only entry (Vinted sold email, no listing id)', () => {
     expect(d.commitSale).toHaveBeenCalledWith('item_mr', SOLD_VIA_VINTED, '');
     const second = await processVintedSoldReport('org_1', [{ vintedId: '9879473979', title: MR_NATURAL }], d);
     expect(second[0].result).toBe('alreadySold');
+  });
+});
+
+// 2026-10-12: manual reconciliation for a Vinted bundle sale (organizer ticks the bundled items).
+describe('markItemsSoldOnVinted / sanitizeManualSoldItemIds', () => {
+  const owned = [
+    { id: 'a', title: 'Item A', status: 'AVAILABLE' },
+    { id: 'b', title: 'Item B', status: 'AVAILABLE' },
+    { id: 'c', title: 'Item C', status: 'SOLD' },
+    { id: 'd', title: 'Item D', status: 'RESERVED' },
+  ];
+  function deps(over: Record<string, any> = {}) {
+    return {
+      loadOwnedItems: jest.fn(async (_org: string, ids: string[]) => owned.filter((o) => ids.includes(o.id))),
+      closeVintedListingRecord: jest.fn(async () => true),
+      commitSale: jest.fn(async (id: string) => ({ alreadyCommitted: id === 'c' || id === 'd' })),
+      getItemStatus: jest.fn(async (id: string) => owned.find((o) => o.id === id)!.status),
+      ...over,
+    };
+  }
+
+  it('runs the same sold flow per owned item: close the Vinted record, then commit with VINTED (no price argument)', async () => {
+    const d = deps();
+    const r = await markItemsSoldOnVinted('org_1', ['a', 'b'], d);
+    expect(r.map((x) => x.result)).toEqual(['sold', 'sold']);
+    expect(d.closeVintedListingRecord).toHaveBeenCalledTimes(2);
+    expect(d.commitSale).toHaveBeenCalledWith('a', SOLD_VIA_VINTED, '');
+    expect(d.commitSale.mock.calls[0]).toHaveLength(3);
+    expect(d.loadOwnedItems).toHaveBeenCalledWith('org_1', ['a', 'b']);
+  });
+
+  it('is idempotent: an already-sold item is reported alreadySold, a reserved one notAvailable', async () => {
+    const r = await markItemsSoldOnVinted('org_1', ['c', 'd'], deps());
+    expect(r.map((x) => x.result)).toEqual(['alreadySold', 'notAvailable']);
+  });
+
+  it('never touches an item the organizer does not own (not returned by the scoped load)', async () => {
+    const d = deps();
+    const r = await markItemsSoldOnVinted('org_1', ['a', 'someone_elses'], d);
+    expect(r[1]).toEqual({ itemId: 'someone_elses', result: 'notFound', reason: 'not_found_for_this_organizer' });
+    expect(d.commitSale).toHaveBeenCalledTimes(1);
+  });
+
+  it('one failing item does not fail the others', async () => {
+    const d = deps({ commitSale: jest.fn(async (id: string) => { if (id === 'a') throw new Error('boom'); return { alreadyCommitted: false }; }) });
+    const err = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const r = await markItemsSoldOnVinted('org_1', ['a', 'b'], d);
+      expect(r.map((x) => x.result)).toEqual(['error', 'sold']);
+    } finally {
+      err.mockRestore();
+    }
+  });
+
+  it('a multi-unit item that keeps stock reports AVAILABLE with the Vinted listing closed', async () => {
+    const r = await markItemsSoldOnVinted('org_1', ['a'], deps({ commitSale: jest.fn(async () => ({ alreadyCommitted: false, partial: true })), closeVintedListingRecord: jest.fn(async () => false) }));
+    expect(r[0]).toEqual(expect.objectContaining({ result: 'sold', itemStatus: 'AVAILABLE', vintedListingClosed: true }));
+  });
+
+  it('requires an organizer id and caps the selection at 50', async () => {
+    await expect(markItemsSoldOnVinted('', ['a'], deps())).rejects.toThrow('organizerId required');
+    const many = Array.from({ length: VINTED_MANUAL_SOLD_MAX_ITEMS + 1 }, (_, i) => `i${i}`);
+    await expect(markItemsSoldOnVinted('org_1', many, deps())).rejects.toThrow('too_many_items');
+    expect(await markItemsSoldOnVinted('org_1', [], deps())).toEqual([]);
+  });
+
+  it('sanitizeManualSoldItemIds keeps unique non-empty strings only', () => {
+    expect(sanitizeManualSoldItemIds(['a', ' a ', '', 5, null, 'b', 'x'.repeat(65)])).toEqual(['a', 'b']);
+    expect(sanitizeManualSoldItemIds('nope')).toEqual([]);
   });
 });

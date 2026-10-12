@@ -5,7 +5,8 @@
 const mockPrisma: any = {
   marketplaceListingJob: { findMany: jest.fn() },
   organizer: { findUnique: jest.fn() },
-  notification: { count: jest.fn(), updateMany: jest.fn() },
+  notification: { count: jest.fn(), updateMany: jest.fn(), findMany: jest.fn() },
+  item: { findMany: jest.fn() },
 };
 jest.mock('../../lib/prisma', () => ({ prisma: mockPrisma }));
 const mockCreateNotification = jest.fn();
@@ -18,6 +19,9 @@ import {
   notifyOrganizerVintedBundleSale,
   hasPendingVintedBundleSale,
   acknowledgeVintedBundleSale,
+  listPendingVintedBundleNotices,
+  listVintedBundleSelectionOptions,
+  VINTED_BUNDLE_PAGE_PATH,
   VINTED_BUNDLE_NOTIFICATION_TYPE,
   VINTED_BUNDLE_CHECK_WINDOW_MS,
 } from '../vintedBundleSaleService';
@@ -107,5 +111,40 @@ describe('pending flag + acknowledgement', () => {
   it('acknowledge marks only unread bundle notifications read', async () => {
     await acknowledgeVintedBundleSale('u1');
     expect(mockPrisma.notification.updateMany).toHaveBeenCalledWith({ where: { userId: 'u1', type: VINTED_BUNDLE_NOTIFICATION_TYPE, read: false }, data: { read: true } });
+  });
+});
+
+describe('manual selection page support (2026-10-12)', () => {
+  it('the bundle notification links to the selection page', async () => {
+    mockPrisma.organizer.findUnique.mockResolvedValue({ userId: 'u1' });
+    mockPrisma.marketplaceListingJob.findMany.mockResolvedValue([]);
+    await notifyOrganizerVintedBundleSale('org1', { itemCount: 5, amountText: '$5.00', buyer: 'duck212' });
+    expect(mockCreateNotification.mock.calls[0][0].link).toBe(VINTED_BUNDLE_PAGE_PATH);
+    expect(VINTED_BUNDLE_PAGE_PATH).toBe('/organizer/vinted-bundle');
+  });
+
+  it('lists only the caller\'s unread, recent bundle notices', async () => {
+    mockPrisma.notification.findMany.mockResolvedValue([]);
+    const now = 1_800_000_000_000;
+    await listPendingVintedBundleNotices('u1', now);
+    const args = mockPrisma.notification.findMany.mock.calls[0][0];
+    expect(args.where).toEqual({ userId: 'u1', type: VINTED_BUNDLE_NOTIFICATION_TYPE, read: false, createdAt: { gte: new Date(now - 14 * 24 * 60 * 60 * 1000) } });
+  });
+
+  it('offers tracked live Vinted items first and the remaining available items under "other", organizer-scoped', async () => {
+    mockPrisma.marketplaceListingJob.findMany.mockResolvedValue([
+      { itemId: 'i1', action: 'POST', status: 'POSTED', createdAt: new Date(5), item: { title: 'One' } },
+    ]);
+    mockPrisma.item.findMany.mockResolvedValue([
+      { id: 'i1', title: 'One' },
+      { id: 'i2', title: 'Dime Tube' },
+    ]);
+    const r = await listVintedBundleSelectionOptions('org1');
+    expect(r.tracked).toEqual([{ itemId: 'i1', title: 'One' }]);
+    expect(r.other).toEqual([{ itemId: 'i2', title: 'Dime Tube' }]);
+    const where = mockPrisma.item.findMany.mock.calls[0][0].where;
+    expect(where.status).toBe('AVAILABLE');
+    expect(JSON.stringify(where)).toContain('org1');
+    await expect(listVintedBundleSelectionOptions('')).rejects.toThrow();
   });
 });

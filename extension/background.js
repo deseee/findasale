@@ -699,7 +699,7 @@ async function fasRecordPostTime(platform) {
 }
 // Message types that start or continue a publish/removal/sold-check for ONE platform's content script.
 const FAS_PAUSE_START_MSGS = { setQueue: 'FACEBOOK', setCraigslistQueue: 'CRAIGSLIST', setGumtreeAuQueue: 'GUMTREE_AU', setPoshmarkQueue: 'POSHMARK', setMercariQueue: 'MERCARI', setVintedQueue: 'VINTED', setGrailedQueue: 'GRAILED', reopenGrailedTab: 'GRAILED' };
-const FAS_PAUSE_READ_MSGS = { getQueueItem: 'FACEBOOK', getCraigslistQueueItem: 'CRAIGSLIST', getGumtreeAuQueueItem: 'GUMTREE_AU', getPoshmarkQueueItem: 'POSHMARK', getMercariQueueItem: 'MERCARI', getVintedQueueItem: 'VINTED', getGrailedQueueItem: 'GRAILED', getRemovalQueueItem: 'FACEBOOK', getRenewalQueueItem: 'FACEBOOK', getFacebookSoldChecks: 'FACEBOOK' };
+const FAS_PAUSE_READ_MSGS = { getQueueItem: 'FACEBOOK', getCraigslistQueueItem: 'CRAIGSLIST', getGumtreeAuQueueItem: 'GUMTREE_AU', getPoshmarkQueueItem: 'POSHMARK', getMercariQueueItem: 'MERCARI', getVintedQueueItem: 'VINTED', getGrailedQueueItem: 'GRAILED', getRemovalQueueItem: 'FACEBOOK', getRenewalQueueItem: 'FACEBOOK', getFacebookSoldChecks: 'FACEBOOK', getVintedSoldCheckRequested: 'VINTED' };
 
 async function openSilentRemovalTab() {
   // Per-marketplace pause: never open a Facebook tab while paused (covers every caller).
@@ -3488,6 +3488,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await clearStalledRemovalRuns(msg.platform || 'FACEBOOK');
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
           { method: 'POST', body: { reason: msg.reason || null, platform: msg.platform || 'FACEBOOK' } }));
+      } else if (msg.type === 'getVintedSoldCheckRequested') {
+        // 2026-10-12 (Vinted bundle sale): fas-vinted.js's forced early wardrobe check used to ask via
+        // getFacebookSoldChecks, which the central pause gate answers with an empty `{items, paused}` whenever
+        // FACEBOOK is paused (Patrick's Facebook account is suspended/paused), so the backend's
+        // vintedSoldCheckRequested flag never arrived and the bundle items were never checked. This type is
+        // gated on VINTED (FAS_PAUSE_READ_MSGS) instead. Same passthrough, same backend endpoint.
+        sendResponse(await apiFetch('/extension/pending-sold-checks'));
       } else if (msg.type === 'getFacebookSoldChecks') {
         // (2026-08-05) Reverse-direction cross-channel sync (ADR-084 amendment, Part D):
         // fas-remove.js's sold-detection scan asks for the candidate titles to check against

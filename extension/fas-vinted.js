@@ -4934,7 +4934,7 @@
         try {
           const lastForced = Number(await vintRemStorageGet(VINT_SOLD_LAST_FORCED_KEY)) || 0;
           if (Date.now() - lastForced >= VINT_SOLD_FORCED_MIN_GAP_MS) {
-            const flagResp = await chrome.runtime.sendMessage({ type: 'getFacebookSoldChecks' });
+            const flagResp = await chrome.runtime.sendMessage({ type: 'getVintedSoldCheckRequested' }); // 2026-10-12: not getFacebookSoldChecks (that one is answered empty while Facebook is paused)
             forced = !!(flagResp && flagResp.ok && flagResp.data && flagResp.data.vintedSoldCheckRequested === true);
             if (forced) await vintRemStorageSet(VINT_SOLD_LAST_FORCED_KEY, Date.now());
           }

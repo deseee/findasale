@@ -310,3 +310,102 @@ export async function processVintedSoldTitleReport(
   const [result] = await processVintedSoldReport(organizerId, [{ vintedId: '', title: clean }], deps);
   return result;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Manual reconciliation (2026-10-12, Vinted bundle sale): the organizer ticks the items that were
+// in a bundle and we run the SAME per-item sold flow as the email / wardrobe paths above
+// (closeVintedListingRecord, then commitFacebookNativeSale with soldVia 'VINTED' and
+// soldOnPlatform VINTED, which cascades withdrawals to every other channel). No price is read or
+// guessed: the commit helper never takes one, so each item keeps its own price and the bundle
+// total is not allocated (no bundle/multi-item allocation convention exists in this codebase).
+// ---------------------------------------------------------------------------------------------
+
+export const VINTED_MANUAL_SOLD_MAX_ITEMS = 50;
+
+export type VintedManualSoldResultKind = 'sold' | 'alreadySold' | 'notAvailable' | 'notFound' | 'error';
+
+export interface VintedManualSoldResult {
+  itemId: string;
+  title?: string;
+  result: VintedManualSoldResultKind;
+  itemStatus?: string;
+  vintedListingClosed?: boolean;
+  reason?: string;
+}
+
+export interface VintedManualSoldDeps {
+  loadOwnedItems?: (organizerId: string, itemIds: string[]) => Promise<VintedSoldCandidateItem[]>;
+  closeVintedListingRecord?: (itemId: string) => Promise<boolean>;
+  commitSale?: (itemId: string, soldVia: string, remoteListingId?: string) => Promise<{ alreadyCommitted: boolean; partial?: boolean }>;
+  getItemStatus?: (itemId: string) => Promise<string | null>;
+}
+
+async function defaultLoadOwnedItems(organizerId: string, itemIds: string[]): Promise<VintedSoldCandidateItem[]> {
+  return prisma.item.findMany({
+    where: { id: { in: itemIds }, ...organizerItemScope(organizerId) },
+    select: { id: true, title: true, status: true },
+  });
+}
+
+/** Keeps only non-empty string ids, trimmed, unique, in order. Does NOT cap (the caller rejects an oversized list). */
+export function sanitizeManualSoldItemIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of raw) {
+    if (typeof v !== 'string') continue;
+    const id = v.trim();
+    if (!id || id.length > 64 || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+export async function markItemsSoldOnVinted(
+  organizerId: string,
+  itemIds: string[],
+  deps: VintedManualSoldDeps = {},
+): Promise<VintedManualSoldResult[]> {
+  if (!organizerId) throw new Error('organizerId required'); // never an unscoped lookup
+  if (itemIds.length > VINTED_MANUAL_SOLD_MAX_ITEMS) throw new Error('too_many_items');
+  const loadOwnedItems = deps.loadOwnedItems ?? defaultLoadOwnedItems;
+  const closeVintedListingRecord = deps.closeVintedListingRecord ?? defaultCloseVintedListingRecord;
+  const commitSale = deps.commitSale ?? defaultCommitSale;
+  const getItemStatus = deps.getItemStatus ?? defaultGetItemStatus;
+  if (!itemIds.length) return [];
+
+  const owned = new Map((await loadOwnedItems(organizerId, itemIds)).map((i) => [i.id, i]));
+  const results: VintedManualSoldResult[] = [];
+  for (const itemId of itemIds) {
+    const it = owned.get(itemId);
+    if (!it) {
+      results.push({ itemId, result: 'notFound', reason: 'not_found_for_this_organizer' });
+      continue;
+    }
+    let vintedListingClosed = false;
+    let alreadyCommitted: boolean;
+    let partial = false;
+    try {
+      vintedListingClosed = await closeVintedListingRecord(itemId);
+      ({ alreadyCommitted, partial = false } = await commitSale(itemId, SOLD_VIA_VINTED, ''));
+    } catch (err: any) {
+      console.error('[VintedManualSold] commit failed for item', itemId, err?.message || err);
+      results.push({ itemId, title: it.title, result: 'error', vintedListingClosed, reason: 'commit_failed' });
+      continue;
+    }
+    if (!alreadyCommitted) {
+      results.push({ itemId, title: it.title, result: 'sold', itemStatus: partial ? 'AVAILABLE' : 'SOLD', vintedListingClosed: vintedListingClosed || partial });
+      continue;
+    }
+    const status = await getItemStatus(itemId);
+    results.push({
+      itemId,
+      title: it.title,
+      result: status === 'SOLD' ? 'alreadySold' : 'notAvailable',
+      itemStatus: status ?? undefined,
+      vintedListingClosed,
+    });
+  }
+  return results;
+}

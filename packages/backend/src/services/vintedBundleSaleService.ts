@@ -28,6 +28,9 @@ export const VINTED_BUNDLE_NOTIFICATION_TYPE = 'vinted_bundle_sale_pending';
 /** How long an unread bundle notification keeps asking the extension for a forced wardrobe check. */
 export const VINTED_BUNDLE_CHECK_WINDOW_MS = 48 * 60 * 60 * 1000;
 const MAX_CANDIDATES_LISTED = 15;
+/** Web page where the organizer ticks the bundled items (frontend/pages/organizer/vinted-bundle.tsx). */
+export const VINTED_BUNDLE_PAGE_PATH = '/organizer/vinted-bundle';
+const MAX_OTHER_OPTIONS = 300;
 
 export interface VintedBundleCandidate {
   itemId: string;
@@ -56,7 +59,7 @@ export function buildVintedBundleNotificationBody(args: {
   const how =
     `Your FindA.Sale extension will mark them sold (and take them down from your other channels) as soon as ` +
     `your Vinted wardrobe shows them as sold: open vinted.com in the browser with the extension installed. ` +
-    `If that has not happened within a day, mark them sold yourself.`;
+    `If that has not happened, open the Vinted bundle page in FindA.Sale and tick the items yourself.`;
   if (!args.candidates.length) return head + how;
   const shown = args.candidates.slice(0, MAX_CANDIDATES_LISTED).map((c) => `"${c.title}"`).join('; ');
   const more = args.candidates.length > MAX_CANDIDATES_LISTED ? ` (+${args.candidates.length - MAX_CANDIDATES_LISTED} more)` : '';
@@ -113,7 +116,7 @@ export async function notifyOrganizerVintedBundleSale(
       type: VINTED_BUNDLE_NOTIFICATION_TYPE,
       title: `A Vinted bundle of ${info.itemCount} item${info.itemCount === 1 ? '' : 's'} sold`,
       body: buildVintedBundleNotificationBody({ ...info, candidates }),
-      link: '/organizer/inventory',
+      link: VINTED_BUNDLE_PAGE_PATH,
       channel: 'OPERATIONAL',
       sendEmail: true,
     });
@@ -150,4 +153,52 @@ export async function acknowledgeVintedBundleSale(userId: string): Promise<void>
   } catch (err: any) {
     console.warn('[VintedBundleSale] acknowledge failed:', err?.message || err);
   }
+}
+
+export interface VintedBundlePendingNotice {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: Date;
+}
+
+/** Unread bundle notifications (newest first, last 14 days) -- the "why am I here" header of the selection page. */
+export async function listPendingVintedBundleNotices(userId: string, now: number = Date.now()): Promise<VintedBundlePendingNotice[]> {
+  return prisma.notification.findMany({
+    where: { userId, type: VINTED_BUNDLE_NOTIFICATION_TYPE, read: false, createdAt: { gte: new Date(now - 14 * 24 * 60 * 60 * 1000) } },
+    select: { id: true, title: true, body: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+  });
+}
+
+/**
+ * Items the organizer can tick for a bundle. `tracked` = latest VINTED job row is POST/POSTED (the
+ * candidates the notification already lists). `other` = remaining AVAILABLE published items with no
+ * tracked live Vinted listing (an item listed on Vinted outside job tracking, e.g. one whose
+ * listing was never reported back, can only be found here). Read-only.
+ */
+export async function listVintedBundleSelectionOptions(organizerId: string): Promise<{ tracked: VintedBundleCandidate[]; other: VintedBundleCandidate[] }> {
+  if (!organizerId) throw new Error('organizerId required');
+  const tracked = await listLiveVintedCandidates(organizerId, 200);
+  const trackedIds = new Set(tracked.map((c) => c.itemId));
+  const rows = await prisma.item.findMany({
+    where: {
+      status: 'AVAILABLE',
+      deletedAt: null,
+      draftStatus: 'PUBLISHED',
+      listingType: { not: 'CONSIGNOR_TAG' },
+      OR: [{ sale: { organizerId, deletedAt: null } }, { saleId: null, organizerId }],
+    },
+    select: { id: true, title: true },
+    orderBy: { updatedAt: 'desc' },
+    take: MAX_OTHER_OPTIONS + trackedIds.size,
+  });
+  const other: VintedBundleCandidate[] = [];
+  for (const r of rows) {
+    if (trackedIds.has(r.id)) continue;
+    other.push({ itemId: r.id, title: r.title ?? '' });
+    if (other.length >= MAX_OTHER_OPTIONS) break;
+  }
+  return { tracked, other };
 }
