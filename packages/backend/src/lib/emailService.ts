@@ -272,6 +272,25 @@ function buildRawMessage(options: {
   return Buffer.from(raw).toString('base64url');
 }
 
+/**
+ * Gmail per-user, per-minute rate limit (HTTP 429, "Quota exceeded for quota metric 'Total Query Cost'
+ * ... per minute per user", reason rateLimitExceeded/userRateLimitExceeded). Transient: the window
+ * resets within a minute. Distinct from the DAILY sending cap, which is NOT retryable here.
+ */
+export function isGmailRateLimitError(err: any): boolean {
+  if (!err) return false;
+  const status = err.code ?? err.status ?? err.response?.status;
+  const msg = String(err.message ?? '');
+  if (/daily user sending|sending limit exceeded/i.test(msg)) return false;
+  return Number(status) === 429 || /quota exceeded for quota metric|rate limit exceeded|rateLimitExceeded/i.test(msg);
+}
+
+/** Backoff schedule + sleep for opt-in retryOnRateLimit sends (overridable in tests). */
+export const rateLimitBackoff = {
+  delaysMs: [15000, 30000, 60000, 60000],
+  sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+};
+
 export const emailService = {
   emails: {
     /**
@@ -287,6 +306,13 @@ export const emailService = {
       replyTo?: string;
       listUnsubscribe?: string;
       jobName?: string;
+      /**
+       * Opt-in for paced bulk jobs (e.g. weekly digest): on a Gmail per-minute 429, wait and retry the
+       * same message (up to rateLimitBackoff.delaysMs.length times) instead of dropping the recipient.
+       * Retried attempts do NOT re-increment the daily quota and are not reported to Sentry; only the
+       * final failure is.
+       */
+      retryOnRateLimit?: boolean;
     }) => {
       // ---------------------------------------------------------------------
       // Rail-level unsendable-domain guard (S937). Runs BEFORE quota + send so
@@ -321,17 +347,26 @@ export const emailService = {
       const gmail = createGmailClient();
       const raw = buildRawMessage(sendOptions);
 
-      try {
-        return await gmail.users.messages.send({
-          userId: 'me',
-          requestBody: { raw },
-        });
-      } catch (err: any) {
-        Sentry.captureException(err, {
-          tags: { email_rail: 'gmail', kind: 'gmail_send_failed' },
-          extra: { from: options.from, subject: options.subject, jobName: options.jobName ?? 'unknown' },
-        });
-        throw err; // preserve existing caller behavior
+      const maxRetries = options.retryOnRateLimit ? rateLimitBackoff.delaysMs.length : 0;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: { raw },
+          });
+        } catch (err: any) {
+          if (attempt < maxRetries && isGmailRateLimitError(err)) {
+            const delay = rateLimitBackoff.delaysMs[attempt];
+            console.warn(`[EmailService] Gmail per-minute rate limit (attempt ${attempt + 1}); retrying in ${delay}ms`);
+            await rateLimitBackoff.sleep(delay);
+            continue;
+          }
+          Sentry.captureException(err, {
+            tags: { email_rail: 'gmail', kind: 'gmail_send_failed' },
+            extra: { from: options.from, subject: options.subject, jobName: options.jobName ?? 'unknown', attempts: attempt + 1 },
+          });
+          throw err; // preserve existing caller behavior
+        }
       }
     },
   },

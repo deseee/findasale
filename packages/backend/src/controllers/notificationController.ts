@@ -716,6 +716,8 @@ const filterSalesWithinRadius = (
   });
 };
 
+const DIGEST_SEND_INTERVAL_MS = 600;
+
 // Send weekly digest email to all users with upcoming sales this weekend
 export const sendWeeklyDigest = async () => {
   try {
@@ -818,12 +820,16 @@ export const sendWeeklyDigest = async () => {
           html,
           jobName: 'notificationController-weeklyDigest',
           listUnsubscribe: listUnsubscribeHeader,
+          // Gmail caps sends per user per minute (messages.send = 100 units of a 15,000/min budget,
+          // ~150/min, shared with outreach). Back off + retry on a 429 instead of dropping the recipient.
+          retryOnRateLimit: true,
         });
 
         sent++;
 
-        // Rate limit guard — small delay between sends
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        // Rate limit guard — pace sends under the Gmail per-user per-minute quota (~100/min;
+        // was 200ms = 300/min, which exceeded it and caused the FINDASALE-NODEJS-8H 429s).
+        await new Promise((resolve) => setTimeout(resolve, DIGEST_SEND_INTERVAL_MS));
       } catch (error) {
         console.error(`Weekly digest: failed to send to ${maskEmail(user.email)}:`, error);
         failed++;
