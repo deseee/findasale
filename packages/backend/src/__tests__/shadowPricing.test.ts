@@ -44,6 +44,7 @@ import {
   loadShadowPricingByItemId,
   carryShadowMarker,
   withShadowMarker,
+  isAudioFormatItem,
   SHADOW_CARRY_KEY,
 } from '../services/shadowPricingStore';
 
@@ -487,5 +488,24 @@ describe('(7) stale shadow data is cleared when the new run has no engine price'
     expect(mockFindUnique).not.toHaveBeenCalled();
     mockFindUnique.mockRejectedValue(new Error('db down'));
     await expect(persistShadowPricing('it1', 84.99, {})).resolves.toBeUndefined();
+  });
+});
+
+describe('(8) isAudioFormatItem: backend flag behind the comp-summary isAudioFormat field', () => {
+  it('delegates to the shared audio check with title and category', () => {
+    mockIsAudio.mockReturnValue(true);
+    expect(isAudioFormatItem({ title: 'Abbey Road LP', category: 'Music' })).toBe(true);
+    expect(mockIsAudio).toHaveBeenCalledWith({ title: 'Abbey Road LP', category: 'Music' });
+  });
+  it('is false for a non-audio item, with null fields coerced to empty strings', () => {
+    mockIsAudio.mockReturnValue(false);
+    expect(isAudioFormatItem({ title: 'Antique saloon doors', category: null })).toBe(false);
+    expect(mockIsAudio).toHaveBeenCalledWith({ title: 'Antique saloon doors', category: '' });
+  });
+  it('is false for a missing item and never throws', () => {
+    expect(isAudioFormatItem(null)).toBe(false);
+    expect(isAudioFormatItem(undefined)).toBe(false);
+    mockIsAudio.mockImplementation(() => { throw new Error('boom'); });
+    expect(isAudioFormatItem({ title: 'x', category: 'y' })).toBe(false);
   });
 });

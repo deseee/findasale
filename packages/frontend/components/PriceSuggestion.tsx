@@ -46,17 +46,21 @@ interface PriceSuggestionProps {
 }
 
 /**
- * Shadow mode (2026-10-11): for a non-record item a reanalyze already saved the model price and the market estimate
- * (shown via ShadowPriceCompare, "Smart suggestion" / "Market estimate", display only). The auto-refresh must NOT turn
- * that market number into a one-click "Use $X" panel, so it checks the saved summary first and does nothing when a
- * shadow row exists. A manual "Suggest Price" tap is unaffected.
+ * Auto-refresh gate (2026-10-11). Only a record / vinyl / CD / cassette item (decided by the backend and returned as
+ * `isAudioFormat` on comp-summary, never guessed here from category text) gets the live one-click estimate after a
+ * re-analyze. Every other item is in shadow mode: its Market estimate is evidence-checked and filtered server-side and
+ * shown through ShadowPriceCompare (display only), so an unfiltered live estimate with a "Use $X" button must never
+ * appear. An unreadable summary is treated the same way (skip). A manual "Suggest Price" tap is unaffected.
+ * `showNoReliable` is true only when there is also no saved Market estimate to show instead.
  */
-async function hasSavedShadow(itemId: string): Promise<boolean> {
+async function autoRefreshGate(itemId: string): Promise<{ skip: boolean; showNoReliable: boolean }> {
   try {
     const response = await api.get(`/items/${itemId}/comp-summary`);
-    return response.data?.shadowPricing?.isShadow === true;
+    if (response.data?.isAudioFormat === true) return { skip: false, showNoReliable: false };
+    const hasMarket = typeof response.data?.shadowPricing?.marketPrice === 'number';
+    return { skip: true, showNoReliable: !hasMarket };
   } catch {
-    return false;
+    return { skip: true, showNoReliable: false };
   }
 }
 
@@ -81,6 +85,7 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<SuggestionResult | null>(null);
   const [noDataYet, setNoDataYet] = useState(false);
+  const [noReliableEstimate, setNoReliableEstimate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState(false);
   const { showToast } = useToast();
@@ -97,6 +102,7 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
     setError(null);
     setSuggestion(null);
     setNoDataYet(false);
+    setNoReliableEstimate(false);
     setPendingConfirm(false);
 
     try {
@@ -143,10 +149,17 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
     if (autoRefreshToken === undefined) return;
     setSuggestion(null);
     setNoDataYet(false);
+    setNoReliableEstimate(false);
     setError(null);
     if (isEnabled) {
       void (async () => {
-        if (itemId && (await hasSavedShadow(itemId))) return;
+        if (itemId) {
+          const gate = await autoRefreshGate(itemId);
+          if (gate.skip) {
+            setNoReliableEstimate(gate.showNoReliable);
+            return;
+          }
+        }
         await handleSuggestPrice();
       })();
     }
@@ -204,6 +217,12 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
         <div className="p-3 bg-warm-50 dark:bg-gray-800 border border-warm-200 dark:border-gray-600 rounded-lg text-sm text-warm-600 dark:text-warm-400">
           Not enough market data yet for this item. Try again once more comps are available.
         </div>
+      )}
+
+      {noReliableEstimate && !error && !suggestion && (
+        <p className="text-xs text-warm-600 dark:text-warm-400">
+          No reliable market estimate for this item.
+        </p>
       )}
 
       {suggestion && (

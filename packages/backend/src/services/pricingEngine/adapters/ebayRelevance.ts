@@ -171,7 +171,7 @@ export function isSpreadTooWide(ratio: number | null | undefined): boolean {
 /**
  * Stable eBay query for a RE-ANALYZED item (title drift guard). The model rewrites the title on every run and can
  * invent details ("Set of 2"). When the item already had a title, the query keeps only the distinctive tokens of the
- * NEW title that also appear in the PRIOR title, in the new title's order. Fewer than 2 common tokens means the
+ * NEW title that also appear in the PRIOR title, in the new title's order (bare 1-3 digit numeric tokens are dropped). Fewer than 2 common tokens means the
  * identification genuinely changed, so the new title is used as is. No prior title, or nothing to drop: new title as is.
  */
 export function stableShadowQuery(newTitle: string, priorTitle?: string | null): string {
@@ -179,7 +179,9 @@ export function stableShadowQuery(newTitle: string, priorTitle?: string | null):
   if (typeof priorTitle !== 'string' || priorTitle.trim() === '') return fresh;
   const prior = new Set(tokenizeTitle(priorTitle));
   const freshTokens = tokenizeTitle(fresh);
-  const common = freshTokens.filter(t => prior.has(t));
+  // Bare 1-3 digit numbers ("Set of 2", "4 pack") are quantity noise, not product identity: never part of the stable query.
+  // Years and model numbers (4+ digits) are kept.
+  const common = freshTokens.filter(t => prior.has(t) && !/^\d{1,3}$/.test(t));
   if (common.length < 2 || common.length === freshTokens.length) return fresh;
   return common.join(' ');
 }

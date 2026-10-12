@@ -69,7 +69,7 @@ import { getPinnedCardCategory, isPinnedCardCategoryId, standardEnvelopePriceCro
 import { normalizeCondition, normalizeGrade, type ConditionGrade } from '../utils/conditionMapping'; // 2026-10-04 (U4): one condition vocabulary; coerces legacy values, never 400s on them
 import { pushItemToEbay, computeEbayPushFields, buildEbayPlan, buildExtensionPlan, EBAY_CONTENT_FIELDS, EBAY_PUSH_FIELDS, type EbayPushField, type MarketplacePlan } from '../services/ebayItemPushService'; // 2026-10-04 (U1/U2): structured, recorded eBay push extracted from updateItem
 import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: a local category/tags/photos edit must survive the next import
-import { loadShadowPricingByItemId, shadowDtoFromCompRow } from '../services/shadowPricingStore'; // shadow mode (2026-10-11): model price + market estimate side by side (read-only)
+import { loadShadowPricingByItemId, shadowDtoFromCompRow, isAudioFormatItem } from '../services/shadowPricingStore'; // shadow mode (2026-10-11): model price + market estimate side by side (read-only)
 import { listedExtensionPlatformsByItemId, getItemMarketplaceStatus, getFailedPushCountsByItemId, ITEM_STATUS_SELECT, EXTENSION_PLATFORMS } from '../services/itemMarketplaceStatusService'; // 2026-10-04 (U3): newest-row-wins listing status shared by the Add Items list and GET /items/:id/marketplace-status
 
 /**
@@ -5709,6 +5709,7 @@ export const getCompSummary = async (req: Request, res: Response) => {
         medianLow: null,
         medianHigh: null,
         lastUpdated: null,
+        isAudioFormat: isAudioFormatItem(item),
       });
     }
 
@@ -5738,6 +5739,8 @@ export const getCompSummary = async (req: Request, res: Response) => {
       lastUpdated,
       // Shadow mode: { smartPrice, marketPrice, marketConfidence, compsFound } or null. Display only.
       shadowPricing: shadowDtoFromCompRow(compLookup),
+      // Record / vinyl / CD / cassette (shared Discogs check). Non-audio items get no one-click live estimate after a re-analyze.
+      isAudioFormat: isAudioFormatItem(item),
     });
   } catch (error) {
     console.error('[getCompSummary] Error:', error);

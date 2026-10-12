@@ -225,6 +225,11 @@ describe('stableShadowQuery', () => {
       'Wooden Staff Only Partition Divider, Vintage Wood Shutters',
     )).toBe('wood partition divider shutter');
   });
+  it('drops bare 1-3 digit numeric tokens ("Set of 2") even when both titles have them, keeps 4+ digit years and models', () => {
+    expect(stableShadowQuery('Wood Divider Saloon Doors, Set of 2', 'Saloon Doors Wood Divider, Set of 2')).toBe('wood divider saloon door');
+    expect(stableShadowQuery('Wood Divider 2 Panel 36', 'Wood Divider 2 Panel 36 Screen')).toBe('wood divider panel');
+    expect(stableShadowQuery('Mouse Trap Game 2005 Set of 2', 'Mouse Trap Game 2005 Set of 2')).toBe('mouse trap game 2005');
+  });
   it('is deterministic', () => {
     const a = stableShadowQuery('Vintage Wood Partition Divider Shutters, Set of 2', 'Wood Partition Divider Shutters');
     const b = stableShadowQuery('Vintage Wood Partition Divider Shutters, Set of 2', 'Wood Partition Divider Shutters');

@@ -16,6 +16,21 @@
  */
 import { prisma } from '../lib/prisma';
 import type { AITagResult } from './cloudAIService';
+import { isAudioFormatMatch } from './pricingEngine/adapters/discogs';
+
+/**
+ * True when an item is a record / vinyl / CD / cassette, using the same shared check the audio pricing path uses.
+ * Exposed on GET /items/:id/comp-summary as `isAudioFormat` so the client never guesses from category strings.
+ * Never throws.
+ */
+export function isAudioFormatItem(item: { title?: string | null; category?: string | null } | null | undefined): boolean {
+  try {
+    if (!item) return false;
+    return isAudioFormatMatch({ title: item.title ?? '', category: item.category ?? '' }) === true;
+  } catch {
+    return false;
+  }
+}
 
 export interface ShadowPricingDto {
   /** The model's own suggestion in dollars, or null when it was not recorded. */
