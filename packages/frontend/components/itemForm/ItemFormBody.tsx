@@ -68,7 +68,7 @@ import { stockCountNoteText } from '../../lib/stockCountNote';
 import { ConditionSelect, ConditionGradePicker } from './ConditionFields';
 import { PushFailureBanner, PushNeedsInfoNotice, SaveOutcomeRow, EbayHoldPanel } from './MarketplaceNotices';
 import { PlatformChipStrip, PlatformStatusList } from './PlatformChips';
-import { KitContentsSection, InKitsNote } from './KitContentsSection'; // kits live in the Quantity & setup section
+import { KitContentsSection, InKitsNote, MakeThisKit } from './KitContentsSection'; // kits live in the Quantity & setup section
 
 // Bug fix (2026-08-08, same P1 data-corruption class as add-items.tsx auctionEndTime
 // fix): item.auctionEndTime is stored as a UTC ISO timestamp. Previously this page did
@@ -3011,7 +3011,10 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
               {item?.listingType === 'KIT' ? (
                 <KitContentsSection itemId={id} saleId={item?.saleId ?? null} />
               ) : (
-                item?.isKitComponent !== false && <InKitsNote itemId={id} />
+                <>
+                  {item?.isKitComponent !== false && <InKitsNote itemId={id} />}
+                  <MakeThisKit itemId={id} saleId={item?.saleId ?? null} item={item} />
+                </>
               )}
 
               <div>

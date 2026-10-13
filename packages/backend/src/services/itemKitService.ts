@@ -14,11 +14,13 @@
  *  - 1 to 25 components, each once, quantity 1 to 1000.
  *  - Components cannot be changed once the kit has sold (a later refund restocks the CURRENT components, so the recipe must not move).
  *    Title, description and price can always be edited.
+ *  - An ordinary item can be turned into a kit in place (convertItemToKit): it keeps its own title, photos, description and price.
  *  - Kits are excluded from markdown automation and are never listed on eBay in Phase 1 (ebayShippingOverride DONT_LIST).
  */
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { KIT_LISTING_TYPE, computeKitAvailability, recomputeKitStock } from './itemKitStock';
+import { KIT_LISTING_TYPE, computeKitAvailability, materializedKitStockTotal, recomputeKitStock } from './itemKitStock';
+import { organizerEditStampAlways } from '../utils/organizerEdit';
 
 export const KIT_LIMITS = { maxComponents: 25, maxQuantity: 1000, maxTitle: 200, maxDescription: 5000, maxPrice: 1_000_000 } as const;
 
@@ -345,6 +347,103 @@ export async function createKit(organizerId: string, raw: unknown): Promise<KitV
     });
     await db.item.updateMany({ where: { id: { in: rows.map((r) => r.item.id) } }, data: { isKitComponent: true } });
     return toView(db, created.id);
+  });
+}
+
+/** Why an ordinary item cannot be turned into a kit, or null when it can. Messages are shown to the organizer. */
+export function convertIneligibleReason(item: {
+  organizerId: string | null;
+  deletedAt: Date | null;
+  listingType: string | null;
+  status: string;
+  stockSold: number;
+  isKitComponent: boolean;
+  consignorId: string | null;
+  vendorBoothId: string | null;
+  bulkLot: { id: string } | null;
+}, organizerId: string): { code: string; message: string } | null {
+  if (item.organizerId !== organizerId || item.deletedAt) return { code: 'ITEM_NOT_FOUND', message: 'Item not found.' };
+  if (item.listingType === KIT_LISTING_TYPE) return { code: 'KIT_ALREADY_KIT', message: 'This item is already a kit.' };
+  if (item.listingType !== 'FIXED' && item.listingType !== null) {
+    return { code: 'KIT_CONVERT_TYPE', message: 'Only regular fixed-price items can become a kit. Auction and other special listings cannot.' };
+  }
+  if (item.consignorId || item.vendorBoothId || item.bulkLot) {
+    return { code: 'KIT_CONVERT_TYPE', message: 'Consigned, booth and bulk lot items cannot become a kit yet.' };
+  }
+  if (item.isKitComponent) return { code: 'KIT_CONVERT_IS_COMPONENT', message: 'This item is part of another kit, so it cannot become a kit itself.' };
+  if (item.status !== 'AVAILABLE') return { code: 'KIT_CONVERT_STATUS', message: 'Only an item that is available to buy can become a kit.' };
+  if (item.stockSold > 0) return { code: 'KIT_CONVERT_HAS_SALES', message: 'This item has already sold, so it cannot become a kit. Make a new kit instead.' };
+  return null;
+}
+
+/**
+ * Turns an existing ordinary item into a kit IN PLACE (one transaction). The item keeps its id, title, description, price and photos;
+ * only its listing type, stock and recipe change. Refuses (409) when the item is live on another marketplace, because the kit is
+ * never listed externally and the listing would be left behind.
+ */
+export async function convertItemToKit(organizerId: string, itemId: string, rawComponents: unknown): Promise<KitView> {
+  const components = parseKitComponents(rawComponents);
+  return prisma.$transaction(async (txClient) => {
+    const db = txClient as unknown as Db;
+    const item = await db.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        organizerId: true,
+        deletedAt: true,
+        listingType: true,
+        status: true,
+        stockSold: true,
+        isKitComponent: true,
+        consignorId: true,
+        vendorBoothId: true,
+        bulkLot: { select: { id: true } },
+        ebayListingId: true,
+        ebayOfferId: true,
+        discogsListingId: true,
+        reverbListingId: true,
+      },
+    });
+    if (!item) throw new KitError('ITEM_NOT_FOUND', 404, 'Item not found.');
+    const reason = convertIneligibleReason(item, organizerId);
+    if (reason) throw new KitError(reason.code, reason.code === 'ITEM_NOT_FOUND' ? 404 : 409, reason.message);
+    if (components.some((c) => c.itemId === itemId)) {
+      throw new KitError('KIT_COMPONENT_SELF', 400, 'A kit cannot contain itself.');
+    }
+    const asComponent = await db.itemKitComponent.count({ where: { componentItemId: itemId } });
+    if (asComponent > 0) throw new KitError('KIT_CONVERT_IS_COMPONENT', 409, 'This item is part of another kit, so it cannot become a kit itself.');
+    const liveJobs = await db.marketplaceListingJob.count({
+      where: { itemId, OR: [{ action: 'POST', status: { in: ['QUEUED', 'RUNNING', 'POSTED'] } }] },
+    });
+    const shopify = await db.shopifyListing.count({ where: { itemId, status: 'ACTIVE' } });
+    const etsy = await db.etsyListing.count({ where: { itemId, state: { in: ['DRAFT_PENDING', 'DRAFT_READY', 'PUBLISHING', 'ACTIVE'] } } });
+    if (item.ebayListingId || item.ebayOfferId || item.discogsListingId || item.reverbListingId || liveJobs > 0 || shopify > 0 || etsy > 0) {
+      throw new KitError(
+        'KIT_CONVERT_HAS_LISTINGS',
+        409,
+        'This item is listed on another marketplace. Take those listings down first, then make it a kit. Kits are not listed on other marketplaces yet.',
+      );
+    }
+    const rows = await loadEligibleComponents(db, organizerId, components);
+    const available = computeKitAvailability(rows.map((r) => ({ remaining: remainingOf(r.item), quantity: r.quantity })));
+    if (available < 1) {
+      throw new KitError('KIT_NO_STOCK', 409, 'There is not enough stock to make even one kit from these items and quantities.');
+    }
+    await db.itemKitComponent.createMany({ data: rows.map((r) => ({ kitItemId: itemId, componentItemId: r.item.id, quantity: r.quantity })) });
+    await db.item.update({
+      where: { id: itemId },
+      data: {
+        listingType: KIT_LISTING_TYPE,
+        stockTotal: materializedKitStockTotal(0, available),
+        stockSold: 0,
+        isKitComponent: false,
+        excludeFromMarkdown: true,
+        ebayShippingOverride: 'DONT_LIST',
+        ...organizerEditStampAlways(),
+      },
+    });
+    await db.item.updateMany({ where: { id: { in: rows.map((r) => r.item.id) } }, data: { isKitComponent: true } });
+    return toView(db, itemId);
   });
 }
 

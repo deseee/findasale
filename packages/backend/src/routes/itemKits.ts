@@ -29,6 +29,7 @@ router.get('/candidates', authenticate, requireOrganizer, kitReadLimiter, itemKi
 router.get('/', authenticate, requireOrganizer, kitReadLimiter, itemKitHandlers.list);
 // Must stay registered ahead of the kit id route so the kit id wildcard does not swallow it.
 router.get('/by-component/:itemId', authenticate, requireOrganizer, kitReadLimiter, itemKitHandlers.byComponent);
+router.post('/convert/:itemId', authenticate, requireOrganizer, kitWriteLimiter, itemKitHandlers.convert);
 router.post('/', authenticate, requireOrganizer, kitWriteLimiter, itemKitHandlers.create);
 router.get('/:kitId', authenticate, requireOrganizer, kitReadLimiter, itemKitHandlers.getOne);
 router.put('/:kitId', authenticate, requireOrganizer, kitWriteLimiter, itemKitHandlers.update);

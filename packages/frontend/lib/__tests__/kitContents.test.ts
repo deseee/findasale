@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {
   KIT_MAX_COMPONENTS,
   buildKitComponentsPayload,
+  canOfferMakeKit,
   kitAvailableLine,
   kitErrorText,
   kitPartsChanged,
@@ -83,4 +84,16 @@ test('validateNewKit asks for a name, items, and a price only when it has to', (
   assert.equal(validateNewKit('Set', ok, '', true), 'Enter a kit price greater than zero.');
   assert.equal(validateNewKit('Set', ok, '0', true), 'Enter a kit price greater than zero.');
   assert.equal(validateNewKit('Set', ok, '12.50', true), null);
+});
+
+test('canOfferMakeKit only for plain, unsold, available fixed-price items', () => {
+  assert.equal(canOfferMakeKit({ listingType: 'FIXED', status: 'AVAILABLE', stockSold: 0, isKitComponent: false }), true);
+  assert.equal(canOfferMakeKit({ listingType: null, status: 'AVAILABLE' }), true);
+  assert.equal(canOfferMakeKit({ listingType: 'KIT', status: 'AVAILABLE' }), false);
+  assert.equal(canOfferMakeKit({ listingType: 'AUCTION', status: 'AVAILABLE' }), false);
+  assert.equal(canOfferMakeKit({ listingType: 'FIXED', status: 'SOLD' }), false);
+  assert.equal(canOfferMakeKit({ listingType: 'FIXED', status: 'AVAILABLE', stockSold: 1 }), false);
+  assert.equal(canOfferMakeKit({ listingType: 'FIXED', status: 'AVAILABLE', isKitComponent: true }), false);
+  assert.equal(canOfferMakeKit({ listingType: 'FIXED', status: 'AVAILABLE', consignorId: 'c1' }), false);
+  assert.equal(canOfferMakeKit(null), false);
 });

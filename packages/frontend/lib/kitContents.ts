@@ -105,3 +105,10 @@ export function validateNewKit(name: string, parts: KitDraftPart[], priceText: s
   }
   return null;
 }
+
+/** True when the edit page should offer "Make this a kit": a plain, unsold, available fixed-price item. The server re-checks everything (listings, other kits) and has the final say. */
+export function canOfferMakeKit(item: { listingType?: string | null; status?: string | null; stockSold?: number | null; isKitComponent?: boolean | null; consignorId?: string | null } | null | undefined): boolean {
+  if (!item) return false;
+  const type = item.listingType ?? 'FIXED';
+  return type === 'FIXED' && item.status === 'AVAILABLE' && !(Number(item.stockSold) > 0) && item.isKitComponent !== true && !item.consignorId;
+}

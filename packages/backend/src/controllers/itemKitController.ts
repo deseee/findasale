@@ -5,6 +5,7 @@
  *   GET    /?saleId=                organizer: the organizer's kits (optionally one sale's)
  *   GET    /by-component/:itemId    organizer: the kits that contain this item
  *   POST   /                        organizer: create a kit { title, description?, price, saleId?, components: [{ itemId, quantity }] }
+ *   POST   /convert/:itemId         organizer: turn an existing ordinary item into a kit in place { components: [{ itemId, quantity }] }
  *   GET    /:kitId                  organizer: one kit with live component stock
  *   PUT    /:kitId                  organizer: edit name / description / price / components (components locked once the kit has sold)
  *   POST   /:kitId/recompute        organizer: re-derive the kit's stock from its components now
@@ -15,7 +16,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { archiveKit, createKit, getKit, isKitError, listKitCandidates, listKits, listKitsForComponent, refreshKit, updateKit } from '../services/itemKitService';
+import { archiveKit, convertItemToKit, createKit, getKit, isKitError, listKitCandidates, listKits, listKitsForComponent, refreshKit, updateKit } from '../services/itemKitService';
 
 function fail(res: Response, status: number, error: string, code: string, extra?: Record<string, unknown>): Response {
   return res.status(status).json({ success: false, error, code, ...(extra ?? {}) });
@@ -90,6 +91,19 @@ export const itemKitHandlers = {
       return res.status(201).json({ success: true, data: { kit } });
     } catch (err) {
       return sendError(res, err, 'create');
+    }
+  },
+
+  async convert(req: AuthRequest, res: Response) {
+    try {
+      const organizerId = await organizerIdFor(req, res);
+      if (!organizerId) return res;
+      const itemId = idParam(req.params.itemId);
+      if (!itemId) return fail(res, 404, 'Item not found.', 'ITEM_NOT_FOUND');
+      const kit = await convertItemToKit(organizerId, itemId, req.body?.components);
+      return res.json({ success: true, data: { kit } });
+    } catch (err) {
+      return sendError(res, err, 'convert');
     }
   },
 

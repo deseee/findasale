@@ -2126,7 +2126,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({ message: 'A kit cannot be changed to another listing type.', code: 'KIT_TYPE_FIXED', field: 'listingType' });
       }
     } else if (listingType === 'KIT') {
-      return res.status(400).json({ message: 'Kits are created from the Kits page.', code: 'KIT_CREATE_ELSEWHERE', field: 'listingType' });
+      return res.status(400).json({ message: 'To make this item a kit, use Make this a kit on its edit page.', code: 'KIT_CREATE_ELSEWHERE', field: 'listingType' });
     }
 
     // ADR-087 P1 (D1): stockTotal can never drop below units already sold. stockSold is

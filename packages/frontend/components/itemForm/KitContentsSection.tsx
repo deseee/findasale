@@ -5,6 +5,8 @@
  *    editor: the items inside, quantity per kit, add from the organizer's own items, remove. Contents save through PUT /api/kits/:kitId with
  *    their own "Save contents" button, independent of the form's Save (the kit's name, price and description are ordinary item fields that the
  *    normal form saves). All rules live on the server; this only shows what it says.
+ *  - MakeThisKit: for an ordinary item. A Make this a kit control with an inline contents picker; confirming calls POST /api/kits/convert/:itemId,
+ *    which turns this same item into a kit (it keeps its photos, description, price and name), then reloads the item so KitContentsSection takes over.
  *  - InKitsNote: for an ordinary item. A short read-only list of the kits it is part of, each linking to that kit's edit page.
  */
 import React, { useEffect, useState } from 'react';
@@ -15,6 +17,7 @@ import { useToast } from '../ToastContext';
 import {
   KIT_LOCKED_NOTE,
   buildKitComponentsPayload,
+  canOfferMakeKit,
   kitAvailableLine,
   kitErrorText,
   kitPartsChanged,
@@ -284,6 +287,172 @@ export const KitContentsSection: React.FC<{ itemId: string; saleId: string | nul
           <p className="text-xs text-warm-500 dark:text-warm-400">The items inside save with this button. The name, price and description save with the form's Save.</p>
         </div>
       )}
+    </div>
+  );
+};
+
+export const MakeThisKit: React.FC<{ itemId: string; saleId: string | null; item: Parameters<typeof canOfferMakeKit>[0] }> = ({ itemId, saleId, item }) => {
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [parts, setParts] = useState<KitDraftPart[]>([]);
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const candidatesQuery = useQuery({
+    queryKey: ['kit-candidates', saleId, search],
+    queryFn: async (): Promise<Candidate[]> => {
+      const res = await api.get('/kits/candidates', { params: { saleId: saleId || undefined, q: search || undefined } });
+      return (res.data?.data?.items ?? []) as Candidate[];
+    },
+    enabled: open,
+    staleTime: 10 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
+
+  if (!canOfferMakeKit(item)) return null;
+
+  if (!open) {
+    return (
+      <div data-testid="make-kit">
+        <button type="button" onClick={() => setOpen(true)} className={secondaryBtn}>
+          Make this a kit
+        </button>
+        <p className="mt-1 text-xs text-warm-500 dark:text-warm-400">Turn this listing into a kit made of other items you already have. It keeps its own photos, description and price.</p>
+      </div>
+    );
+  }
+
+  const preview = previewKitAvailable(parts);
+
+  const confirm = async () => {
+    const problem = validateKitParts(parts);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await api.post(`/kits/convert/${encodeURIComponent(itemId)}`, { components: buildKitComponentsPayload(parts) });
+      showToast('This item is now a kit.', 'success');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['item', itemId] }),
+        queryClient.invalidateQueries({ queryKey: ['kit', itemId] }),
+        queryClient.invalidateQueries({ queryKey: ['kit-candidates'] }),
+        queryClient.invalidateQueries({ queryKey: ['kits-by-component'] }),
+        ...(saleId ? [queryClient.invalidateQueries({ queryKey: ['items', saleId] })] : []),
+      ]);
+    } catch (err) {
+      setError(kitErrorText(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border border-warm-200 p-3 dark:border-gray-700" data-testid="make-kit">
+      <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100">What goes in this kit</h3>
+      <p className="text-xs text-warm-500 dark:text-warm-400">Save any other changes to this item first. Picking items here does not change its photos, description or price.</p>
+      {parts.length === 0 && <p className="text-sm text-warm-700 dark:text-warm-300">No items yet. Search below and add some.</p>}
+      <ul className="space-y-2">
+        {parts.map((p) => (
+          <li key={p.itemId} className="flex flex-wrap items-center gap-2 rounded-lg border border-warm-200 p-2 dark:border-gray-700">
+            <span className="min-w-0 flex-1 break-words text-sm text-warm-900 dark:text-warm-100">
+              {p.title}
+              <span className="ml-2 text-xs text-warm-600 dark:text-warm-400">{p.remaining} left</span>
+            </span>
+            <label className="text-xs text-warm-600 dark:text-warm-400" htmlFor={`make-kit-qty-${p.itemId}`}>
+              Quantity per kit
+            </label>
+            <input
+              id={`make-kit-qty-${p.itemId}`}
+              type="text"
+              inputMode="numeric"
+              value={p.quantity}
+              disabled={saving}
+              onChange={(e) => setParts(parts.map((x) => (x.itemId === p.itemId ? { ...x, quantity: e.target.value } : x)))}
+              className={`${inputCls} !w-20`}
+            />
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => setParts(parts.filter((x) => x.itemId !== p.itemId))}
+              className={secondaryBtn}
+              aria-label={`Remove ${p.title} from this kit`}
+            >
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div>
+        <label htmlFor="make-kit-search" className={labelCls}>
+          Find items to add
+        </label>
+        <input id="make-kit-search" type="text" value={search} placeholder="Search by name" onChange={(e) => setSearch(e.target.value)} className={inputCls} />
+        {candidatesQuery.isLoading && (
+          <p role="status" className="mt-2 text-sm text-warm-600 dark:text-warm-300">
+            Loading items...
+          </p>
+        )}
+        {candidatesQuery.isError && (
+          <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">
+            Could not load your items. Try again.
+          </p>
+        )}
+        <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto">
+          {(candidatesQuery.data ?? [])
+            .filter((c) => c.id !== itemId)
+            .map((c) => {
+              const added = parts.some((p) => p.itemId === c.id);
+              return (
+                <li key={c.id} className="flex items-center gap-2 rounded-lg border border-warm-200 p-2 dark:border-gray-700">
+                  <span className="min-w-0 flex-1 break-words text-sm text-warm-900 dark:text-warm-100">
+                    {c.title}
+                    <span className="ml-2 text-xs text-warm-600 dark:text-warm-400">
+                      {money(c.price)} {c.remaining} left
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={added || saving}
+                    onClick={() => setParts([...parts, { itemId: c.id, title: c.title, photoUrl: c.photoUrl, quantity: '1', remaining: c.remaining }])}
+                    className={secondaryBtn}
+                  >
+                    {added ? 'Added' : 'Add'}
+                  </button>
+                </li>
+              );
+            })}
+        </ul>
+      </div>
+      {error && (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+          {error}
+        </p>
+      )}
+      <p className="text-xs text-warm-600 dark:text-warm-400" data-testid="make-kit-preview">
+        {kitAvailableLine(preview)}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={confirm} disabled={saving || parts.length === 0 || preview < 1} className={primaryBtn}>
+          {saving ? 'Making kit...' : 'Make this a kit'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setError('');
+          }}
+          disabled={saving}
+          className={secondaryBtn}
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 };
