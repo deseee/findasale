@@ -69,7 +69,7 @@ const state: { row: Row | null } = { row: null };
 const row = (over: Row = {}): Row => ({
   id: 'item_1', status: 'AVAILABLE', listingType: 'STANDARD', stockTotal: 5, stockSold: 1, saleId: 'sale_1', organizerId: 'org_1',
   createdAt: new Date('2026-01-01'), costBasis: null, roomTag: null, deletedAt: null, draftStatus: 'PUBLISHED', isKitComponent: false,
-  ebayOfferId: 'offer_1', ebayListingId: '1234567890', ebayQueuedAt: null, ebaySyncHeldAt: null, ebayHeldFields: [],
+  ebayOfferId: 'offer_1', ebayListingId: '1234567890', ebayQuantityAvailable: 4, ebayQueuedAt: null, ebaySyncHeldAt: null, ebayHeldFields: [],
   ebaySyncState: 'SYNCED', ebaySyncFailureReason: null, discogsListingId: null, reverbListingId: null, fbExportedAt: null, card: null,
   ...over,
 });
@@ -240,6 +240,30 @@ describe('syncItemStock: eBay, stock above zero', () => {
     expect(mockAbsorb).not.toHaveBeenCalled();
   });
 
+  it('checkOnly refreshes a stale mirror when eBay already matches, writes only the mirror, and reports unchanged', async () => {
+    state.row = row({ ebayQuantityAvailable: 6 });
+    routeEbay({ liveQty: 4 });
+    const r = await syncItemStock('item_1', 'sweep', { checkOnly: true });
+    expect(ebayOutcome(r)).toMatchObject({ status: 'unchanged', expected: 4, live: 4 });
+    expect(puts()).toHaveLength(0);
+    expect(mockPrisma.item.updateMany.mock.calls.map((c: any[]) => c[0].data)).toEqual([{ ebayQuantityAvailable: 4 }]);
+  });
+
+  it('checkOnly leaves a correct mirror alone', async () => {
+    state.row = row({ ebayQuantityAvailable: 4 });
+    routeEbay({ liveQty: 4 });
+    await syncItemStock('item_1', 'sweep', { checkOnly: true });
+    expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('a normal sync also refreshes a stale mirror when eBay already matches', async () => {
+    state.row = row({ ebayQuantityAvailable: 6 });
+    routeEbay({ liveQty: 4 });
+    const r = await syncItemStock('item_1', 'edit');
+    expect(ebayOutcome(r).status).toBe('unchanged');
+    expect(mirrorWrites()).toEqual([{ ebayQuantityAvailable: 4 }]);
+  });
+
   it('a held item is not pushed; the quantity is recorded as held for "Update eBay now"', async () => {
     state.row = row({ ebaySyncHeldAt: new Date() });
     const r = await syncItemStock('item_1', 'edit');
@@ -338,6 +362,22 @@ describe('syncItemStock: eBay, zero stock', () => {
   it('checkOnly reports a live listing with nothing in stock as drift and ends nothing', async () => {
     const r = await syncItemStock('item_1', 'sweep', { checkOnly: true });
     expect(ebayOutcome(r).status).toBe('drift');
+    expect(mockEndEbay).not.toHaveBeenCalled();
+    expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('checkOnly with nothing in stock reports an unreadable offer (HTTP 400) as failed with eBay\'s message, and changes nothing', async () => {
+    mockEbayFetch.mockImplementation(async (path: string) => {
+      if (path.startsWith('/sell/inventory/v1/offer/')) return res(400, { errors: [{ errorId: 25709, message: 'Invalid value for offerId.' }] });
+      return res(404);
+    });
+    const r = await syncItemStock('item_1', 'sweep', { checkOnly: true });
+    expect(r.inStock).toBe(0);
+    const o = ebayOutcome(r);
+    expect(o.status).toBe('failed');
+    expect(o.detail).toContain('HTTP 400');
+    expect(o.detail).toContain('Invalid value for offerId');
+    expect(ebayCalls().every((c) => c.method === 'GET')).toBe(true); // no PUT, POST (publish) or DELETE
     expect(mockEndEbay).not.toHaveBeenCalled();
     expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
   });

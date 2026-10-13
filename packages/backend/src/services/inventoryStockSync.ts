@@ -143,6 +143,7 @@ const SYNC_SELECT = {
   isKitComponent: true,
   ebayOfferId: true,
   ebayListingId: true,
+  ebayQuantityAvailable: true,
   ebayQueuedAt: true,
   ebaySyncHeldAt: true,
   ebayHeldFields: true,
@@ -514,6 +515,10 @@ async function syncEbay(ctx: SyncCtx): Promise<MarketSyncOutcome | { restart: tr
   if (liveQty !== null && liveQty === inStock) {
     if (!ctx.checkOnly) {
       await writeEbayMirror(item.id, inStock, (item.ebaySyncFailureReason ?? '').startsWith(STOCK_FLAG_PREFIX));
+    } else if (item.ebayQuantityAvailable !== inStock) {
+      // checkOnly still refreshes a stale MIRROR column: it changes nothing on eBay and nothing in the stock ledger, and it is
+      // not drift or a repair (the outcome stays 'unchanged'). Only ebayQuantityAvailable is written; the failure flag is left alone.
+      await writeEbayMirror(item.id, inStock, false);
     }
     return outcome('ebay', 'unchanged', inStock, { live: liveQty });
   }
@@ -557,6 +562,7 @@ async function ebayZero(ctx: SyncCtx): Promise<MarketSyncOutcome> {
   // An offer that is already ended needs nothing (a sweep must not end it again).
   let precheckPublished: boolean | null = null;
   let offerQty: number | null = null;
+  let openFailure: MarketSyncOutcome | null = null;
   if (item.ebayOfferId) {
     try {
       const opened = await ebayOpenOffer(ctx);
@@ -565,6 +571,8 @@ async function ebayZero(ctx: SyncCtx): Promise<MarketSyncOutcome> {
         offerQty = opened.live.offerQty;
       } else if (isEbayRateLimited()) {
         return opened.out; // rate limited: nothing is sent, the next sync repeats
+      } else if (opened.out.status === 'failed') {
+        openFailure = opened.out;
       }
     } catch (err) {
       console.warn(`[StockSync] could not read the eBay offer for item ${item.id} before ending it:`, (err as Error).message);
@@ -572,6 +580,8 @@ async function ebayZero(ctx: SyncCtx): Promise<MarketSyncOutcome> {
   }
 
   if (ctx.checkOnly) {
+    // An offer eBay refused to return (e.g. HTTP 400) is a failure with eBay's message, never a quiet skip that hides real drift.
+    if (precheckPublished === null && openFailure) return openFailure;
     if (precheckPublished === null) return outcome('ebay', 'skipped', expected, { detail: 'could not read the live eBay listing' });
     return precheckPublished
       ? outcome('ebay', 'drift', expected, { live: offerQty, detail: 'the eBay listing is still live but nothing is in stock' })
