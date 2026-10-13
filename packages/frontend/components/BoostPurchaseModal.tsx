@@ -282,7 +282,7 @@ export default function BoostPurchaseModal({
               <>
                 <div className="p-3 rounded-lg border border-sage-500 bg-sage-50 dark:bg-sage-900/20 text-sage-700 dark:text-sage-300 text-center">
                   <div className="text-lg font-bold">${quote.stripeAmountDollars}</div>
-                  <div className="text-xs mt-0.5 text-gray-400 dark:text-gray-500">
+                  <div className="text-xs mt-0.5 text-gray-500 dark:text-gray-400">
                     One-time charge, no subscription
                   </div>
                 </div>

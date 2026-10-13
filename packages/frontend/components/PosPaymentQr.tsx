@@ -135,7 +135,7 @@ export default function PosPaymentQr({
                   copied
                     ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
                     : paymentLinkUrl
-                    ? 'bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-400 hover:bg-sage-200 dark:hover:bg-sage-800'
+                    ? 'bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300 hover:bg-sage-200 dark:hover:bg-sage-800'
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50'
                 }`}
               >

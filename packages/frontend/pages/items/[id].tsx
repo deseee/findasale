@@ -140,7 +140,7 @@ interface Item {
   variantSku?: string; // V4: Multi-variant support
   priceBeforeMarkdown?: number; // Feature #91: Auto-Markdown
   markdownApplied?: boolean; // Feature #91: Auto-Markdown
-  organizerDiscountAmount?: number; // D-XP-003: Organizer-funded item discount
+  organizerDiscountAmount?: number | string | null; // D-XP-003: Prisma Decimal, serialized as a string by getItemById
   organizerDiscountXp?: number; // D-XP-003: XP cost of discount
   stockTotal?: number | null; // ADR-087 P2: multi-unit stock pool total (null/1 = single-unit)
   stockSold?: number; // ADR-087 P2: units sold so far across all channels (server-owned)
@@ -900,10 +900,10 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                   </div>
                 )}
                 {/* D-XP-003: Organizer discount badge */}
-                {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 && (
+                {Number(item.organizerDiscountAmount) > 0 && (
                   <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                     <div className="inline-block px-3 py-1.5 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 text-sm font-semibold rounded-full">
-                      Organizer Special: ${item.organizerDiscountAmount.toFixed(2)} off. Spend {item.organizerDiscountXp} XP
+                      Organizer Special: ${Number(item.organizerDiscountAmount).toFixed(2)} off. Spend {item.organizerDiscountXp} XP
                     </div>
                     {user && user.guildXp && user.guildXp >= (item.organizerDiscountXp ?? 0) && (
                       <div className="mt-2 text-xs font-semibold text-green-600 dark:text-green-400">

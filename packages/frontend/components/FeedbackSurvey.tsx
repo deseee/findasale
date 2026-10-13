@@ -152,7 +152,7 @@ export const FeedbackSurvey: React.FC = () => {
       {/* Modal */}
       <div
         ref={modalRef}
-        className={`relative z-51 w-full sm:max-w-md mx-4 ${bgColor} rounded-lg shadow-lg p-6 sm:p-8 ${textColor} border ${borderColor}`}
+        className={`relative z-10 w-full sm:max-w-md mx-4 ${bgColor} rounded-lg shadow-lg p-6 sm:p-8 ${textColor} border ${borderColor}`}
       >
         {/* Close button */}
         <button

@@ -72,7 +72,7 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({ isOpen, onClose }) =
 
       {/* Modal */}
       <div
-        className={`relative z-51 w-full max-w-md mx-4 ${bgColor} rounded-lg shadow-lg p-6 sm:p-8 ${textColor} border ${borderColor}`}
+        className={`relative z-10 w-full max-w-md mx-4 ${bgColor} rounded-lg shadow-lg p-6 sm:p-8 ${textColor} border ${borderColor}`}
       >
         {/* Close button */}
         <button

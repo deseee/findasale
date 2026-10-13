@@ -34,7 +34,7 @@ const CookieConsentBanner = () => {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-700 shadow-2xl"
+      className="fixed bottom-0 left-0 right-0 z-[45] bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-700 shadow-2xl"
       role="alert"
     >
       <div className="max-w-2xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -48,14 +48,14 @@ const CookieConsentBanner = () => {
         <div className="flex gap-2 flex-shrink-0">
           <button
             onClick={handleDecline}
-            className="px-4 py-2 text-sm font-medium text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+            className="px-4 py-2 min-h-[44px] text-sm font-medium text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
             aria-label="Decline cookies"
           >
             Decline
           </button>
           <button
             onClick={handleAccept}
-            className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 rounded-lg transition-colors"
+            className="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 rounded-lg transition-colors"
             aria-label="Accept cookies"
           >
             Accept

@@ -1688,7 +1688,7 @@ const ReviewPage = () => {
 
       {/* Approve-all confirmation modal */}
       {showApproveAllModal && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-2xl border border-black/10 dark:border-[#3A3A3C] shadow-2xl overflow-hidden">
             <div className="p-7">
               <p className="text-[10px] font-mono tracking-widest uppercase text-[#C8552B] mb-2">Confirm publish</p>
@@ -1730,7 +1730,7 @@ const ReviewPage = () => {
 
       {/* Discard-all confirmation modal */}
       {showDiscardAllModal && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-2xl border border-black/10 dark:border-[#3A3A3C] shadow-2xl overflow-hidden">
             <div className="p-7">
               <p className="text-[10px] font-mono tracking-widest uppercase text-red-600 mb-2">Destructive action</p>
@@ -1825,7 +1825,7 @@ const ReviewPage = () => {
           {/* ── Pinned action bar (stats + bulk actions) ──
               The slot stays in the page flow; the bar inside it is fixed under the site header once the slot
               scrolls past (see usePinnedBar). z-30 keeps it under the site header (z-50), the search bar and
-              menus, and under this page's confirm dialogs (z-40). No overflow clipping on any ancestor of the
+              menus, and under this page's confirm dialogs (z-50). No overflow clipping on any ancestor of the
               category picker, so its dropdown can extend below the bar. */}
           {!itemsLoading && !queueEmpty && (() => {
             const barLayout = bulkBarLayout(selectedCount, bulkMode);

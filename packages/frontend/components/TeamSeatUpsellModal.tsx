@@ -100,7 +100,8 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            aria-label="Close"
+            className="p-2 -mr-2 -my-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
             ✕
           </button>
@@ -122,7 +123,7 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
               </p>
               <Link
                 href="/organizer/subscription"
-                className="inline-block px-4 py-2 bg-sage-600 hover:bg-sage-700 text-white rounded-md"
+                className="inline-flex items-center min-h-touch px-4 py-2 bg-sage-600 hover:bg-sage-700 text-white rounded-md"
               >
                 Add payment method
               </Link>
@@ -135,8 +136,8 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
             </div>
           )}
 
-          <div className="mb-6 p-4 bg-sage-50 dark:bg-sage-700/30 border border-sage-200 dark:border-sage-700 rounded">
-            <p className="text-sm text-sage-700 dark:text-sage-100">
+          <div className="mb-6 p-4 rounded border bg-sage-50 border-sage-200 dark:bg-sage-700/20 dark:border-sage-600">
+            <p className="text-sm text-sage-700 dark:text-sage-200">
               New seats are billed monthly to your TEAMS subscription.
             </p>
           </div>
@@ -147,14 +148,14 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+            className="px-4 py-2 min-h-touch border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleAddSeat}
             disabled={isLoading || needsPaymentMethod}
-            className="px-4 py-2 bg-sage-600 hover:bg-sage-700 text-white rounded-md disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 min-h-touch bg-sage-600 hover:bg-sage-700 text-white rounded-md disabled:opacity-50 flex items-center gap-2"
           >
             {isLoading ? (
               <>

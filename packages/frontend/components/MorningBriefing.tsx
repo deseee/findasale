@@ -269,7 +269,7 @@ function PrepThermometer({
         </div>
         <button
           onClick={() => setShowAdd(!showAdd)}
-          className="text-sm font-medium px-3 py-1.5 rounded-full border border-sage-500 dark:border-sage-400 text-sage-600 dark:text-sage-400 hover:bg-sage-50 dark:hover:bg-sage-900/20 transition"
+          className="text-sm font-medium px-3 py-1.5 rounded-full border border-sage-500 dark:border-sage-400 text-sage-600 dark:text-sage-300 hover:bg-sage-50 dark:hover:bg-sage-900/20 transition"
         >
           {showAdd ? 'Cancel' : '+ Add task'}
         </button>

@@ -181,7 +181,7 @@ export default function HubManagePage() {
           {/* Hub Details Section */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-sage-900">Hub Details</h2>
+              <h2 className="text-xl font-bold text-sage-900 dark:text-sage-100">Hub Details</h2>
               <button
                 onClick={() => setEditMode(!editMode)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -295,7 +295,7 @@ export default function HubManagePage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Hub Name</p>
-                  <p className="text-lg font-semibold text-sage-900">{formData.name || 'N/A'}</p>
+                  <p className="text-lg font-semibold text-sage-900 dark:text-sage-100">{formData.name || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Description</p>
@@ -324,7 +324,7 @@ export default function HubManagePage() {
           {/* Neighborhood Sale Day Section */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-sage-900">🎉 Neighborhood Sale Day</h2>
+              <h2 className="text-xl font-bold text-sage-900 dark:text-sage-100">🎉 Neighborhood Sale Day</h2>
               <button
                 onClick={() => setShowEventForm(!showEventForm)}
                 className="px-4 py-2 bg-sage-50 text-sage-700 hover:bg-sage-100 rounded-lg text-sm font-medium transition-colors"

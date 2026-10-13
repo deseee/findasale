@@ -232,7 +232,7 @@ export default function InstallPrompt() {
         // bottom-16 on mobile = 64px, clears the h-14 BottomTabNav (56px) + 8px gap.
         // sm:bottom-4 floats the card 16px above the viewport edge on wider screens.
         // BottomTabNav is md:hidden so the offset is only needed below sm breakpoint.
-        className="fixed bottom-16 left-0 right-0 z-50 bg-white dark:bg-warm-800 border-t border-warm-200 dark:border-warm-700 shadow-lg px-4 py-4 flex items-center gap-4 sm:bottom-4 sm:max-w-md sm:mx-auto sm:rounded-xl sm:border"
+        className="fixed bottom-16 left-0 right-0 z-[44] bg-white dark:bg-warm-800 border-t border-warm-200 dark:border-warm-700 shadow-lg px-4 py-4 flex items-center gap-4 sm:bottom-4 sm:max-w-md sm:mx-auto sm:rounded-xl sm:border"
       >
         {/* App icon */}
         <Image src="/icons/icon-72x72.png" alt="FindA.Sale icon" width={48} height={48} className="w-12 h-12 rounded-xl flex-shrink-0" />
@@ -267,7 +267,7 @@ export default function InstallPrompt() {
         aria-label="Add FindA.Sale to Home Screen"
         // bottom-20 on mobile = 80px, clears BottomTabNav (56px) + safe-area buffer.
         // sm:bottom-4 uses standard floating position on wider screens.
-        className="fixed bottom-20 left-4 right-4 z-50 sm:bottom-4 bg-warm-900 text-white rounded-2xl shadow-xl px-4 py-4"
+        className="fixed bottom-20 left-4 right-4 z-[44] sm:bottom-4 bg-warm-900 text-white rounded-2xl shadow-xl px-4 py-4"
       >
         <button
           onClick={handleDismiss}
@@ -297,7 +297,7 @@ export default function InstallPrompt() {
         role="dialog"
         aria-label="Install FindA.Sale from Chrome's menu"
         // Same bottom-sheet-over-BottomTabNav offsets as the showIOS block above.
-        className="fixed bottom-20 left-4 right-4 z-50 sm:bottom-4 bg-warm-900 text-white rounded-2xl shadow-xl px-4 py-4"
+        className="fixed bottom-20 left-4 right-4 z-[44] sm:bottom-4 bg-warm-900 text-white rounded-2xl shadow-xl px-4 py-4"
       >
         <button
           onClick={handleDismissFallback}

@@ -267,7 +267,7 @@ export default function TrailDetailPage() {
                     const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/trail/${trail.shareToken}`;
                     navigator.clipboard.writeText(url);
                   }}
-                  className="text-xs text-sage-600 dark:text-sage-400 hover:underline"
+                  className="text-xs text-sage-600 dark:text-sage-300 hover:underline"
                 >
                   Copy link
                 </button>

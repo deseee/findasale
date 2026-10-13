@@ -115,7 +115,7 @@ export default function CreateHubPage() {
           </Link>
 
           {/* Header */}
-          <h1 className="text-3xl font-bold text-sage-900 mb-2">Create a New Hub</h1>
+          <h1 className="text-3xl font-bold text-sage-900 dark:text-sage-100 mb-2">Create a New Hub</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-8">
             Set up a flea market, antique mall, popup market, or farmers market. Vendors claim their own
             booth inside this hub, with their own booth fee, revenue share, and payouts.

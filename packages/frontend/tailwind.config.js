@@ -44,6 +44,7 @@ module.exports = {
           700: '#047857',
         },
         // CD1: Brand sage-green — sustainability, calm, secondary accents
+        // NOTE: sage-400 is intentionally darker than sage-500 (400 is the AA brand text color). Do not swap.
         sage: {
           DEFAULT: '#4A7A5C',
           50: '#F0F7F3',
@@ -54,6 +55,9 @@ module.exports = {
           500: '#52876A',
           600: '#3E6E53',
           700: '#2D5440',
+          800: '#1F3B2D',
+          900: '#14261D',
+          950: '#0C1812',
         },
       },
       fontFamily: {

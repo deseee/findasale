@@ -754,8 +754,8 @@ export default function WorkspaceSettingsPage() {
                 {/* Total */}
                 <div className="bg-sage-50 dark:bg-sage-900/20 rounded-lg p-6 flex flex-col justify-center">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Total Monthly Cost</p>
-                  <p className="text-4xl font-bold text-sage-700 dark:text-sage-400">${costData.totalMonthlyCost}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-4">Billed monthly • No setup fee</p>
+                  <p className="text-4xl font-bold text-sage-700 dark:text-sage-300">${costData.totalMonthlyCost}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">Billed monthly • No setup fee</p>
                 </div>
               </div>
             ) : (
