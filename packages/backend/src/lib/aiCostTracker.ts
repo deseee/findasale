@@ -393,15 +393,15 @@ export function pruneOldCostRecords(): void {
 /**
  * Track a Google Vision API call for unified cost ceiling enforcement.
  *
- * Google Vision pricing (combined features: LABEL + OBJECT + TEXT):
- *   ~$1.50 per 1,000 images = $0.0015 per image
+ * Google Vision pricing (combined features: LABEL + OBJECT + TEXT, billed per feature per image):
+ *   $1.50 + $2.25 + $1.50 = $5.25 per 1,000 images = $0.00525 per image (after each feature's 1,000 free units a month)
  * Converted to Anthropic-equivalent tokens so the same $50 ceiling applies.
  *
  * @param imageCount Number of images sent in this Vision call (default 1)
  */
 export async function trackVisionCall(imageCount: number = 1): Promise<void> {
-  // Google Vision combined-feature cost per image (~$0.0015)
-  const GOOGLE_VISION_COST_PER_IMAGE = 0.0015;
+  // Google Vision combined-feature cost per image: label + object + text = $0.00525 (was $0.0015, which priced one feature)
+  const GOOGLE_VISION_COST_PER_IMAGE = 0.00525;
   const visionCostUsd = imageCount * GOOGLE_VISION_COST_PER_IMAGE;
   // Convert to Anthropic-equivalent token units so the shared $50 ceiling counts Vision spend
   const equivalentTokens = Math.round((visionCostUsd / ANTHROPIC_COST_PER_M_TOKENS) * 1_000_000);

@@ -30,7 +30,7 @@ import type { RecognitionOutcome } from './types';
 export const SCAN_COST_SERVICE_TAG = 'anthropic:card_scan';
 /** About $0.0022 per Haiku frame (ADR section 5.1), rounded up. */
 export const DEFAULT_FRAME_COST_ESTIMATE_USD = 0.0025;
-/** Haiku frame plus one text detection call ($0.0015 per the cost tracker constant). */
+/** Haiku frame plus one text detection call ($0.0015 for one text detection call, per Google's pricing page). */
 export const DEFAULT_OCR_FRAME_COST_ESTIMATE_USD = 0.004;
 
 /** Dollars are stored as whole units of $0.0001 so many small increments never drift. */

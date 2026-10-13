@@ -16,7 +16,7 @@ import { cleanOcrText } from './prompt';
 
 export const VISION_ANNOTATE_URL = 'https://vision.googleapis.com/v1/images:annotate';
 export const VISION_TIMEOUT_MS = 15000;
-/** The cost tracker books Google Vision at $0.0015 per image (lib/aiCostTracker.ts trackVisionCall). UNVERIFIED for text detection alone. */
+/** Google Vision TEXT_DETECTION alone is $1.50 per 1,000 images ($0.0015) on Google's pricing page, past the 1,000 free units a month. The regular photo pipeline's three bundled features are booked at $0.00525 in lib/aiCostTracker.ts trackVisionCall. */
 export const VISION_TEXT_DETECTION_COST_USD = 0.0015;
 
 export type OcrOutcome = { ok: true; text: string; costUsd: number } | { ok: false };
