@@ -2069,6 +2069,19 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Kits (2026-10-16, Phase 1): a kit's stock is derived from its components (services/itemKitStock.ts) and its type is fixed, so the generic
+    // edit refuses to set the unit count or change the listing type of a kit. Name, description and price edit normally; components via /api/kits.
+    if (item.listingType === 'KIT') {
+      if (stockTotal !== undefined && stockTotal !== null && parseInt(stockTotal, 10) !== item.stockTotal) {
+        return res.status(400).json({ message: 'A kit\'s units available are worked out from the items inside it and cannot be set by hand.', code: 'KIT_STOCK_DERIVED', field: 'stockTotal' });
+      }
+      if (listingType !== undefined && listingType !== 'KIT') {
+        return res.status(400).json({ message: 'A kit cannot be changed to another listing type.', code: 'KIT_TYPE_FIXED', field: 'listingType' });
+      }
+    } else if (listingType === 'KIT') {
+      return res.status(400).json({ message: 'Kits are created from the Kits page.', code: 'KIT_CREATE_ELSEWHERE', field: 'listingType' });
+    }
+
     // ADR-087 P1 (D1): stockTotal can never drop below units already sold. stockSold is
     // server-owned -- it is intentionally NOT in the updateItem whitelist above, so a
     // client can never set it; we compare the requested stockTotal against the DB value.

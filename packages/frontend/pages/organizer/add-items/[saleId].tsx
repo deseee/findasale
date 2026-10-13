@@ -2660,6 +2660,14 @@ const AddItemsDetailPage = () => {
               />
             )}
             {typeof saleId === 'string' && saleId !== '' && (
+              <Link
+                href={`/organizer/kits/${encodeURIComponent(saleId)}`}
+                className="inline-flex min-h-[44px] items-center px-4 py-2 rounded-lg font-medium bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400 transition-all"
+              >
+                Kits
+              </Link>
+            )}
+            {typeof saleId === 'string' && saleId !== '' && (
               <CardScanLink
                 saleId={saleId}
                 className="inline-flex min-h-[44px] items-center px-4 py-2 rounded-lg font-medium bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400 transition-all"

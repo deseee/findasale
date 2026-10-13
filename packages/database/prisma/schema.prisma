@@ -1860,6 +1860,12 @@ model Item {
   // ADR-136 (2026-10-05, #659): count-based bulk lot record. Relation only, no new Item column. The card count
   // is Item.stockTotal / Item.stockSold and the price per 1,000 cards is Item.price (see ADR-136 section 2).
   bulkLot                         ItemBulkLot?
+  // Kits (2026-10-16, Phase 1): a kit is an Item with listingType 'KIT' made of existing items (ItemKitComponent rows).
+  // Kit stock is DERIVED from the components and materialized into stockTotal by services/itemKitStock.ts.
+  // isKitComponent is a server-owned flag (true while this item is a component of any kit) so the sale hot path can skip kit work for ordinary items.
+  isKitComponent                  Boolean                 @default(false)
+  kitComponents                   ItemKitComponent[]      @relation("KitItemComponents")
+  kitMemberships                  ItemKitComponent[]      @relation("KitComponentItem")
 
   // ADR-136 Addendum C (2026-10-05, #659): eBay fixed-size bundle settings for this lot (1:1, relation only, no Item column).
   ebayBundle                      ItemBulkLotEbayBundle?
@@ -8846,4 +8852,19 @@ model RecruitChannelEvent {
   createdAt DateTime                @default(now())
 
   @@index([type, createdAt])
+}
+
+// Kits (2026-10-16, Phase 1): one row per component of a kit. A kit is an Item (listingType 'KIT'); selling one kit takes
+// `quantity` units from each component through the guarded stock path in one transaction. Distinct from ItemBundle (display only).
+model ItemKitComponent {
+  id              String   @id @default(cuid())
+  kitItemId       String
+  componentItemId String
+  quantity        Int      @default(1)
+  createdAt       DateTime @default(now())
+  kitItem         Item     @relation("KitItemComponents", fields: [kitItemId], references: [id], onDelete: Cascade)
+  componentItem   Item     @relation("KitComponentItem", fields: [componentItemId], references: [id], onDelete: NoAction)
+
+  @@unique([kitItemId, componentItemId])
+  @@index([componentItemId])
 }

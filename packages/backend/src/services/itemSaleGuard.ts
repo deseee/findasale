@@ -29,6 +29,8 @@
 
 import { Item, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { InsufficientStockError } from './itemStockErrors';
+import { KIT_LISTING_TYPE, commitKitSale, recomputeKitsForComponents } from './itemKitStock';
 
 /**
  * Thrown when commitItemSale() cannot legally perform the requested
@@ -127,5 +129,35 @@ export async function commitItemSale(
     throw new ItemAlreadyCommittedError(`Item ${itemId} is not in an allowed state for this transition`);
   }
 
-  return client.item.findUniqueOrThrow({ where: { id: itemId } });
+  const committed = await client.item.findUniqueOrThrow({ where: { id: itemId } });
+
+  // Kits (2026-10-16): commitItemSale never touches stockSold for ordinary items, but a KIT marked sold must take its components
+  // (and count its own unit), all-or-nothing; a component marked SOLD shrinks the kits that contain it. INVOICE_ISSUED is a hold only:
+  // the real kit sale happens in itemStockService.sellItemUnits when the payment lands, so nothing is taken here.
+  if (toStatus === 'SOLD' && committed) {
+    if (committed.listingType === KIT_LISTING_TYPE) {
+      try {
+        if (tx) {
+          await commitKitSale(client, itemId);
+        } else {
+          await prisma.$transaction(async (kitTx) => {
+            await commitKitSale(kitTx as unknown as Prisma.TransactionClient, itemId);
+          });
+        }
+      } catch (err) {
+        if (err instanceof InsufficientStockError) {
+          if (!tx) {
+            // No caller transaction to roll the status flip back: restore it, then refuse the sale like any lost race.
+            await prisma.item.updateMany({ where: { id: itemId, status: 'SOLD' }, data: { status: 'AVAILABLE' } });
+          }
+          throw new ItemAlreadyCommittedError(err.message);
+        }
+        throw err;
+      }
+    } else if (committed.isKitComponent) {
+      await recomputeKitsForComponents(client, [itemId]);
+    }
+  }
+
+  return committed;
 }

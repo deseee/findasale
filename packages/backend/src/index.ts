@@ -212,6 +212,7 @@ import cardIntakeRoutes from './routes/cardIntake';           // ADR-134 B4: spr
 import cardScanRoutes from './routes/cardScan';               // ADR-138 B9: card scan intake (the frame route answers 503 unless CARD_SCAN_ENABLED is true; GET /status always answers)
 import cardTcgplayerRoutes from './routes/cardTcgplayer';     // ADR-137 #660: TCGplayer round trip for card shops (writing routes answer 404 unless CARD_TCGPLAYER_SYNC_ENABLED and CARD_CATALOG_ENABLED are true)
 import bulkLotRoutes from './routes/bulkLots';                // ADR-136 #659: bulk lots for card shops (answers 404 BULK_DISABLED unless CARD_BULK_LOTS_ENABLED is true)
+import itemKitRoutes from './routes/itemKits';              // Kits (2026-10-16, Phase 1): bundle several existing items into one sellable kit
 import bulkLotEbayRoutes from './routes/bulkLotEbay';          // ADR-136 Addendum C #659: eBay bundles of bulk lots (404 BUNDLE_DISABLED unless CARD_BULK_EBAY_ENABLED is true)
 import etsyRoutes from './routes/etsy';                       // ADR-135 B1: Etsy connect, callback, connection, shop setup (kill switch per route)
 import etsyListingRoutes from './routes/etsyListings';        // ADR-135 B3: Etsy item eligibility, draft, publish, end (kill switch per route)
@@ -921,6 +922,7 @@ app.use('/api/card-scan', cardScanRoutes);                                  // A
 app.use('/api/card-tcgplayer', cardTcgplayerRoutes);                        // ADR-137 #660: TCGplayer round trip (flag CARD_TCGPLAYER_SYNC_ENABLED, default off)
 app.use('/api/bulk-lots/ebay', bulkLotEbayRoutes);                      // ADR-136 Addendum C #659: eBay bundles (flag CARD_BULK_EBAY_ENABLED, default off); before /api/bulk-lots so its paths are never shadowed
 app.use('/api/bulk-lots', bulkLotRoutes);                                // ADR-136 #659: bulk lots (flag CARD_BULK_LOTS_ENABLED, default off)
+app.use('/api/kits', itemKitRoutes);                                 // Kits (2026-10-16, Phase 1): organizer-only create/edit of kits
 // ADR-135 (Etsy): the webhook router mounts FIRST (no auth, no kill switch: the handler answers 200 and ignores
 // when the connector is off), then the two organizer routers, each with the kill switch applied per route.
 app.use('/api/etsy/webhook', etsyWebhookRoutes);                            // ADR-135 B4: public, raw body, signature verified in the handler

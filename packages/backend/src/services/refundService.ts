@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { restockKitIfKit } from './itemKitStock'; // Kits (2026-10-16): a refunded kit sale gives its components back
 import * as Sentry from '@sentry/node';
 import { getStripe, isStripeNotConfiguredError } from '../utils/stripe';
 import { notifyVendorBoothSaleRefunded } from './vendorBoothSaleNotificationService'; // tell the vendor their booth sale was refunded
@@ -756,10 +757,19 @@ export async function executeVerifiedRefund(
         });
       } else {
         // Consignor price tags (2026-10-06): a minted CONSIGNOR_TAG item has no unit to give back; it stays SOLD/stockSold 1.
-        await prisma.item.updateMany({
+        const stockGivenBack = await prisma.item.updateMany({
           where: { id: purchase.itemId, stockSold: { gte: 1 }, listingType: { not: 'CONSIGNOR_TAG' } },
           data: { stockSold: { decrement: 1 } },
         });
+        // Kits (2026-10-16): if this item is a KIT, put one kit's worth back on every component and recompute the kits that share them.
+        // Tied to the same guarded decrement above (count 0 = nothing was given back, so nothing is restocked twice). A no-op for ordinary items.
+        if (stockGivenBack && stockGivenBack.count > 0) {
+          try {
+            await restockKitIfKit(prisma as any, purchase.itemId, 1);
+          } catch (kitErr) {
+            console.error(`[executeVerifiedRefund] Failed to restock kit components for item ${purchase.itemId} after refund of purchase ${purchaseId} (non-fatal, run the kit recompute):`, kitErr);
+          }
+        }
       }
     } catch (err) {
       console.error(`[executeVerifiedRefund] Failed to decrement stockSold for item ${purchase.itemId} after refund of purchase ${purchaseId} (non-fatal):`, err);

@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { prisma } from '../lib/prisma';
+import { restockKitIfKit } from './itemKitStock'; // Kits (2026-10-16): a refunded kit sale gives its components back
 import * as Sentry from '@sentry/node';
 import { SquareClient, SquareEnvironment } from 'square';
 import { RefundError } from './refundService'; // SAME error class Stripe's refund path throws -- see file comment below for why this is not redeclared here.
@@ -396,10 +397,12 @@ async function finalizeSquareRefundTx(args: {
       // Consignor price tags (2026-10-06): the server-minted SOLD item of a tag line has no unit to put back on sale. It keeps
       // status SOLD and stockSold 1 on a refund (the ledger excludes it through the REFUNDED Purchase row), so it can never join the
       // available pool. Every other item is unchanged.
-      await tx.item.updateMany({
+      const stockGivenBack = await tx.item.updateMany({
         where: { id: purchase.itemId, stockSold: { gt: 0 }, listingType: { not: 'CONSIGNOR_TAG' } },
         data: { stockSold: { decrement: 1 } },
       });
+      // Kits (2026-10-16): a refunded KIT gives one kit's worth back to every component (inside this transaction, so it commits or rolls back with the refund).
+      if (stockGivenBack && stockGivenBack.count > 0) await restockKitIfKit(tx as any, purchase.itemId, 1);
       // Put the unit back on sale (callers also restore status; this makes a reconcile-finished refund
       // complete on its own). Only ever SOLD -> AVAILABLE, never walks a later transition backwards.
       await tx.item.updateMany({ where: { id: purchase.itemId, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } }, data: { status: 'AVAILABLE' } });
@@ -1737,10 +1740,12 @@ export async function syncSquareRefundWebhookStatus(refund: {
         if (flipped.count === 0) return; // raced with something else since the read above -- a later delivery/sweep reconciles
 
         if (row.itemId) {
-          await tx.item.updateMany({
+          const stockGivenBack = await tx.item.updateMany({
             where: { id: row.itemId, stockSold: { gt: 0 }, listingType: { not: 'CONSIGNOR_TAG' } },
             data: { stockSold: { decrement: 1 } },
           });
+          // Kits (2026-10-16): same component restock as the refund path above.
+          if (stockGivenBack && stockGivenBack.count > 0) await restockKitIfKit(tx as any, row.itemId, 1);
           await tx.item.updateMany({
             where: { id: row.itemId, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } },
             data: { status: 'AVAILABLE' },

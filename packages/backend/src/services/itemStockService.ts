@@ -21,15 +21,11 @@
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { InsufficientStockError } from './itemStockErrors';
+import { KIT_LISTING_TYPE, recomputeKitsForComponents, sellKitComponents, undoKitCounter } from './itemKitStock';
 
-export class InsufficientStockError extends Error {
-  constructor(itemId: string, requested: number, remaining: number) {
-    super(
-      `Cannot sell ${requested} unit(s) of item ${itemId}: only ${remaining} remaining.`
-    );
-    this.name = 'InsufficientStockError';
-  }
-}
+// Moved to itemStockErrors.ts (shared with itemKitStock.ts without a circular import); re-exported so every import keeps working.
+export { InsufficientStockError };
 
 export interface SellItemUnitsResult {
   fullySoldOut: boolean;
@@ -109,7 +105,7 @@ export async function sellItemUnits(
 
   const updated = await client.item.findUniqueOrThrow({
     where: { id: itemId },
-    select: { stockTotal: true, stockSold: true, status: true },
+    select: { stockTotal: true, stockSold: true, status: true, listingType: true, isKitComponent: true },
   });
 
   const total = updated.stockTotal ?? 1;
@@ -131,6 +127,40 @@ export async function sellItemUnits(
       where: { id: itemId, status: updated.status },
       data: { status: 'AVAILABLE' },
     });
+  }
+
+  // Kits (2026-10-16): selling a kit takes every component; selling a kit's component shrinks the kits that contain it.
+  // Ordinary items (neither flag set) cost nothing extra here.
+  if (updated.listingType === KIT_LISTING_TYPE) {
+    if (tx) {
+      // The caller owns the transaction: a short component throws and the caller's rollback undoes the kit's own counter too.
+      await sellKitComponents(client, itemId, unitsSold);
+    } else {
+      try {
+        await prisma.$transaction(async (kitTx) => {
+          await sellKitComponents(kitTx as unknown as Prisma.TransactionClient, itemId, unitsSold);
+        });
+      } catch (err) {
+        // The kit's own counter committed above (no caller transaction to roll it back): give it back, then fail the sale cleanly.
+        try {
+          await undoKitCounter(prisma as unknown as Prisma.TransactionClient, itemId, unitsSold);
+        } catch (undoErr) {
+          console.error(`[sellItemUnits] failed to undo kit ${itemId} counter after a short component (needs manual recompute):`, undoErr);
+        }
+        throw err;
+      }
+    }
+  } else if (updated.isKitComponent) {
+    if (tx) {
+      await recomputeKitsForComponents(client, [itemId]);
+    } else {
+      try {
+        await recomputeKitsForComponents(client, [itemId]);
+      } catch (kitErr) {
+        // Derived kit stock is stale until the next recompute; a kit SALE is still guarded by its own component decrements, so this cannot oversell.
+        console.error(`[sellItemUnits] kit recompute after selling component ${itemId} failed (non-fatal):`, kitErr);
+      }
+    }
   }
 
   return {
@@ -166,7 +196,7 @@ export async function sellItemUnitsInTransaction(
   // Same explicit annotation as sellItemUnits (Prisma v5 union-type pitfall, see the comment there).
   const client: Prisma.TransactionClient = tx as Prisma.TransactionClient;
 
-  const rows = await client.$queryRaw<Array<{ stockTotal: number | null; stockSold: number; status: string }>>`
+  const rows = await client.$queryRaw<Array<{ stockTotal: number | null; stockSold: number; status: string; listingType?: string; isKitComponent?: boolean }>>`
     UPDATE "Item"
     SET "stockSold" = "stockSold" + ${unitsSold},
         "status" = CASE
@@ -176,7 +206,7 @@ export async function sellItemUnitsInTransaction(
         END
     WHERE "id" = ${itemId}
       AND "stockSold" + ${unitsSold} <= COALESCE("stockTotal", 1)
-    RETURNING "stockTotal", "stockSold", "status"
+    RETURNING "stockTotal", "stockSold", "status", "listingType", "isKitComponent"
   `;
 
   if (!rows || rows.length === 0) {
@@ -194,6 +224,12 @@ export async function sellItemUnitsInTransaction(
   const row = rows[0];
   const total = row.stockTotal ?? 1;
   const sold = Number(row.stockSold);
+  // Kits (2026-10-16): the caller owns the transaction, so a short component throws and rolls the kit's own counter back with it.
+  if (row.listingType === KIT_LISTING_TYPE) {
+    await sellKitComponents(client, itemId, unitsSold);
+  } else if (row.isKitComponent) {
+    await recomputeKitsForComponents(client, [itemId]);
+  }
   return {
     fullySoldOut: sold >= total,
     remainingStock: Math.max(total - sold, 0),
