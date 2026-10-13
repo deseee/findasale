@@ -407,6 +407,36 @@ describe('componentIneligibleReason', () => {
     expect(componentIneligibleReason({ ...base, listingType: 'CONSIGNOR_TAG' }, 'org1')?.code).toBe('KIT_COMPONENT_TYPE');
     expect(componentIneligibleReason({ ...base, consignorId: 'c1' }, 'org1')?.code).toBe('KIT_COMPONENT_CONSIGNED');
     expect(componentIneligibleReason({ ...base, vendorBoothId: 'v1' }, 'org1')?.code).toBe('KIT_COMPONENT_VENDOR_BOOTH');
+  });
+  describe('vendor booth components', () => {
+    const booth = { userId: 'u1', status: 'CONFIRMED', deletedAt: null, isHubOwnerBooth: false, hub: { organizerId: 'org1' } };
+    const inBooth = (b: unknown) => ({ ...base, vendorBoothId: 'v1', vendorBooth: b as never });
+    it('allows an item in the organizer\'s own booth (booth.userId matches)', () => {
+      expect(componentIneligibleReason(inBooth(booth), 'org1', 'u1')).toBeNull();
+    });
+    it('allows the house booth of a hub the organizer owns', () => {
+      expect(componentIneligibleReason(inBooth({ ...booth, userId: 'u9', isHubOwnerBooth: true }), 'org1', 'u1')).toBeNull();
+    });
+    it('rejects another vendor\'s booth', () => {
+      expect(componentIneligibleReason(inBooth({ ...booth, userId: 'u2' }), 'org1', 'u1')?.code).toBe('KIT_COMPONENT_VENDOR_BOOTH');
+      expect(componentIneligibleReason(inBooth({ ...booth, userId: null }), 'org1', 'u1')?.code).toBe('KIT_COMPONENT_VENDOR_BOOTH');
+    });
+    it('rejects a house booth of someone else\'s hub', () => {
+      expect(componentIneligibleReason(inBooth({ ...booth, userId: 'u9', isHubOwnerBooth: true, hub: { organizerId: 'orgX' } }), 'org1', 'u1')?.code).toBe('KIT_COMPONENT_VENDOR_BOOTH');
+    });
+    it('rejects a deleted or unconfirmed own booth', () => {
+      expect(componentIneligibleReason(inBooth({ ...booth, deletedAt: new Date() }), 'org1', 'u1')?.code).toBe('KIT_COMPONENT_VENDOR_BOOTH');
+      for (const status of ['PENDING', 'REJECTED', 'CANCELLED']) {
+        expect(componentIneligibleReason(inBooth({ ...booth, status }), 'org1', 'u1')?.code).toBe('KIT_COMPONENT_VENDOR_BOOTH');
+      }
+    });
+    it('fails closed when the booth was not loaded or the organizer user is unknown', () => {
+      expect(componentIneligibleReason({ ...base, vendorBoothId: 'v1' }, 'org1', 'u1')?.code).toBe('KIT_COMPONENT_VENDOR_BOOTH');
+      expect(componentIneligibleReason(inBooth(booth), 'org1', null)?.code).toBe('KIT_COMPONENT_VENDOR_BOOTH');
+      expect(componentIneligibleReason(inBooth(booth), 'org1')?.code).toBe('KIT_COMPONENT_VENDOR_BOOTH');
+    });
+  });
+  it('still rejects the other ineligible kinds', () => {
     expect(componentIneligibleReason({ ...base, bulkLot: { id: 'b1' } }, 'org1')?.code).toBe('KIT_COMPONENT_BULK_LOT');
     expect(componentIneligibleReason({ ...base, status: 'SOLD' }, 'org1')?.code).toBe('KIT_COMPONENT_UNAVAILABLE');
   });

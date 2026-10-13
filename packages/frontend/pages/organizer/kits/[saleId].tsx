@@ -312,7 +312,7 @@ const KitsPage = () => {
                       })}
                     </ul>
                     {candidatesQuery.isSuccess && (candidatesQuery.data ?? []).length === 0 && (
-                      <p className="mt-2 text-sm text-warm-700 dark:text-warm-300">No matching items. Consigned, vendor booth, bulk lot and auction items cannot go in a kit yet.</p>
+                      <p className="mt-2 text-sm text-warm-700 dark:text-warm-300">No matching items. Consigned, other vendors' booth, bulk lot and auction items cannot go in a kit yet.</p>
                     )}
                   </div>
                 )}

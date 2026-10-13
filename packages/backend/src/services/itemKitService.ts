@@ -7,8 +7,10 @@
  *
  * Rules enforced here (v1):
  *  - The organizer id always comes from the logged-in account. Another organizer's item looks exactly like a missing one (404).
- *  - Components must be plain AVAILABLE items: not consigned, not in a vendor booth, not a bulk lot, not an auction, not a kit,
- *    not a consignor price tag. (Nested kits and consigned / booth / bulk-lot components are Phase 2 or later.)
+ *  - Components must be plain AVAILABLE items: not consigned, not a bulk lot, not an auction, not a kit, not a consignor price tag,
+ *    and not in ANOTHER vendor's booth. An item in the organizer's OWN booth (CONFIRMED, not deleted, booth.userId is the organizer's
+ *    user id, or the hub-owner house booth of a hub the organizer owns) is allowed. (Nested kits and consigned / bulk-lot components
+ *    are Phase 2 or later.)
  *  - 1 to 25 components, each once, quantity 1 to 1000.
  *  - Components cannot be changed once the kit has sold (a later refund restocks the CURRENT components, so the recipe must not move).
  *    Title, description and price can always be edited.
@@ -152,18 +154,37 @@ export interface KitComponentCandidate {
   deletedAt: Date | null;
   consignorId: string | null;
   vendorBoothId: string | null;
+  /** Loaded only when vendorBoothId is set. A missing booth row for a set vendorBoothId fails closed (rejected). */
+  vendorBooth?: KitComponentBooth | null;
   bulkLot: { id: string } | null;
 }
 
+export interface KitComponentBooth {
+  userId: string | null;
+  status: string;
+  deletedAt: Date | null;
+  isHubOwnerBooth: boolean;
+  hub: { organizerId: string } | null;
+}
+
+/** True when the booth is the organizer's own: confirmed, not deleted, and either operated by the organizer's user or the house booth of the organizer's hub. */
+export function isOwnBooth(booth: KitComponentBooth | null | undefined, organizerId: string, organizerUserId: string | null | undefined): boolean {
+  if (!booth || booth.deletedAt || booth.status !== 'CONFIRMED') return false;
+  if (organizerUserId && booth.userId === organizerUserId) return true;
+  return booth.isHubOwnerBooth === true && booth.hub?.organizerId === organizerId;
+}
+
 /** Why an item cannot be a kit component, or null when it can. Messages are shown to the organizer. */
-export function componentIneligibleReason(item: KitComponentCandidate, organizerId: string): { code: string; message: string } | null {
+export function componentIneligibleReason(item: KitComponentCandidate, organizerId: string, organizerUserId?: string | null): { code: string; message: string } | null {
   if (item.organizerId !== organizerId || item.deletedAt) return { code: 'KIT_COMPONENT_NOT_FOUND', message: 'One of the items could not be found.' };
   if (item.listingType === KIT_LISTING_TYPE) return { code: 'KIT_COMPONENT_IS_KIT', message: 'A kit cannot contain another kit.' };
   if (item.listingType !== 'FIXED' && item.listingType !== 'POS' && item.listingType !== null) {
     return { code: 'KIT_COMPONENT_TYPE', message: 'Only regular fixed-price items can go in a kit. Auction items cannot.' };
   }
   if (item.consignorId) return { code: 'KIT_COMPONENT_CONSIGNED', message: 'Consigned items cannot go in a kit yet.' };
-  if (item.vendorBoothId) return { code: 'KIT_COMPONENT_VENDOR_BOOTH', message: 'Vendor booth items cannot go in a kit yet.' };
+  if (item.vendorBoothId && !isOwnBooth(item.vendorBooth, organizerId, organizerUserId)) {
+    return { code: 'KIT_COMPONENT_VENDOR_BOOTH', message: 'Items in another vendor\'s booth cannot go in a kit yet. Items in your own booth can.' };
+  }
   if (item.bulkLot) return { code: 'KIT_COMPONENT_BULK_LOT', message: 'Bulk lots cannot go in a kit yet.' };
   if (item.status !== 'AVAILABLE') return { code: 'KIT_COMPONENT_UNAVAILABLE', message: 'Only items that are available to buy can go in a kit.' };
   return null;
@@ -188,18 +209,25 @@ const COMPONENT_ITEM_SELECT = {
   deletedAt: true,
   consignorId: true,
   vendorBoothId: true,
+  vendorBooth: { select: { userId: true, status: true, deletedAt: true, isHubOwnerBooth: true, hub: { select: { organizerId: true } } } },
   stockTotal: true,
   stockSold: true,
   bulkLot: { select: { id: true } },
 } as const;
 
+async function loadOrganizerUserId(db: Db, organizerId: string): Promise<string | null> {
+  const org = await db.organizer.findUnique({ where: { id: organizerId }, select: { userId: true } });
+  return org?.userId ?? null;
+}
+
 async function loadEligibleComponents(db: Db, organizerId: string, inputs: KitComponentInput[]) {
   const items = await db.item.findMany({ where: { id: { in: inputs.map((c) => c.itemId) } }, select: COMPONENT_ITEM_SELECT });
+  const organizerUserId = await loadOrganizerUserId(db, organizerId);
   const byId = new Map(items.map((i) => [i.id, i]));
   const rows = inputs.map((input) => {
     const item = byId.get(input.itemId);
     if (!item) throw new KitError('KIT_COMPONENT_NOT_FOUND', 404, 'One of the items could not be found.');
-    const reason = componentIneligibleReason(item, organizerId);
+    const reason = componentIneligibleReason(item, organizerId, organizerUserId);
     if (reason) throw new KitError(reason.code, reason.code === 'KIT_COMPONENT_NOT_FOUND' ? 404 : 409, reason.message, { itemId: item.id, title: item.title });
     return { item, quantity: input.quantity };
   });
@@ -398,6 +426,10 @@ export interface KitCandidate {
 export async function listKitCandidates(organizerId: string, opts: { saleId?: string | null; q?: string | null }): Promise<KitCandidate[]> {
   const db = prisma as unknown as Db;
   const q = (opts.q ?? '').trim().slice(0, 100);
+  const organizerUserId = await loadOrganizerUserId(db, organizerId);
+  // Same rule as isOwnBooth: no booth, or a confirmed, non-deleted booth that is the organizer's own.
+  const ownBoothClauses: Prisma.VendorBoothWhereInput[] = [{ isHubOwnerBooth: true, hub: { organizerId } }];
+  if (organizerUserId) ownBoothClauses.push({ userId: organizerUserId });
   const items = await db.item.findMany({
     where: {
       organizerId,
@@ -405,7 +437,10 @@ export async function listKitCandidates(organizerId: string, opts: { saleId?: st
       status: 'AVAILABLE',
       listingType: { in: ['FIXED', 'POS'] },
       consignorId: null,
-      vendorBoothId: null,
+      OR: [
+        { vendorBoothId: null },
+        { vendorBooth: { is: { deletedAt: null, status: 'CONFIRMED', OR: ownBoothClauses } } },
+      ],
       bulkLot: { is: null },
       ...(opts.saleId ? { saleId: opts.saleId } : {}),
       ...(q ? { title: { contains: q, mode: 'insensitive' as const } } : {}),

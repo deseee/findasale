@@ -16,7 +16,7 @@
  *    shortfall like bulkLotEbaySoldService.absorbBundleOrderLine does. The shortfall pattern exists because an eBay order is
  *    already placed and cannot be refused; every FindA.Sale path that reaches here treats InsufficientStockError as a clean abort.
  *  - Components are locked in id order (deadlock avoidance when two kits share components).
- *  - Components are plain items only (no nesting, no consigned / vendor-booth / bulk-lot items; enforced in itemKitService).
+ *  - Components are plain items only (no nesting, no consigned / bulk-lot items, no items in another vendor's booth (the organizer's own booth is allowed); enforced in itemKitService).
  *
  * This module takes the database client as an argument (no prisma import) so it works inside a caller's transaction and can be
  * tested with an in-memory fake.
