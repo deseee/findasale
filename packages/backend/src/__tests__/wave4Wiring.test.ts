@@ -113,6 +113,7 @@ describe('index.ts body parsers and mounts (source order)', () => {
       'startEtsySoldSyncCron();',
       'scheduleCardCatalogScryfallRefresh();',
       'scheduleCardCatalogTcgcsvRefresh();',
+      'scheduleCardCatalogTcgdexRefresh();',
       'startEtsyHousekeepingCron({ refreshTaxonomy: () => refreshEtsyTaxonomyCache() });',
     ]) {
       expect(count(indexSrc, call)).toBe(1);
@@ -120,7 +121,7 @@ describe('index.ts body parsers and mounts (source order)', () => {
     }
     expect(indexSrc).toContain("import { startEtsySoldSyncCron } from './jobs/etsySoldSyncCron';");
     expect(indexSrc).toContain("import { startEtsyHousekeepingCron } from './jobs/etsyHousekeepingCron';");
-    expect(indexSrc).toContain("import { scheduleCardCatalogScryfallRefresh, scheduleCardCatalogTcgcsvRefresh } from './jobs/cardCatalogRefreshCron';");
+    expect(indexSrc).toContain("import { scheduleCardCatalogScryfallRefresh, scheduleCardCatalogTcgcsvRefresh, scheduleCardCatalogTcgdexRefresh } from './jobs/cardCatalogRefreshCron';");
     expect(indexSrc).toContain("import { refreshEtsyTaxonomyCache } from './services/marketplace/etsyTaxonomy';");
     expect(read('jobs/etsyHousekeepingCron.ts')).toMatch(/export function startEtsyHousekeepingCron\(/);
     expect(read('services/marketplace/etsyTaxonomy.ts')).toMatch(/export async function refreshEtsyTaxonomyCache\(/);
