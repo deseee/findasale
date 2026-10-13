@@ -7,10 +7,10 @@ export const postAC: BlogPost = {
   publishDate: '2026-10-29',
   category: 'guides',
   readingTimeMinutes: 6,
-  excerpt: "Paid AI cataloging tools are starting to offer free tiers. That's a sign cataloging has become table stakes, not proof that the hard, expensive part of running a sale got solved.",
+  excerpt: "Paid Smart cataloging tools are starting to offer free tiers. That's a sign cataloging has become table stakes, not proof that the hard, expensive part of running a sale got solved.",
   body: `## The cataloging race is heading toward free
 
-One of the bigger paid tools in AI-assisted estate sale cataloging just rolled out a free tier. Organizers can now get automated titles, descriptions, and price estimates off a photo without paying anything, at least up to a listing cap, before the paid plans kick in for anyone who needs more volume.
+One of the bigger paid tools in Smart-assisted estate sale cataloging just rolled out a free tier. Organizers can now get automated titles, descriptions, and price estimates off a photo without paying anything, at least up to a listing cap, before the paid plans kick in for anyone who needs more volume.
 
 That's worth sitting with for a second. A feature that paid tools were charging $29 to $149 a month for is now available for nothing, at least at a starter level. When a paid competitor starts giving away the thing it used to charge for, that's usually a sign the feature has stopped being special. It's become the baseline, the thing every tool in the category is expected to have, not the thing that sets one apart from another.
 
