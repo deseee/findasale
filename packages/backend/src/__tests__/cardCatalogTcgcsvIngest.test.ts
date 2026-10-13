@@ -1,6 +1,10 @@
 /**
  * TCGCSV ingest (ADR-134 batch B3): default-off flag, mapping, spacing, 429, DB-space guard, headers.
  * Synthetic payloads shaped like the live tcgcsv.com responses; no network, no database.
+ *
+ * Since the TCGdex work (2026-10-12) the TCGCSV job reads Yu-Gi-Oh only: Pokemon is never ingested
+ * from TCGCSV (TCGplayer's terms bar combining its data), so the ingest tests below use the
+ * Yu-Gi-Oh fixtures and one test proves Pokemon is ignored. The pure Pokemon helpers stay tested.
  */
 import {
   TCGCSV_BASE_URL,
@@ -57,7 +61,9 @@ describe('flag defaults (legal decision D2 pending)', () => {
     expect(getEnabledGames({})).toEqual(['MTG']);
     expect(getEnabledGames({ CARD_CATALOG_GAMES: '' })).toEqual(['MTG']);
     expect(getEnabledGames({ CARD_CATALOG_GAMES: 'bogus' })).toEqual(['MTG']);
-    expect(getEnabledGames({ CARD_CATALOG_GAMES: 'mtg, pokemon,YUGIOH,pokemon' })).toEqual(['MTG', 'POKEMON', 'YUGIOH']);
+    // POKEMON cannot be listed while CARD_CATALOG_TCGDEX_ENABLED is off; YUGIOH still waits on D2 and must be listed.
+    expect(getEnabledGames({ CARD_CATALOG_GAMES: 'mtg, pokemon,YUGIOH,pokemon' })).toEqual(['MTG', 'YUGIOH']);
+    expect(getEnabledGames({ CARD_CATALOG_GAMES: 'pokemon' })).toEqual(['MTG']);
   });
 
   it('with the default games the TCGCSV job does nothing: DISABLED, no request, no bookkeeping', async () => {
@@ -68,56 +74,75 @@ describe('flag defaults (legal decision D2 pending)', () => {
     expect(http.calls).toHaveLength(0);
     expect(store.sources.size).toBe(0);
   });
+
+  it('never ingests Pokemon from TCGCSV, whatever CARD_CATALOG_GAMES and the TCGdex flag say', async () => {
+    const envs: Array<Record<string, string>> = [
+      { CARD_CATALOG_ENABLED: 'true', CARD_CATALOG_GAMES: 'MTG,POKEMON' },
+      { CARD_CATALOG_ENABLED: 'true', CARD_CATALOG_GAMES: 'POKEMON', CARD_CATALOG_TCGDEX_ENABLED: 'true' },
+    ];
+    for (const env of envs) {
+      const store = new MemoryCatalogStore();
+      const http = tcgHttp();
+      const res = await runTcgcsvIngest(deps(store, http.httpGet, env));
+      expect(res.status).toBe('DISABLED');
+      expect(http.calls).toHaveLength(0);
+      expect(store.printings.size).toBe(0);
+    }
+  });
+
+  it('with Pokemon and Yu-Gi-Oh both listed, only the Yu-Gi-Oh category is requested', async () => {
+    const store = new MemoryCatalogStore();
+    const http = tcgHttp();
+    const env = { CARD_CATALOG_ENABLED: 'true', CARD_CATALOG_GAMES: 'POKEMON,YUGIOH', CARD_CATALOG_TCGDEX_ENABLED: 'true' };
+    const res = await runTcgcsvIngest(deps(store, http.httpGet, env));
+    expect(res.status).toBe('OK');
+    expect(http.calls.some((c) => c.url.includes('/tcgplayer/3/'))).toBe(false);
+    expect(http.calls.some((c) => c.url.endsWith('/tcgplayer/2/groups'))).toBe(true);
+    expect(Array.from(store.printings.values()).every((p) => p.game === 'YUGIOH')).toBe(true);
+  });
 });
 
-describe('TCGCSV ingest for Pokemon', () => {
-  const env = { CARD_CATALOG_ENABLED: 'true', CARD_CATALOG_GAMES: 'MTG,POKEMON' };
+describe('TCGCSV ingest for Yu-Gi-Oh', () => {
+  const env = { CARD_CATALOG_ENABLED: 'true', CARD_CATALOG_GAMES: 'MTG,YUGIOH' };
 
-  it('stores singles only, with set, number, rarity, finishes and prices from the allowed sub-types', async () => {
-    const store = new MemoryCatalogStore();
-    const res = await runTcgcsvIngest(deps(store, tcgHttp().httpGet, env));
-    expect(res.status).toBe('OK');
-    expect(store.printings.has('TCGCSV:99999')).toBe(false); // sealed box: no Number
-    const alakazam = store.printings.get('TCGCSV:42346')!;
-    expect(alakazam).toMatchObject({
-      game: 'POKEMON',
-      source: 'TCGCSV',
-      name: 'Alakazam',
-      setCode: 'bs',
-      setName: 'Base Set',
-      collectorNumber: '001/102',
-      rarity: 'Holo Rare',
-      releaseYear: 1999,
-      finishes: ['HOLO'],
-      tcgplayerProductId: 42346,
-      language: 'en',
-    });
-    expect(store.printings.get('TCGCSV:42347')!.finishes).toEqual(['HOLO', 'NONFOIL']);
-    expect(store.prices.get('TCGCSV:42346')).toMatchObject({ usd: null, usdFoil: '69.41', usdReverse: null });
-    expect(store.prices.get('TCGCSV:42347')).toMatchObject({ usd: '3.50', usdFoil: '91.06' });
-    expect(res.detail).toMatchObject({ unmappedSubTypes: { 'POKEMON:1st Edition Holofoil': 1 } });
-  });
-
-  it('leaves releaseYear null for supplemental groups (their publishedOn is a refresh timestamp)', async () => {
-    const store = new MemoryCatalogStore();
-    await runTcgcsvIngest(deps(store, tcgHttp().httpGet, env));
-    expect(store.printings.get('TCGCSV:77001')!.releaseYear).toBeNull();
-  });
-
-  it('a second identical run with a new snapshot changes 0 printing rows and 0 price rows', async () => {
-    const store = new MemoryCatalogStore();
-    await runTcgcsvIngest(deps(store, tcgHttp().httpGet, env));
-    // Same payloads, newer last-updated stamp, so the unchanged-version shortcut is not what is tested.
-    const http = fakeHttp((url) => {
-      if (url.endsWith('/last-updated.txt')) return { body: '2026-10-04T20:05:38+0000' };
-      if (/\/groups$/.test(url)) return { body: JSON.stringify(tcgGroups('POKEMON')) };
+  function ygoHttp(lastUpdated: string) {
+    return fakeHttp((url) => {
+      if (url.endsWith('/last-updated.txt')) return { body: lastUpdated };
+      if (/\/groups$/.test(url)) return { body: JSON.stringify(tcgGroups('YUGIOH')) };
       let m = /\/(\d+)\/products$/.exec(url);
       if (m) return { body: JSON.stringify(tcgProducts(Number(m[1]))) };
       m = /\/(\d+)\/prices$/.exec(url);
       if (m) return { body: JSON.stringify(tcgPrices(Number(m[1]))) };
       return { status: 404 };
     });
-    const again = await runTcgcsvIngest(deps(store, http.httpGet, env));
+  }
+
+  it('stores singles with set, number, rarity, finish and price from the allowed sub-type', async () => {
+    const store = new MemoryCatalogStore();
+    const res = await runTcgcsvIngest(deps(store, tcgHttp().httpGet, env));
+    expect(res.status).toBe('OK');
+    expect(store.printings.get('TCGCSV:55001')).toMatchObject({
+      game: 'YUGIOH',
+      source: 'TCGCSV',
+      name: 'Aqua Madoor',
+      setCode: 'lob',
+      setName: 'The Legend of Blue Eyes White Dragon',
+      collectorNumber: 'LOB-027',
+      rarity: 'Rare',
+      releaseYear: 2002,
+      finishes: ['NONFOIL'],
+      tcgplayerProductId: 55001,
+      language: 'en',
+    });
+    expect(store.prices.get('TCGCSV:55001')).toMatchObject({ usd: '0.50', usdFoil: null, usdReverse: null });
+    expect(res.detail).toMatchObject({ unmappedSubTypes: { 'YUGIOH:1st Edition': 1 } });
+  });
+
+  it('a second identical run with a new snapshot changes 0 printing rows and 0 price rows', async () => {
+    const store = new MemoryCatalogStore();
+    await runTcgcsvIngest(deps(store, tcgHttp().httpGet, env));
+    // Same payloads, newer last-updated stamp, so the unchanged-version shortcut is not what is tested.
+    const again = await runTcgcsvIngest(deps(store, ygoHttp('2026-10-04T20:05:38+0000').httpGet, env));
     expect(again.status).toBe('OK');
     expect(again.printingsChanged).toBe(0);
     expect(again.pricesChanged).toBe(0);
@@ -137,9 +162,9 @@ describe('TCGCSV ingest for Pokemon', () => {
     const sleep = jest.fn(async () => undefined);
     const http = tcgHttp();
     await runTcgcsvIngest(deps(store, http.httpGet, { ...env, CARD_DATA_USER_AGENT: 'FindASale/1.0 (card catalog; test)' }, sleep));
-    // 1 last-updated + 1 groups + 2 groups x (prices + products) = 6 requests, 5 waits
-    expect(http.calls).toHaveLength(6);
-    expect(sleep).toHaveBeenCalledTimes(5);
+    // 1 last-updated + 1 groups + 1 group x (prices + products) = 4 requests, 3 waits
+    expect(http.calls).toHaveLength(4);
+    expect(sleep).toHaveBeenCalledTimes(3);
     for (const call of sleep.mock.calls) expect((call as any)[0]).toBe(TCGCSV_REQUEST_SPACING_MS);
     for (const call of http.calls) {
       expect(call.headers['User-Agent']).toBe('FindASale/1.0 (card catalog; test)');
@@ -151,28 +176,24 @@ describe('TCGCSV ingest for Pokemon', () => {
   it('on a later run re-fetches products only for groups modified since the last success or not yet loaded', async () => {
     const store = new MemoryCatalogStore();
     await runTcgcsvIngest(deps(store, tcgHttp().httpGet, env));
-    // Pretend the last success was 2026-10-03 20:30 UTC: group 604 was modified in February (older, already loaded),
-    // group 2332 was modified 2026-10-03 20:00 UTC (inside the 24 hour safety margin).
+
+    // Last success 2026-10-03 20:30 UTC: group 330 was modified 2026-08-20 (older than the 24 hour margin) and is loaded, so no products request.
     store.sources.get('TCGCSV')!.lastSuccessAt = new Date('2026-10-03T20:30:00Z');
-    const http = fakeHttp((url) => {
-      if (url.endsWith('/last-updated.txt')) return { body: '2026-10-05T20:05:38+0000' };
-      let m = /\/tcgplayer\/(\d+)\/groups$/.exec(url);
-      if (m) return { body: JSON.stringify(tcgGroups('POKEMON')) };
-      m = /\/(\d+)\/products$/.exec(url);
-      if (m) return { body: JSON.stringify(tcgProducts(Number(m[1]))) };
-      m = /\/(\d+)\/prices$/.exec(url);
-      if (m) return { body: JSON.stringify(tcgPrices(Number(m[1]))) };
-      return { status: 404 };
-    });
-    await runTcgcsvIngest(deps(store, http.httpGet, env));
-    const productCalls = http.calls.filter((c) => c.url.endsWith('/products')).map((c) => c.url);
-    expect(productCalls).toEqual([`${TCGCSV_BASE_URL}/tcgplayer/3/2332/products`]);
-    expect(http.calls.filter((c) => c.url.endsWith('/prices'))).toHaveLength(2); // prices every run
+    const quiet = ygoHttp('2026-10-05T20:05:38+0000');
+    await runTcgcsvIngest(deps(store, quiet.httpGet, env));
+    expect(quiet.calls.filter((c) => c.url.endsWith('/products'))).toEqual([]);
+    expect(quiet.calls.filter((c) => c.url.endsWith('/prices'))).toHaveLength(1); // prices every run
+
+    // Last success 2026-08-21: the group was modified 2026-08-20 20:55 UTC, inside the margin, so its products are fetched again.
+    store.sources.get('TCGCSV')!.lastSuccessAt = new Date('2026-08-21T00:00:00Z');
+    const busy = ygoHttp('2026-10-06T20:05:38+0000');
+    await runTcgcsvIngest(deps(store, busy.httpGet, env));
+    expect(busy.calls.filter((c) => c.url.endsWith('/products')).map((c) => c.url)).toEqual([`${TCGCSV_BASE_URL}/tcgplayer/2/330/products`]);
   });
 });
 
 describe('TCGCSV failure handling and guards', () => {
-  const env = { CARD_CATALOG_ENABLED: 'true', CARD_CATALOG_GAMES: 'POKEMON' };
+  const env = { CARD_CATALOG_ENABLED: 'true', CARD_CATALOG_GAMES: 'YUGIOH' };
 
   it('HTTP 429 stops the run at once with no retry', async () => {
     const store = new MemoryCatalogStore();
@@ -187,10 +208,10 @@ describe('TCGCSV failure handling and guards', () => {
 
   it('retries a 5xx once and then succeeds', async () => {
     const store = new MemoryCatalogStore();
-    const http = tcgHttp({ failOnce: /\/604\/prices$/ });
+    const http = tcgHttp({ failOnce: /\/330\/prices$/ });
     const res = await runTcgcsvIngest(deps(store, http.httpGet, env));
     expect(res.status).toBe('OK');
-    expect(http.calls.filter((c) => c.url.endsWith('/604/prices'))).toHaveLength(2);
+    expect(http.calls.filter((c) => c.url.endsWith('/330/prices'))).toHaveLength(2);
   });
 
   it('records SKIPPED_DB_SPACE and makes no request when the database exceeds the soft limit', async () => {
@@ -220,6 +241,11 @@ describe('pure TCGCSV helpers', () => {
       collectorNumber: '5/10',
       releaseYear: 2020,
     });
+  });
+
+  it('mapTcgcsvProduct leaves releaseYear null for supplemental groups (their publishedOn is a refresh timestamp)', () => {
+    const group = { groupId: 2332, name: 'Promos', abbreviation: 'PPP', isSupplemental: true, publishedOn: '2026-10-03T20:00:05Z', modifiedOn: null };
+    expect(mapTcgcsvProduct('POKEMON', group, { productId: 7, name: 'Promo', extendedData: [{ name: 'Number', value: 'PP-001' }] }, [])?.releaseYear).toBeNull();
   });
 
   it('Yu-Gi-Oh stores Unlimited only and counts 1st Edition as unmapped (DECISION NEEDED)', () => {

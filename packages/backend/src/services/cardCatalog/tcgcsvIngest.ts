@@ -1,7 +1,13 @@
 /**
- * TCGCSV ingest for Pokemon and Yu-Gi-Oh (ADR-134 section 3.3, batch B3). OFF by default: it only
- * runs when CARD_CATALOG_GAMES lists POKEMON or YUGIOH, which waits on legal decision D2
- * (TCGCSV publishes no terms page and its data originates from TCGplayer).
+ * TCGCSV ingest for Yu-Gi-Oh (ADR-134 section 3.3, batch B3). OFF by default: it only runs when
+ * CARD_CATALOG_GAMES lists YUGIOH, which waits on legal decision D2 (TCGCSV publishes no terms
+ * page and its data originates from TCGplayer).
+ *
+ * POKEMON IS NO LONGER INGESTED HERE (2026-10-12). TCGplayer's terms bar combining its pricing with
+ * other data, so Pokemon identity comes from the TCGdex ingest (tcgdexIngest.ts) and nothing
+ * Pokemon is ever read from TCGCSV, whatever CARD_CATALOG_GAMES says. The Pokemon branches of the
+ * pure helpers below are kept (and tested) only so the file stays a faithful record of what was
+ * verified on 2026-10-03.
  *
  * Verified live on 2026-10-03 (read-only GETs of public JSON):
  *  - GET https://tcgcsv.com/last-updated.txt -> '2026-10-03T20:05:38+0000'
@@ -182,12 +188,12 @@ function modifiedMs(group: TcgGroup): number | null {
 
 /**
  * Runs one TCGCSV refresh for the enabled games. Returns status 'DISABLED' (and touches nothing)
- * when neither POKEMON nor YUGIOH is enabled. Never throws.
+ * when YUGIOH is not enabled. Pokemon is always ignored here. Never throws.
  */
 export async function runTcgcsvIngest(overrides: Partial<IngestDeps> = {}): Promise<IngestResult> {
   const deps = resolveDeps(overrides);
   const { store, httpGet, now, sleep, env } = deps;
-  const games = getEnabledGames(env).filter((g): g is TcgGame => g === 'POKEMON' || g === 'YUGIOH');
+  const games = getEnabledGames(env).filter((g): g is TcgGame => g === 'YUGIOH');
   if (games.length === 0) return { ...emptyResult('TCGCSV'), status: 'DISABLED' };
 
   const result = emptyResult('TCGCSV');

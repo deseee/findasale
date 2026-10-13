@@ -6,7 +6,7 @@
  *   GET  /search           prefix search or exact set+number, capped at 20
  *   POST /resolve          up to 500 refs -> EXACT | AMBIGUOUS | UNMATCHED (used by intake)
  *   GET  /suggested-price  Suggested price block for one printing (computed, never stored)
- *   GET  /status           CardDataSource freshness for the UI banner
+ *   GET  /status           CardDataSource freshness for the UI banner (plus data attributions when TCGdex is on)
  *
  * Contract:
  *  - Every success body is { success: true, catalogReady, dataAsOf: { SCRYFALL, TCGCSV }, ...payload,
@@ -127,7 +127,7 @@ export function createCardCatalogHandlers(overrides: Partial<CardCatalogControll
       const st = await state();
       const limit = clampSearchLimit(q.limit);
       if (!isGameServed(st, q.game as any)) return sendOk(res, st, { results: [], capped: false, limit });
-      const found = await searchPrintings({ game: q.game as any, q: q.q, set: q.set, number: q.number, limit }, deps.getDb());
+      const found = await searchPrintings({ game: q.game as any, q: q.q, set: q.set, number: q.number, limit }, deps.getDb(), deps.getEnv());
       return sendOk(res, st, { results: found.results, capped: found.capped, limit });
     } catch (err) {
       return sendServerError(res, 'search', err);
@@ -143,7 +143,7 @@ export function createCardCatalogHandlers(overrides: Partial<CardCatalogControll
       const unmatched = (r: { ref: string }) => ({ ref: r.ref, status: 'UNMATCHED', candidates: [], truncated: false });
       if (!st.catalogReady) return sendOk(res, st, { results: refs.map(unmatched) });
       const served = refs.filter((r) => isGameServed(st, r.game as any));
-      const resolved = served.length > 0 ? await resolveRefs(served as any, deps.getDb()) : [];
+      const resolved = served.length > 0 ? await resolveRefs(served as any, deps.getDb(), deps.getEnv()) : [];
       const byRef = new Map<object, unknown>();
       served.forEach((r, i) => byRef.set(r, resolved[i]));
       const results = refs.map((r) => byRef.get(r) ?? unmatched(r));
@@ -174,7 +174,13 @@ export function createCardCatalogHandlers(overrides: Partial<CardCatalogControll
   const status = async (_req: AuthRequest, res: Response) => {
     try {
       const st = await state();
-      return sendOk(res, st, { enabled: st.enabled, readyGames: st.readyGames, sources: st.sources });
+      // `attribution` (the TCGdex copyright and MIT notice) appears only while CARD_CATALOG_TCGDEX_ENABLED is on.
+      return sendOk(res, st, {
+        enabled: st.enabled,
+        readyGames: st.readyGames,
+        sources: st.sources,
+        ...(st.attributions && st.attributions.length > 0 ? { attribution: st.attributions } : {}),
+      });
     } catch (err) {
       return sendServerError(res, 'status', err);
     }

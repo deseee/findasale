@@ -19,6 +19,9 @@ import {
 } from './__fixtures__/cardCatalogFixtures';
 import { collectorNumberCandidates, collectorNumbersMatch, normalizeCardName } from '../services/cardCatalog/normalize';
 
+// Pokemon is reachable only while both the catalog and the TCGdex flag are on (see cardCatalogTcgdexGuards.test.ts).
+const POKEMON_ON = { CARD_CATALOG_ENABLED: 'true', CARD_CATALOG_TCGDEX_ENABLED: 'true' };
+
 const fifty = Array.from({ length: 50 }, (_, i) =>
   dbPrinting({
     id: `SCRYFALL:b${i}`,
@@ -81,7 +84,7 @@ describe('searchPrintings (acceptance 4: capped at 20)', () => {
     ];
     const { db } = makeFakeDb({ printings: rows });
     for (const typed of ['1', '001', '001/102', '1/102']) {
-      const res = await searchPrintings({ game: 'POKEMON', set: 'BS', number: typed }, db);
+      const res = await searchPrintings({ game: 'POKEMON', set: 'BS', number: typed }, db, POKEMON_ON);
       expect(res.results.map((r) => r.id)).toEqual(['TCGCSV:1']);
     }
   });
@@ -122,6 +125,7 @@ describe('resolveRefs', () => {
         { ref: 'r2', game: 'POKEMON', tcgplayerProductId: 42346 },
       ],
       db,
+      POKEMON_ON,
     );
     expect(out.map((o) => [o.ref, o.status, o.candidates[0]?.id])).toEqual([
       ['r1', 'EXACT', 'SCRYFALL:aaa'],
@@ -140,6 +144,7 @@ describe('resolveRefs', () => {
         { ref: 'empty', game: 'MTG' },
       ],
       db,
+      POKEMON_ON,
     );
     const by = Object.fromEntries(out.map((o) => [o.ref, o]));
     expect(by.set.status).toBe('EXACT');

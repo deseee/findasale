@@ -10,7 +10,16 @@
  */
 import type { CatalogGame, CatalogSourceId } from './types';
 import { CatalogDb, getCatalogDb } from './catalogStore';
-import { CATALOG_GAMES, EnvLike, getEnabledGames, getPriceStaleHours, isCatalogEnabled } from './catalogConfig';
+import {
+  CATALOG_GAMES,
+  EnvLike,
+  getEnabledGames,
+  getPriceStaleHours,
+  isCatalogEnabled,
+  isPokemonServable,
+  isTcgdexEnabled,
+} from './catalogConfig';
+import { DataAttribution, TCGDEX_ATTRIBUTION } from './tcgdexAttribution';
 import {
   collectorNumberCandidates,
   collectorNumbersMatch,
@@ -29,7 +38,7 @@ const PAIR_QUERY_CHUNK = 100;
 
 export const GAME_SOURCE: Record<CatalogGame, CatalogSourceId> = {
   MTG: 'SCRYFALL',
-  POKEMON: 'TCGCSV',
+  POKEMON: 'TCGDEX',
   YUGIOH: 'TCGCSV',
 };
 
@@ -139,7 +148,10 @@ export interface CatalogState {
   /** True when at least one enabled game has a source that has completed a run. */
   catalogReady: boolean;
   readyGames: CatalogGame[];
-  dataAsOf: { SCRYFALL: string | null; TCGCSV: string | null };
+  /** TCGDEX appears only while CARD_CATALOG_TCGDEX_ENABLED is on and a TCGdex run has been recorded. */
+  dataAsOf: { SCRYFALL: string | null; TCGCSV: string | null; TCGDEX?: string | null };
+  /** Notices that must travel with the data (present only while CARD_CATALOG_TCGDEX_ENABLED is on). */
+  attributions?: DataAttribution[];
   sources: Array<{
     source: CatalogSourceId;
     lastAttemptAt: string | null;
@@ -177,7 +189,7 @@ export async function loadCatalogState(db: () => CatalogDb = getCatalogDb, env: 
   const wanted = new Set<CatalogSourceId>(games.map((g) => GAME_SOURCE[g]));
 
   const readyGames = games.filter((g) => bySource.get(GAME_SOURCE[g])?.lastSuccessAt);
-  const dataAsOf = { SCRYFALL: null as string | null, TCGCSV: null as string | null };
+  const dataAsOf: CatalogState['dataAsOf'] = { SCRYFALL: null, TCGCSV: null };
   const sources: CatalogState['sources'] = [];
   for (const source of wanted) {
     const row = bySource.get(source);
@@ -193,7 +205,14 @@ export async function loadCatalogState(db: () => CatalogDb = getCatalogDb, env: 
       dataAsOf: asOf,
     });
   }
-  return { enabled: true, catalogReady: readyGames.length > 0, readyGames, dataAsOf, sources };
+  return {
+    enabled: true,
+    catalogReady: readyGames.length > 0,
+    readyGames,
+    dataAsOf,
+    sources,
+    ...(isTcgdexEnabled(env) ? { attributions: [TCGDEX_ATTRIBUTION] } : {}),
+  };
 }
 
 export function isGameServed(state: CatalogState, game: CatalogGame): boolean {
@@ -245,7 +264,13 @@ function collectorNumberWhere(raw: string): Record<string, unknown> | null {
  * Prefix search on the normalized name, or exact (set, number). Needs a name of at least two
  * characters, or a set together with a number; anything else returns no rows.
  */
-export async function searchPrintings(params: SearchParams, db: CatalogDb = getCatalogDb()): Promise<SearchResult> {
+export async function searchPrintings(
+  params: SearchParams,
+  db: CatalogDb = getCatalogDb(),
+  env: EnvLike = process.env,
+): Promise<SearchResult> {
+  // Pokemon is reachable only while both the catalog and the TCGdex flag are on.
+  if (params.game === 'POKEMON' && !isPokemonServable(env)) return { results: [], capped: false };
   const limit = clampSearchLimit(params.limit);
   const qn = normalizeCardName(params.q ?? '');
   const set = String(params.set ?? '').trim().toLowerCase();
@@ -331,8 +356,21 @@ function toResolveResult(ref: string, rows: any[]): ResolveResult {
  * set code plus collector number, then by name (optionally within a set). The caller validates
  * the 500 cap (the HTTP layer returns 400); a longer list is rejected here too.
  */
-export async function resolveRefs(refs: ResolveRef[], db: CatalogDb = getCatalogDb()): Promise<ResolveResult[]> {
+export async function resolveRefs(
+  refs: ResolveRef[],
+  db: CatalogDb = getCatalogDb(),
+  env: EnvLike = process.env,
+): Promise<ResolveResult[]> {
   if (refs.length > RESOLVE_MAX_REFS) throw new Error(`resolve accepts at most ${RESOLVE_MAX_REFS} refs`);
+  // Pokemon refs are answered UNMATCHED, without a query, unless both the catalog and the TCGdex flag are on.
+  if (!isPokemonServable(env) && refs.some((r) => r.game === 'POKEMON')) {
+    const allowed = refs.filter((r) => r.game !== 'POKEMON');
+    const resolved = allowed.length > 0 ? await resolveRefs(allowed, db, env) : [];
+    let next = 0;
+    return refs.map((r) =>
+      r.game === 'POKEMON' ? { ref: r.ref, status: 'UNMATCHED' as const, candidates: [], truncated: false } : resolved[next++],
+    );
+  }
   const out: Array<ResolveResult | null> = refs.map(() => null);
 
   // Phase 1: stable ids.
@@ -442,13 +480,20 @@ const LOAD_BY_ID_CHUNK = 500;
  * result, so the caller decides what a missing printing means. Duplicate and blank ids are ignored. Reads local
  * tables only, in chunks of 500, and has no list-all form: it only answers for ids the caller already holds.
  */
-export async function loadPrintingsByIds(ids: string[], db: CatalogDb = getCatalogDb()): Promise<PrintingDto[]> {
+export async function loadPrintingsByIds(
+  ids: string[],
+  db: CatalogDb = getCatalogDb(),
+  env: EnvLike = process.env,
+): Promise<PrintingDto[]> {
   const unique = Array.from(new Set(ids.map((id) => String(id ?? '').trim()).filter((id) => id.length > 0)));
   const out: PrintingDto[] = [];
   for (let start = 0; start < unique.length; start += LOAD_BY_ID_CHUNK) {
     const chunk = unique.slice(start, start + LOAD_BY_ID_CHUNK);
     const rows = await db.cardPrinting.findMany({ where: { id: { in: chunk } }, select: PRINTING_SELECT, take: chunk.length });
-    for (const row of rows) out.push(toPrintingDto(row));
+    for (const row of rows) {
+      if (row.game === 'POKEMON' && !isPokemonServable(env)) continue;
+      out.push(toPrintingDto(row));
+    }
   }
   return out;
 }
@@ -479,6 +524,7 @@ export async function suggestPriceForPrinting(
 ): Promise<SuggestedPriceOutcome> {
   const row = await db.cardPrinting.findUnique({ where: { id: params.printingId }, select: PRINTING_SELECT });
   if (!row) return { found: false };
+  if (row.game === 'POKEMON' && !isPokemonServable(env)) return { found: false };
   const dto = toPrintingDto(row);
   const sourceRow = await db.cardDataSource.findUnique({ where: { source: row.source } });
   const sourceAsOf = sourceRow ? sourceDataAsOf(sourceRow) : null;

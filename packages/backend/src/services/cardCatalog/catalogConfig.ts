@@ -29,18 +29,40 @@ export function isCatalogEnabled(env: EnvLike = process.env): boolean {
 }
 
 /**
- * Games the catalog serves. Default is MTG only (Scryfall); Pokemon and Yu-Gi-Oh (TCGCSV) must be
- * listed explicitly, which waits on legal decision D2.
+ * Own switch for the TCGdex Pokemon identity ingest. Defaults to false and is separate from
+ * CARD_CATALOG_ENABLED: Pokemon is served only when BOTH are on. With this off nothing about
+ * Pokemon is reachable (no ingest, no lookup, no listing as an enabled game).
+ */
+export function isTcgdexEnabled(env: EnvLike = process.env): boolean {
+  const raw = (env.CARD_CATALOG_TCGDEX_ENABLED ?? '').trim().toLowerCase();
+  return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on';
+}
+
+/** True only when the master catalog switch and the TCGdex switch are both on. */
+export function isPokemonServable(env: EnvLike = process.env): boolean {
+  return isCatalogEnabled(env) && isTcgdexEnabled(env);
+}
+
+/**
+ * Games the catalog serves. Default is MTG only (Scryfall). POKEMON is stripped from
+ * CARD_CATALOG_GAMES unless CARD_CATALOG_TCGDEX_ENABLED is on (the TCGCSV route to Pokemon is
+ * closed for good: TCGplayer's terms bar combining its data with others). With the TCGdex switch
+ * on, POKEMON is enabled even when it is not listed, because the switch is its opt-in. YUGIOH
+ * (TCGCSV) still waits on legal decision D2 and must be listed explicitly.
  */
 export function getEnabledGames(env: EnvLike = process.env): CatalogGame[] {
   const raw = (env.CARD_CATALOG_GAMES ?? '').trim();
-  if (!raw) return ['MTG'];
-  const out: CatalogGame[] = [];
-  for (const part of raw.split(',')) {
-    const g = part.trim().toUpperCase() as CatalogGame;
-    if (CATALOG_GAMES.includes(g) && !out.includes(g)) out.push(g);
+  const listed: CatalogGame[] = [];
+  if (raw) {
+    for (const part of raw.split(',')) {
+      const g = part.trim().toUpperCase() as CatalogGame;
+      if (CATALOG_GAMES.includes(g) && !listed.includes(g)) listed.push(g);
+    }
   }
-  return out.length > 0 ? out : ['MTG'];
+  const allowed = isTcgdexEnabled(env) ? listed : listed.filter((g) => g !== 'POKEMON');
+  const out: CatalogGame[] = allowed.length > 0 ? allowed : ['MTG'];
+  if (isTcgdexEnabled(env) && !out.includes('POKEMON')) out.push('POKEMON');
+  return out;
 }
 
 export function getUserAgent(env: EnvLike = process.env): string {
@@ -56,4 +78,52 @@ export function getDbSoftLimitMb(env: EnvLike = process.env): number {
 export function getPriceStaleHours(env: EnvLike = process.env): number {
   const n = Number((env.CARD_PRICE_STALE_HOURS ?? '').trim());
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_PRICE_STALE_HOURS;
+}
+
+// ---------------------------------------------------------------------------------------------
+// TCGdex (Pokemon identity) settings
+// ---------------------------------------------------------------------------------------------
+
+export const TCGDEX_REPO_OWNER = 'tcgdex';
+export const TCGDEX_REPO_NAME = 'cards-database';
+/**
+ * Commit of github.com/tcgdex/cards-database the ingest reads by default (master as seen on
+ * 2026-10-12, confirmed to exist). Override with CARD_CATALOG_TCGDEX_REF (a 40 character commit
+ * id or a tag); a moving branch name is refused so a run is always reproducible.
+ */
+export const TCGDEX_PINNED_REF = '4199850a6af49665db0080fa2bb9ef751750a406';
+
+/** TCGdex language codes the ingest accepts. Dutch, Polish, Indonesian and Thai are left out: the card vocabulary has no code for them. */
+export const TCGDEX_LANGUAGE_CODES: readonly string[] = [
+  'en', 'fr', 'es', 'es-mx', 'it', 'pt', 'pt-br', 'pt-pt', 'de', 'ru', 'ja', 'ko', 'zh-tw', 'zh-cn',
+];
+/** Languages whose files live under data-asia/ in the repository (the rest live under data/). */
+export const TCGDEX_ASIAN_LANGUAGE_CODES: readonly string[] = ['ja', 'ko', 'zh-tw', 'zh-cn'];
+export const TCGDEX_DEFAULT_LANGUAGES: readonly string[] = ['en'];
+
+/** CARD_CATALOG_TCGDEX_LANGUAGES: comma separated TCGdex codes, default English only. Unknown codes are dropped. */
+export function getTcgdexLanguages(env: EnvLike = process.env): string[] {
+  const raw = (env.CARD_CATALOG_TCGDEX_LANGUAGES ?? '').trim();
+  const out: string[] = [];
+  if (raw) {
+    for (const part of raw.split(',')) {
+      const code = part.trim().toLowerCase();
+      if (TCGDEX_LANGUAGE_CODES.includes(code) && !out.includes(code)) out.push(code);
+    }
+  }
+  return out.length > 0 ? out : Array.from(TCGDEX_DEFAULT_LANGUAGES);
+}
+
+export function getTcgdexRef(env: EnvLike = process.env): string {
+  const raw = (env.CARD_CATALOG_TCGDEX_REF ?? '').trim();
+  return raw || TCGDEX_PINNED_REF;
+}
+
+const MOVING_REF_NAMES = ['master', 'main', 'head', 'develop', 'dev', 'trunk'];
+
+/** A commit id or a tag-like name; never a moving branch name. */
+export function isAcceptableTcgdexRef(ref: string): boolean {
+  if (/^[0-9a-f]{40}$/i.test(ref)) return true;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(ref)) return false;
+  return !MOVING_REF_NAMES.includes(ref.toLowerCase());
 }

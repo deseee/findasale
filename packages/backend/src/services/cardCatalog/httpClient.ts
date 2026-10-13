@@ -1,7 +1,8 @@
 /**
  * Minimal HTTP layer for the card catalog ingest jobs (ADR-134 sections 3.3 and 11).
  *
- * - Fixed hosts only: api.scryfall.com, *.scryfall.io and tcgcsv.com. No user-supplied URL is ever
+ * - Fixed hosts only: api.scryfall.com, *.scryfall.io, tcgcsv.com and codeload.github.com (the TCGdex
+ *   repository archive). No user-supplied URL is ever
  *   fetched, and every redirect hop is checked against the same allowlist.
  * - Uses Node's https module (no new dependency) and exposes the response body as a stream so the
  *   78 MB Scryfall file is never buffered.
@@ -40,7 +41,13 @@ export class RateLimitedError extends HttpStatusError {
 
 export function isAllowedCatalogHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
-  return h === 'api.scryfall.com' || h === 'scryfall.io' || h.endsWith('.scryfall.io') || h === 'tcgcsv.com';
+  return (
+    h === 'api.scryfall.com' ||
+    h === 'scryfall.io' ||
+    h.endsWith('.scryfall.io') ||
+    h === 'tcgcsv.com' ||
+    h === 'codeload.github.com' // TCGdex ingest: pinned repository archive only (never api.tcgdex.net)
+  );
 }
 
 /** Parses a URL and throws unless it is https on an allowed host. */

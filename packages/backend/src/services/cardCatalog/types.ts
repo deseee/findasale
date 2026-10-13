@@ -4,12 +4,12 @@
  */
 
 export type CatalogGame = 'MTG' | 'POKEMON' | 'YUGIOH';
-export type CatalogSourceId = 'SCRYFALL' | 'TCGCSV';
+export type CatalogSourceId = 'SCRYFALL' | 'TCGCSV' | 'TCGDEX';
 
 /** Values stored in CardDataSource.lastStatus. */
 export type RunStatus = 'OK' | 'FAILED' | 'SKIPPED_UNCHANGED' | 'SKIPPED_DB_SPACE';
 
-/** One row of the CardPrinting table (id encodes the source: 'SCRYFALL:<uuid>' or 'TCGCSV:<productId>'). */
+/** One row of the CardPrinting table (id encodes the source: 'SCRYFALL:<uuid>', 'TCGCSV:<productId>' or 'TCGDEX:<lang>:<set>-<localId>[:<variant>]'). */
 export interface PrintingRow {
   id: string;
   source: CatalogSourceId;
