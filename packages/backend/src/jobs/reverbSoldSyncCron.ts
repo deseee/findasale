@@ -15,6 +15,10 @@
  *      Reverb listing itself left alone (it is the one that sold). The extension's
  *      getPendingRemovals then pulls every still-POSTED platform. Idempotent: only AVAILABLE items
  *      are loaded, and a repeat commit is alreadyCommitted.
+ *   5. (2026-10-13) MULTI-UNIT item (stock > 1): the order takes exactly ONE unit and nothing is withdrawn anywhere; only the unit that
+ *      empties the stock runs the step 4 cascade. The item stays AVAILABLE with its reverbListingId, so the same order matches on every
+ *      poll inside the lookback window: the dedupe key `sold-unit:REVERB:<orderNumber>:<itemId>` (ProcessedWebhookEvent, see
+ *      soldElsewhereUnitSale.ts) makes the repeat a no-op.
  *
  * Order shape is from reverb-api.com/docs/retrieve-orders (fetched 2026-09-23), not yet confirmed
  * against a live response. The token needs the read_orders scope; tokens generated with only
@@ -52,8 +56,8 @@ export const REVERB_STALE_SWEEP_LIMIT = 10;
 export interface ReverbSoldSyncDeps {
   loadListedItems?: (organizerId: string) => Promise<Array<{ id: string; title: string; saleId: string | null; reverbListingId: string }>>;
   fetchOrders?: (organizerId: string, since: Date) => Promise<ReverbSellerOrder[] | null>;
-  commitSale?: (itemId: string) => Promise<{ alreadyCommitted: boolean }>;
-  notify?: (organizerId: string, item: { id: string; title: string; saleId: string | null }, orderNumber: string) => Promise<void>;
+  commitSale?: (itemId: string, orderNumber: string) => Promise<{ alreadyCommitted: boolean; partial?: boolean }>;
+  notify?: (organizerId: string, item: { id: string; title: string; saleId: string | null }, orderNumber: string, partial?: boolean) => Promise<void>;
   now?: () => Date;
 }
 
@@ -70,7 +74,12 @@ export function isVoidReverbOrderStatus(status: string): boolean {
   return /^(cancel|refund|unpaid|payment_pending|pending_review|blocked)/i.test(String(status ?? '').trim());
 }
 
-/** Pure: which listed items do these orders sell? First live order per listing wins. */
+/**
+ * Pure: which listed items do these orders sell? Every distinct live order for a listed listing is returned (one entry per order +
+ * item). There is deliberately NO per-listing dedupe: on a multi-unit listing a second order must take its own unit, and a repeat of
+ * an order across polls is stopped downstream by the per-order dedupeKey ('sold-unit:REVERB:<orderNumber>:<itemId>', see
+ * defaultCommitSale). A single-unit item sells once: the second commit returns alreadyCommitted.
+ */
 export function matchReverbOrdersToItems(
   orders: ReverbSellerOrder[],
   items: Array<{ id: string; reverbListingId: string }>,
@@ -78,12 +87,14 @@ export function matchReverbOrdersToItems(
   const byListing = new Map<string, string>();
   for (const it of items) if (it.reverbListingId) byListing.set(String(it.reverbListingId), it.id);
   const out: Array<{ itemId: string; orderNumber: string }> = [];
-  const seen = new Set<string>();
+  const seenPairs = new Set<string>(); // the same order number repeated in one payload is one sale, never two units
   for (const o of orders) {
     if (isVoidReverbOrderStatus(o.status)) continue;
     const itemId = o.listingId ? byListing.get(String(o.listingId)) : undefined;
-    if (!itemId || seen.has(itemId)) continue;
-    seen.add(itemId);
+    if (!itemId) continue;
+    const pair = `${o.orderNumber}:${itemId}`;
+    if (seenPairs.has(pair)) continue;
+    seenPairs.add(pair);
     out.push({ itemId, orderNumber: o.orderNumber });
   }
   return out;
@@ -102,19 +113,24 @@ async function defaultLoadListedItems(organizerId: string) {
   return rows.map((r: any) => ({ id: r.id, title: r.title, saleId: r.saleId, reverbListingId: String(r.reverbListingId) }));
 }
 
-async function defaultCommitSale(itemId: string) {
-  const r = await commitFacebookNativeSale(itemId, SOLD_VIA_REVERB, { skipWithdraw: ['REVERB'] });
-  return { alreadyCommitted: r.alreadyCommitted };
+async function defaultCommitSale(itemId: string, orderNumber: string) {
+  const r = await commitFacebookNativeSale(itemId, SOLD_VIA_REVERB, {
+    skipWithdraw: ['REVERB'],
+    dedupeKey: `sold-unit:${SOLD_VIA_REVERB}:${orderNumber}:${itemId}`, // multi-unit items only; one order takes one unit once
+  });
+  return { alreadyCommitted: r.alreadyCommitted, partial: r.partial === true };
 }
 
-async function defaultNotify(organizerId: string, item: { id: string; title: string; saleId: string | null }, orderNumber: string) {
+async function defaultNotify(organizerId: string, item: { id: string; title: string; saleId: string | null }, orderNumber: string, partial = false) {
   const organizer = await prisma.organizer.findUnique({ where: { id: organizerId }, select: { userId: true } });
   if (!organizer?.userId) return;
   await createNotification({
     userId: organizer.userId,
     type: 'SALE_UPDATE',
     title: 'Item sold on Reverb',
-    body: `"${item.title}" sold on Reverb (order ${orderNumber}) and has been marked as sold. It is being removed from your other marketplaces.`,
+    body: partial
+      ? `One unit of "${item.title}" sold on Reverb (order ${orderNumber}). Your stock count was reduced by one and your other listings stay up.`
+      : `"${item.title}" sold on Reverb (order ${orderNumber}) and has been marked as sold. It is being removed from your other marketplaces.`,
     link: item.saleId ? `/organizer/sales/${item.saleId}` : `/organizer/inventory`,
     sendEmail: true,
   });
@@ -141,15 +157,15 @@ export async function syncReverbSoldItemsForOrganizer(
 
   const itemById = new Map(items.map((i) => [i.id, i]));
   for (const m of matchReverbOrdersToItems(orders, items)) {
-    const { alreadyCommitted } = await commitSale(m.itemId);
+    const { alreadyCommitted, partial = false } = await commitSale(m.itemId, m.orderNumber);
     if (alreadyCommitted) {
       result.alreadySold++;
       continue;
     }
     result.sold.push(m);
     const item = itemById.get(m.itemId)!;
-    console.log(`[Reverb Sync] Item ${m.itemId} ("${item.title}") sold via Reverb order ${m.orderNumber} -- marked SOLD`);
-    await notify(organizerId, item, m.orderNumber).catch((err: any) =>
+    console.log(`[Reverb Sync] Item ${m.itemId} ("${item.title}") sold via Reverb order ${m.orderNumber} -- ${partial ? 'took one unit, item stays AVAILABLE' : 'marked SOLD'}`);
+    await notify(organizerId, item, m.orderNumber, partial).catch((err: any) =>
       console.error(`[Reverb Sync] Failed to notify organizer ${organizerId} for item ${m.itemId}:`, err?.message)
     );
   }

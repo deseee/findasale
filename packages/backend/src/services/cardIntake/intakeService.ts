@@ -420,15 +420,19 @@ export async function runPreview(deps: IntakeDeps, input: PreviewInput): Promise
     if (!ex) continue;
     willMerge += 1;
     if (!firstMerge || g.firstRow < (firstMerge.row as number)) {
-      const stock = ex.stockTotal ?? 1;
+      // Everything shown to the organizer is the IN STOCK number (stockTotal - stockSold), not the stored total.
+      const sold = ex.stockSold;
+      const inStockNow = Math.max((ex.stockTotal ?? 1) - sold, 0);
+      const addTotal = nextStockTotal('ADD', ex, g.quantity);
+      const replaceTotal = nextStockTotal('REPLACE', ex, g.quantity);
       firstMerge = {
         row: g.firstRow,
         name: g.name,
-        existingStock: stock,
+        existingStock: inStockNow,
         fileQuantity: g.quantity,
-        addResult: nextStockTotal('ADD', ex, g.quantity),
-        replaceResult: nextStockTotal('REPLACE', ex, g.quantity),
-        alreadySold: ex.stockSold,
+        addResult: addTotal === null ? null : Math.max(addTotal - sold, 0),
+        replaceResult: replaceTotal === null ? null : Math.max(replaceTotal - sold, 0),
+        alreadySold: sold,
       };
     }
   }

@@ -5,7 +5,7 @@
  *
  *  - computeSaveImpact: the BEFORE-save text. Mirrors the backend rules in services/ebayItemPushService.ts
  *    (computeEbayPushFields, buildEbayPlan, buildExtensionPlan): eBay is pushed only for fields that REALLY changed
- *    (title, description, condition, price, shipping inputs), only when the item is listed on eBay with an offer, and
+ *    (title, description, condition, price, in stock, shipping inputs), only when the item is listed on eBay with an offer, and
  *    never while the eBay sync is held. Extension marketplaces (Vinted, Poshmark, ...) are never pushed: where the item
  *    is listed and a title, description, condition or price changed, the organizer is told to update it by hand.
  *  - describePlan / describePushOutcome: the AFTER-save row text, from the PUT response's marketplacePlan and from the
@@ -16,7 +16,7 @@
  */
 import { desiredEbayCondition } from './conditionModel';
 
-export type EbayPushField = 'title' | 'description' | 'condition' | 'price' | 'shipping' | 'fccId' | 'brand' | 'mpn' | 'upc' | 'ean' | 'isbn';
+export type EbayPushField = 'title' | 'description' | 'condition' | 'price' | 'quantity' | 'shipping' | 'fccId' | 'brand' | 'mpn' | 'upc' | 'ean' | 'isbn';
 export type EbayPlanReason = 'not_listed' | 'no_offer_id' | 'held' | 'no_changes';
 
 /** The fields whose change prompts a manual update on an extension marketplace (same set as the backend). */
@@ -56,6 +56,10 @@ export interface SaveImpactLoadedItem {
   condition?: string | null;
   conditionGrade?: string | null;
   price?: unknown;
+  /** The one in-stock number (server computed). When absent, stockTotal minus stockSold is used. */
+  inStock?: number | null;
+  stockTotal?: number | null;
+  stockSold?: number | null;
   packageWeightOz?: unknown;
   packageLengthIn?: unknown;
   packageWidthIn?: unknown;
@@ -113,6 +117,16 @@ function priceNumber(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** The loaded in-stock number: the server's inStock, else stockTotal minus stockSold, else null (unknown). */
+function loadedInStockNumber(loaded: SaveImpactLoadedItem): number | null {
+  if (typeof loaded.inStock === 'number' && Number.isFinite(loaded.inStock)) return loaded.inStock;
+  if (typeof loaded.stockTotal === 'number' && Number.isFinite(loaded.stockTotal)) {
+    const sold = typeof loaded.stockSold === 'number' && Number.isFinite(loaded.stockSold) ? loaded.stockSold : 0;
+    return Math.max(0, loaded.stockTotal - sold);
+  }
+  return null;
+}
+
 function numOrNull(v: unknown): number | null {
   return v === undefined || v === null || v === '' ? null : Number(v);
 }
@@ -147,6 +161,12 @@ export function computeChangedEbayFields(
     const nextNum = priceNumber(dirty.price);
     const curNum = priceNumber(loaded.price);
     if (nextNum !== null && (curNum === null || Math.abs(nextNum - curNum) >= 0.005)) fields.push('price');
+  }
+
+  // quantity: the entered In stock number differs from the loaded one. eBay takes a count, so it is pushed.
+  if (provided(dirty, 'inStock')) {
+    const nextStock = numOrNull(dirty.inStock);
+    if (nextStock !== null && Number.isFinite(nextStock) && nextStock !== loadedInStockNumber(loaded)) fields.push('quantity');
   }
 
   const shippingChanged =
@@ -214,6 +234,7 @@ const FIELD_WORDS: Record<string, string> = {
   description: 'description',
   condition: 'condition',
   price: 'price',
+  quantity: 'in stock',
   shipping: 'shipping',
   fccId: 'FCC ID',
   brand: 'brand',

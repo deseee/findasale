@@ -4,7 +4,8 @@
  *  - In-file duplicates (same dedupKey twice) are summed before the database step; the first
  *    non-blank price, cost and sku win; the first row of the group is the one that is written.
  *  - ADD:     stockTotal = stockTotal + qty   (a null or single-unit stockTotal counts as 1)
- *  - REPLACE: stockTotal = max(qty, stockSold)  (never below what has already sold)
+ *  - REPLACE: stockTotal = stockSold + qty  (the IN STOCK number, stockTotal - stockSold, becomes exactly the
+ *             file quantity; qty 0 is allowed and leaves in stock at 0; units already sold are kept)
  *  - stockSold is never written (itemStockService owns it).
  *  - Merge target: the oldest matching Item of this sale (AVAILABLE and not deleted, which the caller's
  *    query guarantees; SOLD items are never merge targets).
@@ -55,10 +56,14 @@ export interface StockState {
   stockSold: number;
 }
 
-/** The new stockTotal for a merge. Returns null when the result would be out of range. */
+/**
+ * The new stockTotal for a merge. Returns null when the result would be out of range (not a safe integer,
+ * below 0, or above MAX_STOCK_TOTAL). Under the single in-stock number, ADD raises in stock by qty and
+ * REPLACE sets in stock to exactly qty; either way the stored total is what carries it.
+ */
 export function nextStockTotal(mode: IntakeMode, current: StockState, quantity: number): number | null {
   const sold = Number.isFinite(current.stockSold) ? current.stockSold : 0;
-  const next = mode === 'ADD' ? (current.stockTotal ?? 1) + quantity : Math.max(quantity, sold);
+  const next = mode === 'ADD' ? (current.stockTotal ?? 1) + quantity : sold + quantity;
   return Number.isSafeInteger(next) && next >= 0 && next <= MAX_STOCK_TOTAL ? next : null;
 }
 

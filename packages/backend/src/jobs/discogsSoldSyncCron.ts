@@ -14,6 +14,10 @@
  *      SOLD via the ADR-098 guard, lastSoldVia 'DISCOGS', eBay + Shopify withdrawn, the Discogs
  *      listing itself left alone (it is the one that sold). The extension's getPendingRemovals
  *      then pulls every still-POSTED platform. Idempotent: a repeat is alreadyCommitted.
+ *   5. (2026-10-13) MULTI-UNIT item (stock > 1): the order takes exactly ONE unit and nothing is withdrawn anywhere; only the unit that
+ *      empties the stock runs the step 4 cascade. The item stays AVAILABLE and keeps its discogsListingId, so the same order matches again
+ *      on every poll: the dedupe key `sold-unit:DISCOGS:<orderId>:<itemId>` (ProcessedWebhookEvent, see soldElsewhereUnitSale.ts) makes the
+ *      repeat a no-op.
  *
  * Every 15 minutes, offset from the eBay poll. Organizers are processed sequentially.
  */
@@ -32,8 +36,8 @@ type DiscogsOrder = { id: string; status: string; items: Array<{ id: string }> }
 export interface DiscogsSoldSyncDeps {
   loadListedItems?: (organizerId: string) => Promise<Array<{ id: string; title: string; saleId: string | null; discogsListingId: string }>>;
   fetchOrders?: (organizerId: string) => Promise<DiscogsOrder[] | null>;
-  commitSale?: (itemId: string) => Promise<{ alreadyCommitted: boolean }>;
-  notify?: (organizerId: string, item: { id: string; title: string; saleId: string | null }, orderId: string) => Promise<void>;
+  commitSale?: (itemId: string, orderId: string) => Promise<{ alreadyCommitted: boolean; partial?: boolean }>;
+  notify?: (organizerId: string, item: { id: string; title: string; saleId: string | null }, orderId: string, partial?: boolean) => Promise<void>;
 }
 
 export interface DiscogsSoldSyncResult {
@@ -47,7 +51,12 @@ export function isCancelledDiscogsOrderStatus(status: string): boolean {
   return /^cancel/i.test(String(status ?? '').trim());
 }
 
-/** Pure: which listed items do these orders sell? First live order per listing wins. */
+/**
+ * Pure: which listed items do these orders sell? Every distinct live order that contains a listed listing is returned (one entry per
+ * order + item). There is deliberately NO per-listing dedupe: on a multi-unit listing a second order must take its own unit, and a
+ * repeat of an order across polls is stopped downstream by the per-order dedupeKey ('sold-unit:DISCOGS:<orderId>:<itemId>', see
+ * defaultCommitSale). A single-unit item sells once: the second commit returns alreadyCommitted.
+ */
 export function matchDiscogsOrdersToItems(
   orders: DiscogsOrder[],
   items: Array<{ id: string; discogsListingId: string }>,
@@ -55,13 +64,15 @@ export function matchDiscogsOrdersToItems(
   const byListing = new Map<string, string>();
   for (const it of items) if (it.discogsListingId) byListing.set(String(it.discogsListingId), it.id);
   const out: Array<{ itemId: string; orderId: string }> = [];
-  const seen = new Set<string>();
+  const seenPairs = new Set<string>(); // the SAME order listing the same item twice in one payload is one sale, never two units
   for (const o of orders) {
     if (isCancelledDiscogsOrderStatus(o.status)) continue;
     for (const li of o.items ?? []) {
       const itemId = byListing.get(String(li.id));
-      if (!itemId || seen.has(itemId)) continue;
-      seen.add(itemId);
+      if (!itemId) continue;
+      const pair = `${o.id}:${itemId}`;
+      if (seenPairs.has(pair)) continue;
+      seenPairs.add(pair);
       out.push({ itemId, orderId: o.id });
     }
   }
@@ -81,19 +92,24 @@ async function defaultLoadListedItems(organizerId: string) {
   return rows.map((r: any) => ({ id: r.id, title: r.title, saleId: r.saleId, discogsListingId: String(r.discogsListingId) }));
 }
 
-async function defaultCommitSale(itemId: string) {
-  const r = await commitFacebookNativeSale(itemId, SOLD_VIA_DISCOGS, { skipWithdraw: ['DISCOGS'] });
-  return { alreadyCommitted: r.alreadyCommitted };
+async function defaultCommitSale(itemId: string, orderId: string) {
+  const r = await commitFacebookNativeSale(itemId, SOLD_VIA_DISCOGS, {
+    skipWithdraw: ['DISCOGS'],
+    dedupeKey: `sold-unit:${SOLD_VIA_DISCOGS}:${orderId}:${itemId}`, // multi-unit items only; one order takes one unit once
+  });
+  return { alreadyCommitted: r.alreadyCommitted, partial: r.partial === true };
 }
 
-async function defaultNotify(organizerId: string, item: { id: string; title: string; saleId: string | null }, orderId: string) {
+async function defaultNotify(organizerId: string, item: { id: string; title: string; saleId: string | null }, orderId: string, partial = false) {
   const organizer = await prisma.organizer.findUnique({ where: { id: organizerId }, select: { userId: true } });
   if (!organizer?.userId) return;
   await createNotification({
     userId: organizer.userId,
     type: 'SALE_UPDATE',
     title: 'Item sold on Discogs',
-    body: `"${item.title}" sold on Discogs (order ${orderId}) and has been marked as sold. It is being removed from your other marketplaces.`,
+    body: partial
+      ? `One unit of "${item.title}" sold on Discogs (order ${orderId}). Your stock count was reduced by one and your other listings stay up.`
+      : `"${item.title}" sold on Discogs (order ${orderId}) and has been marked as sold. It is being removed from your other marketplaces.`,
     link: item.saleId ? `/organizer/sales/${item.saleId}` : `/organizer/inventory`,
     sendEmail: true,
   });
@@ -118,15 +134,15 @@ export async function syncDiscogsSoldItemsForOrganizer(
 
   const itemById = new Map(items.map((i) => [i.id, i]));
   for (const m of matchDiscogsOrdersToItems(orders, items)) {
-    const { alreadyCommitted } = await commitSale(m.itemId);
+    const { alreadyCommitted, partial = false } = await commitSale(m.itemId, m.orderId);
     if (alreadyCommitted) {
       result.alreadySold++;
       continue;
     }
     result.sold.push(m);
     const item = itemById.get(m.itemId)!;
-    console.log(`[Discogs Sync] Item ${m.itemId} ("${item.title}") sold via Discogs order ${m.orderId} -- marked SOLD`);
-    await notify(organizerId, item, m.orderId).catch((err: any) =>
+    console.log(`[Discogs Sync] Item ${m.itemId} ("${item.title}") sold via Discogs order ${m.orderId} -- ${partial ? 'took one unit, item stays AVAILABLE' : 'marked SOLD'}`);
+    await notify(organizerId, item, m.orderId, partial).catch((err: any) =>
       console.error(`[Discogs Sync] Failed to notify organizer ${organizerId} for item ${m.itemId}:`, err?.message)
     );
   }

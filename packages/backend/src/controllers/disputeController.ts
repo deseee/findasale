@@ -388,10 +388,9 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
     if (actualRefundedAmount !== undefined) {
       if (refundedItemId && refundIsFull) {
         // Consignor price tags (2026-10-06): a minted CONSIGNOR_TAG item never returns to the available pool.
-        await prisma.item.updateMany({
-          where: { id: refundedItemId, listingType: { not: 'CONSIGNOR_TAG' } },
-          data: { status: 'AVAILABLE' }
-        }).catch((err: unknown) => console.error(`[updateDisputeStatus] Failed to restore item ${refundedItemId} to AVAILABLE (non-fatal):`, err));
+        // Single inventory number (2026-10-13): same guarded SOLD -> AVAILABLE flip as refundService.ts (only when this refund
+        // returned the last sold unit; never a consignor tag or kit). Raw SQL because Prisma cannot express column arithmetic.
+        await prisma.$executeRaw`UPDATE "Item" SET "status" = 'AVAILABLE' WHERE "id" = ${refundedItemId} AND "status" = 'SOLD' AND "listingType" NOT IN ('CONSIGNOR_TAG', 'KIT') AND "stockSold" = COALESCE("stockTotal", 1) - 1`.catch((err: unknown) => console.error(`[updateDisputeStatus] Failed to restore item ${refundedItemId} to AVAILABLE (non-fatal):`, err));
       }
       if (refundConfirmationParams) {
         sendRefundConfirmationEmail({

@@ -35,7 +35,10 @@ import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
 //
 // brand, mpn, upc, ean, isbn (2026-10-11): product identifiers edited after the item went live, merged into the live
 // inventory item by utils/ebayIdentifierMerge.ts (same GET, merge, PUT, republish path as fccId). Not content fields either.
-export const EBAY_PUSH_FIELDS = ['title', 'description', 'condition', 'price', 'shipping', 'fccId', 'brand', 'mpn', 'upc', 'ean', 'isbn'] as const;
+// quantity (2026-10-13): the ONE in-stock number (inStockOf). Not a content field. It is never sent from here directly: the
+// quantity branch of pushItemToEbay calls services/inventoryStockSync (syncItemStockForPush), which owns the hold, rate limit,
+// stale-overwrite and zero-stock rules.
+export const EBAY_PUSH_FIELDS = ['title', 'description', 'condition', 'price', 'quantity', 'shipping', 'fccId', 'brand', 'mpn', 'upc', 'ean', 'isbn'] as const;
 export type EbayPushField = (typeof EBAY_PUSH_FIELDS)[number];
 /** The fields the pull-sync cron would otherwise overwrite from eBay (guarded by ebayContentDirtyAt). */
 export const EBAY_CONTENT_FIELDS = ['title', 'description', 'condition'] as const;
@@ -133,6 +136,8 @@ export function sanitizePushErrorMessage(raw: unknown, max: number = PUSH_ERROR_
 // ---------------------------------------------------------------------------------------------------------
 
 type DiffExisting = {
+  stockTotal?: number | null;
+  stockSold?: number | null;
   title?: string | null;
   description?: string | null;
   condition?: string | null;
@@ -146,6 +151,8 @@ type DiffExisting = {
   isbn?: string | null;
 };
 type DiffNext = {
+  /** The in-stock number after the edit (stockTotal - stockSold). undefined means "not provided". */
+  inStock?: number | null;
   title?: string | null;
   description?: string | null;
   condition?: string | null;
@@ -209,6 +216,12 @@ export function computeEbayPushFields(
     }
   } else if (opts.priceReopen && priceNumber(existing.price) !== null) {
     fields.push('price');
+  }
+
+  // quantity: the one in-stock number changed (stockTotal - stockSold). Needs the existing stock to compare against.
+  if (next.inStock !== undefined && next.inStock !== null && (existing.stockTotal !== undefined || existing.stockSold !== undefined)) {
+    const curInStock = Math.max((existing.stockTotal ?? 1) - (existing.stockSold ?? 0), 0);
+    if (next.inStock !== curInStock) fields.push('quantity');
   }
 
   // fccId: a non-empty FCC ID that differs from the stored one. Clearing one (null / empty) never pushes: eBay's
@@ -671,6 +684,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
       if (f === 'description') return finalDescription.length > 0;
       if (f === 'condition') return !!item.condition;
       if (f === 'price') return item.price !== null && item.price !== undefined;
+      if (f === 'quantity') return true; // sent through inventoryStockSync below
       if (f === 'fccId') return !!normalizeFccId(item.fccId); // never attempt (or send) an empty FCC ID
       if ((EBAY_IDENTIFIER_FIELDS as readonly string[]).includes(f)) return true; // a clear is attempted too (removed, or reported as skipped)
       return f === 'shipping' ? !!item.ebayListingId : false;
@@ -696,7 +710,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
       }
     };
 
-    const contentRequested = attempted.filter((f) => f !== 'shipping');
+    const contentRequested = attempted.filter((f) => f !== 'shipping' && f !== 'quantity');
     let accessToken: string | null = null;
 
     if (contentRequested.length > 0) {
@@ -957,6 +971,32 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
           for (const f of priceFieldsPushedByPut) pushed.add(f);
           if (published) for (const f of pendingAfterRepublish) pushed.add(f);
         }
+      }
+    }
+
+    // quantity (2026-10-13): the one in-stock number goes through inventoryStockSync (GET, merge, PUT, stale-overwrite guard, rate
+    // limiter, zero-stock end). An explicit push ignores the "Save without updating marketplaces" hold; the hold is released
+    // below only after everything succeeded.
+    if (attempted.includes('quantity')) {
+      try {
+        const { syncItemStockForPush } = await import('./inventoryStockSync');
+        const res = await syncItemStockForPush(item.id, `push:${trigger}`);
+        const ebayOut = res.outcomes.find((o) => o.market === 'ebay');
+        if (res.inStock < 0) {
+          fail('QUANTITY_PUSH_FAILED', 'The quantity could not be read, so it was not sent to eBay.');
+        } else if (!ebayOut) {
+          noop.add('quantity');
+        } else if (ebayOut.status === 'synced' || ebayOut.status === 'relisted' || ebayOut.status === 'ended') {
+          pushed.add('quantity');
+        } else if (ebayOut.status === 'unchanged') {
+          noop.add('quantity');
+        } else if (ebayOut.status === 'failed') {
+          fail('QUANTITY_PUSH_FAILED', ebayOut.detail ?? 'eBay did not accept the new quantity.');
+        } else {
+          fail('QUANTITY_NOT_SENT', ebayOut.detail ?? 'The new quantity was not sent to eBay.');
+        }
+      } catch (qtyErr) {
+        fail('QUANTITY_PUSH_FAILED', `The quantity could not be sent to eBay: ${(qtyErr as Error).message}`);
       }
     }
 

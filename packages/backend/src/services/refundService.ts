@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { restockKitIfKit } from './itemKitStock'; // Kits (2026-10-16): a refunded kit sale gives its components back
+import { restockKitIfKit, recomputeKitsForComponents } from './itemKitStock'; // Kits (2026-10-16): a refunded kit sale gives its components back
 import * as Sentry from '@sentry/node';
 import { getStripe, isStripeNotConfiguredError } from '../utils/stripe';
 import { notifyVendorBoothSaleRefunded } from './vendorBoothSaleNotificationService'; // tell the vendor their booth sale was refunded
@@ -769,6 +769,29 @@ export async function executeVerifiedRefund(
           } catch (kitErr) {
             console.error(`[executeVerifiedRefund] Failed to restock kit components for item ${purchase.itemId} after refund of purchase ${purchaseId} (non-fatal, run the kit recompute):`, kitErr);
           }
+        }
+        // Single inventory number (2026-10-13): a unit came back, so (1) an item that sold out purely from stock exhaustion is for
+        // sale again (guarded: only SOLD, never a consignor price tag, and ONLY when this refund's unit is what took the item from
+        // 0 to 1 in stock, i.e. stockSold is now exactly total - 1. A manually SOLD multi-unit item that still showed units left is
+        // not flipped by an unrelated old refund; the callers also reset the status),
+        // (2) kits that CONTAIN this item are recomputed, and (3) every market follows the one in-stock number (an ended eBay
+        // listing relists). Fire-and-forget; never changes the refund outcome.
+        if (stockGivenBack && stockGivenBack.count > 0) {
+          const refundedItemId = purchase.itemId;
+          (async () => {
+            try {
+              await prisma.$executeRaw`UPDATE "Item" SET "status" = 'AVAILABLE' WHERE "id" = ${refundedItemId} AND "status" = 'SOLD' AND "listingType" NOT IN ('CONSIGNOR_TAG', 'KIT') AND "stockSold" = COALESCE("stockTotal", 1) - 1`;
+            } catch (statusErr) {
+              console.error(`[executeVerifiedRefund] Could not return item ${refundedItemId} to AVAILABLE after refund of purchase ${purchaseId} (non-fatal):`, statusErr);
+            }
+            try {
+              await recomputeKitsForComponents(prisma as any, [refundedItemId]);
+            } catch (kitErr) {
+              console.error(`[executeVerifiedRefund] Kit recompute after refund failed for item ${refundedItemId} (non-fatal):`, kitErr);
+            }
+            const { syncItemStock } = await import('./inventoryStockSync');
+            await syncItemStock(refundedItemId, 'refund');
+          })().catch((syncErr) => console.warn(`[executeVerifiedRefund] stock sync after refund failed for item ${refundedItemId}:`, (syncErr as Error)?.message));
         }
       }
     } catch (err) {

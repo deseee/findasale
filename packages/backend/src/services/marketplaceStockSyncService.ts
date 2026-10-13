@@ -1,6 +1,12 @@
 /**
  * marketplaceStockSyncService.ts — ADR-087 Phase 4 "Revise-on-Partial"
  *
+ * 2026-10-13 (single inventory number): this file is now a THIN DELEGATE. The quantity logic (every market, hold gates, rate
+ * limiter, lot guards, stale-overwrite guard, zero-stock end, restock relist) lives in services/inventoryStockSync.ts
+ * (syncItemStock). The caller-supplied remainingStock is ignored except for logging: the number is always re-read from the
+ * database, and the old floor-at-1 behavior is gone (a 0 ends the listing instead). The text below is the historical design
+ * record for the conditions that syncItemStock now carries.
+ *
  * Fire-and-forget helper that revises a LIVE eBay listing's remaining quantity
  * immediately after a PARTIAL sale on any FindA.Sale channel (POS, terminal,
  * Stripe checkout, reservations, vendor-booth, auction). This is the
@@ -59,45 +65,21 @@
  * this dev pass (no live eBay call performed — out of scope per dispatch).
  */
 
-import { prisma } from '../lib/prisma';
-import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, refreshEbayAccessToken } from './ebayHttp';
-import { isEbayRateLimited, trackEbayCall } from '../lib/ebayRateLimiter';
-import { buildCustomLabel } from '../controllers/ebayController';
-import { findBulkLotItemIds } from './bulkLot/bulkLotService'; // ADR-136 Addendum C (#659)
-import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
-import { isBulkEbayEnabled } from './bulkLot/bulkLotEbayConfig';
-import { reconcileBulkLotEbayInBackgroundIfEnabled } from './bulkLot/bulkLotEbayWiring';
-
-/** How stale EbayConnection.lastEbaySoldSyncAt can be before we log a
- * potential-stale-overwrite warning (condition 2). 15 minutes matches
- * ebaySoldSyncCron's poll cadence (the mechanism that would otherwise have
- * absorbed a very recent eBay-side sale into stockSold before we compute
- * remainingStock). Log-only — never blocks the PUT (hacker review: "this must
- * be logged, not swallowed", not "this must be blocked").
- */
-const STALE_SYNC_THRESHOLD_MS = 15 * 60 * 1000;
-
 export interface MarketplaceSaleOutcome {
   fullySoldOut: boolean;
   remainingStock: number;
 }
 
+/** Reason string passed to syncItemStock (also the reason bulk-lot reconciliation is logged with). */
+const PARTIAL_SALE_REASON = 'partial sale on another channel';
+
 /**
- * Revise a live eBay listing's remaining quantity after a PARTIAL sale.
+ * Bring every market in line with the item's one in-stock number after a PARTIAL sale on any FindA.Sale channel.
  *
- * Callers: every `sellItemUnits()` call site on a checkout-completion path
- * (POS, terminal, Stripe x6, reservations, vendor-booth, auction) should call
- * this in the branch where `fullySoldOut === false`, fire-and-forget, exactly
- * like the existing `endEbayListingIfExists(...).catch(...)` call in the
- * `fullySoldOut === true` branch. Do NOT call this for a fully-sold-out sale —
- * that item takes the withdraw path instead (this function also no-ops
- * defensively if `fullySoldOut` is somehow true, as a second guard).
+ * Callers keep the same shape as before: call in the branch where `fullySoldOut === false`, fire-and-forget. A fully sold out
+ * item takes the withdraw path (soldFanOutService), so this no-ops defensively when `fullySoldOut` is true.
  *
- * Do NOT call this from ebaySoldSyncCron.ts's own sellItemUnits() call — that
- * absorbs an eBay-side sale INTO FindA.Sale's pool (the opposite direction).
- * Firing a revise PUT immediately after would either no-op (eBay's quantity
- * already reflects the sale it just told us about) or race the same 15-minute
- * reconciliation window this function's own staleness check exists to flag.
+ * Do NOT call this from ebaySoldSyncCron.ts's own sellItemUnits() call (that absorbs an eBay sale INTO the pool).
  *
  * Never throws. Never awaited by a caller's response path.
  */
@@ -106,174 +88,18 @@ export async function syncMarketplaceStock(
   saleOutcome: MarketplaceSaleOutcome
 ): Promise<void> {
   try {
-    // Defensive second guard (condition 3 / D4): this function is only for the
-    // partial-sale branch. A fully-sold-out item is handled by the existing
-    // endEbayListingIfExists withdraw hook — never both.
     if (saleOutcome.fullySoldOut) {
       return;
     }
-
-    // Condition 5: check the rate limiter BEFORE any eBay fetch call. Log and
-    // skip — never queue, never retry inline, never block the caller.
-    if (isEbayRateLimited()) {
-      console.warn(`[eBay ReviseQty] Rate-limited — skipping quantity revise for item ${itemId}`);
-      return;
-    }
-
-    // Condition 4: itemId-only re-derivation, mirroring endEbayListingIfExists's
-    // exact lookup chain (item -> sale -> organizer -> ebayConnection). Never
-    // accept organizerId/ebayOfferId/quantity from any caller.
-    const item = await prisma.item.findUnique({
-      where: { id: itemId },
-      select: {
-        ebayOfferId: true,
-        saleId: true,
-        createdAt: true,
-        costBasis: true,
-        roomTag: true,
-      },
-    });
-
-    if (!item) {
-      console.warn(`[eBay ReviseQty] Item ${itemId} not found`);
-      return;
-    }
-
-    // Not eBay-published — nothing to revise. This is the common case (most
-    // partial sales are not eBay-linked items), so this early-return is the
-    // hot path for every non-eBay checkout.
-    if (!item.ebayOfferId) {
-      return;
-    }
-
-    // ADR-136 Addendum C (#659): for a bulk lot `remainingStock` is a number of CARDS, never a quantity to send to eBay
-    // (a 4,200 card lot would become 4,200 bundles). A lot with an eBay offer is a bundle listing, so its quantity is
-    // whole bundles and is worked out by the bundle reconcile, which also ends the listing below one bundle. The lot
-    // lookup runs whatever the flags say (an offer can outlive the flag being turned off); with the bundle flag off
-    // nothing is sent for a lot at all. A failed lookup sends nothing.
-    try {
-      if ((await findBulkLotItemIds(prisma as any, [itemId], isBulkLotsEnabled())).has(itemId)) {
-        if (isBulkEbayEnabled()) reconcileBulkLotEbayInBackgroundIfEnabled(itemId, 'partial sale on another channel');
-        else console.warn(`[eBay ReviseQty] Item ${itemId} is a bulk lot and eBay bundles are off: not revising eBay quantity`);
-        return;
-      }
-    } catch (lotErr) {
-      console.error(`[eBay ReviseQty] bulk lot check failed for item ${itemId}, not revising:`, lotErr);
-      return;
-    }
-
-    if (!item.saleId) {
-      console.warn(`[eBay ReviseQty] Item ${itemId} has no saleId — skipping`);
-      return;
-    }
-
-    const sale = await prisma.sale.findUnique({
-      where: { id: item.saleId },
-      select: { organizerId: true },
-    });
-
-    if (!sale) {
-      console.warn(`[eBay ReviseQty] Sale ${item.saleId} not found for item ${itemId}`);
-      return;
-    }
-
-    const organizer = await prisma.organizer.findUnique({
-      where: { id: sale.organizerId },
-      select: {
-        id: true,
-        skuAppendDate: true,
-        skuAppendCost: true,
-        skuAppendLocation: true,
-        ebayConnection: { select: { lastEbaySoldSyncAt: true } },
-      },
-    });
-
-    if (!organizer?.ebayConnection) {
-      console.warn(`[eBay ReviseQty] No eBay connection for organizer of item ${itemId}`);
-      return;
-    }
-
-    // Condition 2: stale-overwrite risk. Compare against EbayConnection's own
-    // lastEbaySoldSyncAt (the cron's reconciliation timestamp for THIS
-    // organizer), not Item.updatedAt — the caller's own sellItemUnits() call
-    // just touched Item.updatedAt moments ago (it increments stockSold), so
-    // updatedAt would always read "fresh" and this check would never fire.
-    // lastEbaySoldSyncAt actually reflects when eBay-side orders for this
-    // organizer were last polled, which is the real race window the hacker
-    // review flagged.
-    const lastSync = organizer.ebayConnection.lastEbaySoldSyncAt;
-    const staleMs = lastSync ? Date.now() - lastSync.getTime() : Infinity;
-    if (staleMs > STALE_SYNC_THRESHOLD_MS) {
-      console.warn(
-        `[eBay ReviseQty] potential-stale-overwrite — item ${itemId} organizer ${organizer.id} ` +
-          `lastEbaySoldSyncAt=${lastSync ? lastSync.toISOString() : 'never'} ` +
-          `(${lastSync ? Math.round(staleMs / 60000) : 'n/a'} min ago). Proceeding with PUT ` +
-          `per hacker-review condition 2 (log, don't block).`
+    // Lazy import: inventoryStockSync pulls in the eBay controller, which must not be loaded at this module's import time.
+    const { syncItemStock } = await import('./inventoryStockSync');
+    const result = await syncItemStock(itemId, PARTIAL_SALE_REASON);
+    if (result.inStock >= 0 && result.inStock !== saleOutcome.remainingStock) {
+      console.log(
+        `[Stock Sync] item ${itemId}: caller reported ${saleOutcome.remainingStock} remaining, database says ${result.inStock} (database number used)`
       );
     }
-
-    const accessToken = await refreshEbayAccessToken(organizer.id);
-    if (!accessToken) {
-      console.error(`[eBay ReviseQty] Could not refresh token for item ${itemId}`);
-      return;
-    }
-
-    // Condition 6: floor at 1, never 0 — identical to the publish-time payload
-    // floor (ebayController.ts:2397-2400). sellItemUnits() can legitimately
-    // return 0 for a fully-sold-out sale, but that branch is excluded above
-    // (fullySoldOut guard), so this floor only ever matters for the
-    // theoretical edge case of remainingStock arriving as 0 for a partial sale.
-    const quantity = Math.max(saleOutcome.remainingStock, 1);
-
-    const sku = buildCustomLabel(itemId, organizer, item);
-    const headers = { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() };
-    const inventoryPath = `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-    const inventoryUrl = ebayProxyUrl(encodeURIComponent(inventoryPath));
-
-    // GET current inventory_item — full-replace API (see header note), so we
-    // preserve the existing product/condition/packaging fields and merge in
-    // only the new quantity, mirroring the established GET-merge-PUT pattern
-    // used for the sibling `offer` endpoint (applyFulfillmentPolicyToOffer).
-    const getRes = await fetch(inventoryUrl, { method: 'GET', headers });
-    if (!getRes.ok) {
-      const errText = await getRes.text();
-      console.warn(
-        `[eBay ReviseQty] inventory_item GET failed for item ${itemId} sku=${sku}: ${getRes.status} ${errText.slice(0, 300)}`
-      );
-      return; // Fail-safe: never guess a payload, never PUT on a failed GET.
-    }
-    trackEbayCall();
-
-    const inventoryItem = (await getRes.json()) as Record<string, any>;
-    const existingAvailability = (inventoryItem.availability as Record<string, unknown> | undefined) ?? {};
-    const existingShipToLocation =
-      (existingAvailability.shipToLocationAvailability as Record<string, unknown> | undefined) ?? {};
-    inventoryItem.availability = {
-      ...existingAvailability,
-      shipToLocationAvailability: {
-        ...existingShipToLocation,
-        quantity,
-      },
-    };
-
-    const putRes = await fetch(inventoryUrl, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(inventoryItem),
-    });
-
-    if (!putRes.ok && putRes.status !== 204) {
-      const errText = await putRes.text();
-      console.error(
-        `[eBay ReviseQty] inventory_item PUT failed for item ${itemId} sku=${sku}: ${putRes.status} ${errText.slice(0, 300)}`
-      );
-      return;
-    }
-    trackEbayCall();
-
-    console.log(`[eBay ReviseQty] Revised quantity to ${quantity} for item ${itemId} sku=${sku}`);
-  } catch (error) {
-    console.error(`[eBay ReviseQty] Error revising eBay quantity for item ${itemId}:`, error);
-    // Fire-and-forget: never throw back to the caller's checkout path.
+  } catch (err) {
+    console.error(`[Stock Sync] unexpected error for item ${itemId}:`, err);
   }
 }

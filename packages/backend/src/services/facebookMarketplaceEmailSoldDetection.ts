@@ -193,7 +193,9 @@ async function defaultResolveItemIdForListingId(remoteListingId: string, organiz
 }
 
 async function defaultCommitSale(itemId: string, soldVia: string): Promise<{ alreadyCommitted: boolean }> {
-  const result = await commitFacebookNativeSale(itemId, soldVia);
+  // 2026-10-13 (S-SINGLE-INVENTORY-NUMBER): name the platform so a MULTI-unit item takes exactly one unit (the live FACEBOOK listing row is the
+  // idempotency key, so a duplicate order / label e-mail cannot take a second one). Single-unit items run the legacy whole-item SOLD path.
+  const result = await commitFacebookNativeSale(itemId, soldVia, { soldOnPlatform: { platform: 'FACEBOOK', remoteListingId: null } });
   return { alreadyCommitted: result.alreadyCommitted };
 }
 

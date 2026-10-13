@@ -218,7 +218,7 @@ export const SCAN_COPY = {
   addToStock: 'Add to my stock',
   replaceStock: 'Set my stock to this count',
   modeHintAdd: 'The count is added to what you already have.',
-  modeHintReplace: 'Your stock for each card is set to this count. It never goes below what has already sold.',
+  modeHintReplace: 'The in stock number for each card is set to this count. Cards you have already sold stay counted as sold.',
   chooseModeFirst: 'Choose how to count before you continue.',
   commitButton: (n: number) => `Save ${n} ${cardsWord(n)}`,
   commitButtonIdle: 'Save cards',

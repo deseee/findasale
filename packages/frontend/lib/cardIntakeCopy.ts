@@ -194,7 +194,7 @@ export const INTAKE_COPY = {
   modeAddTitle: 'Add to existing quantity',
   modeAddBody: 'The number in your file is added to the quantity you already have.',
   modeReplaceTitle: 'Replace quantity with file value',
-  modeReplaceBody: 'The quantity is set to the number in your file. It never goes below the number already sold.',
+  modeReplaceBody: 'The in stock number is set to the number in your file. Cards you have already sold stay counted as sold.',
   modeExampleHeading: 'Example from your file',
   modeExample: (name: string, existing: number, file: number, addResult: number | null, replaceResult: number | null) => {
     const add = addResult === null ? 'cannot be worked out' : `${existing} in stock plus ${file} = ${addResult}`;

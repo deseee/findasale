@@ -14,16 +14,19 @@ const mockPrisma: any = {
   marketplaceListingJob: { create: jest.fn(), findFirst: jest.fn() },
   organizer: { findUnique: jest.fn(), findFirst: jest.fn() },
   $transaction: jest.fn(),
+  $executeRaw: jest.fn(),
 };
 const mockLotRefusal = jest.fn();
 const mockNotify = jest.fn();
 const mockEbayReopen = jest.fn();
 const mockOffPlatformUndo = jest.fn();
+const mockSyncStock = jest.fn();
 
 jest.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
 jest.mock('../index', () => ({ prisma: mockPrisma }));
 jest.mock('../lib/notificationService', () => ({ createNotification: (...a: unknown[]) => mockNotify(...a) }));
 jest.mock('../services/bulkLot/bulkLotInvariants', () => ({ lotChannelRefusal: (...a: unknown[]) => mockLotRefusal(...a) }));
+jest.mock('../services/inventoryStockSync', () => ({ syncItemStock: (...a: unknown[]) => mockSyncStock(...a) }));
 jest.mock('../controllers/itemController', () => ({
   reopenEbayCancelledSale: (...a: unknown[]) => mockEbayReopen(...a),
   undoItemSoldOffPlatform: (...a: unknown[]) => mockOffPlatformUndo(...a),
@@ -56,7 +59,9 @@ beforeEach(() => {
   mockPrisma.purchase.findFirst.mockResolvedValue(null);
   mockPrisma.ebaySoldEvent.count.mockResolvedValue(0);
   mockPrisma.item.updateMany.mockResolvedValue({ count: 1 });
+  mockPrisma.$executeRaw.mockResolvedValue(0);
   mockPrisma.marketplaceListingJob.create.mockResolvedValue({});
+  mockSyncStock.mockResolvedValue({});
   mockPrisma.organizer.findUnique.mockResolvedValue({ userId: 'user1' });
   mockPrisma.$transaction.mockImplementation(async (cb: any) => cb(mockPrisma));
 });
@@ -155,9 +160,23 @@ describe('reopenAttestedSale: FB_NATIVE', () => {
       data: expect.objectContaining({ itemId: 'item1', action: 'REMOVE', status: 'REMOVED', platform: 'FACEBOOK', lastErrorMessage: REOPEN_MARKER }),
     });
     const arg = mockPrisma.item.updateMany.mock.calls[0][0];
-    expect(arg.where).toEqual({ id: 'item1', status: 'SOLD', lastSoldVia: 'FB_NATIVE' });
-    expect(arg.data).toMatchObject({ status: 'AVAILABLE', stockSold: 0, lastSoldVia: null });
+    expect(arg.where).toEqual({ id: 'item1', status: 'SOLD', lastSoldVia: 'FB_NATIVE', OR: [{ stockTotal: null }, { stockTotal: { lte: 1 } }] });
+    // Gives back only the cancelled unit (a decrement, never "stockSold = 0"), and the same unit off the eBay counter.
+    expect(arg.data).toMatchObject({ status: 'AVAILABLE', stockSold: { decrement: 1 }, ebayQuantitySold: { decrement: 1 }, lastSoldVia: null });
+    // Both counters are floored at zero afterwards, in the same transaction.
+    expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.$executeRaw.mock.calls[0][0].join('?')).toContain('GREATEST("stockSold", 0)');
+    await new Promise((r) => setImmediate(r)); // the stock sync is fire-and-forget
+    expect(mockSyncStock).toHaveBeenCalledWith('item1', 'reopen');
     expect(arg.data.price).toBeUndefined(); // never touches a price
+  });
+
+  it('a multi-unit total that appears after the read cannot be reopened: the flip is guarded on stockTotal <= 1', async () => {
+    mockPrisma.item.updateMany.mockResolvedValue({ count: 0 }); // the guarded WHERE no longer matches
+    const r: any = await reopenAttestedSale('item1', OPTS);
+    expect(r).toMatchObject({ ok: false, code: 'RACE' });
+    expect(mockPrisma.$executeRaw).not.toHaveBeenCalled();
+    expect(mockSyncStock).not.toHaveBeenCalled();
   });
 
   it('never fires a sold notification (informational SALE_UPDATE only)', async () => {

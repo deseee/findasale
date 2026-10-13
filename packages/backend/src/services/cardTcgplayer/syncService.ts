@@ -64,6 +64,8 @@ export interface SyncDeps {
   raiseUnits(itemId: string, units: number, tx: SyncTx): Promise<boolean>;
   /** Called after commit for every item that lost units (marketplace propagation). Never awaited, never throws. */
   onSold?(result: SoldResult): void;
+  /** Called after commit for an item that GAINED units from the file (single inventory number: the markets follow). Never awaited, never throws. */
+  onRaised?(itemId: string, units: number): void;
   now(): Date;
 }
 
@@ -545,6 +547,14 @@ async function applyStockGroup(
   if (!result) return null;
   // Only after the transaction committed is the stock change reported for marketplace propagation.
   soldOut.push(...result.removed);
+  const raised = result.plan.raise;
+  if (raised && raised.units > 0) {
+    try {
+      deps.onRaised?.(raised.itemId, raised.units);
+    } catch {
+      // propagation is best effort and must never fail the reconcile
+    }
+  }
   return result.plan;
 }
 

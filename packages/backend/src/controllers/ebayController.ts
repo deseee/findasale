@@ -76,6 +76,7 @@ import { estimatePackageProfile, isNeverShippableItem } from '../services/ebayPa
 import { modelTokenFrom } from '../services/ebayCatalogLookup';
 import { fetchAndCacheEbayStoreSubscription } from '../services/ebayStoreSubscriptionService';
 import { csvCell } from '../utils/csvSafe'; // CSV formula-injection-safe cell writer
+import { inStockOf } from '../services/inventoryStockMath'; // 2026-10-13: the ONE in-stock number (pure module, no import cycle with inventoryStockSync)
 import { resolveItemOwnerOrganizer } from '../utils/itemOwner'; // B1: inventory-safe, default-deny item ownership
 
 /**
@@ -3405,15 +3406,15 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           offerId = createData.offerId;
         }
 
-        // Store offerId + real remaining stock as ebayQuantityAvailable (ADR-085
-        // Track B: finishes the previously-dead half of the eBay multi-quantity
-        // system -- ebaySoldSyncCron.ts already correctly used this field, it was
-        // just never written until now).
+        // Store offerId + the in-stock number as the ebayQuantityAvailable MIRROR ("last quantity confirmed on eBay").
+        // 2026-10-13 (single inventory number): based on inStockOf WITHOUT a floor at 1. The payload above floors at 1 because
+        // eBay rejects quantity 0 on a publishing offer, but the mirror must never turn a real 0 into a 1: at 0 the stock sync
+        // ends the listing instead of leaving a phantom unit on eBay.
         await prisma.item.update({
           where: { id: item.id },
           data: {
             ebayOfferId: offerId,
-            ebayQuantityAvailable: Math.max((item.stockTotal ?? 1) - item.stockSold, 1),
+            ebayQuantityAvailable: inStockOf(item),
           },
         });
 
@@ -6658,6 +6659,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           return true;
         }
       }
+      // Single inventory number (2026-10-13): adopting links the listing only. Stock (stockTotal / stockSold / ebayQuantityAvailable) is
+      // deliberately NOT written here: the platform owns the number and the stock sync pushes it to eBay.
       await prisma.item.update({
         where: { id: candidate.id },
         data: {
@@ -6710,6 +6713,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       // P0 fix: keep ebayShippingClassification in sync only when this reconciliation
       // actually changes category (mirrors the same conditional-set pattern as category itself).
       const willSetCategoryOnReconcile = !hit.category && !!categoryName;
+      // Single inventory number (2026-10-13): reconcile links the listing and fills blanks only. Stock is NOT written (the platform
+      // owns the number; the stock sync pushes it to eBay).
       await prisma.item.update({
         where: { id: hit.id },
         data: {
@@ -6919,6 +6924,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             organizerId: organizer.id,
             saleId: null,          // Feature #300: inventory items need no sale container
             ebayListingId: ebayListingIdToStore, // numeric listingId if offer fetch succeeded; sku as fallback
+            // Single inventory number (2026-10-13): an IMPORT is the one place eBay's count becomes ours. A new item starts with
+            // stockTotal = eBay's net quantity and stockSold 0 (the default), so inStock equals what eBay shows; the mirror is the
+            // same number. From then on the platform owns the number: adopt / reconcile-by-title / SKU-prefix paths below never touch stock.
             ...(invQty ? { stockTotal: invQty, ebayQuantityAvailable: invQty } : {}),
             // Imported item is live on eBay — publish it on FindA.Sale immediately
             // rather than landing it on the "review & publish" queue.
@@ -7121,6 +7129,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               organizerId: organizer.id,
               saleId: null,          // Feature #300: inventory items need no sale container
               ebayListingId: ebayItemId,  // always store numeric eBay ItemID, not SKU
+              // Single inventory number (2026-10-13): creation only. stockTotal = eBay's net quantity, stockSold stays 0, mirror = same
+              // number. Adopt / reconcile-by-title / SKU-prefix never overwrite stock on an existing item.
               ...(listingQty > 1 ? { stockTotal: listingQty, ebayQuantityAvailable: listingQty } : {}),
               // Imported item is live on eBay — publish it on FindA.Sale immediately.
               draftStatus: 'PUBLISHED',

@@ -600,6 +600,28 @@ describe('POST /bulk: ownership is default-deny', () => {
   });
 });
 
+describe('POST /bulk: delete never hard-deletes a kit (2026-10-13)', () => {
+  it('reports the kit as failed with a kit-removal reason and deletes only the ordinary item', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('plain'), saleItem('kit1', { listingType: 'KIT' })]);
+    mockPrisma.item.deleteMany.mockResolvedValue({ count: 1 });
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['plain', 'kit1'], operation: 'delete' }), res);
+    expect(res.statusCode).toBe(207);
+    expect(res.body.succeeded).toEqual(['plain']);
+    expect(res.body.failed).toEqual([{ itemId: 'kit1', reason: expect.stringContaining('kit') }]);
+    expect(mockPrisma.item.deleteMany).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.item.deleteMany.mock.calls[0][0]).toEqual({ where: { id: { in: ['plain'] } } });
+  });
+
+  it('a delete of only kits is refused with 400 and nothing is deleted', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([saleItem('kit1', { listingType: 'KIT' })]);
+    const res = makeRes();
+    await bulk(makeReq({ itemIds: ['kit1'], operation: 'delete' }), res);
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.item.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /bulk/photos', () => {
   it('stamps lastEditedAt when photos are added', async () => {
     mockPrisma.item.findMany.mockResolvedValue([{ ...saleItem('a'), photoUrls: ['p1'] }]);

@@ -18,8 +18,14 @@ const mockPrisma: any = {
   marketplaceListingJob: { findMany: jest.fn() },
   itemMarketplacePush: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn(), groupBy: jest.fn(), updateMany: jest.fn() },
   etsyListing: { findMany: jest.fn(), findFirst: jest.fn() },
+  itemBulkLot: { findMany: jest.fn() },
   $transaction: jest.fn(),
+  $queryRaw: jest.fn(),
+  $executeRaw: jest.fn(),
 };
+const mockSyncStock = jest.fn();
+const mockFanOut = jest.fn();
+const mockRecomputeKits = jest.fn();
 const mockPush = jest.fn();
 const mockNotify = jest.fn();
 const mockCommit = jest.fn();
@@ -78,6 +84,12 @@ jest.mock('../controllers/ebayController', () => ({
   endEbayListingIfExists: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('../services/shopifyService', () => ({ markShopifyItemSold: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../services/inventoryStockSync', () => ({ syncItemStock: (...a: unknown[]) => mockSyncStock(...a) }));
+jest.mock('../services/soldFanOutService', () => ({ fanOutItemSoldWithdrawals: (...a: unknown[]) => mockFanOut(...a) }));
+jest.mock('../services/itemKitStock', () => ({
+  ...jest.requireActual('../services/itemKitStock'),
+  recomputeKitsForComponents: (...a: unknown[]) => mockRecomputeKits(...a),
+}));
 jest.mock('../services/facebookNudgeService', () => ({ notifyFacebookExportedItemSold: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/marketplace/discogsListingConnector', () => ({ withdrawDiscogsListingIfExists: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/ebayItemPushService', () => ({
@@ -955,5 +967,215 @@ describe('getDraftItemsBySaleId: stock, cost basis, consignor and markdown field
     expect(res.body[0].consignorId).toBeNull();
     expect(res.body[0].consignor).toBeNull();
     expect(res.body[0].costBasis).toBeNull();
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------
+// 2026-10-13 (single inventory number): the organizer edits ONE number, `inStock`. NOT EXECUTED when written; CI is the first run.
+describe('updateItem: inStock, the one number the organizer edits', () => {
+  const arrange = (item: any, fresh: { stockTotal: number; stockSold: number } = { stockTotal: 5, stockSold: 2 }) => {
+    mockPrisma.item.findUnique.mockResolvedValue(item);
+    mockPrisma.item.update.mockResolvedValue({
+      id: 'i1', title: item.title, price: item.price, ebayOfferId: item.ebayOfferId, ebayListingId: item.ebayListingId, saleId: item.saleId,
+      status: item.status, isHighValueLocked: true,
+    });
+    mockPrisma.$queryRaw.mockResolvedValue([fresh]);
+    mockPrisma.$executeRaw.mockResolvedValue(1);
+    mockPrisma.itemBulkLot.findMany.mockResolvedValue([]);
+    mockPrisma.sale.findUnique.mockResolvedValue({ organizerId: 'org_sale' });
+  };
+  const run = async (body: Record<string, unknown>) => {
+    const res = makeRes();
+    await updateItem({ user: asUser(OWNER_USER), params: { id: 'i1' }, body }, res);
+    await flush();
+    return res;
+  };
+  const writtenData = () => mockPrisma.item.update.mock.calls[0][0].data;
+
+  beforeEach(() => {
+    mockSyncStock.mockReset().mockResolvedValue({ itemId: 'i1', inStock: 0, outcomes: [] });
+    mockFanOut.mockReset();
+    mockRecomputeKits.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('sets stockTotal = inStock + stockSold in ONE SQL statement from the freshest stockSold, before the item update', async () => {
+    arrange(saleItem({ stockTotal: 5, stockSold: 2 }));
+    const res = await run({ inStock: 3 });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1);
+    const [strings, qty, id] = mockPrisma.$queryRaw.mock.calls[0];
+    expect(strings.join('?')).toMatch(/UPDATE "Item" SET "stockTotal" = \?::int \+ "stockSold" WHERE "id" = \?/);
+    expect(qty).toBe(3);
+    expect(id).toBe('i1');
+    expect(mockPrisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(mockPrisma.item.update.mock.invocationCallOrder[0]);
+    expect(writtenData()).not.toHaveProperty('stockTotal'); // the statement above owns it
+    expect(res.body).toMatchObject({ inStock: 3, stockTotal: 5, stockSold: 2 });
+  });
+
+  it('brings the markets in line after the save (fire and forget)', async () => {
+    arrange(saleItem({ stockTotal: 5, stockSold: 2 }));
+    await run({ inStock: 3 });
+    expect(mockSyncStock).toHaveBeenCalledWith('i1', 'edit');
+  });
+
+  it('inStock wins over a legacy stockTotal sent in the same body', async () => {
+    arrange(saleItem({ stockTotal: 5, stockSold: 2 }));
+    await run({ inStock: 3, stockTotal: 99 });
+    expect(mockPrisma.$queryRaw.mock.calls[0][1]).toBe(3);
+    expect(writtenData()).not.toHaveProperty('stockTotal');
+  });
+
+  it('the legacy stockTotal edit still works with its old validation, and also syncs the markets', async () => {
+    arrange(saleItem({ stockTotal: 5, stockSold: 2 }));
+    const ok = await run({ stockTotal: 7 });
+    expect(ok.statusCode).toBe(200);
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+    expect(writtenData().stockTotal).toBe(7);
+    expect(mockSyncStock).toHaveBeenCalledWith('i1', 'edit');
+    expect((await run({ stockTotal: 0 })).statusCode).toBe(400); // the legacy field still refuses zero
+    expect((await run({ stockTotal: 1 })).statusCode).toBe(400); // and still cannot drop below the 2 already sold
+  });
+
+  it.each([[-1], [1.5], ['abc'], [''], [' '], [1000001], [{}], [[1]], [true]])('inStock %p is refused with a 400 and nothing is written', async (bad) => {
+    arrange(saleItem({ stockTotal: 5, stockSold: 2 }));
+    const res = await run({ inStock: bad });
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe('IN_STOCK_INVALID');
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts a whole number sent as text, and null means "not provided"', async () => {
+    arrange(saleItem({ stockTotal: 5, stockSold: 2 }));
+    expect((await run({ inStock: '4' })).statusCode).toBe(200);
+    expect(mockPrisma.$queryRaw.mock.calls[0][1]).toBe(4);
+    mockPrisma.$queryRaw.mockClear();
+    expect((await run({ inStock: null, title: 'Lamp' })).statusCode).toBe(200);
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('zero is allowed: the item becomes SOLD and takes the sell-out fan-out instead of a quantity push', async () => {
+    arrange(saleItem({ status: 'AVAILABLE', stockTotal: 3, stockSold: 1 }), { stockTotal: 1, stockSold: 1 });
+    const res = await run({ inStock: 0 });
+    expect(res.statusCode).toBe(200);
+    expect(writtenData().status).toBe('SOLD');
+    expect(mockFanOut).toHaveBeenCalledWith('i1', 'updateItem inStock 0');
+    expect(mockSyncStock).not.toHaveBeenCalled();
+    expect(res.body.inStock).toBe(0);
+  });
+
+  it('restocking an item that sold out from stock exhaustion makes it AVAILABLE again and syncs the markets', async () => {
+    arrange(saleItem({ status: 'SOLD', stockTotal: 2, stockSold: 2 }), { stockTotal: 5, stockSold: 2 });
+    await run({ inStock: 3 });
+    expect(writtenData().status).toBe('AVAILABLE');
+    expect(mockFanOut).not.toHaveBeenCalled();
+    expect(mockSyncStock).toHaveBeenCalledWith('i1', 'edit');
+  });
+
+  it('a form that echoes status SOLD back cannot undo the restock', async () => {
+    arrange(saleItem({ status: 'SOLD', stockTotal: 2, stockSold: 2 }), { stockTotal: 5, stockSold: 2 });
+    await run({ inStock: 3, status: 'SOLD' });
+    expect(writtenData().status).toBe('AVAILABLE');
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+
+  it('a legacy SOLD item that still has stock on the ledger is not reopened by an inStock edit', async () => {
+    arrange(saleItem({ status: 'SOLD', stockTotal: 1, stockSold: 0 }), { stockTotal: 1, stockSold: 0 });
+    await run({ inStock: 1 });
+    expect(writtenData()).not.toHaveProperty('status');
+  });
+
+  it('a plain SOLD -> AVAILABLE edit on a manually settled item gives back exactly ONE unit in one atomic statement, then syncs', async () => {
+    arrange(saleItem({ status: 'SOLD', stockTotal: 3, stockSold: 3 }), { stockTotal: 3, stockSold: 2 });
+    const res = await run({ status: 'AVAILABLE' });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1);
+    const [strings, id] = mockPrisma.$queryRaw.mock.calls[0];
+    expect(strings.join('?')).toMatch(/UPDATE "Item" SET "stockSold" = GREATEST\(COALESCE\("stockTotal", 1\) - 1, 0\) WHERE "id" = \?/);
+    expect(id).toBe('i1');
+    expect(mockPrisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(mockPrisma.item.update.mock.invocationCallOrder[0]);
+    expect(writtenData().status).toBe('AVAILABLE');
+    expect(res.body).toMatchObject({ stockSold: 2, inStock: 1 });
+    expect(mockSyncStock).toHaveBeenCalledWith('i1', 'edit');
+  });
+
+  it('SOLD -> AVAILABLE does NOT touch the ledger when the item still has units, when inStock is supplied, or for lots, kits and consignor tags', async () => {
+    arrange(saleItem({ status: 'SOLD', stockTotal: 3, stockSold: 1 }));
+    await run({ status: 'AVAILABLE' });
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+
+    mockPrisma.$queryRaw.mockClear();
+    arrange(saleItem({ status: 'SOLD', stockTotal: 2, stockSold: 2 }), { stockTotal: 5, stockSold: 2 });
+    await run({ status: 'AVAILABLE', inStock: 3 });
+    expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1); // only the inStock statement, never the restore
+    expect(mockPrisma.$queryRaw.mock.calls[0][0].join('?')).toMatch(/"stockTotal" = \?::int/);
+
+    mockPrisma.$queryRaw.mockClear();
+    arrange(saleItem({ status: 'SOLD', stockTotal: 2, stockSold: 2 }));
+    mockPrisma.itemBulkLot.findMany.mockResolvedValue([{ itemId: 'i1' }]);
+    await run({ status: 'AVAILABLE' });
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+
+    mockPrisma.$queryRaw.mockClear();
+    arrange(saleItem({ listingType: 'CONSIGNOR_TAG', status: 'SOLD', stockTotal: 1, stockSold: 1 }));
+    await run({ status: 'AVAILABLE' });
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('a bulk lot refuses inStock (cards are changed with Adjust count)', async () => {
+    arrange(saleItem({ stockTotal: 5000, stockSold: 0 }));
+    mockPrisma.itemBulkLot.findMany.mockResolvedValue([{ itemId: 'i1' }]);
+    const res = await run({ inStock: 10 });
+    expect(res.statusCode).toBe(409);
+    expect(res.body.code).toBe('BULK_USE_ADJUST');
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('a kit refuses inStock (its stock is derived from its components)', async () => {
+    arrange(saleItem({ listingType: 'KIT', stockTotal: 4, stockSold: 0 }));
+    const res = await run({ inStock: 2 });
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe('KIT_STOCK_DERIVED');
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('on an eBay listing the quantity is planned and sent by the stock sync, not by a second push', async () => {
+    arrange(ebayListed({ stockTotal: 5, stockSold: 2 }), { stockTotal: 4, stockSold: 2 });
+    const res = await run({ inStock: 2 });
+    expect(res.body.marketplacePlan.ebay).toEqual({ willPush: true, fields: ['quantity'] });
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockSyncStock).toHaveBeenCalledWith('i1', 'edit');
+  });
+
+  it('with "save without updating marketplaces" the quantity is held for "Update eBay now" instead of sent', async () => {
+    arrange(ebayListed({ stockTotal: 5, stockSold: 2 }), { stockTotal: 4, stockSold: 2 });
+    await run({ inStock: 2, skipMarketplaceSync: true });
+    expect(writtenData().ebayHeldFields).toEqual(['quantity']);
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush.mock.calls[0][0]).toMatchObject({ hold: true, trigger: 'SAVE', fields: ['quantity'] });
+  });
+
+  it('an inStock equal to the current number plans nothing', async () => {
+    arrange(ebayListed({ stockTotal: 5, stockSold: 2 }), { stockTotal: 5, stockSold: 2 });
+    const res = await run({ inStock: 3 });
+    expect(res.body.marketplacePlan.ebay).toEqual({ willPush: false, fields: [], reason: 'no_changes' });
+  });
+
+  it('manually marking a multi-unit item SOLD settles the ledger so nothing is left in stock', async () => {
+    arrange(saleItem({ status: 'AVAILABLE', stockTotal: 3, stockSold: 0 }));
+    const res = await run({ status: 'SOLD' });
+    expect(res.statusCode).toBe(200);
+    expect(mockCommit).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.$executeRaw.mock.calls[0][0].join('?')).toContain('SET "stockSold" = COALESCE("stockTotal", 1)');
+    expect(mockPrisma.$executeRaw.mock.calls[0][1]).toBe('i1');
+  });
+
+  it('marking a bulk lot SOLD through the edit never settles its card ledger', async () => {
+    arrange(saleItem({ status: 'AVAILABLE', stockTotal: 5000, stockSold: 0 }));
+    mockPrisma.itemBulkLot.findMany.mockResolvedValue([{ itemId: 'i1' }]);
+    await run({ status: 'SOLD' });
+    expect(mockPrisma.$executeRaw).not.toHaveBeenCalled();
   });
 });

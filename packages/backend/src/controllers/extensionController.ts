@@ -2274,8 +2274,11 @@ export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): P
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
   if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
 
-  await commitFacebookNativeSale(itemId, 'FB_NATIVE');
-  res.json({ ok: true });
+  // 2026-10-13 (S-SINGLE-INVENTORY-NUMBER): name the platform so a MULTI-unit item takes exactly one unit (the Facebook row is consumed
+  // as the idempotency key, so the content script re-reporting the same Sold card cannot take a second one) instead of going fully SOLD
+  // and being pulled from every market. Single-unit items fall through to the legacy whole-item SOLD cascade unchanged.
+  const sale = await commitFacebookNativeSale(itemId, 'FB_NATIVE', { soldOnPlatform: { platform: 'FACEBOOK', remoteListingId: null } });
+  res.json({ ok: true, ...(sale?.partial ? { partial: true, remainingStock: sale.remainingStock } : {}) });
 };
 
 // POST /api/extension/items/:id/mark-posted -- manual counterpart to markItemListed above.

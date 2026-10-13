@@ -777,7 +777,7 @@ test('the save button needs a chosen mode, ready cards, no sends and no saves in
   assert.deepEqual(add.blockers, []);
   assert.equal(add.buttonLabel, 'Save 3 cards');
   assert.equal(add.modeHint, 'The count is added to what you already have.');
-  assert.match(commitState({ ...base, mode: 'REPLACE' }).modeHint as string, /never goes below what has already sold/);
+  assert.match(commitState({ ...base, mode: 'REPLACE' }).modeHint as string, /stay counted as sold/);
 
   assert.deepEqual(commitState({ ...base, mode: 'ADD', uploadsInFlight: 2 }).blockers, ['UPLOADING']);
   assert.deepEqual(commitState({ ...base, mode: 'ADD', pendingChanges: 1 }).blockers, ['SAVING']);

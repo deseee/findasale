@@ -20,7 +20,7 @@
  *     saleReopenGuard.ts makes commitFacebookNativeSale ignore a sold report that names the cancelled listing;
  *   - EbaySoldEvent / EtsySoldEvent ledger rows are never touched (that is what stops those syncs re-selling);
  *   - the Reverb / Discogs order polls ignore cancelled and refunded orders.
- * Nothing is relisted: only Item.status / stockSold / lastSoldVia change. No sold notification is fired.
+ * Only Item.status / stockSold / ebayQuantitySold / lastSoldVia change here (stockSold and ebayQuantitySold go DOWN by the cancelled units, floored at 0, never reset); afterwards the stock sync (inventoryStockSync) relists an ended eBay listing. No sold notification is fired.
  */
 
 import { prisma } from '../lib/prisma';
@@ -81,6 +81,9 @@ const fail = (
   message: string,
   extra: { requiresConfirmation?: boolean; marketplace?: string } = {}
 ): SaleReopenResult => ({ ok: false, status, code, message, ...extra });
+
+/** Units given back by one attested cancellation: a sold-elsewhere report always takes exactly one unit. */
+const REOPEN_UNITS = 1;
 
 export interface SaleReopenOptions {
   organizerId: string;
@@ -168,11 +171,28 @@ export async function reopenAttestedSale(itemId: string, opts: SaleReopenOptions
         },
       });
     }
+    // Single inventory number (2026-10-13): give back ONLY the units of the cancelled sale (never "stockSold = 0", which would restore the
+    // whole stock of a multi-unit item sold out over several orders). One attested cancellation is one unit (every sold-elsewhere report
+    // takes exactly one), and multi-quantity items are refused above, so the guard on stockTotal here only closes the race where the
+    // total was raised between the read and this write. The item returns to AVAILABLE because the freed unit leaves inStock at 1.
     const updated = await tx.item.updateMany({
-      where: { id: itemId, status: 'SOLD', lastSoldVia: via ? via : null },
-      data: { status: 'AVAILABLE', stockSold: 0, lastSoldVia: null, ...organizerEditStampAlways() },
+      where: {
+        id: itemId,
+        status: 'SOLD',
+        lastSoldVia: via ? via : null,
+        OR: [{ stockTotal: null }, { stockTotal: { lte: 1 } }],
+      },
+      data: {
+        status: 'AVAILABLE',
+        stockSold: { decrement: REOPEN_UNITS },
+        ebayQuantitySold: { decrement: REOPEN_UNITS }, // the same units off the eBay counter (floored below), not a reset
+        lastSoldVia: null,
+        ...organizerEditStampAlways(),
+      },
     });
     if (updated.count === 0) throw new Error('REOPEN_RACE');
+    // Floor both counters at zero (a legacy SOLD item whose ledger was never incremented would otherwise go to -1).
+    await tx.$executeRaw`UPDATE "Item" SET "stockSold" = GREATEST("stockSold", 0), "ebayQuantitySold" = GREATEST("ebayQuantitySold", 0) WHERE "id" = ${itemId} AND ("stockSold" < 0 OR "ebayQuantitySold" < 0)`;
     return true;
   }).catch((err: any) => {
     if (err?.message === 'REOPEN_RACE') return false;
@@ -182,9 +202,15 @@ export async function reopenAttestedSale(itemId: string, opts: SaleReopenOptions
     return fail(409, 'RACE', 'The item changed while it was being reopened. Refresh and try again.');
   }
 
+  // Single inventory number (2026-10-13): the unit is back in stock, so kits that contain it are recomputed and every market follows
+  // the one in-stock number (an eBay listing that was ended when the item sold is relisted with the right quantity). Fire-and-forget.
+  import('./inventoryStockSync')
+    .then((m) => m.syncItemStock(itemId, 'reopen'))
+    .catch((err: unknown) => console.warn(`[Sale Reopen] stock sync failed for item ${itemId}:`, (err as Error)?.message));
+
   console.log(
     `[Sale Reopen] REOPENED item ${itemId} ("${item.title}") channel=${via || 'UNTAGGED'} actor=${opts.actorUserId} ` +
-      `organizer=${opts.organizerId} attested=true -- ledger rows kept, nothing relisted`
+      `organizer=${opts.organizerId} attested=true -- ledger rows kept, eBay relisted by the stock sync when it was ended`
   );
 
   // Informational only (NOT a sold notification). Best-effort.
@@ -195,7 +221,7 @@ export async function reopenAttestedSale(itemId: string, opts: SaleReopenOptions
         userId: organizer.userId,
         type: 'SALE_UPDATE',
         title: 'Sale cancelled, item available again',
-        body: `"${item.title}" is marked available again after the ${channel.label} sale was cancelled. Listings that were paused or ended when it sold were not relisted.`,
+        body: `"${item.title}" is marked available again after the ${channel.label} sale was cancelled. An eBay listing that was ended when it sold is relisted automatically; relist it yourself on any other marketplace where you want it.`,
         link: item.saleId ? `/organizer/sales/${item.saleId}` : '/organizer/inventory',
       });
     }

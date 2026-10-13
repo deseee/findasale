@@ -16,7 +16,7 @@ import type { ItemFormData, ItemSaveTouched } from '../buildItemSavePayload';
 function legacyBuildSavePayload(
   formData: ItemFormData,
   quantityText: string,
-  stockTotalText: string,
+  inStockText: string,
   weightTouched: boolean,
   shippingTouched: boolean,
   consignorTouched: boolean,
@@ -32,7 +32,8 @@ function legacyBuildSavePayload(
   const payload = {
     ...formData,
     quantity: parseCount(quantityText),
-    stockTotal: parseCount(stockTotalText),
+    stockTotal: undefined,
+    inStock: Math.max(0, Number.isFinite(parseInt(inStockText, 10)) ? parseInt(inStockText, 10) : 0),
     packageWeightOz: weightTouched ? toIntOrNull(formData.packageWeightOz) : undefined,
     ...(weightTouched && toIntOrNull(formData.packageWeightOz) !== null
       ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
@@ -174,7 +175,7 @@ test('golden: serialized payload is byte-identical to the old page closure when 
           buildEditSavePayload({
             formData: form,
             quantityText: q,
-            stockTotalText: s,
+            inStockText: s,
             touched,
             conditionTouched: true,
             loadedCondition: 'ignored',
@@ -197,7 +198,7 @@ test('golden: untouched condition with canonical stored values is byte-identical
         buildEditSavePayload({
           formData: form,
           quantityText: '1',
-          stockTotalText: '1',
+          inStockText: '1',
           touched,
           conditionTouched: false,
           loadedCondition: form.condition || null,
@@ -214,7 +215,7 @@ test('untouched condition sends the stored legacy value, not the normalized disp
   const payload = buildEditSavePayload({
     formData: form,
     quantityText: '1',
-    stockTotalText: '1',
+    inStockText: '1',
     touched: { weightTouched: false, shippingTouched: false, consignorTouched: false },
     conditionTouched: false,
     loadedCondition: 'LIKE_NEW',
@@ -229,7 +230,7 @@ test('touched condition sends the form values', () => {
   const payload = buildEditSavePayload({
     formData: form,
     quantityText: '1',
-    stockTotalText: '1',
+    inStockText: '1',
     touched: { weightTouched: false, shippingTouched: false, consignorTouched: false },
     conditionTouched: true,
     loadedCondition: 'LIKE_NEW',
@@ -243,7 +244,7 @@ test('skipMarketplaceSync is added only when strictly true, as the last key', ()
   const input = {
     formData: baseForm(),
     quantityText: '1',
-    stockTotalText: '1',
+    inStockText: '1',
     touched: { weightTouched: false, shippingTouched: false, consignorTouched: false },
     conditionTouched: true,
     loadedCondition: 'USED',
@@ -260,4 +261,22 @@ test('skipMarketplaceSync is added only when strictly true, as the last key', ()
   assert.equal(withSkip.skipMarketplaceSync, true);
   const keys = Object.keys(withSkip);
   assert.equal(keys[keys.length - 1], 'skipMarketplaceSync');
+});
+
+test('the item form saves inStock (not stockTotal) and omits both when the field was not touched', () => {
+  const base = {
+    formData: baseForm({ stockTotal: 40 }),
+    quantityText: '1',
+    inStockText: '6',
+    touched: { weightTouched: false, shippingTouched: false, consignorTouched: false },
+    conditionTouched: true,
+    loadedCondition: 'USED',
+    loadedGrade: 'B',
+  };
+  const sent = JSON.parse(JSON.stringify(buildEditSavePayload({ ...base, inStockTouched: true })));
+  assert.equal(sent.inStock, 6);
+  assert.equal('stockTotal' in sent, false);
+  const quiet = JSON.parse(JSON.stringify(buildEditSavePayload({ ...base, inStockTouched: false })));
+  assert.equal('inStock' in quiet, false);
+  assert.equal('stockTotal' in quiet, false);
 });

@@ -84,6 +84,8 @@ import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 import { ShippingNetPreview } from '../../../components/ShippingNetPreview'; // ADR-103 Phase 5 (2026-09-03)
 import CardConditionConfirm from '../../../components/cardRecord/CardConditionConfirm'; // trading card condition (NM/LP/MP/HP/DMG), one-tap confirm
 import { showCardCondition } from '../../../lib/cardConditionVisibility';
+import { inStockFromItem, parseInStockText } from '../../../lib/buildItemSavePayload';
+import AddKitButton from '../../../components/AddKitButton'; // kits: make a kit, then edit it on the item edit page
 import BulkLotsLink from '../../../components/BulkLotsLink'; // ADR-136 (#659): link to bulk lots, rendered only when the feature is on
 import PriceBookLink from '../../../components/priceBook/PriceBookLink'; // ADR-140 (B8): link to the price book, rendered only when it is on
 import TcgplayerSyncLink from '../../../components/TcgplayerSyncLink'; // ADR-137 (#660): link to TCGplayer sync, rendered only when the feature is on
@@ -481,16 +483,14 @@ const computeDraftStatus = (item: any): 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED'
 // the value it was LOADED with (the *Initial twin) so Save can send only what the organizer changed,
 // and never writes a default or stale value back over the real one.
 const buildRowCommerceState = (item: any) => {
-  // The quick-edit "Units" field holds units LEFT in stock (stockTotal - stockSold); Save sends it back plus stockSold.
-  const stockSold = Number(item.stockSold) > 0 ? Math.floor(Number(item.stockSold)) : 0;
-  const stockTotal = String(Math.max(stockSold > 0 ? 0 : 1, (item.stockTotal != null ? Number(item.stockTotal) || 1 : 1) - stockSold));
+  // The quick-edit "In stock" field is the one stock number; Save sends it as `inStock` and the server does the rest.
+  const inStock = String(inStockFromItem(item));
   const costBasis = item.costBasis != null && item.costBasis !== '' ? String(item.costBasis) : '';
   const consignorId: string = item.consignorId || item.consignor?.id || '';
   const excludeFromMarkdown = item.excludeFromMarkdown === true;
   return {
-    stockTotal,
-    stockTotalInitial: stockTotal,
-    stockSold,
+    inStock,
+    inStockInitial: inStock,
     costBasis,
     costBasisInitial: costBasis,
     consignorId,
@@ -727,7 +727,7 @@ const AddItemsDetailPage = () => {
 
   // Expandable item cards (like review & publish page)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
-  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; conditionGrade: string; conditionInitial: string; conditionGradeInitial: string; description: string; lotNumber: string; stockTotal: string; stockTotalInitial: string; stockSold: number; costBasis: string; costBasisInitial: string; consignorId: string; consignorIdInitial: string; excludeFromMarkdown: boolean; excludeFromMarkdownInitial: boolean; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string; packageLengthIn: string; packageWidthIn: string; packageHeightIn: string }>>({});
+  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; conditionGrade: string; conditionInitial: string; conditionGradeInitial: string; description: string; lotNumber: string; inStock: string; inStockInitial: string; costBasis: string; costBasisInitial: string; consignorId: string; consignorIdInitial: string; excludeFromMarkdown: boolean; excludeFromMarkdownInitial: boolean; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string; packageLengthIn: string; packageWidthIn: string; packageHeightIn: string }>>({});
   // Tracks which items had their Weight (oz) field directly edited in this card's inline
   // eBay & Shipping panel, so handleInlineItemSave knows to send packageConfirmedByOrganizer.
   // Mirrors review.tsx's weightTouched pattern exactly (scoped per-item id, only the weight
@@ -757,17 +757,15 @@ const AddItemsDetailPage = () => {
   }, [itemEditState]);
 
   // Saves the quick-edit card. Resolves true when the PUT succeeded (or there was nothing to save).
-  // stockTotal / costBasis / consignorId / excludeFromMarkdown are sent ONLY when the organizer changed
+  // inStock / costBasis / consignorId / excludeFromMarkdown are sent ONLY when the organizer changed
   // them from the loaded value, so an unknown or stale value is never written over the real one.
   const saveInlineItem = useCallback(async (itemId: string): Promise<boolean> => {
     const state = itemEditState[itemId];
     if (!state) return true;
     const changed: Record<string, any> = {};
-    if (state.stockTotal !== state.stockTotalInitial) {
-      const parsedStock = parseInt(state.stockTotal, 10);
-      // The field is units left in stock; the server stores the pool total, so add back what already sold.
-      const minLeft = state.stockSold > 0 ? 0 : 1;
-      changed.stockTotal = Math.max(minLeft, isNaN(parsedStock) ? minLeft : parsedStock) + state.stockSold;
+    if (state.inStock !== state.inStockInitial) {
+      // The one In stock number (integer, 0 allowed). The server works out the rest.
+      changed.inStock = parseInStockText(state.inStock);
     }
     if (state.costBasis !== state.costBasisInitial) {
       const trimmedCost = state.costBasis.trim();
@@ -818,7 +816,7 @@ const AddItemsDetailPage = () => {
         if (!cur) return prev;
         return { ...prev, [itemId]: {
           ...cur,
-          stockTotalInitial: cur.stockTotal,
+          inStockInitial: cur.inStock,
           costBasisInitial: cur.costBasis,
           consignorIdInitial: cur.consignorId,
           excludeFromMarkdownInitial: cur.excludeFromMarkdown,
@@ -2665,12 +2663,10 @@ const AddItemsDetailPage = () => {
             )}
             <PriceBookLink className="inline-flex min-h-[44px] items-center px-4 py-2 rounded-lg font-medium bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400 transition-all" />
             {typeof saleId === 'string' && saleId !== '' && (
-              <Link
-                href={`/organizer/kits/${encodeURIComponent(saleId)}`}
+              <AddKitButton
+                saleId={saleId}
                 className="inline-flex min-h-[44px] items-center px-4 py-2 rounded-lg font-medium bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400 transition-all"
-              >
-                Kits
-              </Link>
+              />
             )}
             {typeof saleId === 'string' && saleId !== '' && (
               <CardScanLink
@@ -3505,8 +3501,6 @@ const AddItemsDetailPage = () => {
                   const draftStatus = computeDraftStatus(item);
                   const isExpanded = expandedItemId === item.id;
                   const editState = getItemEditState(item);
-                  const unitsSold = Number(item.stockSold) > 0 ? Number(item.stockSold) : 0;
-                  const minUnits = unitsSold > 0 ? 0 : 1; // units left in stock; 0 allowed once something has sold
                   return (
                     <div key={item.id} className="bg-white dark:bg-gray-800">
                       {/* Collapsed row */}
@@ -3687,26 +3681,21 @@ const AddItemsDetailPage = () => {
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">
-                                In stock now
-                                {unitsSold > 0 && (
-                                  <span className="ml-1 font-normal text-warm-500 dark:text-warm-400">({unitsSold} sold)</span>
-                                )}
+                                In stock
                               </label>
                               <input
                                 type="number"
-                                min={minUnits}
+                                min="0"
                                 step="1"
-                                value={editState.stockTotal}
-                                onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, stockTotal: e.target.value } }))}
+                                value={editState.inStock}
+                                onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, inStock: e.target.value } }))}
                                 onBlur={() => {
-                                  const parsed = Math.max(minUnits, parseInt(editState.stockTotal, 10) || minUnits);
-                                  setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, stockTotal: String(parsed) } }));
+                                  const parsed = parseInStockText(editState.inStock);
+                                  setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, inStock: String(parsed) } }));
                                 }}
                                 className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
                               />
-                              {unitsSold > 0 && (
-                                <p className="mt-1 text-[11px] text-warm-500 dark:text-warm-400">{unitsSold} already sold; enter only what you still have.</p>
-                              )}
+                              <p className="mt-1 text-[11px] text-warm-500 dark:text-warm-400">Saving updates this on FindA.Sale and every connected marketplace that can take a count.</p>
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Condition</label>

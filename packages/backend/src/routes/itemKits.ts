@@ -27,6 +27,8 @@ const kitWriteLimiter = limited(60 * 1000, 30);
 
 router.get('/candidates', authenticate, requireOrganizer, kitReadLimiter, itemKitHandlers.candidates);
 router.get('/', authenticate, requireOrganizer, kitReadLimiter, itemKitHandlers.list);
+// Registered before '/:kitId' so it is not swallowed by it.
+router.get('/by-component/:itemId', authenticate, requireOrganizer, kitReadLimiter, itemKitHandlers.byComponent);
 router.post('/', authenticate, requireOrganizer, kitWriteLimiter, itemKitHandlers.create);
 router.get('/:kitId', authenticate, requireOrganizer, kitReadLimiter, itemKitHandlers.getOne);
 router.put('/:kitId', authenticate, requireOrganizer, kitWriteLimiter, itemKitHandlers.update);

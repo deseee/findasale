@@ -3,6 +3,7 @@
  *
  *   GET    /candidates?saleId=&q=   organizer: items that can go in a kit
  *   GET    /?saleId=                organizer: the organizer's kits (optionally one sale's)
+ *   GET    /by-component/:itemId    organizer: the kits that contain this item
  *   POST   /                        organizer: create a kit { title, description?, price, saleId?, components: [{ itemId, quantity }] }
  *   GET    /:kitId                  organizer: one kit with live component stock
  *   PUT    /:kitId                  organizer: edit name / description / price / components (components locked once the kit has sold)
@@ -14,7 +15,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { archiveKit, createKit, getKit, isKitError, listKitCandidates, listKits, refreshKit, updateKit } from '../services/itemKitService';
+import { archiveKit, createKit, getKit, isKitError, listKitCandidates, listKits, listKitsForComponent, refreshKit, updateKit } from '../services/itemKitService';
 
 function fail(res: Response, status: number, error: string, code: string, extra?: Record<string, unknown>): Response {
   return res.status(status).json({ success: false, error, code, ...(extra ?? {}) });
@@ -55,6 +56,18 @@ export const itemKitHandlers = {
       return res.json({ success: true, data: { items } });
     } catch (err) {
       return sendError(res, err, 'candidates');
+    }
+  },
+
+  async byComponent(req: AuthRequest, res: Response) {
+    try {
+      const organizerId = await organizerIdFor(req, res);
+      if (!organizerId) return res;
+      const itemId = idParam(req.params.itemId);
+      if (!itemId) return fail(res, 404, 'Item not found.', 'ITEM_NOT_FOUND');
+      return res.json({ success: true, data: { kits: await listKitsForComponent(organizerId, itemId) } });
+    } catch (err) {
+      return sendError(res, err, 'byComponent');
     }
   },
 

@@ -453,3 +453,35 @@ export async function listKitCandidates(organizerId: string, opts: { saleId?: st
     .map((i) => ({ id: i.id, title: i.title, price: i.price, photoUrl: i.photoUrls[0] ?? null, remaining: remainingOf(i), saleId: i.saleId }))
     .filter((i) => i.remaining > 0);
 }
+
+export interface KitMembership {
+  kitId: string;
+  title: string;
+  saleId: string | null;
+  status: string;
+  /** How many of this item one kit takes. */
+  quantity: number;
+}
+
+/** Pure shaping of the membership rows (exported for tests). Archived (deleted) kits are dropped; sorted by title. */
+export function shapeKitMemberships(
+  rows: Array<{ quantity: number; kitItem: { id: string; title: string; saleId: string | null; status: string; deletedAt: Date | null } }>,
+): KitMembership[] {
+  return rows
+    .filter((r) => !r.kitItem.deletedAt)
+    .map((r) => ({ kitId: r.kitItem.id, title: r.kitItem.title, saleId: r.kitItem.saleId, status: r.kitItem.status, quantity: r.quantity }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+}
+
+/** The kits (of this organizer) that contain the given item. Another organizer's item looks exactly like a missing one (404). */
+export async function listKitsForComponent(organizerId: string, itemId: string): Promise<KitMembership[]> {
+  const db = prisma as unknown as Db;
+  const item = await db.item.findUnique({ where: { id: itemId }, select: { id: true, organizerId: true, deletedAt: true } });
+  if (!item || item.organizerId !== organizerId || item.deletedAt) throw new KitError('ITEM_NOT_FOUND', 404, 'Item not found.');
+  const rows = await db.itemKitComponent.findMany({
+    where: { componentItemId: itemId, kitItem: { organizerId, listingType: KIT_LISTING_TYPE, deletedAt: null } },
+    select: { quantity: true, kitItem: { select: { id: true, title: true, saleId: true, status: true, deletedAt: true } } },
+    take: 100,
+  });
+  return shapeKitMemberships(rows);
+}

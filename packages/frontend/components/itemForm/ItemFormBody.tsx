@@ -49,7 +49,7 @@ import CardRecordPanel from '../CardRecordPanel'; // ADR-134 card details
 import CardConditionConfirm from '../cardRecord/CardConditionConfirm'; // trading card condition (NM/LP/MP/HP/DMG), one-tap confirm
 import ItemPriceLock from '../priceBook/ItemPriceLock'; // ADR-140 (B8): "Keep my price", only for card items when the price book is on
 import { showCardCondition } from '../../lib/cardConditionVisibility';
-import { remainingFromTotal, totalFromRemainingText } from '../../lib/buildItemSavePayload';
+import { inStockFromItem, parseInStockText, remainingFromTotal } from '../../lib/buildItemSavePayload';
 import EtsyListingStatus from '../etsy/EtsyListingStatus'; // ADR-135 Etsy listing section
 import { useEtsyConnection } from '../../lib/useEtsyConnection';
 import {
@@ -64,9 +64,11 @@ import { computeSaveImpact, describeSaveImpact, isInformationalPushCode, informa
 import { buildPlatformChips } from '../../lib/platformStatusView';
 import { useItemForEdit } from './useItemForEdit';
 import { useItemMarketplace } from './useItemMarketplace';
+import { stockCountNoteText } from '../../lib/stockCountNote';
 import { ConditionSelect, ConditionGradePicker } from './ConditionFields';
 import { PushFailureBanner, PushNeedsInfoNotice, SaveOutcomeRow, EbayHoldPanel } from './MarketplaceNotices';
 import { PlatformChipStrip, PlatformStatusList } from './PlatformChips';
+import { KitContentsSection, InKitsNote } from './KitContentsSection'; // kits live in the Quantity & setup section
 
 // Bug fix (2026-08-08, same P1 data-corruption class as add-items.tsx auctionEndTime
 // fix): item.auctionEndTime is stored as a UTC ISO timestamp. Previously this page did
@@ -204,17 +206,19 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
   // go through an empty intermediate state while typing instead of snapping
   // back to 1 on every keystroke. Clamped to a valid integer (min 1) on blur.
   const [quantityText, setQuantityText] = useState(String(formData.quantity ?? 1));
-  // stockTotalText holds the units LEFT in stock (stockTotal - stockSold), what the organizer actually counts.
-  // The saved stockTotal is that number plus stockSold (see totalFromRemainingText). stockSold is server-owned.
+  // inStockText holds the ONE stock number the organizer sees and edits ("In stock"). It is saved as `inStock`; the
+  // server works out the rest. stockSold (server-owned) is kept only to keep this field in step after a bulk lot save.
   const [stockSold, setStockSold] = useState(0);
-  const [stockTotalText, setStockTotalText] = useState(String(formData.stockTotal ?? 1));
+  const [inStockText, setInStockText] = useState(String(formData.stockTotal ?? 1));
+  // True once the organizer changed the In stock field (reset after a save). Untouched means inStock is not sent.
+  const [inStockTouched, setInStockTouched] = useState(false);
 
   useEffect(() => {
     setQuantityText(String(formData.quantity ?? 1));
   }, [formData.quantity]);
 
   useEffect(() => {
-    setStockTotalText(String(remainingFromTotal(formData.stockTotal, stockSold)));
+    setInStockText(String(remainingFromTotal(formData.stockTotal, stockSold)));
   }, [formData.stockTotal, stockSold]);
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -360,10 +364,10 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
   const isDirtyRef = useRef(false);
   const loadedItemIdRef = useRef<string | null>(null);
 
-  // Snapshot of what Save would send. quantity/stockTotal use the clamped text inputs, so a value
-  // typed but not yet blurred still counts as a change (and is what actually gets saved).
+  // Snapshot of what Save would send. quantity and the In stock number (held in the snapshot's stockTotal slot) use the
+  // clamped text inputs, so a value typed but not yet blurred still counts as a change (and is what actually gets saved).
   const makeCurrentSnapshot = (): SaveSnapshot => ({
-    f: { ...formData, quantity: parseCount(quantityText), stockTotal: totalFromRemainingText(stockTotalText, stockSold) },
+    f: { ...formData, quantity: parseCount(quantityText), stockTotal: parseInStockText(inStockText) },
     w: weightTouched,
     s: shippingTouched,
     c: consignorTouched,
@@ -610,8 +614,8 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
     buildEditSavePayload({
       formData,
       quantityText,
-      stockTotalText,
-      stockSold,
+      inStockText,
+      inStockTouched,
       touched: { weightTouched, shippingTouched, consignorTouched },
       conditionTouched,
       loadedCondition: item?.condition,
@@ -636,6 +640,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
       setShippingTouched(false);
       setConsignorTouched(false);
       setConditionTouched(false);
+      setInStockTouched(false);
       setBaseline({ ...snapshot, w: false, s: false, c: false });
     } else {
       setBaseline(snapshot);
@@ -1099,7 +1104,8 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
       setQuantityText(String(item.quantity ?? 1));
       const loadedSold = Math.max(0, Number(item.stockSold) || 0);
       setStockSold(loadedSold);
-      setStockTotalText(String(remainingFromTotal(item.stockTotal, loadedSold)));
+      setInStockText(String(inStockFromItem(item)));
+      setInStockTouched(false);
       // Re-baseline dirty tracking once these values have rendered.
       setBaselinePending(true);
     }
@@ -1302,10 +1308,13 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
+      // Kits (2026-10-13): a kit is removed through the kit endpoint (soft delete that also frees the items inside it); the plain
+      // item delete refuses a kit so a hard delete can never leave its components flagged as kit parts.
+      if (item?.listingType === 'KIT') return await api.delete(`/kits/${id}`);
       return await api.delete(`/items/${id}`);
     },
     onSuccess: () => {
-      showToast('Item deleted', 'success');
+      showToast(item?.listingType === 'KIT' ? 'Kit deleted' : 'Item deleted', 'success');
       if (isSheet) {
         // The sheet never navigates away: refresh the lists behind it and ask the host to close.
         if (item?.saleId) queryClient.invalidateQueries({ queryKey: ['items', item.saleId] });
@@ -1431,6 +1440,9 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
     if (item.draftStatus === 'PENDING_REVIEW') return { label: 'Needs review', className: amber };
     return { label: 'Live', className: green };
   })();
+
+  // Read-only note under In stock: shown only when the loaded count is above 1 and a listed market cannot take a count.
+  const stockCountNote = stockCountNoteText(mp.status, inStockFromItem(item));
 
   // Where this is listed: one chip per platform from marketplace-status; until it loads, eBay and Discogs come from
   // the item itself. Extension marketplaces (Vinted, Poshmark, ...) are prompt-only.
@@ -1563,6 +1575,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
     'upc',
     'ean',
     'isbn',
+    'inStock',
   ].forEach((key) => {
     if (wouldSend[key] !== undefined) impactDirty[key] = wouldSend[key];
   });
@@ -1577,9 +1590,9 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
   });
   const saveImpactParts: string[] = describeSaveImpact(saveImpact);
   if (item.ebayListingId) {
-    saveImpactParts.push('Photos, category, quantity and best-offer settings are not sent by Save; use Re-push to eBay.');
+    saveImpactParts.push('Photos, category and best-offer settings are not sent by Save; use Re-push to eBay.');
   } else if (item.ebayOfferId) {
-    saveImpactParts.push('Photos, category, quantity and best-offer settings are not sent by Save; use Publish to eBay now.');
+    saveImpactParts.push('Photos, category and best-offer settings are not sent by Save; use Publish to eBay now.');
   }
   // Discogs and Reverb are never updated by Save.
   const onDiscogsListing = !!item.discogsListingId;
@@ -2163,11 +2176,13 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                 </label>
                 <select
                   value={formData.listingType}
+                  disabled={item?.listingType === 'KIT'}
                   onChange={(e) =>
                     setFormData({ ...formData, listingType: e.target.value })
                   }
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 disabled:opacity-60"
                 >
+                  {item?.listingType === 'KIT' && <option value="KIT">Kit</option>}
                   <option value="FIXED">Fixed Price</option>
                   <option value="AUCTION">Auction</option>
                   <option value="REVERSE_AUCTION">Reverse Auction</option>
@@ -2945,7 +2960,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
               )}
             </ItemFormSection>
 
-            <ItemFormSection id="section-setup" title="Quantity & setup" defaultOpen summary={`${formData.quantity} in lot, ${remainingFromTotal(formData.stockTotal, stockSold)} in stock`}>
+            <ItemFormSection id="section-setup" title="Quantity & setup" defaultOpen summary={formData.quantity > 1 ? `${formData.quantity} pieces per lot, ${parseInStockText(inStockText)} in stock` : `${parseInStockText(inStockText)} in stock`}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
@@ -2964,39 +2979,40 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                     }}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                   />
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many pieces are bundled together and sold as one lot (e.g. "set of 8" sold together). This is not your sellable stock count.</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Describes what is inside one lot (for example a "set of 8" sold together). It does not change your In stock number.</p>
                 </div>
 
-                {/* ADR-087 P1: "Units available" = the real independently-sellable stock pool (stockTotal). */}
+                {/* One stock number: "In stock". Saved as inStock; the server updates FindA.Sale and connected markets. A kit's number is derived (KitContentsSection below). */}
+                {item?.listingType !== 'KIT' && (
                 <div>
                   <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                    How many you have in stock now
+                    In stock
                   </label>
                   <input
                     type="number"
-                    min={stockSold > 0 ? 0 : 1}
+                    min="0"
                     step="1"
-                    value={stockTotalText}
-                    onChange={(e) => setStockTotalText(e.target.value)}
-                    onBlur={() => {
-                      const newTotal = totalFromRemainingText(stockTotalText, stockSold);
-                      setStockTotalText(String(newTotal - stockSold));
-                      setFormData({ ...formData, stockTotal: newTotal });
+                    value={inStockText}
+                    onChange={(e) => {
+                      setInStockText(e.target.value);
+                      setInStockTouched(true);
                     }}
+                    onBlur={() => setInStockText(String(parseInStockText(inStockText)))}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                   />
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many units you have left to sell right now. Each sale (in person, at POS, or on a connected marketplace) takes one off this number, and the item stays listed until none are left. If your real count changes, type the new count here. Leave at 1 for a single item.</p>
-                  {stockSold > 0 && (
-                    <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Sold so far: {stockSold}</p>
-                  )}
-                  {formData.quantity > 1 && (formData.stockTotal ?? 1) <= 1 && (
-                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-start gap-1">
-                      <span aria-hidden="true">&#9888;</span>
-                      <span>This item&apos;s stock pool isn&apos;t set. Shoppers and marketplaces will see only 1 available. Set &ldquo;How many you have in stock now&rdquo; to your real number of units.</span>
-                    </p>
-                  )}
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Saving updates this number on FindA.Sale and on every connected marketplace that can take a count. Sales on any channel lower it automatically.</p>
+                {stockCountNote && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-1" data-testid="stock-count-note">{stockCountNote}</p>
+                )}
                 </div>
+                )}
               </div>
+
+              {item?.listingType === 'KIT' ? (
+                <KitContentsSection itemId={id} saleId={item?.saleId ?? null} />
+              ) : (
+                item?.isKitComponent !== false && <InKitsNote itemId={id} />
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">

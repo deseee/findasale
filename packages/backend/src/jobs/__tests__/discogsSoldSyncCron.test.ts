@@ -29,11 +29,18 @@ describe('matchDiscogsOrdersToItems', () => {
     ];
     expect(matchDiscogsOrdersToItems(orders, ITEMS)).toEqual([{ itemId: 'item_rocks', orderId: '123-2' }]);
   });
-  it('matches each item once even if two orders name it', () => {
+  it('returns EVERY distinct live order that names an item (a multi-unit listing needs one unit per order)', () => {
     const orders = [
       { id: 'a', status: 'New Order', items: [{ id: '4356608142' }] },
       { id: 'b', status: 'Shipped', items: [{ id: '4356608142' }] },
     ];
+    expect(matchDiscogsOrdersToItems(orders, ITEMS)).toEqual([
+      { itemId: 'item_rocks', orderId: 'a' },
+      { itemId: 'item_rocks', orderId: 'b' },
+    ]);
+  });
+  it('the SAME order naming the item twice in one payload is still one sale', () => {
+    const orders = [{ id: 'a', status: 'New Order', items: [{ id: '4356608142' }, { id: '4356608142' }] }];
     expect(matchDiscogsOrdersToItems(orders, ITEMS)).toEqual([{ itemId: 'item_rocks', orderId: 'a' }]);
   });
   it('knows the cancelled statuses', () => {
@@ -64,7 +71,7 @@ describe('syncDiscogsSoldItemsForOrganizer', () => {
     const deps = { loadListedItems: async () => ITEMS, fetchOrders: async () => orders, commitSale, notify };
     const first = await syncDiscogsSoldItemsForOrganizer('org_1', deps);
     expect(first.sold).toEqual([{ itemId: 'item_rocks', orderId: '123-2' }]);
-    expect(commitSale).toHaveBeenCalledWith('item_rocks');
+    expect(commitSale).toHaveBeenCalledWith('item_rocks', '123-2');
     expect(notify).toHaveBeenCalledTimes(1);
     const second = await syncDiscogsSoldItemsForOrganizer('org_1', deps);
     expect(second.sold).toEqual([]);

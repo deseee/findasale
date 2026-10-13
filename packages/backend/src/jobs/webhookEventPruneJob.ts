@@ -24,12 +24,14 @@ export function scheduleWebhookEventPruneJob(): void {
       // chargeback applied (buyer strike, suspension, XP clawback) so a later WON decision can reverse them. Card
       // disputes routinely outlive 30 days, so those markers are kept for a year; everything else (including the
       // stored webhook payloads, which live on the same rows) goes at 30 days.
+      // 2026-10-13: 'sold-unit:' markers (soldElsewhereUnitSale.ts) are the idempotency key of a unit sale seen on Discogs / Reverb / the operator
+      // route; the Discogs poll re-reads old orders with no time window, so those markers also outlive 30 days (a year, like the dispute markers).
       const markerCutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
       const { count } = await prisma.processedWebhookEvent.deleteMany({
         where: {
           OR: [
-            { processedAt: { lt: cutoff }, NOT: { eventId: { startsWith: 'square-dispute-step:' } } },
-            { processedAt: { lt: markerCutoff }, eventId: { startsWith: 'square-dispute-step:' } },
+            { processedAt: { lt: cutoff }, NOT: [{ eventId: { startsWith: 'square-dispute-step:' } }, { eventId: { startsWith: 'sold-unit:' } }] },
+            { processedAt: { lt: markerCutoff }, OR: [{ eventId: { startsWith: 'square-dispute-step:' } }, { eventId: { startsWith: 'sold-unit:' } }] },
           ],
         },
       });

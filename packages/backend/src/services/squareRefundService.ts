@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { prisma } from '../lib/prisma';
-import { restockKitIfKit } from './itemKitStock'; // Kits (2026-10-16): a refunded kit sale gives its components back
+import { restockKitIfKit, recomputeKitsForComponents } from './itemKitStock'; // Kits (2026-10-16): a refunded kit sale gives its components back
 import * as Sentry from '@sentry/node';
 import { SquareClient, SquareEnvironment } from 'square';
 import { RefundError } from './refundService'; // SAME error class Stripe's refund path throws -- see file comment below for why this is not redeclared here.
@@ -296,6 +296,22 @@ interface FinalizeOutcome {
  * refundedAmount tracked, so the item is NOT put back on sale while the buyer keeps it, and a second
  * partial refund can still be issued up to the remaining balance.
  */
+/**
+ * Single inventory number (2026-10-13): a unit came back after a refund COMMITTED, so kits that contain the item are recomputed and
+ * every market follows the one in-stock number (an ended eBay listing relists). Fire-and-forget; never changes the refund outcome.
+ */
+function fireRefundStockSync(itemId: string): void {
+  (async () => {
+    try {
+      await recomputeKitsForComponents(prisma as any, [itemId]);
+    } catch (kitErr) {
+      console.error(`[squareRefundService] Kit recompute after refund failed for item ${itemId} (non-fatal):`, kitErr);
+    }
+    const { syncItemStock } = await import('./inventoryStockSync');
+    await syncItemStock(itemId, 'refund');
+  })().catch((err) => console.warn(`[squareRefundService] stock sync after refund failed for item ${itemId}:`, (err as Error)?.message));
+}
+
 async function finalizeSquareRefundTx(args: {
   purchase: FinalizablePurchase;
   refundAmount: number;
@@ -333,7 +349,8 @@ async function finalizeSquareRefundTx(args: {
   const feeShare = (total: number) => (purchase.amount > 0 ? roundMoney(feeAmount * Math.min(1, Math.max(0, total) / purchase.amount)) : 0);
   const cashFeeToReverse = isCashPurchase && feeAmount > 0 ? Math.max(0, roundMoney(feeShare(newTotal) - feeShare(priorRefunded))) : 0;
 
-  return prisma.$transaction(async (tx) => {
+  const restock: { itemId: string | null } = { itemId: null }; // set inside the transaction, acted on only after it commits
+  const finalizeOutcome = await prisma.$transaction(async (tx) => {
     const flipped = await tx.purchase.updateMany({
       where: { id: purchase.id, status: 'REFUNDING' },
       data: {
@@ -402,10 +419,16 @@ async function finalizeSquareRefundTx(args: {
         data: { stockSold: { decrement: 1 } },
       });
       // Kits (2026-10-16): a refunded KIT gives one kit's worth back to every component (inside this transaction, so it commits or rolls back with the refund).
-      if (stockGivenBack && stockGivenBack.count > 0) await restockKitIfKit(tx as any, purchase.itemId, 1);
+      if (stockGivenBack && stockGivenBack.count > 0) {
+        await restockKitIfKit(tx as any, purchase.itemId, 1);
+        restock.itemId = purchase.itemId;
+      }
       // Put the unit back on sale (callers also restore status; this makes a reconcile-finished refund
       // complete on its own). Only ever SOLD -> AVAILABLE, never walks a later transition backwards.
-      await tx.item.updateMany({ where: { id: purchase.itemId, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } }, data: { status: 'AVAILABLE' } });
+      // Single inventory number (2026-10-13): only when this refund's unit is what took the item from 0 to 1 in stock (stockSold now
+      // exactly total - 1), so an unrelated old refund never reopens a manually SOLD multi-unit item that still showed units left.
+      // Kits are derived from their components and never flipped here.
+      await tx.$executeRaw`UPDATE "Item" SET "status" = 'AVAILABLE' WHERE "id" = ${purchase.itemId} AND "status" = 'SOLD' AND "listingType" NOT IN ('CONSIGNOR_TAG', 'KIT') AND "stockSold" = COALESCE("stockTotal", 1) - 1`;
     }
 
     if (cashFeeToReverse > 0 && organizerId) {
@@ -433,6 +456,8 @@ async function finalizeSquareRefundTx(args: {
 
     return { alreadyFinalized: false, isFullRefund, totalRefundedAmount: newTotal, ...(isBulkRow ? { bulkCardsReturned } : {}) };
   });
+  if (restock.itemId) fireRefundStockSync(restock.itemId);
+  return finalizeOutcome;
 }
 
 /**
@@ -1726,6 +1751,7 @@ export async function syncSquareRefundWebhookStatus(refund: {
   }
 
   for (const row of untouched) {
+    const restock: { itemId: string | null } = { itemId: null };
     try {
       await prisma.$transaction(async (tx) => {
         const flipped = await tx.purchase.updateMany({
@@ -1745,17 +1771,19 @@ export async function syncSquareRefundWebhookStatus(refund: {
             data: { stockSold: { decrement: 1 } },
           });
           // Kits (2026-10-16): same component restock as the refund path above.
-          if (stockGivenBack && stockGivenBack.count > 0) await restockKitIfKit(tx as any, row.itemId, 1);
-          await tx.item.updateMany({
-            where: { id: row.itemId, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } },
-            data: { status: 'AVAILABLE' },
-          });
+          if (stockGivenBack && stockGivenBack.count > 0) {
+            await restockKitIfKit(tx as any, row.itemId, 1);
+            restock.itemId = row.itemId;
+          }
+          // Same 0 -> 1 in-stock guard as the refund path above (single inventory number, 2026-10-13).
+          await tx.$executeRaw`UPDATE "Item" SET "status" = 'AVAILABLE' WHERE "id" = ${row.itemId} AND "status" = 'SOLD' AND "listingType" NOT IN ('CONSIGNOR_TAG', 'KIT') AND "stockSold" = COALESCE("stockTotal", 1) - 1`;
           await tx.itemReservation.updateMany({
             where: { itemId: row.itemId, status: { notIn: ['CANCELLED', 'EXPIRED', 'COMPLETED'] } },
             data: { status: 'CANCELLED' },
           });
         }
       });
+      if (restock.itemId) fireRefundStockSync(restock.itemId);
       console.log(`[squareRefundService] Purchase ${row.id} marked REFUNDED from external Square refund ${refundId} (payment ${paymentId}).`);
       Sentry.captureMessage('Square refund.updated: external refund applied (no FindA.Sale-initiated flow saw it first)', {
         level: 'info',

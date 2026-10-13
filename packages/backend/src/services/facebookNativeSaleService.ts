@@ -27,6 +27,11 @@
  *    (2026-09-23, extension wardrobe sold-detection; closes the item's VINTED listing record
  *    itself before calling this, since this helper touches no MarketplaceListingJob rows).
  *
+ * MULTI-UNIT ITEMS (2026-10-13, S-SINGLE-INVENTORY-NUMBER): every call site above takes exactly ONE unit of an item holding more than one
+ *  unit (stockTotal > 1) instead of marking it SOLD and withdrawing it everywhere. Per-listing platforms pass soldOnPlatform (dedupe = the live
+ *  MarketplaceListingJob row); Discogs / Reverb pass dedupeKey `sold-unit:<SOURCE>:<orderId>:<itemId>` (dedupe = a ProcessedWebhookEvent marker,
+ *  see soldElsewhereUnitSale.ts); the full sold cascade runs only when the unit taken empties the stock. Single-unit items are untouched.
+ *
  * Deliberately does NOT call notifyFacebookExportedItemSold for either call site: that
  * hook's job is telling the extension to go remove the matching Facebook listing, which
  * is meaningless here -- the sale happened ON Facebook, so there's nothing left to remove
@@ -47,6 +52,7 @@ import { withdrawReverbListingIfExists } from './marketplace/reverbConnector';
 import { withdrawEtsyListingIfExists } from './marketplace/etsyConnector';
 import { sellItemUnits } from './itemStockService';
 import { syncMarketplaceStock } from './marketplaceStockSyncService';
+import { takeSoldElsewhereUnit, fireItemStockSync } from './soldElsewhereUnitSale'; // 2026-10-13: one shared multi-unit step for every sold-elsewhere path
 import { lotChannelRefusal } from './bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a bulk lot is never marked SOLD by a sale seen elsewhere
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
 import { soldEmailStaleReason, soldEmailAlreadyApplied, soldRowMessage, getSoldEmailSource, parseSoldRowSentAtMs } from './soldEmailSourceGuard'; // 2026-10-12: an e-mail replayed after marker loss / relist must not consume a unit twice
@@ -117,6 +123,11 @@ export interface CommitFacebookNativeSaleOptions {
      * sold-email retry) is treated as this order's own sale already counted. Absent = any such row within the last 14 days. */
     orderCreatedAt?: Date;
   };
+  /** Idempotency key for a sale seen on a market that has NO MarketplaceListingJob row (Discogs, Reverb, operator route), used only
+   * when the item holds more than one unit (2026-10-13, S-SINGLE-INVENTORY-NUMBER). Shape `sold-unit:<SOURCE>:<externalEventId>:<itemId>`,
+   * stored as a ProcessedWebhookEvent row in the same transaction as the unit decrement, so a repeated poll takes no second unit.
+   * Ignored when soldOnPlatform is set (that path dedupes on the platform's live listing row) and for single-unit items. */
+  dedupeKey?: string;
 }
 
 /** Window used for the closed-by-email-sale rule when the order carries no creation time. */
@@ -186,11 +197,12 @@ async function commitPlatformUnitSale(
 
   const outcome: UnitSaleOutcome = await prisma.$transaction(async (txRaw) => {
     const tx = txRaw as any;
-    const rows: Array<{ status: string; stockTotal: number | null }> = await tx.$queryRaw`
-      SELECT "status"::text AS "status", "stockTotal" FROM "Item" WHERE "id" = ${itemId} FOR UPDATE
+    const rows: Array<{ status: string; stockTotal: number | null; listingType?: string | null }> = await tx.$queryRaw`
+      SELECT "status"::text AS "status", "stockTotal", "listingType" FROM "Item" WHERE "id" = ${itemId} FOR UPDATE
     `;
     const row = rows[0];
-    if (!row || (row.stockTotal ?? 1) <= 1) return { kind: 'single' } as UnitSaleOutcome;
+    // CONSIGNOR_TAG items keep their own sale path (never unit-sold from a marketplace signal), same as a single-unit item.
+    if (!row || (row.stockTotal ?? 1) <= 1 || row.listingType === 'CONSIGNOR_TAG') return { kind: 'single' } as UnitSaleOutcome;
     if (!['AVAILABLE', 'RESERVED', 'INVOICE_ISSUED'].includes(row.status)) return { kind: 'noop', reason: `item_status_${row.status}` } as UnitSaleOutcome;
 
     // Did THIS listing id already consume a unit? (REMOVE/REMOVED sold_on_* row stamped with it by a previous unit sale.)
@@ -318,10 +330,41 @@ async function commitPlatformUnitSale(
     syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock: outcome.remainingStock }).catch((err: any) =>
       console.warn(`[StockSync] revise-on-partial (${soldVia}) failed for item ${itemId}:`, err?.message)
     );
+    // Single in-stock number: re-push it to every market that carries a quantity (fire-and-forget, never throws).
+    fireItemStockSync(itemId, `sold-on-${platform.toLowerCase()}`);
     return { ok: true, alreadyCommitted: false, partial: true, remainingStock: outcome.remainingStock };
   }
 
   // Last unit gone: same as any other sold-elsewhere SOLD (sellItemUnits already set status).
+  await prisma.item.update({ where: { id: itemId }, data: { lastSoldVia: soldVia } });
+  fanOutWithdrawals(itemId, soldVia, skip);
+  return { ok: true, alreadyCommitted: false };
+}
+
+/**
+ * Multi-unit sale seen by a path with no per-listing marketplace row (Discogs / Reverb polls, the operator route, any caller that
+ * names no platform). Same contract as commitPlatformUnitSale: returns null for a single-unit item (caller falls through to the
+ * whole-item SOLD path, byte-for-byte as before); otherwise takes exactly one unit via the guarded sellItemUnits and leaves every
+ * listing alone unless that unit was the last one, in which case the usual full-sold fan-out runs.
+ */
+async function commitDedupedUnitSale(
+  itemId: string,
+  soldVia: string,
+  dedupeKey: string | undefined,
+  skip: Set<string>,
+): Promise<CommitFacebookNativeSaleResult | null> {
+  const outcome = await takeSoldElsewhereUnit(itemId, dedupeKey);
+  if (outcome.kind === 'single') return null;
+  if (outcome.kind === 'noop') {
+    return { ok: true, alreadyCommitted: true, noopReason: outcome.reason, ...(outcome.counted ? { alreadyCounted: true } : {}) };
+  }
+  if (!outcome.fullySoldOut) {
+    syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock: outcome.remainingStock }).catch((err: any) =>
+      console.warn(`[StockSync] revise-on-partial (${soldVia}) failed for item ${itemId}:`, err?.message)
+    );
+    fireItemStockSync(itemId, `sold-on-${soldVia.toLowerCase()}`);
+    return { ok: true, alreadyCommitted: false, partial: true, remainingStock: outcome.remainingStock };
+  }
   await prisma.item.update({ where: { id: itemId }, data: { lastSoldVia: soldVia } });
   fanOutWithdrawals(itemId, soldVia, skip);
   return { ok: true, alreadyCommitted: false };
@@ -362,6 +405,11 @@ export async function commitFacebookNativeSale(
   const skip = new Set<string>(options.skipWithdraw ?? []);
   if (options.soldOnPlatform) {
     const unit = await commitPlatformUnitSale(itemId, soldVia, options.soldOnPlatform, skip);
+    if (unit) return unit;
+  } else {
+    // 2026-10-13 (S-SINGLE-INVENTORY-NUMBER): no per-listing platform named (Discogs / Reverb polls, operator route ...). A multi-unit
+    // item takes ONE unit instead of going fully SOLD; a single-unit item returns null here and runs the legacy path below untouched.
+    const unit = await commitDedupedUnitSale(itemId, soldVia, options.dedupeKey, skip);
     if (unit) return unit;
   }
   try {

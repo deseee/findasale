@@ -105,6 +105,28 @@ test('listed, shipping inputs: a real package change counts, the same value does
   assert.deepEqual(describeSaveImpact(changed), ['Saving will update eBay: shipping.']);
 });
 
+test('listed, in stock: a different count is pushed, the same count is not, no extension prompt', () => {
+  const stocked = { ...loaded, inStock: 4, stockTotal: 10, stockSold: 6 };
+  const changed = computeSaveImpact({ loadedItem: stocked, dirtyFields: { inStock: 3 }, held: false, ebayListed: true, extensionPlatformsListed: ['VINTED'] });
+  assert.deepEqual(changed.ebay, { willPush: true, fields: ['quantity'] });
+  assert.deepEqual(changed.extensions, []);
+  assert.deepEqual(describeSaveImpact(changed), ['Saving will update eBay: in stock.']);
+  const zero = computeSaveImpact({ loadedItem: stocked, dirtyFields: { inStock: 0 }, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.deepEqual(zero.ebay.fields, ['quantity']);
+  const same = computeSaveImpact({ loadedItem: stocked, dirtyFields: { inStock: 4 }, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.equal(same.ebay.willPush, false);
+  const absent = computeSaveImpact({ loadedItem: stocked, dirtyFields: {}, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.equal(absent.ebay.willPush, false);
+});
+
+test('listed, in stock falls back to stockTotal minus stockSold when the item has no inStock', () => {
+  const legacyStock = { ...loaded, stockTotal: 10, stockSold: 6 };
+  const same = computeSaveImpact({ loadedItem: legacyStock, dirtyFields: { inStock: 4 }, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.equal(same.ebay.willPush, false);
+  const changed = computeSaveImpact({ loadedItem: legacyStock, dirtyFields: { inStock: 5, price: '70' }, held: false, ebayListed: true, extensionPlatformsListed: noExt });
+  assert.deepEqual(describeSaveImpact(changed), ['Saving will update eBay: price, in stock.']);
+});
+
 test('held: nothing is pushed, the fields that would have are listed, and the text says paused', () => {
   const impact = computeSaveImpact({ loadedItem: loaded, dirtyFields: { price: '50', title: 'New title' }, held: true, ebayListed: true, extensionPlatformsListed: noExt });
   assert.deepEqual(impact.ebay, { willPush: false, fields: ['title', 'price'], reason: 'held' });

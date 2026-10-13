@@ -102,6 +102,11 @@ export interface PlatformStatusEntry {
   heldAt: Date | null;
   /** True when the item is listed but would no longer pass the platform's eligibility rule. */
   ineligible?: boolean;
+  /**
+   * True when FindA.Sale can set this market's unit count automatically (mirrors services/inventoryStockSync.ts: eBay, Etsy
+   * and Shopify). False for markets that only report 'manual' while more than one unit is in stock.
+   */
+  supportsQuantity: boolean;
 }
 
 export interface ItemMarketplaceStatus {
@@ -141,6 +146,9 @@ export type StatusItemInput = ChannelStatusItemInput & {
   ebayHeldFields?: string[] | null;
   ebayContentDirtyAt?: Date | null;
 };
+
+/** Markets whose unit count inventoryStockSync.ts can set. Every other platform is reported 'manual' there. */
+export const QUANTITY_PLATFORMS: ReadonlySet<string> = new Set(['EBAY', 'ETSY', 'SHOPIFY']);
 
 const LABELS: Record<string, string> = {
   EBAY: 'eBay',
@@ -258,6 +266,7 @@ export function buildItemMarketplaceStatus(inputs: StatusInputs): ItemMarketplac
     ids,
     lastPush: null,
     heldAt: null,
+    supportsQuantity: QUANTITY_PLATFORMS.has(platform),
     ...extra,
   });
 

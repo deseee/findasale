@@ -83,7 +83,7 @@ The listing appears in your eBay seller account within 60 seconds.
 
 Before you push, you can tap **Check eBay fees** to see whether publishing would cost a real insertion fee. The check runs only when you tap it, not when you open the item.
 
-After an item is on eBay, a normal save sends only the fields that really changed: title, description, condition, price and shipping. The line above Save says exactly what will go. Photos, category, quantity and best-offer settings are not sent by Save. Use **Re-push to eBay** for those.
+After an item is on eBay, a normal save sends only the fields that really changed: title, description, condition, price, your In stock number and shipping. The line above Save says exactly what will go. Photos, category and best-offer settings are not sent by Save. Use **Re-push to eBay** for those.
 
 ---
 

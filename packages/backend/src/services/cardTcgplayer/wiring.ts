@@ -7,6 +7,7 @@
 import { prisma } from '../../lib/prisma';
 import { sellItemUnits } from '../itemStockService';
 import { syncMarketplaceStock } from '../marketplaceStockSyncService';
+import { syncItemStock } from '../inventoryStockSync'; // 2026-10-13: one in-stock number on every market
 import { endEbayListingIfExists } from '../../controllers/ebayController';
 import { markShopifyItemSold } from '../shopifyService';
 import { withdrawDiscogsListingIfExists } from '../marketplace/discogsListingConnector';
@@ -53,6 +54,10 @@ export function createDefaultDeps(): SyncDeps {
       return count > 0;
     },
     onSold: propagateSold,
+    // Units a TCGplayer file ADDED raise stockTotal, so the in-stock number grew: every market follows (after commit, fire-and-forget).
+    onRaised: (itemId) => {
+      syncItemStock(itemId, 'tcgplayer restock').catch((err) => console.error('[cardTcgplayer] stock sync failed:', (err as { name?: string })?.name ?? 'Error'));
+    },
     now: () => new Date(),
   };
 }

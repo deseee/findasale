@@ -22,6 +22,7 @@ import {
 } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): all 3 sites in this file are buyer-initiated online checkout except createSquareTestTransaction, which mirrors the POS path and uses IN_PERSON
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { fanOutItemSoldWithdrawals } from '../services/soldFanOutService'; // 2026-09-23: eBay/Shopify/Discogs/FB withdraw on sell-out
+import { syncItemStock } from '../services/inventoryStockSync'; // 2026-10-13: one in-stock number on every market after a partial sale
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { assertSaleCanAcceptSquarePayment } from '../services/squarePaymentEligibilityService';
 import { describeSquareError } from '../services/squareErrorReasons'; // 2026-10-11: specific, safe card-failure reason
@@ -543,8 +544,10 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
     }
 
     let soldOut = false;
+    let unitSold = false;
     try {
       ({ fullySoldOut: soldOut } = await sellItemUnits(item.id, 1));
+      unitSold = true;
     } catch (stockErr: any) {
       if (stockErr instanceof InsufficientStockError) {
         // Race: Square already captured the charge (synchronous, no PENDING window the
@@ -571,6 +574,8 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
     // 2026-09-23: this path flipped the item SOLD (via sellItemUnits) without withdrawing it from
     // eBay/Shopify/Discogs -- the only sale rail that skipped the fan-out (see header SCOPE NOTE).
     if (soldOut) fanOutItemSoldWithdrawals(item.id, 'square_payment');
+    // 2026-10-13: a PARTIAL sale (units remain) brings every market's count down to the one in-stock number. Fire-and-forget, never throws.
+    else if (unitSold) syncItemStock(item.id, 'square sale').catch((err) => console.warn(`[squarePayment] stock sync failed for item ${item.id}:`, err?.message));
 
     // Sale Passport wiring (2026-09-29): engagement awards for a logged-in buyer. Fired after the
     // Purchase row and stock decrement are committed (a stock-race REFUNDING row earns nothing), off the
@@ -889,6 +894,8 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
         const { fullySoldOut } = await sellItemUnits(item.id, 1);
         // 2026-09-23: same missing fan-out as the single-item Square path above.
         if (fullySoldOut) fanOutItemSoldWithdrawals(item.id, 'square_cart_payment');
+        // 2026-10-13: partial sale -> every market follows the one in-stock number (fire-and-forget).
+        else syncItemStock(item.id, 'square cart sale').catch((err) => console.warn(`[squareCartPayment] stock sync failed for item ${item.id}:`, err?.message));
       } catch (stockErr: any) {
         if (stockErr instanceof InsufficientStockError) {
           anyStockRace = true;

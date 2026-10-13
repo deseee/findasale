@@ -58,10 +58,11 @@ export const prisma: any = {
   item: {
     findMany: async (args: any) => {
       store.lastItemFindMany = { where: args.where, select: args.select };
+      // 2026-10-13 (single inventory number): the candidate filter reads the platform's unit ledger (stockTotal > 1), not the eBay mirror.
       const wantBundle = Boolean(args.select?.ebayBundle);
       const includeBundleRows = JSON.stringify(args.where).includes('ebayBundle');
       return store.items
-        .filter((i) => i.status === 'AVAILABLE' || (i.ebayQuantityAvailable ?? 0) > 1 || (includeBundleRows && i.bundleSize !== null))
+        .filter((i) => i.status === 'AVAILABLE' || (i.stockTotal ?? 0) > 1 || (includeBundleRows && i.bundleSize !== null))
         .map((i) => ({
           id: i.id,
           ebayListingId: i.ebayListingId,

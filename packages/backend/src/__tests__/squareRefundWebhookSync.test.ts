@@ -25,6 +25,7 @@ jest.mock('../lib/prisma', () => ({
       purchase: { updateMany: jest.fn() },
       item: { updateMany: jest.fn() },
       itemReservation: { updateMany: jest.fn() },
+      $executeRaw: jest.fn().mockResolvedValue(0),
     })),
   },
 }));
@@ -94,11 +95,13 @@ describe('syncSquareRefundWebhookStatus', () => {
     const txPurchaseUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
     const txItemUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
     const txReservationUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
+    const txExecuteRaw = jest.fn().mockResolvedValue(0);
     db.$transaction.mockImplementation(async (fn: any) =>
       fn({
         purchase: { updateMany: txPurchaseUpdateMany },
         item: { updateMany: txItemUpdateMany },
         itemReservation: { updateMany: txReservationUpdateMany },
+        $executeRaw: txExecuteRaw,
       })
     );
 
@@ -109,6 +112,10 @@ describe('syncSquareRefundWebhookStatus', () => {
       data: expect.objectContaining({ status: 'REFUNDED', refundedAmount: 50, refundInitiatedBy: 'square_dashboard' }),
     });
     expect(txItemUpdateMany).toHaveBeenCalled();
+    // The SOLD -> AVAILABLE flip is one guarded raw UPDATE: only when this refund's unit took the item from 0 to 1 in stock.
+    expect(txExecuteRaw).toHaveBeenCalledTimes(1);
+    expect(txExecuteRaw.mock.calls[0][0].join('?')).toMatch(/SET "status" = 'AVAILABLE' WHERE "id" = \? AND "status" = 'SOLD' AND "listingType" NOT IN \('CONSIGNOR_TAG', 'KIT'\) AND "stockSold" = COALESCE\("stockTotal", 1\) - 1/);
+    expect(txExecuteRaw.mock.calls[0][1]).toBe('item_1');
     expect(txReservationUpdateMany).toHaveBeenCalled();
   });
 

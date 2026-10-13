@@ -1184,8 +1184,20 @@ router.post('/mark-item-sold-elsewhere', requireSecret, async (req: express.Requ
     // lastSoldVia on a fresh transition only, then the eBay/Shopify/Discogs withdraw fan-out) is
     // now the one shared helper, also used by markItemSoldOnFacebook, the Facebook order-email
     // path and the extension's Vinted sold-detection. Same response shape as before.
-    const result = await commitFacebookNativeSale(itemId, soldVia);
-    res.json({ ok: true, alreadyCommitted: result.alreadyCommitted });
+    // 2026-10-13 (S-SINGLE-INVENTORY-NUMBER): a MULTI-unit item takes exactly one unit (it stays AVAILABLE, no withdrawal) unless that
+    // was the last unit. Optional body fields give the call an event identity so a repeat cannot take a second unit:
+    //  - `platform` (VINTED|MERCARI|POSHMARK|GRAILED|FACEBOOK): dedupes on that platform's live listing row, like the detectors do;
+    //  - `eventKey` (any string): dedupes on a ProcessedWebhookEvent marker `sold-unit:<soldVia>:<eventKey>:<itemId>`.
+    // Neither given = no identity, every call on a multi-unit item takes one unit (the operator asserts one real sale per call).
+    // Single-unit items ignore both and behave exactly as before.
+    const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : '';
+    const unitPlatforms = ['VINTED', 'MERCARI', 'POSHMARK', 'GRAILED', 'FACEBOOK'];
+    const eventKey = typeof req.body?.eventKey === 'string' && req.body.eventKey.trim().length > 0 ? req.body.eventKey.trim().slice(0, 200) : undefined;
+    const result = await commitFacebookNativeSale(itemId, soldVia, {
+      ...(unitPlatforms.includes(platformRaw) ? { soldOnPlatform: { platform: platformRaw as 'VINTED' | 'MERCARI' | 'POSHMARK' | 'GRAILED' | 'FACEBOOK' } } : {}),
+      ...(eventKey ? { dedupeKey: `sold-unit:${soldVia}:${eventKey}:${itemId}` } : {}),
+    });
+    res.json({ ok: true, alreadyCommitted: result.alreadyCommitted, ...(result.partial ? { partial: true, remainingStock: result.remainingStock } : {}) });
   } catch (err: any) {
     console.error('[MarkItemSoldElsewhere] route error:', err?.message || err);
     res.status(500).json({ error: 'mark-item-sold-elsewhere failed', detail: String(err?.message || err) });

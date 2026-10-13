@@ -272,6 +272,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
       select: {
         id: true,
         status: true,
+        listingType: true, // 2026-10-13: a KIT is never hard-deleted by the bulk delete (kit removal frees its components)
         draftStatus: true, // 2026-10-08: oldValues for the bulk draftStatus operation
         price: true,
         category: true,
@@ -339,7 +340,10 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
     // Validate status-safe operations
     if (safeStatuses) {
       for (const item of items) {
-        if (!safeStatuses.includes(item.status)) {
+        if (operation === 'delete' && item.listingType === 'KIT') {
+          // Kits (2026-10-13): hard-deleting a kit would leave its components flagged isKitComponent. Removal goes through /api/kits/:id.
+          failed.push({ itemId: item.id, reason: 'This is a kit. Remove it from its own Delete button so the items inside are freed.' });
+        } else if (!safeStatuses.includes(item.status)) {
           // reopen-sale (2026-10-10): the generic SOLD message was a dead end for a cancelled marketplace sale.
           const friendlyMsg =
             operation === 'status' && value === 'AVAILABLE' && item.status === 'SOLD'

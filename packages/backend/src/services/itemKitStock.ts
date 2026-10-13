@@ -169,6 +169,64 @@ export async function recomputeKitsForComponents(client: KitStockClient, compone
   );
 }
 
+export interface StaleKit {
+  kitId: string;
+  title: string;
+  storedStockTotal: number | null;
+  expectedStockTotal: number;
+  storedAvail: number;
+  expectedAvail: number;
+}
+
+/**
+ * Reconcile sweep: every non-deleted kit whose stored stockTotal does not equal stockSold + the true availability (same
+ * availability rule as recomputeWhere). Read-only. Kits with no component rows are not listed (recompute cannot touch them).
+ */
+export async function findStaleKits(client: KitStockClient): Promise<StaleKit[]> {
+  const rows = await asTx(client).$queryRaw<
+    Array<{ kitId: string; title: string; storedStockTotal: number | null; stockSold: number; avail: number }>
+  >`
+    SELECT k."id" AS "kitId", k."title" AS "title", k."stockTotal" AS "storedStockTotal", k."stockSold" AS "stockSold", a."avail"::int AS "avail"
+    FROM "Item" k
+    JOIN (
+      SELECT c."kitItemId" AS "kitId",
+             COALESCE(MIN(
+               CASE
+                 WHEN ci."deletedAt" IS NOT NULL OR ci."status" IN ('SOLD', 'DONATED', 'AUCTION_ENDED') THEN 0
+                 ELSE GREATEST(COALESCE(ci."stockTotal", 1) - ci."stockSold", 0) / c."quantity"
+               END
+             ), 0) AS "avail"
+      FROM "ItemKitComponent" c
+      JOIN "Item" ci ON ci."id" = c."componentItemId"
+      GROUP BY c."kitItemId"
+    ) a ON a."kitId" = k."id"
+    WHERE k."listingType" = 'KIT'
+      AND k."deletedAt" IS NULL
+      AND k."stockTotal" IS DISTINCT FROM (k."stockSold" + a."avail")
+  `;
+  return (rows || []).map((r) => {
+    const avail = Number(r.avail);
+    const sold = Number(r.stockSold);
+    const stored = r.storedStockTotal === null || r.storedStockTotal === undefined ? null : Number(r.storedStockTotal);
+    return {
+      kitId: r.kitId,
+      title: r.title,
+      storedStockTotal: stored,
+      expectedStockTotal: sold + avail,
+      storedAvail: Math.max((stored ?? 1) - sold, 0),
+      expectedAvail: avail,
+    };
+  });
+}
+
+/** Recomputes every stale kit (see findStaleKits) and returns how many were changed. Derived totals only; never edits stockSold. */
+export async function recomputeAllKitStock(client: KitStockClient): Promise<number> {
+  const stale = await findStaleKits(client);
+  if (stale.length === 0) return 0;
+  await recomputeKitStock(client, stale.map((k) => k.kitId));
+  return stale.length;
+}
+
 export const defaultKitStockDeps: KitStockDeps = {
   loadComponents: loadKitComponents,
   decrement: decrementComponent,

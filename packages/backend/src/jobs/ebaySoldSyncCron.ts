@@ -23,6 +23,7 @@ import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { inStockOf } from '../services/inventoryStockMath'; // 2026-10-13: the ONE in-stock number (stockTotal - stockSold)
 import { createNotification } from '../lib/notificationService';
 import { classifyEbayOrderLine, type EbayOrderShape } from '../services/ebayOrderState'; // 2026-10-01: cancel / payment / refund awareness
 import { reopenEbayCancelledSale } from '../services/ebaySaleReopenService'; // 2026-10-01: explicit logged reopen (ledger rows kept)
@@ -224,7 +225,9 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
           // (so the idempotent ledger can still absorb re-runs of an already-counted order).
           // ADR-136 Addendum C: PLUS bulk lot bundles whatever their status (a lot the counter sold out can still have a
           // bundle order in flight; its shortfall must be recorded, not lost).
-          { OR: [ { status: 'AVAILABLE' }, { ebayQuantityAvailable: { gt: 1 } }, ...(isBundleSync ? [{ ebayBundle: { isNot: null } }] : []) ] },
+          // 2026-10-13 (single inventory number): "multi-quantity" is read from the platform's own unit ledger (stockTotal), NOT from
+          // Item.ebayQuantityAvailable, which is only a mirror of the last quantity confirmed on eBay.
+          { OR: [ { status: 'AVAILABLE' }, { stockTotal: { gt: 1 } }, ...(isBundleSync ? [{ ebayBundle: { isNot: null } }] : []) ] },
           // Both sale items and inventory items (saleId=null) imported from eBay.
           { OR: [ { sale: { organizerId } }, { organizerId, saleId: null } ] },
         ],
@@ -425,10 +428,11 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         const updated = await prisma.item.update({
           where: { id: matchedItem.id },
           data: { ebayQuantitySold: { increment: unitQty } },
-          select: { ebayQuantitySold: true, ebayQuantityAvailable: true, status: true },
+          select: { ebayQuantitySold: true, status: true },
         });
-        const avail = updated.ebayQuantityAvailable ?? 1;
         const soldCount = updated.ebayQuantitySold;
+        // Units left in the platform's pool after this order is absorbed (null for a bulk lot bundle, which has its own accounting).
+        let remainingNow: number | null = null;
 
         // ADR-085 Track B: draw the SAME units down from the general cross-channel
         // stock pool -- this is what makes an eBay sale and a POS/Stripe/etc. sale
@@ -475,6 +479,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         } else try {
           const stockResult = await sellItemUnits(matchedItem.id, unitQty);
           fullySold = stockResult.fullySoldOut;
+          remainingNow = stockResult.remainingStock;
         } catch (err) {
           if (err instanceof InsufficientStockError) {
             // Real money already changed hands on eBay -- the general pool
@@ -488,10 +493,21 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
               `eBay confirmed a real sale but the general stock pool shows no remaining units. ` +
               `Falling back to eBay-ledger-only fullySold check. ${err.message}`
             );
-            fullySold = soldCount >= avail;
+            // 2026-10-13: decided from the platform's own number (a fresh read), not from the eBay mirror.
+            const freshStock = await prisma.item.findUnique({ where: { id: matchedItem.id }, select: { stockTotal: true, stockSold: true } });
+            remainingNow = freshStock ? inStockOf(freshStock) : 0;
+            fullySold = remainingNow === 0;
           } else {
             throw err;
           }
+        }
+
+        // eBay already took this order's units off its own listing, so the mirror ("last quantity confirmed on eBay") becomes the
+        // units left in the pool WITHOUT pushing anything back to eBay. Bundles are skipped (their quantity is whole bundles).
+        if (bundleSize === null && remainingNow !== null) {
+          await prisma.item
+            .update({ where: { id: matchedItem.id }, data: { ebayQuantityAvailable: remainingNow } })
+            .catch((mirrorErr: any) => console.warn(`[eBay Sync] could not update the eBay quantity mirror for item ${matchedItem!.id}:`, mirrorErr?.message));
         }
 
         if (fullySold && updated.status !== 'SOLD') {
@@ -537,8 +553,8 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
           body:
             bundleAbsorb !== null && bundleSize !== null
               ? `"${matchedItem.title}": ${describeBundleSale(unitQty, bundleSize)} ${formatCardCount(bundleAbsorb.remainingCards)} cards left in the lot.`
-              : avail > 1
-              ? `"${matchedItem.title}" sold a unit on eBay (${soldCount} of ${avail}).`
+              : soldCount + (remainingNow ?? 0) > 1
+              ? `"${matchedItem.title}" sold a unit on eBay (${soldCount} of ${soldCount + (remainingNow ?? 0)}).`
               : `"${matchedItem.title}" was purchased on eBay and has been marked as sold.`,
           link: matchedItem.saleId ? `/organizer/sales/${matchedItem.saleId}` : `/organizer/inventory`,
           sendEmail: true,
@@ -547,7 +563,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         );
 
         console.log(
-          `[eBay Sync] Item ${matchedItem.id} ("${matchedItem.title}") — unit sold via eBay order ${order.orderId} (${soldCount}/${avail}${fullySold ? ', now SOLD' : ''})`
+          `[eBay Sync] Item ${matchedItem.id} ("${matchedItem.title}") — unit sold via eBay order ${order.orderId} (${soldCount}/${soldCount + (remainingNow ?? 0)}${fullySold ? ', now SOLD' : ''})`
         );
 
         // ADR-136 Addendum C: line the eBay quantity up with the cards that are left (END below one bundle). Fire and forget.

@@ -15,9 +15,10 @@ import { untouchedConditionValue, untouchedGradeValue } from './itemFormConditio
 export interface EditSaveInput {
   formData: ItemFormData;
   quantityText: string;
-  stockTotalText: string;
-  /** Units already sold on the loaded item; the saved stockTotal is the entered remaining plus this. */
-  stockSold?: number;
+  /** Raw text of the In stock field. Sent as `inStock` (integer >= 0). */
+  inStockText: string;
+  /** False when the In stock field was not changed this session: inStock is then omitted. */
+  inStockTouched?: boolean;
   touched: ItemSaveTouched;
   /** True once the organizer changed the condition or the grade on this form (reset after a save). */
   conditionTouched: boolean;
@@ -37,7 +38,7 @@ export function buildEditSavePayload(input: EditSaveInput): ItemSavePayload {
         conditionGrade: untouchedGradeValue(input.loadedGrade),
       };
   return buildItemSavePayload(
-    { formData, quantityText: input.quantityText, stockTotalText: input.stockTotalText, stockSold: input.stockSold },
+    { formData, quantityText: input.quantityText, inStockText: input.inStockText, inStockTouched: input.inStockTouched },
     input.touched,
     { skipMarketplaceSync: input.skipMarketplaceSync === true }
   );

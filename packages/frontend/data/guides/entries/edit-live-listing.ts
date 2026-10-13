@@ -24,7 +24,7 @@ The sections are in the same order wherever you open the form. Nothing was remov
 - **Trading card details**: collapsed until you open it.
 - **Pricing**: listing type, then cost basis, then your price with Price Research, then best offers for eBay and Keep out of automatic markdowns. Discounts & coupons (Organizer Special) is collapsed inside Pricing.
 - **Shipping & package**
-- **Quantity & setup**: quantity, with More options collapsed inside.
+- **Quantity & setup**: pieces in the lot and your one In stock number, with More options collapsed inside. Saving In stock updates FindA.Sale and every connected marketplace that can take a count.
 - **Where this is listed**: every marketplace the item is on. Marketplaces it isn't on are collapsed under Other marketplaces. If Discogs or Reverb is connected and the category fits, their panels are here too.
 - **Danger zone**: delete the item.
 
@@ -32,9 +32,9 @@ The sections are in the same order wherever you open the form. Nothing was remov
 
 Above the Save button, the form states exactly what saving will do. For an item on eBay it reads like "Saving will update eBay: description." It also names any marketplace that needs a manual update. Craigslist, Vinted and the other extension marketplaces (Facebook, Poshmark, Mercari, Grailed and Gumtree AU) are prompt-only: FindA.Sale never changes those listings for you. You'll see "Needs manual update on Vinted" and make the change there yourself.
 
-Only fields that really changed are sent to eBay: title, description, condition, price, and shipping inputs (weight, dimensions, package type). If nothing eBay uses changed, eBay is left alone.
+Only fields that really changed are sent to eBay: title, description, condition, price, your In stock number, and shipping inputs (weight, dimensions, package type). If nothing eBay uses changed, eBay is left alone.
 
-Photos, category, quantity and best-offer settings are not sent by Save. To send those, use **Re-push to eBay** under Where this is listed. Discogs and Reverb are never updated by Save either. Use their buttons in the same section.
+Photos, category and best-offer settings are not sent by Save. To send those, use **Re-push to eBay** under Where this is listed. Discogs and Reverb are never updated by Save either. Use their buttons in the same section.
 
 After you save, you stay on the page. A line next to the buttons shows what happened: "eBay updated: price", "eBay not changed" with the reason, or "eBay update failed" with the reason and a **Retry** button.
 

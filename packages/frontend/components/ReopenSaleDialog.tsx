@@ -2,8 +2,8 @@
  * ReopenSaleDialog
  *
  * Confirm dialog for "Mark available again" on a SOLD item whose marketplace sale was cancelled.
- * States which marketplace the sale was recorded on and that listings paused or ended when it sold are NOT
- * relisted. Shows the server's refusal reason on a 409 (paid through FindA.Sale, multi-quantity, bulk lot, ...).
+ * States which marketplace the sale was recorded on and that the cancelled unit(s) go back into stock automatically, with every
+ * market's count synced. Shows the server's refusal reason on a 409 (paid through FindA.Sale, multi-quantity, bulk lot, ...).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -74,8 +74,8 @@ const ReopenSaleDialog: React.FC<ReopenSaleDialogProps> = ({ isOpen, itemId, ite
         )}
 
         <p className="text-sm text-warm-700 dark:text-warm-300 mb-3">
-          Listings that were paused or ended when it sold are not relisted automatically. Relist it on any marketplace where you want it
-          to appear.
+          The cancelled unit(s) go back into your stock and the item becomes available again. Every marketplace is updated to the new
+          count automatically, so there is nothing to relist by hand.
         </p>
 
         {needsAttestation && (

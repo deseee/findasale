@@ -2654,10 +2654,9 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
         const bulkIsFull = 'isFullRefund' in result ? (result.isFullRefund ?? true) : true;
         if (purchase.itemId && bulkIsFull) {
           // Consignor price tags (2026-10-06): a minted CONSIGNOR_TAG item never returns to the available pool.
-          await prisma.item.updateMany({
-            where: { id: purchase.itemId, listingType: { not: 'CONSIGNOR_TAG' } },
-            data: { status: 'AVAILABLE' },
-          });
+          // Single inventory number (2026-10-13): same guarded SOLD -> AVAILABLE flip as refundService.ts (only when this refund
+          // returned the last sold unit; never a consignor tag or kit). Raw SQL because Prisma cannot express column arithmetic.
+          await prisma.$executeRaw`UPDATE "Item" SET "status" = 'AVAILABLE' WHERE "id" = ${purchase.itemId} AND "status" = 'SOLD' AND "listingType" NOT IN ('CONSIGNOR_TAG', 'KIT') AND "stockSold" = COALESCE("stockTotal", 1) - 1`;
         }
         results.push({
           purchaseId,

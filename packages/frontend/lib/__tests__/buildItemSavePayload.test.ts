@@ -11,8 +11,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildItemSavePayload,
+  inStockFromItem,
+  parseInStockText,
   remainingFromTotal,
-  totalFromRemainingText,
   type ItemFormData,
   type ItemSaveState,
   type ItemSaveTouched,
@@ -24,7 +25,7 @@ import {
 function legacyBuildSavePayload(
   formData: ItemFormData,
   quantityText: string,
-  stockTotalText: string,
+  inStockText: string,
   weightTouched: boolean,
   shippingTouched: boolean,
   consignorTouched: boolean,
@@ -40,7 +41,8 @@ function legacyBuildSavePayload(
   const payload = {
     ...formData,
     quantity: parseCount(quantityText),
-    stockTotal: parseCount(stockTotalText),
+    stockTotal: undefined,
+    inStock: Math.max(0, Number.isFinite(parseInt(inStockText, 10)) ? parseInt(inStockText, 10) : 0),
     packageWeightOz: weightTouched ? toIntOrNull(formData.packageWeightOz) : undefined,
     ...(weightTouched && toIntOrNull(formData.packageWeightOz) !== null
       ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
@@ -126,8 +128,8 @@ function baseForm(over: Partial<ItemFormData> = {}): ItemFormData {
 const NONE: ItemSaveTouched = { weightTouched: false, shippingTouched: false, consignorTouched: false };
 const ALL: ItemSaveTouched = { weightTouched: true, shippingTouched: true, consignorTouched: true };
 
-function stateOf(formData: ItemFormData, quantityText = '1', stockTotalText = '1'): ItemSaveState {
-  return { formData, quantityText, stockTotalText };
+function stateOf(formData: ItemFormData, quantityText = '1', inStockText = '1'): ItemSaveState {
+  return { formData, quantityText, inStockText };
 }
 
 /** What actually goes over the wire (undefined keys dropped). */
@@ -136,7 +138,7 @@ function wire(payload: unknown): Record<string, unknown> {
 }
 
 function legacyOf(s: ItemSaveState, t: ItemSaveTouched) {
-  return legacyBuildSavePayload(s.formData, s.quantityText, s.stockTotalText, t.weightTouched, t.shippingTouched, t.consignorTouched);
+  return legacyBuildSavePayload(s.formData, s.quantityText, s.inStockText, t.weightTouched, t.shippingTouched, t.consignorTouched);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -227,32 +229,55 @@ test('price is passed through exactly as the state string, not converted', () =>
   }
 });
 
-test('quantity and stockTotal are clamped from the raw text, minimum 1', () => {
+test('quantity is clamped to at least 1 and inStock to at least 0, both from the raw text', () => {
   const body = wire(buildItemSavePayload(stateOf(baseForm({ quantity: 9, stockTotal: 9 }), '4', ' 12 '), NONE));
   assert.equal(body.quantity, 4);
-  assert.equal(body.stockTotal, 12);
+  assert.equal(body.inStock, 12);
   for (const t of ['', '0', '-2', 'x']) {
     const b = wire(buildItemSavePayload(stateOf(baseForm(), t, t), NONE));
     assert.equal(b.quantity, 1, `text ${JSON.stringify(t)}`);
-    assert.equal(b.stockTotal, 1);
+    assert.equal(b.inStock, 0, `text ${JSON.stringify(t)}`);
   }
 });
 
-test('stockTotal saves as entered remaining plus stockSold', () => {
-  const s = (text: string, sold: number) => wire(buildItemSavePayload({ ...stateOf(baseForm(), '1', text), stockSold: sold }, NONE)).stockTotal;
-  assert.equal(s('86', 13), 99);
-  assert.equal(s('0', 13), 13); // sold out: total equals sold, never below it
-  assert.equal(s('', 13), 13);
-  assert.equal(s('-4', 2), 2);
-  assert.equal(s('0', 0), 1); // nothing sold: keeps the server min of 1
-  assert.equal(s('5', 0), 5);
+test('the payload sends inStock and never stockTotal, even when the form state carries one', () => {
+  const body = wire(buildItemSavePayload(stateOf(baseForm({ stockTotal: 99 }), '1', '5'), NONE));
+  assert.equal(body.inStock, 5);
+  assert.equal('stockTotal' in body, false);
+  assert.equal('stockSold' in body, false);
+});
+
+test('inStock is omitted when the field was not touched, and sent otherwise', () => {
+  const untouched = wire(buildItemSavePayload({ ...stateOf(baseForm(), '1', '7'), inStockTouched: false }, NONE));
+  assert.equal('inStock' in untouched, false);
+  assert.equal('stockTotal' in untouched, false);
+  const touched = wire(buildItemSavePayload({ ...stateOf(baseForm(), '1', '7'), inStockTouched: true }, NONE));
+  assert.equal(touched.inStock, 7);
+  const zero = wire(buildItemSavePayload({ ...stateOf(baseForm(), '1', '0'), inStockTouched: true }, NONE));
+  assert.equal(zero.inStock, 0);
+});
+
+test('parseInStockText is an integer, never below 0', () => {
+  assert.equal(parseInStockText('86'), 86);
+  assert.equal(parseInStockText(' 3.9 '), 3);
+  assert.equal(parseInStockText('-4'), 0);
+  assert.equal(parseInStockText(''), 0);
+});
+
+test('inStockFromItem prefers the server inStock, else stockTotal minus stockSold, never negative', () => {
+  assert.equal(inStockFromItem({ inStock: 4, stockTotal: 10, stockSold: 2 }), 4);
+  assert.equal(inStockFromItem({ inStock: 0, stockTotal: 10, stockSold: 2 }), 0);
+  assert.equal(inStockFromItem({ stockTotal: 87, stockSold: 13 }), 74);
+  assert.equal(inStockFromItem({ stockTotal: 5, stockSold: 9 }), 0);
+  assert.equal(inStockFromItem({ stockTotal: 0, stockSold: 0 }), 0);
+  assert.equal(inStockFromItem({ stockTotal: null }), 1);
+  assert.equal(inStockFromItem({}), 1);
 });
 
 test('remainingFromTotal is total minus sold, never negative', () => {
   assert.equal(remainingFromTotal(87, 13), 74);
   assert.equal(remainingFromTotal(5, 9), 0);
   assert.equal(remainingFromTotal(null, 0), 1);
-  assert.equal(totalFromRemainingText('86', 13), 99);
 });
 
 test('tags and other plain fields are spread through unchanged', () => {
@@ -383,7 +408,7 @@ test('golden: fully populated form with every gate touched', () => {
     description: 'Solid oak, minor wear',
     price: '100',
     quantity: 3,
-    stockTotal: 3,
+    inStock: 3,
     category: 'Furniture',
     ebayCategoryId: '',
     ebayCategoryName: '',
@@ -430,11 +455,11 @@ test('golden: fully populated form with every gate touched', () => {
 test('golden: default form with nothing touched sends this exact set of keys', () => {
   const body = wire(buildItemSavePayload(stateOf(baseForm()), NONE));
   assert.deepEqual(Object.keys(body), [
-    'title', 'description', 'price', 'quantity', 'stockTotal', 'category', 'ebayCategoryId', 'ebayCategoryName',
+    'title', 'description', 'price', 'quantity', 'category', 'ebayCategoryId', 'ebayCategoryName',
     'condition', 'conditionGrade', 'tags', 'status', 'listingType', 'auctionEndTime', 'qrEmbedEnabled', 'isLegendary',
     'tagColor', 'locationId', 'costBasis', 'roomTag', 'packageType', 'crosslisterFreeShipping', 'brand', 'size',
     'color', 'material', 'upc', 'mpn', 'isbn', 'fccId', 'allowBestOffer', 'excludeFromMarkdown', 'ebayShippingOverride',
-    'ebayFulfillmentPolicyOverrideId', 'bestOfferAutoAcceptAmt', 'bestOfferMinimumAmt',
+    'ebayFulfillmentPolicyOverrideId', 'inStock', 'bestOfferAutoAcceptAmt', 'bestOfferMinimumAmt',
   ]);
   assert.equal(body.auctionEndTime, null);
   assert.equal(body.bestOfferAutoAcceptAmt, null);

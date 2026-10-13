@@ -156,6 +156,15 @@ describe('buildItemMarketplaceStatus', () => {
     expect(out.platforms.etsy.status).toBe('live'); // ACTIVE listing, even if the age rule no longer passes (flagged ineligible)
   });
 
+  it('flags which platforms can take an automatic stock count (supportsQuantity)', () => {
+    const out = buildItemMarketplaceStatus(baseInputs());
+    const p = out.platforms as Record<string, { supportsQuantity: boolean }>;
+    for (const key of ['ebay', 'etsy', 'shopify']) expect(p[key].supportsQuantity).toBe(true);
+    for (const key of ['reverb', 'discogs', 'facebook', 'craigslist', 'gumtreeAu', 'poshmark', 'mercari', 'vinted', 'grailed']) {
+      expect(p[key].supportsQuantity).toBe(false);
+    }
+  });
+
   it('exposes the last push outcome without organizerId or itemId', () => {
     const row = {
       id: 'p1', trigger: 'SAVE', status: 'FAILED', fieldsAttempted: ['price'], fieldsPushed: [],

@@ -157,7 +157,7 @@ describe('AT-14: entries reach stock through the shared pipeline', () => {
     expect(batchesOf(h)[0].fileName).toBe('Scan: cards');
   });
 
-  it('ADD adds to an existing item and REPLACE sets the count but never below what has sold', async () => {
+  it('ADD adds to an existing item and REPLACE sets the in stock number to the count, keeping what has sold', async () => {
     const h = makeScanHarness();
     const one = async (quantity: number, mode: string) => {
       const sid = await openSession(h);
@@ -174,9 +174,9 @@ describe('AT-14: entries reach stock through the shared pipeline', () => {
     itemsOf(h)[0].stockSold = 2;
     await one(1, 'REPLACE');
     expect(itemsOf(h)).toHaveLength(1);
-    expect(itemsOf(h)[0].stockTotal).toBe(2);
+    expect(itemsOf(h)[0].stockTotal).toBe(3);
     await one(8, 'replace');
-    expect(itemsOf(h)[0].stockTotal).toBe(8);
+    expect(itemsOf(h)[0].stockTotal).toBe(10);
     expect(batchesOf(h).map((b) => b.mode)).toEqual(['ADD', 'ADD', 'REPLACE', 'REPLACE']);
   });
 

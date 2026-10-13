@@ -39,6 +39,8 @@ export interface PlatformEntry {
   lastPush?: PushRow | null;
   heldAt?: string | null;
   ineligible?: boolean;
+  /** True when FindA.Sale can set this market's unit count automatically (eBay, Etsy, Shopify). Missing means unknown. */
+  supportsQuantity?: boolean;
 }
 
 export interface EbayHold {

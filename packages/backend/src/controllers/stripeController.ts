@@ -3848,10 +3848,10 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       });
       if (otherPaidPurchases === 0) {
         // Consignor price tags (2026-10-06): a minted CONSIGNOR_TAG item never returns to the available pool.
-        await prisma.item.updateMany({
-          where: { id: purchase.itemId, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } },
-          data: { status: 'AVAILABLE' },
-        });
+        // Single inventory number (2026-10-13): guarded like refundService.ts -- only flips when this refund returned the last
+        // sold unit (stockSold is now exactly total - 1), so an unrelated old refund never reopens a manually SOLD multi-unit
+        // item. Kits are derived from their components and never flipped here. Raw SQL because Prisma cannot express column arithmetic.
+        await prisma.$executeRaw`UPDATE "Item" SET "status" = 'AVAILABLE' WHERE "id" = ${purchase.itemId} AND "status" = 'SOLD' AND "listingType" NOT IN ('CONSIGNOR_TAG', 'KIT') AND "stockSold" = COALESCE("stockTotal", 1) - 1`; 
       }
     }
 

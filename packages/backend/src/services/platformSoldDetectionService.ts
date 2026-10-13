@@ -132,6 +132,8 @@ async function defaultCommitSale(
   const r = await commitFacebookNativeSale(
     itemId,
     soldVia,
+    // No platform named (not reachable from processPlatformSoldReport, which always passes one): commitFacebookNativeSale's own
+    // multi-unit default (2026-10-13) still takes one unit instead of a full SOLD; there is simply no event identity to dedupe on.
     platform ? { soldOnPlatform: { platform, remoteListingId: remoteListingId || null } } : {},
   );
   return { alreadyCommitted: r.alreadyCommitted, partial: r.partial === true };

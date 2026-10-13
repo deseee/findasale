@@ -42,10 +42,20 @@ describe('matchReverbOrdersToItems', () => {
     ];
     expect(matchReverbOrdersToItems(orders, ITEMS)).toEqual([{ itemId: 'item_amp', orderNumber: '3' }]);
   });
-  it('matches each item once even if two orders name it', () => {
+  it('returns EVERY distinct live order for an item (a multi-unit listing needs one unit per order)', () => {
     const orders = [
       { orderNumber: 'a', status: 'paid', listingId: '101889751' },
       { orderNumber: 'b', status: 'shipped', listingId: '101889751' },
+    ];
+    expect(matchReverbOrdersToItems(orders, ITEMS)).toEqual([
+      { itemId: 'item_amp', orderNumber: 'a' },
+      { itemId: 'item_amp', orderNumber: 'b' },
+    ]);
+  });
+  it('the SAME order number repeated in one payload is still one sale', () => {
+    const orders = [
+      { orderNumber: 'a', status: 'paid', listingId: '101889751' },
+      { orderNumber: 'a', status: 'paid', listingId: '101889751' },
     ];
     expect(matchReverbOrdersToItems(orders, ITEMS)).toEqual([{ itemId: 'item_amp', orderNumber: 'a' }]);
   });
@@ -93,7 +103,7 @@ describe('syncReverbSoldItemsForOrganizer', () => {
     const deps = { loadListedItems: async () => ITEMS, fetchOrders: async () => orders, commitSale, notify };
     const first = await syncReverbSoldItemsForOrganizer('org_1', deps);
     expect(first.sold).toEqual([{ itemId: 'item_amp', orderNumber: '555' }]);
-    expect(commitSale).toHaveBeenCalledWith('item_amp');
+    expect(commitSale).toHaveBeenCalledWith('item_amp', '555');
     expect(notify).toHaveBeenCalledTimes(1);
     const second = await syncReverbSoldItemsForOrganizer('org_1', deps);
     expect(second.sold).toEqual([]);
@@ -101,10 +111,13 @@ describe('syncReverbSoldItemsForOrganizer', () => {
     expect(notify).toHaveBeenCalledTimes(1);
   });
 
-  it("default commit goes through commitFacebookNativeSale with soldVia REVERB and skipWithdraw ['REVERB']", async () => {
+  it("default commit goes through commitFacebookNativeSale with soldVia REVERB, skipWithdraw ['REVERB'] and a per-order dedupe key", async () => {
     const orders = [{ orderNumber: '9', status: 'paid', listingId: '101889000' }];
     await syncReverbSoldItemsForOrganizer('org_1', { loadListedItems: async () => ITEMS, fetchOrders: async () => orders, notify: async () => undefined });
-    expect(commitFacebookNativeSale as jest.Mock).toHaveBeenCalledWith('item_pedal', 'REVERB', { skipWithdraw: ['REVERB'] });
+    expect(commitFacebookNativeSale as jest.Mock).toHaveBeenCalledWith('item_pedal', 'REVERB', {
+      skipWithdraw: ['REVERB'],
+      dedupeKey: 'sold-unit:REVERB:9:item_pedal',
+    });
   });
 });
 

@@ -75,12 +75,16 @@ export interface ItemSaveState {
   /** Raw text of the quantity input (may be mid-typing). Clamped to an integer of at least 1. */
   quantityText: string;
   /**
-   * Raw text of the "in stock now" input (may be mid-typing). This is the units LEFT, not the pool total: the saved
-   * stockTotal is this value plus stockSold. Clamped to an integer of at least 1 (0 is allowed once something has sold).
+   * Raw text of the "In stock" input (may be mid-typing). The ONE stock number the organizer sees. Sent as `inStock`,
+   * clamped to an integer of at least 0 (0 is always allowed). The server works out the rest.
    */
-  stockTotalText: string;
-  /** Units already sold on the loaded item (server-owned). Omitted/0 for a new item. */
-  stockSold?: number;
+  inStockText: string;
+  /**
+   * False when the organizer did not change the In stock field this session: then neither inStock nor stockTotal is
+   * sent, so an unrelated save can never overwrite a count that changed on another channel in the meantime.
+   * Anything other than a strict false sends inStock.
+   */
+  inStockTouched?: boolean;
 }
 
 /** "Real edit vs incidental re-save" flags. Untouched means the gated keys are omitted. */
@@ -120,7 +124,10 @@ export type ItemSavePayload = Omit<
   | 'consignorId'
 > & {
   quantity: number;
-  stockTotal: number;
+  /** Never sent by the item form any more: the one stock number goes as `inStock`. Always undefined here. */
+  stockTotal: undefined;
+  /** Integer >= 0 when the In stock field was changed, otherwise undefined (omitted). */
+  inStock: number | undefined;
   /** number|null when weight touched, otherwise undefined (omitted). */
   packageWeightOz: number | null | undefined;
   packageLengthIn: number | null | undefined;
@@ -151,19 +158,29 @@ export type ItemSavePayload = Omit<
 /** Mirrors the page's parseCount: integer, never below 1. */
 const parseCount = (text: string): number => Math.max(1, parseInt(text, 10) || 1);
 
-/** Units left in a stock pool: stockTotal - stockSold, never negative. */
-export const remainingFromTotal = (total: number | null | undefined, sold: number | null | undefined): number =>
-  Math.max(0, (Number(total) || 1) - Math.max(0, Number(sold) || 0));
-
 /**
- * The stockTotal to save for an "in stock now" entry: entered remaining + stockSold. The server rejects
- * stockTotal < stockSold and stockTotal < 1, so remaining may be 0 only once at least one unit has sold.
+ * The In stock number for a loaded item: the server's `inStock` when present, else stockTotal minus stockSold
+ * (never negative). A missing stockTotal counts as 1; a stockTotal of 0 is a real 0.
  */
-export const totalFromRemainingText = (text: string, sold: number | null | undefined): number => {
-  const s = Math.max(0, Math.floor(Number(sold) || 0));
-  const n = parseInt(text, 10);
-  const remaining = Math.max(s > 0 ? 0 : 1, Number.isFinite(n) ? n : s > 0 ? 0 : 1);
-  return remaining + s;
+export const inStockFromItem = (item: { inStock?: unknown; stockTotal?: unknown; stockSold?: unknown } | null | undefined): number => {
+  if (!item) return 1;
+  const direct = Number(item.inStock);
+  if (item.inStock !== null && item.inStock !== undefined && item.inStock !== '' && Number.isFinite(direct)) {
+    return Math.max(0, Math.floor(direct));
+  }
+  const total = item.stockTotal === null || item.stockTotal === undefined || item.stockTotal === '' ? 1 : Number(item.stockTotal);
+  const sold = Math.max(0, Number(item.stockSold) || 0);
+  return Math.max(0, Math.floor((Number.isFinite(total) ? total : 1) - sold));
+};
+
+/** Units left in a pool: stockTotal - stockSold, never negative. Used only to keep the field in step after a bulk lot save. */
+export const remainingFromTotal = (total: number | null | undefined, sold: number | null | undefined): number =>
+  inStockFromItem({ stockTotal: total, stockSold: sold });
+
+/** Parses the raw In stock text: integer, never below 0. Empty or unreadable text counts as 0. */
+export const parseInStockText = (text: string): number => {
+  const n = parseInt(String(text), 10);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
 };
 
 /** Positive integer or null (backend zod requires Int for package fields). */
@@ -177,7 +194,7 @@ export function buildItemSavePayload(
   touched: ItemSaveTouched,
   opts?: ItemSaveOptions,
 ): ItemSavePayload {
-  const { formData, quantityText, stockTotalText, stockSold } = state;
+  const { formData, quantityText, inStockText, inStockTouched } = state;
   const { weightTouched, shippingTouched, consignorTouched } = touched;
 
   const price = parseFloat(String(formData.price)) || 0;
@@ -188,7 +205,10 @@ export function buildItemSavePayload(
     ...formData,
     // A value typed but not yet blurred must still be saved, so clamp the raw text here.
     quantity: parseCount(quantityText),
-    stockTotal: totalFromRemainingText(stockTotalText, stockSold),
+    // The old total/sold pair is gone from the organizer UI: the item form sends only `inStock` (and only when it was
+    // changed). stockTotal is stripped so the formData copy is never sent.
+    stockTotal: undefined,
+    inStock: inStockTouched === false ? undefined : parseInStockText(inStockText),
     // Package size is gated behind weightTouched: an unreviewed estimate must not overwrite the column
     // on an unrelated save. Omitted entirely when untouched.
     packageWeightOz: weightTouched ? toIntOrNull(formData.packageWeightOz) : undefined,

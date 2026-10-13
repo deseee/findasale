@@ -45,6 +45,9 @@ import { sendItemSoldAlert } from '../services/saleAlertEmailService'; // P1 fix
 import { republishEbayOffer } from '../services/ebayPublishService'; // Phase 2 relocation + Phase 3 rewire (ADR 2026-06-30)
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
+import { inStockOf } from '../services/inventoryStockMath'; // 2026-10-13: the ONE in-stock number (pure, no imports, so no import cycle)
+import { fanOutItemSoldWithdrawals } from '../services/soldFanOutService'; // 2026-10-13: inStock 0 -> SOLD fan-out
+import { recomputeKitsForComponents } from '../services/itemKitStock'; // 2026-10-13: kits that contain an item whose stock changed
 import { removeItemFromShopify, updateShopifyProductFields, markShopifyItemSold } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits + mark-sold-elsewhere
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector'; // P0 (S-discogs-sold-parity 2026-09-15): withdraw Discogs listing on SOLD, mirrors endEbayListingIfExists/markShopifyItemSold
 import { evaluateLotItemEdit, lotDeleteBlocker, LOT_INVARIANT_MESSAGES } from '../services/bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a lot stays a lot through the generic item form
@@ -1017,6 +1020,7 @@ export const getItemById = async (req: Request, res: Response) => {
     // Return item with computed fields
     const itemWithCounts = {
       ...item,
+      inStock: inStockOf(item), // 2026-10-13: the one in-stock number (stockTotal / stockSold stay for compatibility)
       cartCount,
       views,
       auctionStatus, // ADR-013 Phase 2: auction status for UI badge
@@ -1153,6 +1157,7 @@ export const getItemForEdit = async (req: AuthRequest, res: Response) => {
 
     const itemWithCounts = {
       ...item,
+      inStock: inStockOf(item), // 2026-10-13: the one in-stock number (stockTotal / stockSold stay for compatibility)
       cartCount,
       views,
       auctionStatus,
@@ -1324,6 +1329,9 @@ export const repushItemToEbay = async (req: AuthRequest, res: Response) => {
       const set = new Set<EbayPushField>(held);
       if (item.ebayContentDirtyAt || set.size === 0) EBAY_CONTENT_FIELDS.forEach((f) => set.add(f));
       if (!item.ebayContentDirtyAt && held.length === 0) set.add('price');
+      // Quantity (2026-10-13): always part of an explicit push. pushItemToEbay sends it through the stock sync, which compares
+      // eBay's live number with the in-stock number and changes nothing when they already match.
+      set.add('quantity');
       // FCC ID (2026-10-11): included whenever the item has one. pushItemToEbay compares it with the live aspect fetched in
       // its own GET and sends nothing (no PUT, no republish) when eBay already carries the same value or the category has
       // no FCC ID aspect, so this adds no eBay write for an item whose FCC ID is already on eBay.
@@ -1908,6 +1916,16 @@ function pinnedCardCategoryFields(
   return fields;
 }
 
+/**
+ * 2026-10-13 (single inventory number): bring every market in line with the item's in-stock number. Fire-and-forget; the
+ * module is loaded lazily because inventoryStockSync pulls in the eBay controller. syncItemStock never throws.
+ */
+function fireStockSync(itemId: string, reason: string): void {
+  import('../services/inventoryStockSync')
+    .then((m) => m.syncItemStock(itemId, reason))
+    .catch((err: unknown) => console.warn(`[StockSync] ${reason} sync failed for item ${itemId}:`, (err as Error)?.message ?? err));
+}
+
 export const updateItem = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -1920,7 +1938,22 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // "true", 1 and every other truthy value are ignored. The hold columns (ebaySyncHeldAt, ebayHeldFields,
     // ebayContentDirtyAt) are never read from the request body at all: this handler picks its fields explicitly.
     const skipMarketplaceSyncRequested = (req.body as { skipMarketplaceSync?: unknown } | undefined)?.skipMarketplaceSync === true;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, fccId, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown, card } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal: stockTotalBody, inStock: inStockBody, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, fccId, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown, card } = req.body;
+
+    // 2026-10-13 (single inventory number): `inStock` is the ONE number the organizer edits ("how many do I have right now").
+    // It wins over the legacy `stockTotal` when both arrive. stockTotal is then derived atomically as inStock + stockSold from
+    // the freshest stockSold (see the single SQL UPDATE before the item update). 0 is allowed. null/absent = not provided.
+    let inStockRequested: number | undefined;
+    if (inStockBody !== undefined && inStockBody !== null) {
+      // Only a number or numeric text is accepted; objects, arrays and booleans are refused.
+      const inStockText = typeof inStockBody === 'string' ? inStockBody.trim() : '';
+      const rawInStock = typeof inStockBody === 'number' ? inStockBody : typeof inStockBody === 'string' && inStockText !== '' ? Number(inStockText) : NaN;
+      if (!Number.isInteger(rawInStock) || rawInStock < 0 || rawInStock > 1000000) {
+        return res.status(400).json({ message: 'In stock must be a whole number, zero or greater.', code: 'IN_STOCK_INVALID', field: 'inStock' });
+      }
+      inStockRequested = rawInStock;
+    }
+    const stockTotal = inStockRequested !== undefined ? undefined : stockTotalBody;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -2052,6 +2085,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // The lookup fails open with the flag off and closed (503) with it on. `lotForced` is written on top of updateData
     // just before the update: price rounded to whole cents, excluded from markdown, never an eBay single listing.
     let lotForced: Record<string, unknown> | null = null;
+    let itemIsLot = false;
     {
       const lotFlagOn = isBulkLotsEnabled();
       let isLot = false;
@@ -2059,6 +2093,11 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         isLot = (await findBulkLotItemIds(prisma as any, [id], lotFlagOn)).has(id);
       } catch (lotErr) {
         return res.status(503).json({ message: LOT_INVARIANT_MESSAGES.BULK_CHECK_FAILED, code: 'BULK_CHECK_FAILED' });
+      }
+      itemIsLot = isLot;
+      if (isLot && inStockRequested !== undefined) {
+        // A lot's number is a CARD count, changed only through Adjust count (every change is recorded).
+        return res.status(409).json({ message: LOT_INVARIANT_MESSAGES.BULK_USE_ADJUST, code: 'BULK_USE_ADJUST', field: 'inStock' });
       }
       if (isLot) {
         const lotDecision = evaluateLotItemEdit(req.body as Record<string, unknown>, {
@@ -2077,6 +2116,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // Kits (2026-10-16, Phase 1): a kit's stock is derived from its components (services/itemKitStock.ts) and its type is fixed, so the generic
     // edit refuses to set the unit count or change the listing type of a kit. Name, description and price edit normally; components via /api/kits.
     if (item.listingType === 'KIT') {
+      if (inStockRequested !== undefined && inStockRequested !== inStockOf(item)) {
+        return res.status(400).json({ message: 'A kit\'s units available are worked out from the items inside it and cannot be set by hand.', code: 'KIT_STOCK_DERIVED', field: 'inStock' });
+      }
       if (stockTotal !== undefined && stockTotal !== null && parseInt(stockTotal, 10) !== item.stockTotal) {
         return res.status(400).json({ message: 'A kit\'s units available are worked out from the items inside it and cannot be set by hand.', code: 'KIT_STOCK_DERIVED', field: 'stockTotal' });
       }
@@ -2296,6 +2338,18 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
       await commitItemSale(id, 'SOLD', ['AVAILABLE', 'RESERVED']);
       soldTransitionCommitted = true;
+
+      // 2026-10-13 (single inventory number): "sold" means nothing is left. commitItemSale only flips the status, so a multi-unit
+      // item marked SOLD here kept stockSold < stockTotal and showed units in stock on every market. Settle the ledger so
+      // inStock reads 0. Not for kits (derived) or bulk lots (a card count, changed only through Adjust count).
+      if (!itemIsLot && item.listingType !== 'KIT') {
+        try {
+          await prisma.$executeRaw`UPDATE "Item" SET "stockSold" = COALESCE("stockTotal", 1) WHERE "id" = ${id} AND "listingType" <> 'KIT' AND "stockSold" < COALESCE("stockTotal", 1)`;
+          if (item.isKitComponent) await recomputeKitsForComponents(prisma as any, [id]);
+        } catch (settleErr) {
+          console.error(`[updateItem] could not settle stockSold for item ${id} after the manual SOLD:`, settleErr);
+        }
+      }
 
       if (supersededHold) {
         try {
@@ -2609,9 +2663,18 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     const priceReopen =
       price !== undefined && !priceChanged && ebayListedBeforeSave &&
       (item.ebaySyncState === 'FAILED_RETRYABLE' || item.ebaySyncState === 'FAILED_TERMINAL');
+    // 2026-10-13: the in-stock number this save leaves behind (inStock edit, or the legacy stockTotal edit against the current
+    // stockSold). Only a positive number is diffed: zero ends the listing through the SOLD path, it is not a quantity push.
+    const nextInStockForDiff: number | undefined =
+      inStockRequested !== undefined
+        ? inStockRequested
+        : updateData.stockTotal !== undefined
+          ? Math.max(updateData.stockTotal - item.stockSold, 0)
+          : undefined;
     const changedMarketplaceFields: EbayPushField[] = computeEbayPushFields(
       item,
       {
+        inStock: nextInStockForDiff !== undefined && nextInStockForDiff > 0 && !itemIsLot && item.listingType !== 'KIT' ? nextInStockForDiff : undefined,
         title: updateData.title,
         description: updateData.description,
         condition: updateData.condition,
@@ -2649,6 +2712,61 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
     // Item.lastEditedAt: a card patch is always an organizer edit; otherwise stamp only when a user-visible
     // field in updateData differs from the stored row. lastEditedAt is never read from req.body.
+    // 2026-10-13 (single inventory number): `inStock` edit. ONE SQL statement derives stockTotal from the freshest stockSold, so
+    // a sale that lands between our read and this write can never be lost or double counted (stockTotal = inStock + stockSold).
+    let stockStatusFlip: 'SOLD' | 'AVAILABLE' | null = null;
+    let becameSoldByStock = false;
+    let stockEdited = updateData.stockTotal !== undefined;
+    let freshStock: { stockTotal: number; stockSold: number } | null = null;
+    if (inStockRequested !== undefined && item.listingType !== 'KIT') {
+      const rows = await prisma.$queryRaw<Array<{ stockTotal: number; stockSold: number }>>`UPDATE "Item" SET "stockTotal" = ${inStockRequested}::int + "stockSold" WHERE "id" = ${id} AND "listingType" <> 'KIT' RETURNING "stockTotal", "stockSold"`;
+      if (rows.length === 1) {
+        freshStock = { stockTotal: Number(rows[0].stockTotal), stockSold: Number(rows[0].stockSold) };
+        stockEdited = true;
+        const newInStock = inStockOf(freshStock);
+        const prevInStock = inStockOf(item);
+        if (!soldTransitionCommitted) {
+          const effectiveStatus = (updateData.status as string | undefined) ?? item.status;
+          if (newInStock === 0 && effectiveStatus === 'AVAILABLE') {
+            // Nothing left: SOLD (the same semantics sellItemUnits applies when the last unit sells).
+            updateData.status = 'SOLD';
+            stockStatusFlip = 'SOLD';
+            becameSoldByStock = item.status === 'AVAILABLE';
+          } else if (newInStock > 0 && item.status === 'SOLD' && prevInStock === 0) {
+            // Restocked an item that sold out purely from stock exhaustion: it is for sale again (overrides an echoed 'SOLD').
+            updateData.status = 'AVAILABLE';
+            stockStatusFlip = 'AVAILABLE';
+          }
+        }
+      } else {
+        return res.status(404).json({ message: 'Item not found' });
+      }
+    }
+
+    // 2026-10-13 (single inventory number, reviewer fix): a plain SOLD -> AVAILABLE status edit with no stock figure supplied.
+    // The manual SOLD above settled stockSold up to the total, so putting the item back to AVAILABLE would leave it
+    // AVAILABLE with inStock 0, and the next sync would flip it straight back to SOLD (ending the eBay listing). Give back
+    // exactly ONE unit, atomically. Not for bulk lots (card count), kits (derived) or consignor tags (not inventory).
+    let restoredOneUnit: { stockTotal: number; stockSold: number } | null = null;
+    if (
+      !soldTransitionCommitted &&
+      item.status === 'SOLD' &&
+      updateData.status === 'AVAILABLE' &&
+      inStockRequested === undefined &&
+      updateData.stockTotal === undefined &&
+      !itemIsLot &&
+      item.listingType !== 'KIT' &&
+      item.listingType !== 'CONSIGNOR_TAG' &&
+      inStockOf(item) === 0
+    ) {
+      const restored = await prisma.$queryRaw<Array<{ stockTotal: number; stockSold: number }>>`UPDATE "Item" SET "stockSold" = GREATEST(COALESCE("stockTotal", 1) - 1, 0) WHERE "id" = ${id} AND "listingType" NOT IN ('KIT', 'CONSIGNOR_TAG') AND "stockSold" >= COALESCE("stockTotal", 1) RETURNING "stockTotal", "stockSold"`;
+      if (restored.length === 1) {
+        restoredOneUnit = { stockTotal: Number(restored[0].stockTotal ?? 1), stockSold: Number(restored[0].stockSold) };
+        stockEdited = true;
+        stockStatusFlip = 'AVAILABLE';
+      }
+    }
+
     const updatedItem = await prisma.item.update({
       where: { id },
       data: {
@@ -2656,6 +2774,18 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         ...(cardPatch !== undefined || soldTransitionCommitted ? organizerEditStampAlways() : organizerEditStamp(item, updateData)),
       }
     });
+    if (restoredOneUnit) {
+      updatedItem.stockTotal = restoredOneUnit.stockTotal;
+      updatedItem.stockSold = restoredOneUnit.stockSold;
+      if (item.isKitComponent) {
+        recomputeKitsForComponents(prisma as any, [id]).catch((err: unknown) => console.warn(`[updateItem] kit recompute failed for item ${id}:`, (err as Error)?.message));
+      }
+    }
+    if (freshStock) {
+      // The update above did not carry stockTotal (inStock edits write it in the statement before); keep the response in step.
+      updatedItem.stockTotal = freshStock.stockTotal;
+      updatedItem.stockSold = freshStock.stockSold;
+    }
 
     // ADR-134 #640 (B2): owner-shaped card block for the response (card path only).
     const updatedCard = cardPatch !== undefined
@@ -2847,6 +2977,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
     res.json({
       ...(cardPatch !== undefined ? { ...updatedItem, card: updatedCard ?? null } : updatedItem),
+      inStock: inStockOf(updatedItem), // 2026-10-13: the one in-stock number (stockTotal and stockSold stay for compatibility)
       ...(marketplacePlan ? { marketplacePlan } : {}),
       ...(unpublishResult && unpublishResult.withdrawn > 0 ? { withdrawnListingsCount: unpublishResult.withdrawn } : {}),
       ...(unpublishResult && unpublishResult.warnings.length > 0 ? { withdrawalWarnings: unpublishResult.warnings } : {}),
@@ -2915,18 +3046,36 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // structured outcome and records one ItemMarketplacePush row per attempt. A held item (U2) records SKIPPED_HELD and
     // makes no eBay call. Only fires if this item is live on eBay (has an offer ID); never awaited, never throws.
     // (Skipped when this save just unpublished the item: its eBay listing was ended above, so a push-back would hit a dead offer.)
-    if (!unpublishedNow && changedMarketplaceFields.length > 0 && (updatedItem.ebayOfferId || updatedItem.ebayListingId)) {
+    // 2026-10-13: 'quantity' is NOT sent from this push on a normal save: the stock sync below sends it (it also covers Etsy,
+    // Shopify, kits and the stale-overwrite guard). A held save still records it so "Update eBay now" sends it later.
+    const savePushFields: EbayPushField[] = heldThisSave ? changedMarketplaceFields : changedMarketplaceFields.filter((f) => f !== 'quantity');
+    if (!unpublishedNow && savePushFields.length > 0 && (updatedItem.ebayOfferId || updatedItem.ebayListingId)) {
       if (heldThisSave) {
-        pushItemToEbay({ itemId: id, organizerId: ownerOrganizer.id, trigger: 'SAVE', fields: changedMarketplaceFields, hold: true })
+        pushItemToEbay({ itemId: id, organizerId: ownerOrganizer.id, trigger: 'SAVE', fields: savePushFields, hold: true })
           .catch(err => console.warn(`[eBay PushSync] Unhandled error recording held save for item ${id}:`, err));
       } else if (updatedItem.ebayOfferId) {
         pushItemToEbay({
           itemId: id,
           organizerId: ownerOrganizer.id,
           trigger: 'SAVE',
-          fields: changedMarketplaceFields,
+          fields: savePushFields,
           dirtyBefore: item.ebayContentDirtyAt ?? null,
         }).catch(err => console.warn(`[eBay PushSync] Unhandled error for item ${id}:`, err));
+      }
+    }
+
+    // 2026-10-13 (single inventory number): the stock changed, so every market follows. Kits that contain this item are
+    // recomputed first. A sell-out through this edit takes the canonical SOLD fan-out (eBay end, Shopify, Discogs, Reverb,
+    // Etsy, Facebook nudge); the sync runs for every other stock change (including a restock, which relists an ended eBay
+    // offer). Never awaited, never throws.
+    if (!unpublishedNow && !itemIsLot && item.listingType !== 'KIT' && (stockEdited || stockStatusFlip !== null)) {
+      if (becameSoldByStock) {
+        if (item.isKitComponent) {
+          recomputeKitsForComponents(prisma as any, [id]).catch((err: unknown) => console.warn(`[updateItem] kit recompute failed for item ${id}:`, (err as Error)?.message));
+        }
+        fanOutItemSoldWithdrawals(id, 'updateItem inStock 0');
+      } else {
+        fireStockSync(id, 'edit');
       }
     }
 
@@ -2939,15 +3088,12 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // leaves both untouched makes zero Shopify calls.
     const shopifyPriceChanged =
       price !== undefined && (updatedItem.price ?? null) !== (item.price ?? null);
-    const shopifyQuantityChanged =
-      quantity !== undefined && (updatedItem.quantity ?? null) !== (item.quantity ?? null);
-    if (shopifyPriceChanged || shopifyQuantityChanged) {
+    // 2026-10-13: the Shopify quantity is the in-stock number (stockTotal - stockSold), sent by the stock sync above. It used to
+    // push Item.quantity (an unrelated descriptive field), which put the wrong number on the Shopify product.
+    if (shopifyPriceChanged) {
       const shopifyFields: { price?: number; quantity?: number } = {};
       if (shopifyPriceChanged && updatedItem.price !== null && updatedItem.price !== undefined) {
         shopifyFields.price = updatedItem.price;
-      }
-      if (shopifyQuantityChanged && updatedItem.quantity !== null && updatedItem.quantity !== undefined) {
-        shopifyFields.quantity = updatedItem.quantity;
       }
       if (Object.keys(shopifyFields).length > 0) {
         updateShopifyProductFields(id, shopifyFields).catch((err) =>
@@ -3126,7 +3272,10 @@ export const markItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
       },
     });
 
-    await prisma.item.update({ where: { id }, data: { lastSoldVia: 'OFF_PLATFORM_MANUAL', ...organizerEditStampAlways() } }); // B6: organizer action
+    // stockSold: 1 (2026-10-13, single inventory number): this path is single-unit only (see the v1 restriction above), so a sold
+    // item has nothing left in stock; commitItemSale alone never touched the ledger.
+    await prisma.item.update({ where: { id }, data: { lastSoldVia: 'OFF_PLATFORM_MANUAL', stockSold: 1, ...organizerEditStampAlways() } }); // B6: organizer action
+    recomputeKitsForComponents(prisma as any, [id]).catch((err: unknown) => console.warn(`[markSoldOffPlatform] kit recompute failed for item ${id}:`, (err as Error)?.message));
 
     // P1 fix (2026-09-08, Patrick-reported): this off-platform (BYOR) sold handler is the ONLY
     // code path that records a sale for every extension-only marketplace (Vinted, Poshmark,
@@ -3314,7 +3463,7 @@ export const undoItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
       // REMOVE/REMOVED row. Only a real removal report (markItemRemoved) may write REMOVE/REMOVED.
       const updated = await tx.item.update({
         where: { id },
-        data: { status: 'AVAILABLE', lastSoldVia: null, ...organizerEditStampAlways() }, // B6: organizer undo of their own sold mark
+        data: { status: 'AVAILABLE', lastSoldVia: null, stockSold: 0, ...organizerEditStampAlways() }, // B6: organizer undo of their own sold mark; stockSold 0 (2026-10-13): the unit is back in stock
         select: { id: true, status: true },
       });
       if (offPlatformSale) {
@@ -3323,6 +3472,7 @@ export const undoItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
       return updated;
     });
 
+    fireStockSync(id, 'undo off-platform sale'); // 2026-10-13: the unit is back in stock, so the markets follow (kits recompute, ended eBay listing relists)
     res.json({ ok: true, item: updatedItem });
   } catch (error) {
     console.error('Error undoing off-platform sale:', error);
@@ -3612,6 +3762,15 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
         return res.status(403).json({ message: 'Access denied. Not your sale.' });
       }
       ownerOrganizerId = callerOrganizer.id;
+    }
+
+    // Kits (2026-10-13): a kit is never hard-deleted. Removing one must go through DELETE /api/kits/:kitId (itemKitService.archiveKit),
+    // which soft-deletes the kit AND frees its components (clears isKitComponent). A hard delete here would leave every component flagged.
+    if (item.listingType === 'KIT') {
+      return res.status(400).json({
+        message: 'This is a kit. Remove it with the kit removal (the Delete button on a kit uses it) so the items inside are freed.',
+        code: 'KIT_USE_KIT_REMOVAL',
+      });
     }
 
     // ADR-136 Addendum B (#659): a lot with cards out on a hold or in a hub cart cannot be deleted from under them.
@@ -4958,6 +5117,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     // Sprint 1: Compute health score for each item
     const itemsWithHealth = items.map(item => ({
       ...item,
+      inStock: inStockOf(item), // 2026-10-13: the one in-stock number (stockTotal / stockSold stay for compatibility)
       healthScore: computeHealthScore({
         photoUrls: item.photoUrls,
         title: item.title,

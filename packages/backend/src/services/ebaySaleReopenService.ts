@@ -11,8 +11,9 @@
  *   2. every EbaySoldEvent for the item belongs to an order eBay reports as CANCELED or FULLY_REFUNDED
  *      (so the item has no genuine eBay sale left)
  *   3. no PAID non-test Purchase exists for the item (it was not also sold on another FindA.Sale rail)
- *   4. single-unit item (stockTotal / ebayQuantityAvailable <= 1); multi-unit items are never auto-zeroed
+ *   4. single-unit item (stockTotal <= 1; ebayQuantityAvailable is only a mirror, 2026-10-13); multi-unit items are never auto-zeroed
  *   5. the item's eBay listing, or a relisted live listing whose SKU starts with FAS-<itemId>, is LIVE
+ * Only the cancelled orders' units come back (stockSold / ebayQuantitySold decrement, floored at 0; never reset to 0).
  * The EbaySoldEvent ledger rows are KEPT (they are what stops the sold sync re-selling the same order).
  * No sold notification is fired. Returns a result object (never throws on a business-rule refusal).
  */
@@ -69,13 +70,15 @@ export async function reopenEbayCancelledSale(itemId: string, opts: ReopenOption
   if (item.status !== 'SOLD' || item.lastSoldVia !== 'EBAY') {
     return fail('NOT_EBAY_SOLD', 'This item is not marked sold via eBay, so there is no eBay sale to reopen.');
   }
-  if ((item.stockTotal ?? 1) > 1 || (item.ebayQuantityAvailable ?? 1) > 1) {
+  // Single inventory number (2026-10-13): "multi-quantity" is decided from the platform's own unit ledger (stockTotal), never from
+  // Item.ebayQuantityAvailable, which is only a mirror of the last quantity confirmed on eBay.
+  if ((item.stockTotal ?? 1) > 1) {
     return fail('MULTI_QUANTITY', 'Multi-quantity items cannot be reopened automatically. Adjust stock manually.');
   }
 
   const events = await prisma.ebaySoldEvent.findMany({
     where: { itemId },
-    select: { ebayOrderId: true, ebayLineItemId: true },
+    select: { ebayOrderId: true, ebayLineItemId: true, quantitySold: true },
   });
   if (events.length === 0) {
     return fail('NO_LEDGER', 'No eBay sale record exists for this item, so a cancelled eBay sale cannot be verified.');
@@ -133,19 +136,36 @@ export async function reopenEbayCancelledSale(itemId: string, opts: ReopenOption
   }
 
   // Atomic, guarded reopen. EbaySoldEvent rows are intentionally untouched.
-  const updated = await prisma.item.updateMany({
-    where: { id: itemId, status: 'SOLD', lastSoldVia: 'EBAY' },
-    data: {
-      status: 'AVAILABLE',
-      stockSold: 0,
-      ebayQuantitySold: 0,
-      lastSoldVia: null,
-      ...(adoptedListingId ? { ebayListingId: adoptedListingId, ebayOfferId: adoptedOfferId ?? null } : {}),
-    },
+  // Single inventory number (2026-10-13): give back ONLY the units of the cancelled orders (the quantitySold of their ledger lines, every
+  // one of which was verified cancelled or refunded above), never "stockSold = 0". The same units come off ebayQuantitySold. Both are
+  // floored at zero in the same transaction. Multi-quantity items are refused above, so the stockTotal guard in the WHERE only closes the
+  // race where the total was raised after the read; the freed unit(s) leave inStock >= 1, so the item returns to AVAILABLE.
+  const unitsToGiveBack = Math.max(1, events.reduce((n, e) => n + (Number.isFinite(Number(e.quantitySold)) ? Math.max(Number(e.quantitySold), 0) : 1), 0));
+  const updated = await prisma.$transaction(async (tx: any) => {
+    const r = await tx.item.updateMany({
+      where: { id: itemId, status: 'SOLD', lastSoldVia: 'EBAY', OR: [{ stockTotal: null }, { stockTotal: { lte: 1 } }] },
+      data: {
+        status: 'AVAILABLE',
+        stockSold: { decrement: unitsToGiveBack },
+        ebayQuantitySold: { decrement: unitsToGiveBack },
+        lastSoldVia: null,
+        ...(adoptedListingId ? { ebayListingId: adoptedListingId, ebayOfferId: adoptedOfferId ?? null } : {}),
+      },
+    });
+    if (r.count > 0) {
+      await tx.$executeRaw`UPDATE "Item" SET "stockSold" = GREATEST("stockSold", 0), "ebayQuantitySold" = GREATEST("ebayQuantitySold", 0) WHERE "id" = ${itemId} AND ("stockSold" < 0 OR "ebayQuantitySold" < 0)`;
+    }
+    return r;
   });
   if (updated.count === 0) {
     return fail('RACE', 'The item changed while it was being reopened. Refresh and try again.');
   }
+
+  // Single inventory number (2026-10-13): the unit is back in stock, so kits that contain it are recomputed and every market is
+  // brought in line (the live eBay quantity is compared with the in-stock number and fixed if it differs). Fire-and-forget.
+  import('./inventoryStockSync')
+    .then((m) => m.syncItemStock(itemId, 'reopen'))
+    .catch((err: unknown) => console.warn(`[eBay Reopen] stock sync failed for item ${itemId}:`, (err as Error)?.message));
 
   console.log(
     `[eBay Reopen] REOPENED item ${itemId} ("${item.title}") source=${opts.source} actor=${opts.actorUserId ?? 'system'} ` +

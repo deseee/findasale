@@ -425,7 +425,7 @@ describe('merge modes', () => {
     expect(stockOf(db, 'Widget A')).toBe(3);
   });
 
-  it('REPLACE never sets stockTotal below stockSold (acceptance 7)', async () => {
+  it('REPLACE sets the in stock number to exactly the file quantity, keeping units already sold (acceptance 7)', async () => {
     const db = seedDb();
     const deps = makeDeps(db);
     const f = file();
@@ -436,8 +436,8 @@ describe('merge modes', () => {
     const smaller = writeFile('merge-smaller-synthetic.csv', 'Name,Quantity,Condition\nWidget A,1,Near Mint\n');
     const res = await confirm(deps, smaller, { mode: 'REPLACE' });
     if ('failure' in res) throw new Error(res.failure.code);
-    expect(widget.stockTotal).toBe(2);
-    expect(widget.stockTotal).toBeGreaterThanOrEqual(widget.stockSold);
+    expect(widget.stockTotal).toBe(3);
+    expect(widget.stockTotal - widget.stockSold).toBe(1);
   });
 
   it('a sold item is never a merge target; a new item is created instead (acceptance 9)', async () => {

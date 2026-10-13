@@ -124,6 +124,7 @@ beforeEach(() => {
   db.organizer.updateMany.mockResolvedValue({ count: 1 });
   db.itemReservation.updateMany.mockResolvedValue({ count: 0 });
   db.item.updateMany.mockResolvedValue({ count: 0 });
+  (db as any).$executeRaw = jest.fn().mockResolvedValue(0); // the 0 -> 1 in-stock status flip is a guarded raw UPDATE
   reverseMock.mockResolvedValue({ status: 'REVERSED', reversedCents: 320, appliedCents: 320, shortfallCents: 0 });
 });
 

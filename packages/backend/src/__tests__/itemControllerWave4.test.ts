@@ -10,7 +10,7 @@
  */
 
 const mockPrisma: any = {
-  item: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
+  item: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
   itemCard: { findUnique: jest.fn(), findMany: jest.fn() },
   etsyListing: { findMany: jest.fn() },
   sale: { findUnique: jest.fn() },
@@ -68,7 +68,7 @@ jest.mock('../services/ebayPublishService', () => ({
 ].forEach((p) => jest.mock(p, () => ({})));
 
 // Required AFTER the mocks above (imports are hoisted, so a plain import would load the real modules first).
-const { getDraftItemsBySaleId, createItem, updateItem } = require('../controllers/itemController');
+const { getDraftItemsBySaleId, createItem, updateItem, deleteItem } = require('../controllers/itemController');
 const { ebayPublishWithSelfHeal } = require('../services/ebayPublishService');
 
 function makeRes() {
@@ -393,5 +393,32 @@ describe('ADR-134 5.4 (1): pinned eBay category set only when null', () => {
       expect(dataOfUpdate()).not.toHaveProperty('ebayCategoryId');
       expect(dataOfUpdate()).not.toHaveProperty('card');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+describe('deleteItem: a kit is never hard-deleted (2026-10-13)', () => {
+  const kitRow = (over: Record<string, unknown> = {}) => ({
+    id: 'kit1', listingType: 'KIT', photoUrls: [], organizerId: 'org1',
+    sale: { organizer: { id: 'org1', userId: 'u1' } }, ...over,
+  });
+
+  it('refuses with 400 KIT_USE_KIT_REMOVAL and removes nothing, so no component is left flagged isKitComponent', async () => {
+    mockPrisma.item.findUnique.mockResolvedValue(kitRow());
+    const res = makeRes();
+    await deleteItem({ user: organizerUser, params: { id: 'kit1' } }, res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe('KIT_USE_KIT_REMOVAL');
+    expect(res.body.message).toMatch(/kit/i);
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+    expect(mockPrisma.item.delete).not.toHaveBeenCalled();
+  });
+
+  it('a stranger still gets the ownership 403 first (the kit refusal does not leak whether an item is a kit)', async () => {
+    mockPrisma.item.findUnique.mockResolvedValue(kitRow({ organizerId: 'someone_else', sale: { organizer: { id: 'org9', userId: 'u9' } } }));
+    mockPrisma.organizer.findUnique.mockResolvedValue({ id: 'org1' });
+    const res = makeRes();
+    await deleteItem({ user: organizerUser, params: { id: 'kit1' } }, res);
+    expect(res.statusCode).toBe(403);
   });
 });

@@ -21,6 +21,7 @@ import { errorsCsvLine } from './errorsCsv';
 import { Group, MAX_STOCK_TOTAL, chooseTarget, groupRows, nextStockTotal } from './mergeEngine';
 import { ROW_ERROR_MESSAGES } from './messages';
 import type { IntakeMode, PlannedRow, RowErrorInfo } from './types';
+import { syncChangedStockInBackground } from './stockSyncHook'; // 2026-10-13: one in-stock number on every market
 
 export interface CommitTx {
   $executeRaw(strings: TemplateStringsArray, ...values: unknown[]): Promise<number>;
@@ -89,6 +90,8 @@ interface ChunkResult {
   batch: BatchRow;
   rowErrors: RowErrorEvent[];
   warnings: Record<string, number>;
+  /** Existing items whose stockTotal this chunk changed (synced to the markets only after the chunk commits). */
+  stockChangedIds: string[];
 }
 
 function rowErrorEvent(row: PlannedRow, error: RowErrorInfo, headers: readonly string[], replayed = false): RowErrorEvent {
@@ -139,9 +142,10 @@ async function commitChunk(
   const fresh: BatchRow | null = await tx.cardIntakeBatch.findUnique({ where: { id: p.batch.id } });
   if (!fresh) throw new Error('Intake batch disappeared');
   if (fresh.committedThroughRow >= lastRow) {
-    return { skippedChunk: true, batch: fresh, rowErrors: [], warnings: {} };
+    return { skippedChunk: true, batch: fresh, rowErrors: [], warnings: {}, stockChangedIds: [] };
   }
   const todo = chunk.filter((r) => r.row > fresh.committedThroughRow);
+  const stockChangedIds: string[] = [];
 
   // Prefetch every possible merge target of this chunk: existing, available, undeleted items of THIS sale.
   const keys: string[] = [];
@@ -237,6 +241,7 @@ async function commitChunk(
       if (next !== target.stockTotal) {
         await tx.item.update({ where: { id: target.id }, data: { stockTotal: next } });
         target.stockTotal = next;
+        stockChangedIds.push(target.id);
       }
       merged += 1;
       continue;
@@ -282,7 +287,7 @@ async function commitChunk(
       errorSample: mergeErrorSample(fresh.errorSample, sample).slice(0, ERROR_SAMPLE_CAP),
     },
   });
-  return { skippedChunk: false, batch: updated, rowErrors, warnings };
+  return { skippedChunk: false, batch: updated, rowErrors, warnings, stockChangedIds };
 }
 
 /**
@@ -318,6 +323,7 @@ export async function commitPlan(p: CommitParams): Promise<CommitOutcome> {
       throw err;
     }
     batch = result.batch;
+    syncChangedStockInBackground(result.stockChangedIds, 'card import');
     for (const [k, v] of Object.entries(result.warnings)) bump(warnings, k, v);
     for (const e of result.rowErrors) await p.emit(e);
     processed = total - remaining.length + start + chunk.length;
