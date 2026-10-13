@@ -53,6 +53,7 @@ import { withdrawEtsyListingIfExists } from './marketplace/etsyConnector';
 import { sellItemUnits } from './itemStockService';
 import { syncMarketplaceStock } from './marketplaceStockSyncService';
 import { takeSoldElsewhereUnit, fireItemStockSync } from './soldElsewhereUnitSale'; // 2026-10-13: one shared multi-unit step for every sold-elsewhere path
+import { KIT_LISTING_TYPE, loadKitComponents } from './itemKitStock'; // 2026-10-13: a kit is never listed per platform; its sale takes one kit unit and shrinks its components
 import { lotChannelRefusal } from './bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a bulk lot is never marked SOLD by a sale seen elsewhere
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
 import { soldEmailStaleReason, soldEmailAlreadyApplied, soldRowMessage, getSoldEmailSource, parseSoldRowSentAtMs } from './soldEmailSourceGuard'; // 2026-10-12: an e-mail replayed after marker loss / relist must not consume a unit twice
@@ -141,6 +142,31 @@ export const NEW_EMAIL_SALE_TOLERANCE_MS = 10 * 60 * 1000;
 export async function isMultiStockItem(itemId: string): Promise<boolean> {
   const it = await prisma.item.findUnique({ where: { id: itemId }, select: { stockTotal: true } });
   return (it?.stockTotal ?? 1) > 1;
+}
+
+/** True when the item is a kit (listingType KIT). A failed lookup reads as not-a-kit, i.e. the unchanged legacy behavior. */
+async function isKitItem(itemId: string): Promise<boolean> {
+  try {
+    const it = await prisma.item.findUnique({ where: { id: itemId }, select: { listingType: true } });
+    return it?.listingType === KIT_LISTING_TYPE;
+  } catch (err: any) {
+    console.warn(`[commitFacebookNativeSale] kit lookup failed for item ${itemId}:`, err?.message);
+    return false;
+  }
+}
+
+/**
+ * After a kit sale took its components' stock (sellItemUnits -> sellKitComponents recomputes the kits but never pushes the new
+ * component counts to the markets), re-push every component's in-stock number. A kit is never a unit listing on any market, so
+ * syncing the kit itself does nothing; the components are what eBay / Shopify / ... carry. Fire-and-forget per component; never throws.
+ */
+async function fireKitComponentStockSync(kitItemId: string, soldVia: string): Promise<void> {
+  try {
+    const components = await loadKitComponents(prisma as any, kitItemId);
+    for (const c of components) fireItemStockSync(c.componentItemId, `kit-sold-on-${soldVia.toLowerCase()}`);
+  } catch (err: any) {
+    console.warn(`[StockSync] kit component sync (${soldVia}) failed for kit ${kitItemId}:`, err?.message);
+  }
 }
 
 function fanOutWithdrawals(itemId: string, soldVia: string, skip: Set<string>): void {
@@ -352,6 +378,7 @@ async function commitDedupedUnitSale(
   soldVia: string,
   dedupeKey: string | undefined,
   skip: Set<string>,
+  isKit = false,
 ): Promise<CommitFacebookNativeSaleResult | null> {
   const outcome = await takeSoldElsewhereUnit(itemId, dedupeKey);
   if (outcome.kind === 'single') return null;
@@ -363,10 +390,12 @@ async function commitDedupedUnitSale(
       console.warn(`[StockSync] revise-on-partial (${soldVia}) failed for item ${itemId}:`, err?.message)
     );
     fireItemStockSync(itemId, `sold-on-${soldVia.toLowerCase()}`);
+    if (isKit) await fireKitComponentStockSync(itemId, soldVia);
     return { ok: true, alreadyCommitted: false, partial: true, remainingStock: outcome.remainingStock };
   }
   await prisma.item.update({ where: { id: itemId }, data: { lastSoldVia: soldVia } });
   fanOutWithdrawals(itemId, soldVia, skip);
+  if (isKit) await fireKitComponentStockSync(itemId, soldVia);
   return { ok: true, alreadyCommitted: false };
 }
 
@@ -403,13 +432,17 @@ export async function commitFacebookNativeSale(
     }
   }
   const skip = new Set<string>(options.skipWithdraw ?? []);
-  if (options.soldOnPlatform) {
+  // 2026-10-13 (kit sold on a marketplace): a kit is never listed per platform through the app, so the platform path below (which
+  // needs a live MarketplaceListingJob row as its idempotency key) would find none and take no unit. The caller asserts a real sale,
+  // so a kit takes exactly ONE kit unit through the deduped path even when soldOnPlatform is set (no listing exists to withdraw).
+  const isKit = await isKitItem(itemId);
+  if (options.soldOnPlatform && !isKit) {
     const unit = await commitPlatformUnitSale(itemId, soldVia, options.soldOnPlatform, skip);
     if (unit) return unit;
   } else {
     // 2026-10-13 (S-SINGLE-INVENTORY-NUMBER): no per-listing platform named (Discogs / Reverb polls, operator route ...). A multi-unit
     // item takes ONE unit instead of going fully SOLD; a single-unit item returns null here and runs the legacy path below untouched.
-    const unit = await commitDedupedUnitSale(itemId, soldVia, options.dedupeKey, skip);
+    const unit = await commitDedupedUnitSale(itemId, soldVia, options.dedupeKey, skip, isKit);
     if (unit) return unit;
   }
   try {
@@ -424,6 +457,9 @@ export async function commitFacebookNativeSale(
   await prisma.item.update({ where: { id: itemId }, data: { lastSoldVia: soldVia } });
 
   fanOutWithdrawals(itemId, soldVia, skip);
+
+  // A single-unit kit (one kit left) lands here: commitItemSale takes its components, so push their new counts to the markets.
+  if (isKit) await fireKitComponentStockSync(itemId, soldVia);
 
   return { ok: true, alreadyCommitted: false };
 }
