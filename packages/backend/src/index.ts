@@ -212,6 +212,7 @@ import cardIntakeRoutes from './routes/cardIntake';           // ADR-134 B4: spr
 import cardScanRoutes from './routes/cardScan';               // ADR-138 B9: card scan intake (the frame route answers 503 unless CARD_SCAN_ENABLED is true; GET /status always answers)
 import cardTcgplayerRoutes from './routes/cardTcgplayer';     // ADR-137 #660: TCGplayer round trip for card shops (writing routes answer 404 unless CARD_TCGPLAYER_SYNC_ENABLED and CARD_CATALOG_ENABLED are true)
 import bulkLotRoutes from './routes/bulkLots';                // ADR-136 #659: bulk lots for card shops (answers 404 BULK_DISABLED unless CARD_BULK_LOTS_ENABLED is true)
+import priceBookRoutes from './routes/priceBook';            // ADR-140: first-party price book for card shops (answers 404 PRICE_BOOK_DISABLED unless CARD_PRICE_BOOK_ENABLED is true; GET /status always answers)
 import itemKitRoutes from './routes/itemKits';              // Kits (2026-10-16, Phase 1): bundle several existing items into one sellable kit
 import bulkLotEbayRoutes from './routes/bulkLotEbay';          // ADR-136 Addendum C #659: eBay bundles of bulk lots (404 BUNDLE_DISABLED unless CARD_BULK_EBAY_ENABLED is true)
 import etsyRoutes from './routes/etsy';                       // ADR-135 B1: Etsy connect, callback, connection, shop setup (kill switch per route)
@@ -300,7 +301,7 @@ import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244
 import { startBulkLotEbayBundleSweepCron } from './jobs/bulkLotEbayBundleSweepCron'; // ADR-136 Addendum C #659: keeps eBay bundle listings in line with lot stock
 import { startDiscogsSoldSyncCron } from './jobs/discogsSoldSyncCron'; // 2026-09-23: Discogs seller-order poll -> SOLD + fan-out
 import { startReverbSoldSyncCron } from './jobs/reverbSoldSyncCron'; // 2026-09-23: Reverb seller-order poll -> SOLD + fan-out
-import { scheduleCardCatalogScryfallRefresh, scheduleCardCatalogTcgcsvRefresh } from './jobs/cardCatalogRefreshCron'; // ADR-134 B3: daily card catalog refresh (inert unless CARD_CATALOG_ENABLED is true)
+import { scheduleCardCatalogScryfallRefresh, scheduleCardCatalogTcgcsvRefresh, scheduleCardCatalogTcgdexRefresh } from './jobs/cardCatalogRefreshCron'; // ADR-134 B3: daily card catalog refresh (inert unless CARD_CATALOG_ENABLED is true)
 import { startEtsySoldSyncCron } from './jobs/etsySoldSyncCron'; // ADR-135 B4: Etsy receipt poll + stale-listing sweep (inert unless ETSY_CONNECTOR_ENABLED is true)
 import { startEtsyHousekeepingCron } from './jobs/etsyHousekeepingCron'; // ADR-135 B1: Etsy token keepalive, prune, taxonomy refresh (inert unless ETSY_CONNECTOR_ENABLED is true)
 import { refreshEtsyTaxonomyCache } from './services/marketplace/etsyTaxonomy'; // ADR-135 B3: handed to the Etsy housekeeping cron
@@ -618,6 +619,9 @@ app.use('/api/outreach/resend-webhook', express.raw({ type: 'application/json' }
 // handler (controllers/snoozeController.ts) needs the raw Buffer before express.json re-serializes it.
 app.use('/api/snooze/webhook', express.raw({ type: 'application/json' }));
 
+// ADR-140: the price book CSV import may arrive as JSON up to 2 MB, so this one path gets its own limit; it must stay BEFORE the global parser below (the global one skips a body that is already parsed).
+app.use('/api/price-book/references/import', express.json({ limit: '2mb' }));
+
 // JSON parser with 1 MB body size limit to prevent payload attacks
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
@@ -922,6 +926,7 @@ app.use('/api/card-scan', cardScanRoutes);                                  // A
 app.use('/api/card-tcgplayer', cardTcgplayerRoutes);                        // ADR-137 #660: TCGplayer round trip (flag CARD_TCGPLAYER_SYNC_ENABLED, default off)
 app.use('/api/bulk-lots/ebay', bulkLotEbayRoutes);                      // ADR-136 Addendum C #659: eBay bundles (flag CARD_BULK_EBAY_ENABLED, default off); before /api/bulk-lots so its paths are never shadowed
 app.use('/api/bulk-lots', bulkLotRoutes);                                // ADR-136 #659: bulk lots (flag CARD_BULK_LOTS_ENABLED, default off)
+app.use('/api/price-book', priceBookRoutes);                             // ADR-140: first-party price book (flag CARD_PRICE_BOOK_ENABLED, default off)
 app.use('/api/kits', itemKitRoutes);                                 // Kits (2026-10-16, Phase 1): organizer-only create/edit of kits
 // ADR-135 (Etsy): the webhook router mounts FIRST (no auth, no kill switch: the handler answers 200 and ignores
 // when the connector is off), then the two organizer routers, each with the kill switch applied per route.
@@ -1183,6 +1188,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // ADR-134: daily card catalog refresh (Scryfall 06:23 UTC, TCGCSV 21:10 UTC). Both exit immediately unless CARD_CATALOG_ENABLED is true.
   scheduleCardCatalogScryfallRefresh();
   scheduleCardCatalogTcgcsvRefresh();
+  scheduleCardCatalogTcgdexRefresh(); // inert unless CARD_CATALOG_ENABLED and CARD_CATALOG_TCGDEX_ENABLED are both true
 
   // eBay Queue Mode engine — auto-manage listing slots (every 30 minutes)
   startEbayListingQueueCron();

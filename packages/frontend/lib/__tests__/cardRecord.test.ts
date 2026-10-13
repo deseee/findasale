@@ -367,3 +367,65 @@ test('copy lint: required wording from the ADR is exact', () => {
   assert.equal(CARD_PANEL_COPY.useSuggestedPrice, 'Use suggested price');
   assert.equal(CARD_PANEL_COPY.suggestedTitle, 'Use suggested title');
 });
+
+// ---------------------------------------------------------------------------
+// ADR-140 batch B6: describeSuggestion learns the price book block (additive; every case above is unchanged)
+// ---------------------------------------------------------------------------
+
+test('price book: NO_REFERENCE gets the plain price book message and no price', () => {
+  const labels = { condition: (c: string) => c, finish: (c: string) => c };
+  const v = describeSuggestion({ ok: false, suggestedPrice: null, code: 'NO_REFERENCE', message: 'server text' }, labels);
+  assert.equal(v.price, null);
+  assert.equal(v.unavailableText, 'No suggestion yet. Add a price for this card in your price book.');
+  assert.ok(!v.unavailableText.includes('server text'));
+  assert.equal(v.whyThisPrice, null);
+  // a NO_REFERENCE answer that carries the price book block also gets the popover content
+  const withBlock = describeSuggestion(
+    { ok: false, suggestedPrice: null, code: 'NO_REFERENCE', priceBook: { ok: false, code: 'NO_REFERENCE', priceCents: null, applyAllowed: false } },
+    labels
+  );
+  assert.ok(withBlock.whyThisPrice);
+  assert.equal(withBlock.whyThisPrice.ok, false);
+  assert.equal(withBlock.unavailableText, 'No suggestion yet. Add a price for this card in your price book.');
+});
+
+test('price book: a legacy answer has empty price book lines and a price book answer adds provenance, lock and the popover', () => {
+  const labels = { condition: (c: string) => c, finish: (c: string) => c };
+  const legacy = describeSuggestion({ ok: true, suggestedPrice: 1.25, basis: { finish: 'FOIL', conditionCode: 'LP' } }, labels);
+  assert.equal(legacy.price, 1.25);
+  assert.equal(legacy.provenanceText, '');
+  assert.equal(legacy.lockedText, '');
+  assert.equal(legacy.whyThisPrice, null);
+
+  const fromBook = describeSuggestion(
+    {
+      ok: true,
+      suggestedPrice: 10.25,
+      basis: { finish: 'FOIL', conditionCode: 'LP' },
+      priceBook: {
+        ok: true, priceCents: 1025, priceSource: 'MANUAL', priceAsOf: '2026-10-03T14:00:00.000Z', referenceLabel: 'Your typed price',
+        applyAllowed: true, lockedReason: null, why: 'Based on your typed price of $12.00 (Oct 3).',
+      },
+    },
+    labels
+  );
+  assert.equal(fromBook.price, 10.25);
+  assert.equal(fromBook.priceText, '$10.25');
+  assert.equal(fromBook.provenanceText, 'Your typed price, Oct 3.');
+  assert.equal(fromBook.lockedText, '');
+  assert.ok(fromBook.whyThisPrice);
+  assert.equal(fromBook.whyThisPrice.why, 'Based on your typed price of $12.00 (Oct 3).');
+
+  // a locked price still hands the number back: pressing the button is the organizer's own decision
+  const locked = describeSuggestion(
+    { ok: true, suggestedPrice: 10.25, priceBook: { ok: true, priceCents: 1025, priceSource: 'MANUAL', lockedReason: 'PIN', applyAllowed: false } },
+    labels
+  );
+  assert.equal(locked.price, 10.25);
+  assert.equal(locked.lockedText, 'Locked, so the price book will not change it.');
+  assert.equal(locked.whyThisPrice && locked.whyThisPrice.applyAllowed, false);
+
+  // a null or junk block is ignored
+  assert.equal(describeSuggestion({ ok: true, suggestedPrice: 2, priceBook: null }, labels).whyThisPrice, null);
+  assert.equal(describeSuggestion({ ok: true, suggestedPrice: 2, priceBook: {} }, labels).whyThisPrice, null);
+});

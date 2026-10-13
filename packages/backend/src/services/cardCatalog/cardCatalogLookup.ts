@@ -16,6 +16,7 @@ import {
   getEnabledGames,
   getPriceStaleHours,
   isCatalogEnabled,
+  isCatalogPriceReferenceEnabled,
   isPokemonServable,
   isTcgdexEnabled,
 } from './catalogConfig';
@@ -513,9 +514,19 @@ export interface SuggestedPriceParams {
 
 export type SuggestedPriceOutcome =
   | { found: false }
-  | { found: true; printing: PrintingDto; suggestion: SuggestionResult };
+  | {
+      found: true;
+      printing: PrintingDto;
+      suggestion: SuggestionResult;
+      /** Present (as 'OFF') only when CARD_CATALOG_PRICE_REFERENCE_ENABLED is off (ADR-140 section 12.2). */
+      catalogReference?: 'OFF';
+    };
 
-/** Loads the printing and its stored price, then computes the suggestion. Writes nothing. */
+/**
+ * Loads the printing and its stored price, then computes the suggestion. Writes nothing.
+ * With CARD_CATALOG_PRICE_REFERENCE_ENABLED off the stored price is not used (price: null), so the answer is the existing
+ * no price answer (NO_PRICE_DATA, after the same finish, condition and graded checks as before) and the outcome says so.
+ */
 export async function suggestPriceForPrinting(
   params: SuggestedPriceParams,
   db: CatalogDb = getCatalogDb(),
@@ -529,8 +540,9 @@ export async function suggestPriceForPrinting(
   const sourceRow = await db.cardDataSource.findUnique({ where: { source: row.source } });
   const sourceAsOf = sourceRow ? sourceDataAsOf(sourceRow) : null;
   const asOfDate = dto.price?.asOf ? new Date(dto.price.asOf) : null;
+  const referenceOn = isCatalogPriceReferenceEnabled(env);
   const suggestion = computeSuggestedPrice({
-    price: dto.price
+    price: referenceOn && dto.price
       ? {
           usd: dto.price.usd,
           usdFoil: dto.price.usdFoil,
@@ -548,5 +560,5 @@ export async function suggestPriceForPrinting(
     now,
     staleHours: getPriceStaleHours(env),
   });
-  return { found: true, printing: dto, suggestion };
+  return referenceOn ? { found: true, printing: dto, suggestion } : { found: true, printing: dto, suggestion, catalogReference: 'OFF' };
 }

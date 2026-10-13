@@ -8,6 +8,8 @@ import api from '../../lib/api';
 import { describeSuggestion, formatMoney } from '../../lib/cardRecord';
 import type { SuggestionBody } from '../../lib/cardRecord';
 import { SCAN_COPY } from '../../lib/cardScanCopy';
+import type { WhyThisPriceView } from '../../lib/priceBookRules';
+import WhyThisPrice from '../priceBook/WhyThisPrice'; // ADR-140 (B8): renders only when the answer carries a priceBook block
 import { mutedCls, secondaryBtn, smallBtn } from './ui';
 
 type Phase = 'idle' | 'loading' | 'ready' | 'none' | 'error';
@@ -25,11 +27,18 @@ const plain = (code: string): string => code;
 const SuggestedPriceLookup: React.FC<SuggestedPriceLookupProps> = ({ printingId, finish, conditionCode, disabled, onUse }) => {
   const [phase, setPhase] = useState<Phase>('idle');
   const [price, setPrice] = useState<number | null>(null);
+  // ADR-140 (B8): empty unless the answer came from the shop's price book.
+  const [provenance, setProvenance] = useState('');
+  const [why, setWhy] = useState<WhyThisPriceView | null>(null);
+  const [noneText, setNoneText] = useState('');
 
   // A different printing, finish or condition makes an earlier answer out of date.
   useEffect(() => {
     setPhase('idle');
     setPrice(null);
+    setProvenance('');
+    setWhy(null);
+    setNoneText('');
   }, [printingId, finish, conditionCode]);
 
   const lookup = useCallback(async () => {
@@ -43,10 +52,13 @@ const SuggestedPriceLookup: React.FC<SuggestedPriceLookupProps> = ({ printingId,
       const suggestion = (body.suggestion || (body.data ? body.data.suggestion : null) || null) as SuggestionBody | null;
       const view = describeSuggestion(suggestion, { condition: plain, finish: plain });
       if (view.price === null) {
+        setNoneText(view.whyThisPrice ? view.unavailableText : '');
         setPhase('none');
         return;
       }
       setPrice(view.price);
+      setProvenance(view.provenanceText);
+      setWhy(view.whyThisPrice);
       setPhase('ready');
     } catch {
       setPhase('error');
@@ -61,7 +73,7 @@ const SuggestedPriceLookup: React.FC<SuggestedPriceLookupProps> = ({ printingId,
     );
   }
   if (phase === 'ready' && price !== null) {
-    return (
+    const row = (
       <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
         <p className={mutedCls}>{SCAN_COPY.suggestedPriceValue(formatMoney(price))}</p>
         <button type="button" disabled={disabled} onClick={() => onUse(price)} className={secondaryBtn}>
@@ -69,9 +81,17 @@ const SuggestedPriceLookup: React.FC<SuggestedPriceLookupProps> = ({ printingId,
         </button>
       </div>
     );
+    if (!provenance && !why) return row;
+    return (
+      <div className="flex min-w-0 flex-col gap-2">
+        {row}
+        {provenance && <p className={mutedCls}>{provenance}</p>}
+        {why && <WhyThisPrice view={why} />}
+      </div>
+    );
   }
   if (phase === 'none') {
-    return <p className={mutedCls}>{SCAN_COPY.suggestedPriceNone}</p>;
+    return <p className={mutedCls}>{noneText || SCAN_COPY.suggestedPriceNone}</p>;
   }
   if (phase === 'error') {
     return (

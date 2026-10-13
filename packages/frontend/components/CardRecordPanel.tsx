@@ -557,6 +557,7 @@ const CardRecordPanel: React.FC<CardRecordPanelProps> = ({ itemId, currentPrice,
                   language={form.language}
                   vocab={vocab}
                   lookupEnabled={lookupEnabled}
+                  itemId={itemId}
                   busy={busy}
                   onUse={(price) => {
                     onApplyPrice(price);

@@ -12,6 +12,8 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import Skeleton from '../Skeleton';
 import useDebouncedValue from './useDebouncedValue';
+import WhyThisPrice from '../priceBook/WhyThisPrice'; // ADR-140 (B8): renders only when the answer carries a priceBook block
+import { withItemId } from '../../lib/priceBookWiring';
 import {
   CARD_PANEL_COPY,
   CardVocabulary,
@@ -31,6 +33,8 @@ interface SuggestedPriceBoxProps {
   vocab: Pick<CardVocabulary, 'finishes' | 'conditionCodes'>;
   /** False when card lookup is switched off, so no request is made. */
   lookupEnabled: boolean;
+  /** ADR-140 section 12.3: the saved item, so the price book can see the current price and any lock. Optional. */
+  itemId?: string | null;
   busy: boolean;
   onUse: (price: number) => void;
 }
@@ -45,6 +49,7 @@ const SuggestedPriceBox: React.FC<SuggestedPriceBoxProps> = ({
   language,
   vocab,
   lookupEnabled,
+  itemId,
   busy,
   onUse,
 }) => {
@@ -53,12 +58,13 @@ const SuggestedPriceBox: React.FC<SuggestedPriceBoxProps> = ({
   const [debouncedFinish, debouncedCondition, debouncedLanguage] = debouncedKey.split('|');
 
   const query = useQuery({
-    queryKey: ['card-suggested-price', printingId, debouncedFinish, debouncedCondition, debouncedLanguage],
+    queryKey: ['card-suggested-price', printingId, debouncedFinish, debouncedCondition, debouncedLanguage, itemId || null],
     queryFn: async (): Promise<SuggestionBody | null> => {
       const params: Record<string, string> = { printingId: printingId as string };
       if (debouncedFinish) params.finish = debouncedFinish;
       if (debouncedCondition) params.conditionCode = debouncedCondition;
       if (debouncedLanguage) params.language = debouncedLanguage;
+      withItemId(params, itemId);
       const res = await api.get('/cards/suggested-price', { params });
       const body = res.data ?? {};
       const suggestion = body.suggestion ?? body.data?.suggestion ?? null;
@@ -131,6 +137,8 @@ const SuggestedPriceBox: React.FC<SuggestedPriceBoxProps> = ({
           </p>
           {view.basisText && <p className="text-xs text-warm-600 dark:text-warm-400">{view.basisText}</p>}
           {view.dataDateText && <p className="text-xs text-warm-600 dark:text-warm-400">{view.dataDateText}</p>}
+          {view.provenanceText && <p className="text-xs text-warm-600 dark:text-warm-400">{view.provenanceText}</p>}
+          {view.lockedText && <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{view.lockedText}</p>}
           {view.staleWarning && (
             <p role="alert" className="text-xs font-medium text-amber-700 dark:text-amber-300">
               {view.staleWarning}
@@ -141,6 +149,7 @@ const SuggestedPriceBox: React.FC<SuggestedPriceBoxProps> = ({
               {view.belowMinimumWarning}
             </p>
           )}
+          {view.whyThisPrice && <WhyThisPrice view={view.whyThisPrice} />}
           <button
             type="button"
             disabled={busy}

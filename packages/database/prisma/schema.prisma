@@ -611,6 +611,7 @@ model Organizer {
   claimEmails                     DirectoryClaimEmail[]
   // ADR-139: organizer recruit channel leads (relation only, no column on Organizer)
   recruitLeads                    RecruitLead[]                  @relation("OrganizerRecruitLeads")
+  priceBook                       PriceBook?
   // ADR-073: Verified Organizer autofill sources (migration 20260430300000)
   verificationSource              String?
   googlePlaceId                   String?                        @unique
@@ -8852,6 +8853,219 @@ model RecruitChannelEvent {
   createdAt DateTime                @default(now())
 
   @@index([type, createdAt])
+}
+
+// ADR-140 (2026-10-15): first-party price book. Additive: eight tables, all cascading from PriceBook (one per Organizer).
+model PriceBook {
+  id                       String   @id @default(cuid())
+  organizerId              String   @unique
+  enabled                  Boolean  @default(false)   // per-organizer switch; the book answers suggestions only when true AND CARD_PRICE_BOOK_ENABLED
+  version                  Int      @default(1)       // +1 on every change to settings, rules, rate card, benchmarks; copied onto traces and run items
+  allowCatalogReference    Boolean  @default(false)   // per-book opt-in to CATALOG_REFERENCE (also needs the platform switch)
+  referenceOrder           String[] @default(["MANUAL", "SHOP_SOLD_HISTORY", "SHOP_BENCHMARK", "CATALOG_REFERENCE", "LICENSED_FEED"])
+  retailPercentBps         Int      @default(10000)   // default rule: percent of the reference (10000 = 100 percent)
+  defaultFloorCents        Int      @default(0)
+  defaultCeilingCents      Int?
+  defaultRoundingMode      String   @default("TIERED")
+  defaultRoundingDirection String   @default("NEAREST")
+  condNmBps                Int      @default(10000)   // ADR-134 D10 placeholders kept as the starting point: 100, 90, 80, 65, 50 percent
+  condLpBps                Int      @default(9000)
+  condMpBps                Int      @default(8000)
+  condHpBps                Int      @default(6500)
+  condDmgBps               Int      @default(5000)
+  nonEnglishBps            Int      @default(10000)   // multiplier for language other than en
+  movementReviewBps        Int      @default(2500)    // a price move above this share of the current price needs a look
+  referenceWarnDays        Int      @default(90)      // typed references older than this show a warning
+  referenceMaxDays         Int      @default(365)     // typed references older than this are not used
+  soldHistoryMinSales      Int      @default(2)
+  soldHistoryMaxSales      Int      @default(5)
+  soldHistoryWindowDays    Int      @default(180)
+  manualLockDays           Int      @default(14)
+  buyCreditBps             Int      @default(12000)   // store credit = cash x this (12000 = 1.2)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  organizer                Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  rules                    PriceBookRule[]
+  cardReferences           PriceBookReference[]
+  benchmarks               PriceBookBenchmark[]
+  bulkRates                PriceBookBulkRate[]
+  locks                    PriceBookLock[]
+  runs                     PriceBookRun[]
+}
+
+model PriceBookRule {
+  id                String   @id @default(cuid())
+  bookId            String
+  family            String                          // RETAIL | BUYLIST
+  name              String   @db.VarChar(80)
+  priority          Int                             // ascending; first enabled match wins; ties broken by id; reorder rewrites all priorities of a family in one transaction
+  enabled           Boolean  @default(true)
+  productType       String   @default("SINGLE")     // v1 CHECK allows SINGLE only (extension point, section 18)
+  // matchers (all optional; null means any)
+  game              String?
+  setCode           String?
+  rarityClass       String?
+  rarityText        String?  @db.VarChar(60)
+  finish            String?
+  language          String?
+  variantToken      String?
+  refMinCents       Int?                            // price band on the reference (NM) value
+  refMaxCents       Int?
+  sourceKinds       String[] @default([])           // restrict which reference kinds this rule may use; empty = book order
+  // action
+  basis             String   @default("REFERENCE")
+  percentBps        Int      @default(10000)
+  addCents          Int      @default(0)
+  fixedCents        Int?                            // for FIXED_CENTS
+  floorCents        Int?
+  ceilingCents      Int?
+  minMarginBps      Int?                            // with COST_PLUS or a known cost: price never below cost x (1 + this)
+  roundingMode      String?
+  roundingDirection String?
+  creditBps         Int?                            // BUYLIST only: overrides the book credit multiplier
+  minOfferCents     Int?                            // BUYLIST only: below this cash offer, no offer is made
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  book              PriceBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([bookId, family, priority])
+}
+
+model PriceBookReference {
+  id                 String   @id @default(cuid())
+  bookId             String
+  cardKey            String   @db.VarChar(200)       // 'p:<printingId>' or 's:<setCode>|<numerator>|<nameNorm>|<variantToken or empty>'
+  catalogPrintingId  String?
+  game               String
+  cardName           String?  @db.VarChar(120)
+  setCode            String?
+  setName            String?
+  collectorNumber    String?
+  finish             String
+  language           String   @default("en")
+  valueCents         Int                             // Near Mint equivalent, USD cents
+  note               String?  @db.VarChar(200)       // free text the shop types, shown back as typed (never parsed)
+  asOf               DateTime @default(now())         // when the shop looked the number up or typed it; editable
+  enteredByUserId    String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  book               PriceBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, cardKey, finish, language])
+  @@index([bookId, game, setCode])
+}
+
+model PriceBookBenchmark {
+  id          String   @id @default(cuid())
+  bookId      String
+  game        String
+  rarityClass String
+  finish      String                                // a finish or ANY
+  valueCents  Int                                   // typical Near Mint value the shop sets for this kind of card
+  note        String?  @db.VarChar(200)
+  asOf        DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  book        PriceBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, game, rarityClass, finish])
+}
+
+model PriceBookBulkRate {
+  id                 String   @id @default(cuid())
+  bookId             String
+  direction          String                         // SELL | BUY
+  game               String
+  tier               String
+  finish             String   @default("ANY")
+  unit               String                         // PER_CARD | PER_1000
+  rateCents          Int                            // SELL: price. BUY: cash payout. Cents per card, or cents per 1,000 cards.
+  creditRateCents    Int?                           // BUY only: explicit store credit rate; null = rateCents x book credit multiplier
+  benchmarkNote      String?  @db.VarChar(200)      // typed by the shop, for example what another shop's page said on a date
+  benchmarkRateCents Int?                           // optional number the shop typed with the note, same unit as rateCents
+  benchmarkAsOf      DateTime?
+  updatedAt          DateTime @updatedAt
+  book               PriceBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, direction, game, tier, finish, unit])
+}
+
+model PriceBookLock {
+  id               String   @id @default(cuid())
+  bookId           String
+  itemId           String
+  reason           String   @default("PIN")         // PIN (shop pinned it); room for more reasons later
+  priceCentsAtLock Int?
+  lockedUntil      DateTime?                        // null = until unlocked
+  createdByUserId  String?
+  createdAt        DateTime @default(now())
+  book             PriceBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, itemId])
+  @@index([itemId])
+}
+
+model PriceBookRun {
+  id                 String   @id @default(cuid())
+  bookId             String
+  kind               String                          // SINGLE | BULK | LOT
+  status             String   @default("PREVIEW")    // PREVIEW | APPLYING | APPLIED | PARTIAL | UNDONE | EXPIRED | CANCELLED
+  // typed scope (what the shop asked for)
+  scopeSaleId        String?
+  scopeGame          String?
+  scopeSetCode       String?
+  scopeRarityClass   String?
+  scopeFinish        String?
+  onlyUnpriced       Boolean  @default(false)
+  includeMarkedDown  Boolean  @default(false)
+  includeEbayLive    Boolean  @default(false)
+  bookVersion        Int                             // book version the preview was computed with
+  previewCount       Int      @default(0)
+  changeCount        Int      @default(0)
+  unchangedCount     Int      @default(0)
+  skippedCount       Int      @default(0)
+  reviewCount        Int      @default(0)
+  appliedCount       Int      @default(0)
+  undoneCount        Int      @default(0)
+  createdByUserId    String?
+  createdAt          DateTime @default(now())
+  expiresAt          DateTime                        // preview validity (CARD_PRICE_BOOK_RUN_PREVIEW_MINUTES, default 30)
+  appliedAt          DateTime?
+  undoneAt           DateTime?
+  book               PriceBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  items              PriceBookRunItem[]
+
+  @@index([bookId, createdAt])
+  @@index([status, expiresAt])
+}
+
+model PriceBookRunItem {
+  id               String   @id @default(cuid())
+  runId            String
+  itemId           String
+  itemTitle        String   @db.VarChar(200)         // snapshot for display
+  oldPriceCents    Int?                              // for LOT runs: cents per 1,000 cards
+  newPriceCents    Int?
+  state            String   @default("PENDING")      // PENDING | APPLIED | SKIPPED | CHANGED_SINCE_PREVIEW | UNDONE | UNDO_SKIPPED | FAILED
+  selected         Boolean  @default(true)
+  skipReason       String?  @db.VarChar(40)          // LOCKED | RECENT_EDIT | MARKED_DOWN | EBAY_LIVE | NO_REFERENCE | NO_RULE | NO_RATE | GRADED | NOT_AVAILABLE | UNCHANGED
+  priceSource      String?  @db.VarChar(30)
+  referenceOrigin  String?  @db.VarChar(30)
+  referenceCents   Int?
+  referenceAsOf    DateTime?
+  ruleId           String?
+  ruleName         String?  @db.VarChar(80)
+  conditionCode    String?
+  finish           String?
+  warnings         String[] @default([])
+  reviewReasons    String[] @default([])
+  whyText          String?  @db.VarChar(500)         // plain words from explain(), what the shop sees in the popover later
+  bookVersion      Int
+  appliedAt        DateTime?
+  undoneAt         DateTime?
+  run              PriceBookRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, itemId])
+  @@index([itemId, state])
 }
 
 // Kits (2026-10-16, Phase 1): one row per component of a kit. A kit is an Item (listingType 'KIT'); selling one kit takes

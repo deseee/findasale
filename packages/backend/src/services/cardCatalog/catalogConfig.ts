@@ -65,6 +65,16 @@ export function getEnabledGames(env: EnvLike = process.env): CatalogGame[] {
   return out;
 }
 
+/**
+ * Kill switch for every use of catalog price numbers (ADR-140 section 12.2): the legacy suggested price route and the price
+ * book's catalog reference. Unset means ON, so deploying the price book changes no number. Only false, 0, no or off (any
+ * case) turns it off. Read when called, never at import time.
+ */
+export function isCatalogPriceReferenceEnabled(env: EnvLike = process.env): boolean {
+  const raw = (env.CARD_CATALOG_PRICE_REFERENCE_ENABLED ?? '').trim().toLowerCase();
+  return !(raw === 'false' || raw === '0' || raw === 'no' || raw === 'off');
+}
+
 export function getUserAgent(env: EnvLike = process.env): string {
   const raw = (env.CARD_DATA_USER_AGENT ?? '').trim();
   return raw || DEFAULT_USER_AGENT;

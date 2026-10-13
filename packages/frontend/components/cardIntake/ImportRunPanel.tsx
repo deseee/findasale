@@ -15,6 +15,7 @@ import { buildErrorsCsv } from '../../lib/cardIntake';
 import { INTAKE_COPY, wordingForRowError, wordingForWarning } from '../../lib/cardIntakeCopy';
 import type { ImportState } from '../../lib/cardIntakeStream';
 import { errorCount, errorLines, errorRecords, errorsByCode, percentOf } from '../../lib/cardIntakeStream';
+import RepriceUnpricedLink from '../priceBook/RepriceUnpricedLink'; // ADR-140 (B8): renders only when the price book is on
 import ErrorNotice from './ErrorNotice';
 import ProgressBar from './ProgressBar';
 import { cardCls, headingCls, mutedCls, noticeInfoCls, noticeOkCls, noticeWarnCls, primaryBtn, secondaryBtn } from './ui';
@@ -97,6 +98,7 @@ const ImportRunPanel: React.FC<ImportRunPanelProps> = ({ state, saleId, stalled,
         {state.done.resumed ? <p className={`mt-3 ${mutedCls}`}>{INTAKE_COPY.doneResumed}</p> : null}
         {d.noCatalogMatch > 0 ? <p className={`mt-3 ${mutedCls}`}>{INTAKE_COPY.doneNoMatch(d.noCatalogMatch)}</p> : null}
         {d.needsPrice > 0 ? <p className={`mt-3 ${noticeWarnCls}`}>{INTAKE_COPY.doneNeedsPrice(d.needsPrice)}</p> : null}
+        <RepriceUnpricedLink needsPrice={d.needsPrice} saleId={saleId} batchId={state.done.batchId} />
         {warningCodes.length > 0 ? (
           <ul className={`mt-3 list-disc space-y-1 pl-5 ${mutedCls}`}>
             {warningCodes.map((code) => (

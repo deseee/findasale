@@ -15,6 +15,7 @@ import type { VocabOption } from '../../lib/cardIntake';
 import type { ScanEntry, ScanFailure, ScanMode, ScanSession } from '../../lib/cardScan';
 import { SCAN_COPY } from '../../lib/cardScanCopy';
 import { MODE_OPTIONS, commitState, describeCommit, entryTitle } from '../../lib/cardScanQueue';
+import RepriceUnpricedLink from '../priceBook/RepriceUnpricedLink'; // ADR-140 (B8): renders only when the price book is on
 import type { CommitOutcome } from './useScanSession';
 import ScanNotice from './ScanNotice';
 import { headingCls, mutedCls, primaryBtn, secondaryBtn } from './ui';
@@ -75,6 +76,7 @@ const CommitBar: React.FC<CommitBarProps> = ({
               {line}
             </p>
           ))}
+          <RepriceUnpricedLink needsPrice={outcome.result.summary.needsPrice} saleId={saleId} batchId={outcome.result.batchId} className="pt-1" />
         </div>
         {outcome.result.notCommitted.length > 0 ? (
           <div>

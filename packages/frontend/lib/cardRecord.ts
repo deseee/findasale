@@ -16,6 +16,11 @@
  *    seller presses "Use suggested price".
  */
 
+import type { PriceBookResultBlock } from './priceBook';
+import { PRICE_BOOK_COPY } from './priceBookCopy';
+import { buildWhyThisPrice } from './priceBookRules';
+import type { WhyThisPriceView } from './priceBookRules';
+
 // ---------------------------------------------------------------------------
 // Copy (plain wording: no "AI", no "estate sale", no em dashes)
 // ---------------------------------------------------------------------------
@@ -460,6 +465,10 @@ export interface SuggestionBody {
   belowEbayMinimum?: boolean;
   basis?: { finish?: string; conditionCode?: string };
   englishReference?: { finish?: string; price?: number; label?: string };
+  /** ADR-140 section 12.1: present only when the shop's price book answered. Every field inside is optional. */
+  priceBook?: PriceBookResultBlock | null;
+  /** ADR-140 section 12.2: "OFF" when the catalog price switch is off. */
+  catalogReference?: string;
 }
 
 export interface SuggestionView {
@@ -473,6 +482,10 @@ export interface SuggestionView {
   /** Plain explanation when there is no suggestion. */
   unavailableText: string;
   referenceText: string;
+  /** ADR-140 section 12.3: the price book lines. All empty or null when the answer did not come from the price book. */
+  provenanceText: string;
+  lockedText: string;
+  whyThisPrice: WhyThisPriceView | null;
 }
 
 const EMPTY_VIEW: SuggestionView = {
@@ -484,6 +497,9 @@ const EMPTY_VIEW: SuggestionView = {
   belowMinimumWarning: '',
   unavailableText: CARD_PANEL_COPY.suggestedPriceNone,
   referenceText: '',
+  provenanceText: '',
+  lockedText: '',
+  whyThisPrice: null,
 };
 
 export function describeSuggestion(
@@ -501,12 +517,15 @@ export function describeSuggestion(
     }
     if (s.code === 'NO_PRICE_FOR_FINISH') view.unavailableText = CARD_PANEL_COPY.noPriceForFinish;
     if (s.code === 'NO_PRICE_DATA') view.unavailableText = CARD_PANEL_COPY.suggestedPriceNone;
+    if (s.code === 'NO_REFERENCE') view.unavailableText = PRICE_BOOK_COPY.noSuggestion;
+    view.whyThisPrice = buildWhyThisPrice(s.priceBook);
     return view;
   }
   const condition = s.basis?.conditionCode ? labels.condition(s.basis.conditionCode) : '';
   const finish = s.basis?.finish ? labels.finish(s.basis.finish) : '';
   const basisText = condition && finish ? CARD_PANEL_TEMPLATES.suggestedPriceBasis(condition, finish) : '';
   const date = formatDataDate(s.asOf);
+  const whyThisPrice = buildWhyThisPrice(s.priceBook);
   return {
     price,
     priceText: formatMoney(price),
@@ -516,6 +535,9 @@ export function describeSuggestion(
     belowMinimumWarning: s.belowEbayMinimum || price < 0.99 ? CARD_PANEL_COPY.priceBelowMinimum : '',
     unavailableText: '',
     referenceText: '',
+    provenanceText: whyThisPrice ? whyThisPrice.provenanceText : '',
+    lockedText: whyThisPrice ? whyThisPrice.lockedText : '',
+    whyThisPrice,
   };
 }
 
