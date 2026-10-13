@@ -281,11 +281,104 @@ type OutcomeRowLike = {
   status: string;
   fieldsAttempted?: string[];
   fieldsPushed?: string[];
+  errorCode?: string | null;
   errorMessage?: string | null;
 };
 
+/**
+ * Push block reasons that mean "the organizer needs to add information", not "eBay failed". Mirrors the backend list in
+ * lib/ebayPushInformational.ts. Such a row is shown as an amber note ("Needs package details"), never as a red failure.
+ */
+const PACKAGE_DETAIL_CODES: ReadonlyArray<string> = [
+  'NEEDS_PACKAGE_DETAILS',
+  'EBAY_NO_PACKAGE_WEIGHT',
+  'EBAY_WEIGHT_NOT_CONFIRMED',
+  'EBAY_PACKAGE_DIMS_NOT_CONFIRMED',
+];
+export const INFORMATIONAL_PUSH_CODES: ReadonlyArray<string> = [
+  ...PACKAGE_DETAIL_CODES,
+  'EBAY_BOOK_NO_ISBN',
+  'POLICIES_NOT_CONFIGURED',
+  'NO_FULFILLMENT_POLICY_MATCH',
+];
+
+export function isInformationalPushCode(code: string | null | undefined): boolean {
+  return typeof code === 'string' && INFORMATIONAL_PUSH_CODES.indexOf(code) !== -1;
+}
+
+/** Codes that mean the eBay shipping policies are not set up yet (the fix is in eBay settings). */
+const EBAY_SETUP_CODES: ReadonlyArray<string> = ['POLICIES_NOT_CONFIGURED', 'NO_FULFILLMENT_POLICY_MATCH'];
+
+/**
+ * The one label for a blocked push, used by every surface (item form, Add Items chip, review page, sale page, post-sale
+ * panel) so the wording is identical. Null when the code is a real failure.
+ */
+export function informationalPushLabel(code: string | null | undefined): string | null {
+  if (!isInformationalPushCode(code)) return null;
+  if (PACKAGE_DETAIL_CODES.indexOf(code as string) !== -1) return 'Needs package details';
+  if (EBAY_SETUP_CODES.indexOf(code as string) !== -1) return 'Finish eBay setup';
+  return 'Needs ISBN'; // EBAY_BOOK_NO_ISBN
+}
+
+/** Where the organizer fixes a blocked push: the package fields, the eBay settings page, or the ISBN field. */
+export function informationalPushFix(code: string | null | undefined): 'package' | 'ebay-settings' | 'isbn' | null {
+  if (!isInformationalPushCode(code)) return null;
+  if (PACKAGE_DETAIL_CODES.indexOf(code as string) !== -1) return 'package';
+  if (EBAY_SETUP_CODES.indexOf(code as string) !== -1) return 'ebay-settings';
+  return 'isbn';
+}
+
+/** Route of the eBay settings page (organizer settings, eBay tab). */
+export const EBAY_SETTINGS_HREF = '/organizer/settings?tab=ebay';
+
+type BlockedResultLike = { itemId?: string; status?: string; code?: string | null; error?: string | null; informational?: boolean };
+
+/**
+ * One persistent summary for a sale-level push: how many items were blocked because they need more information, in plain
+ * words, plus up to three item TITLES (never ids). Null when nothing was blocked.
+ */
+export function describeBlockedPushes(
+  results: ReadonlyArray<BlockedResultLike>,
+  titleOf: (itemId: string) => string | null | undefined
+): { text: string; titles: string[]; count: number } | null {
+  const blocked = results.filter((r) => r && r.status === 'error' && (r.informational || isInformationalPushCode(r.code ?? r.error)));
+  if (blocked.length === 0) return null;
+  const counts: Record<string, number> = {};
+  for (const r of blocked) {
+    const label = informationalPushLabel(r.code ?? r.error) || 'Needs package details';
+    counts[label] = (counts[label] || 0) + 1;
+  }
+  const parts: string[] = [];
+  const plural = (n: number) => (n === 1 ? 'item' : 'items');
+  if (counts['Needs package details']) {
+    const n = counts['Needs package details'];
+    parts.push(`${n} ${plural(n)} ${n === 1 ? 'needs' : 'need'} package details before ${n === 1 ? 'it' : 'they'} can go to eBay`);
+  }
+  if (counts['Needs ISBN']) {
+    const n = counts['Needs ISBN'];
+    parts.push(`${n} ${plural(n)} ${n === 1 ? 'needs' : 'need'} an ISBN before ${n === 1 ? 'it' : 'they'} can go to eBay`);
+  }
+  if (counts['Finish eBay setup']) {
+    const n = counts['Finish eBay setup'];
+    parts.push(`Finish eBay setup before ${n} ${plural(n)} can go to eBay`);
+  }
+  const titles = blocked
+    .map((r) => (r.itemId ? titleOf(r.itemId) : null) || 'Untitled item')
+    .filter((t, i, all) => all.indexOf(t) === i)
+    .slice(0, 3);
+  return { text: parts.join('. '), titles, count: blocked.length };
+}
+
 /** The settled result of a push (a recentPushes row or a repush outcome). */
 export function describePushOutcome(row: OutcomeRowLike): OutcomeView {
+  const needsInfoLabel = row.status === 'FAILED' || row.status === 'PARTIAL' ? informationalPushLabel(row.errorCode) : null;
+  if (needsInfoLabel) {
+    return {
+      tone: 'warning',
+      text: `${needsInfoLabel}: ${row.errorMessage || 'Add the missing details, then update eBay again.'}`,
+      canRetry: false,
+    };
+  }
   const attempted = row.fieldsAttempted || [];
   const pushed = row.fieldsPushed && row.fieldsPushed.length > 0 ? row.fieldsPushed : [];
   switch (row.status) {

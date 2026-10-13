@@ -9,6 +9,8 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../../lib/api';
+import { describeBlockedPushes } from '../../../../lib/marketplaceImpact';
+import BlockedPushSummary from '../../../../components/BlockedPushSummary';
 import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
 import { useEbayConnection } from '../../../../lib/useEbayConnection';
@@ -58,6 +60,8 @@ const SaleDetailPage = () => {
   // State for post-sale toast
   const [showedPostSaleToast, setShowedPostSaleToast] = useState(false);
   const [postSaleToastDismissed, setPostSaleToastDismissed] = useState(false);
+  // Persistent amber summary of items an eBay push held back because they need more information (not a failure).
+  const [blockedSummary, setBlockedSummary] = useState<ReturnType<typeof describeBlockedPushes>>(null);
 
   // Fetch sale details
   const { data: sale, isLoading: saleLoading } = useQuery({
@@ -86,6 +90,7 @@ const SaleDetailPage = () => {
     mutationFn: async ({ itemIds }: { itemIds: string[] }) => {
       return api.post(`/ebay/organizer/sales/${id}/ebay-push`, { itemIds });
     },
+    onMutate: () => setBlockedSummary(null),
     onSuccess: (response) => {
       const results = response.data.results || [];
       results.forEach((result: any) => {
@@ -96,15 +101,20 @@ const SaleDetailPage = () => {
           setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'category_review_needed' }));
           showToast('eBay category needs review. Open item editor to set manually', 'error');
         } else {
+          // Needs-more-information blocks (package weight and similar) are not errors: no error state on the card, and the
+          // persistent amber summary below covers them.
+          if (result.informational) return;
           setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'error' }));
           const errorMsg = result.error?.includes('NOT_CONNECTED')
             ? 'eBay not connected'
             : result.error?.includes('POLICIES')
             ? 'eBay policies not configured'
             : result.message || result.error || 'Failed to push item';
+          // Needs-more-information blocks (package weight and similar) are a note, not an error.
           showToast(errorMsg, 'error');
         }
       });
+      setBlockedSummary(describeBlockedPushes(results, (itemId) => items.find((i) => i.id === itemId)?.title));
       refetchItems();
     },
     onError: (error: any, variables: { itemIds: string[] }) => {
@@ -274,6 +284,16 @@ const SaleDetailPage = () => {
           </div>
 
           {typeof id === 'string' && <SaleItemsNudgeBanner saleId={id} className="mb-6" />}
+
+          {blockedSummary && typeof id === 'string' && (
+            <BlockedPushSummary
+              text={blockedSummary.text}
+              titles={blockedSummary.titles}
+              count={blockedSummary.count}
+              reviewHref={`/organizer/add-items/${id}`}
+              onDismiss={() => setBlockedSummary(null)}
+            />
+          )}
 
           {/* Items Grid */}
           {availableItems.length > 0 ? (

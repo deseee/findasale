@@ -6,8 +6,9 @@
  * inside the item <form>).
  */
 import React, { useState } from 'react';
+import Link from 'next/link';
 import type { PushRow } from '../../lib/itemMarketplaceApi';
-import { describePushOutcome, fieldList } from '../../lib/marketplaceImpact';
+import { describePushOutcome, fieldList, informationalPushLabel, informationalPushFix, EBAY_SETTINGS_HREF } from '../../lib/marketplaceImpact';
 import type { OutcomeView } from '../../lib/marketplaceImpact';
 import type { HoldActionResult, SaveOutcome } from './useItemMarketplace';
 
@@ -49,6 +50,103 @@ export const PushFailureBanner: React.FC<{
       >
         {pending ? 'Working...' : 'Acknowledge'}
       </button>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------
+// Note at the top of the form: the last eBay update was held back because the item needs more information (package
+// weight and similar). Amber and informational, not an error: nothing failed.
+// ---------------------------------------------------------------------------------------------------------
+
+export const PushNeedsInfoNotice: React.FC<{
+  row: PushRow;
+  /** "Got it" was pressed: only the long note collapses. The short "Not updated on eBay" line stays until a newer push exists. */
+  collapsed: boolean;
+  onAcknowledge: () => void;
+  pending: boolean;
+  /** Scrolls to and focuses the package weight and box fields (package codes). */
+  onGoToPackage: () => void;
+  /** Opens Product IDs and focuses the ISBN input (ISBN code). */
+  onGoToIsbn: () => void;
+}> = ({ row, collapsed, onAcknowledge, pending, onGoToPackage, onGoToIsbn }) => {
+  const label = informationalPushLabel(row.errorCode) || 'Needs more information';
+  const fix = informationalPushFix(row.errorCode);
+  const fixControl =
+    fix === 'package' ? (
+      <button
+        type="button"
+        onClick={onGoToPackage}
+        className="min-h-[44px] px-4 text-sm font-semibold rounded-lg bg-amber-700 hover:bg-amber-800 text-white"
+      >
+        Go to package details
+      </button>
+    ) : fix === 'ebay-settings' ? (
+      <Link
+        href={EBAY_SETTINGS_HREF}
+        className="inline-flex items-center min-h-[44px] px-4 text-sm font-semibold rounded-lg bg-amber-700 hover:bg-amber-800 text-white"
+      >
+        Open eBay settings
+      </Link>
+    ) : fix === 'isbn' ? (
+      <button
+        type="button"
+        onClick={onGoToIsbn}
+        className="min-h-[44px] px-4 text-sm font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white"
+      >
+        Go to ISBN field
+      </button>
+    ) : null;
+
+  if (collapsed) {
+    return (
+      <div
+        role="status"
+        data-testid="edit-item-push-needs-info-line"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2"
+      >
+        <span className="text-xs font-semibold text-amber-900 dark:text-amber-100">Not updated on eBay</span>
+        <span className="text-xs text-amber-800 dark:text-amber-200">{label}</span>
+        {fix === 'package' ? (
+          <button type="button" onClick={onGoToPackage} className="min-h-[44px] text-xs font-semibold underline text-amber-900 dark:text-amber-100">
+            Go to package details
+          </button>
+        ) : fix === 'ebay-settings' ? (
+          <Link href={EBAY_SETTINGS_HREF} className="inline-flex items-center min-h-[44px] text-xs font-semibold underline text-amber-900 dark:text-amber-100">
+            Open eBay settings
+          </Link>
+        ) : fix === 'isbn' ? (
+          <button type="button" onClick={onGoToIsbn} className="min-h-[44px] text-xs font-semibold underline text-amber-900 dark:text-amber-100">
+            Go to ISBN field
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <div
+      role="status"
+      data-testid="edit-item-push-needs-info"
+      className="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3"
+    >
+      <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">{label}</p>
+      <p className="mt-1 text-sm text-amber-900 dark:text-amber-100">
+        {row.errorMessage || 'Add the missing details, then update eBay again.'}
+      </p>
+      <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+        Nothing went wrong. Your changes are saved here, and eBay was not changed yet.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {fixControl}
+        <button
+          type="button"
+          onClick={onAcknowledge}
+          disabled={pending}
+          className="min-h-[44px] px-4 text-sm font-semibold rounded-lg border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-100 bg-white dark:bg-gray-900 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50"
+        >
+          {pending ? 'Working...' : 'Got it'}
+        </button>
+      </div>
     </div>
   );
 };

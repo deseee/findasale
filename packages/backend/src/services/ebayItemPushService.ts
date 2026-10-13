@@ -20,6 +20,7 @@
  * headers, proxy secrets, URLs, long opaque strings and raw JSON payloads are never stored or returned.
  */
 
+import { isInformationalPushCode } from '../lib/ebayPushInformational';
 import { prisma } from '../lib/prisma';
 import { ebayPublishWithSelfHeal, ensureConditionValidForCategory, getRequiredAspectsForCategory } from './ebayPublishService';
 import { applyFccIdAspect } from '../utils/ebayFccAspect'; // FCC ID item specific, shared with the first-publish path
@@ -444,9 +445,31 @@ export function classifyShippingResync(resync: { changed?: boolean; reason?: str
 }
 
 /**
+ * Records a successful sale-level push ("Re-push to eBay", pushSaleToEbay) as a SUCCESS row per item, with the same
+ * shape the per-item push writes, so the item's "last push" is current. The sale-level push sends the full listing, so
+ * the content fields and price are recorded as attempted and pushed. Trigger REPUSH (existing value, no new enum value or
+ * migration): it is the organizer's explicit re-push. Also acknowledges earlier failed or blocked rows it covers.
+ * Never throws.
+ */
+export async function recordSuccessfulSalePush(input: { itemId: string; organizerId: string; startedAt?: Date }): Promise<void> {
+  const fields: string[] = [...EBAY_CONTENT_FIELDS, 'price'];
+  await recordPushRow({
+    itemId: input.itemId,
+    organizerId: input.organizerId,
+    trigger: 'REPUSH',
+    startedAt: input.startedAt ?? new Date(),
+    outcome: { status: 'SUCCESS', fieldsAttempted: fields, fieldsPushed: fields, errorCode: null, errorMessage: null },
+  });
+  // A successful sale-level push builds the listing with its shipping policy, so it also covers an earlier shipping block.
+  await ackCoveredFailures(input.itemId, input.organizerId, [...fields, 'shipping']);
+}
+
+/**
  * Records an attempt that was stopped BEFORE anything reached eBay (the Re-push to eBay button's shipping soft-block,
  * a guard that refuses the item) as a FAILED ItemMarketplacePush row, so the item form and the Add Items list show the
  * same plain, actionable reason instead of a toast that disappears. Only for an item already on eBay. Never throws.
+ * A reason in INFORMATIONAL_PUSH_CODES (needs package details and similar) is NOT a failure: the row keeps this stored
+ * status but every count, banner and retry lookup skips it, and the UI shows it as an amber "needs more information" note.
  */
 export async function recordBlockedEbayPush(input: {
   itemId: string;
@@ -464,6 +487,51 @@ export async function recordBlockedEbayPush(input: {
     startedAt: input.startedAt ?? new Date(),
     outcome: { status: 'FAILED', fieldsAttempted: [], fieldsPushed: [], errorCode: code, errorMessage: message },
   });
+}
+
+/** Marks per-item sale push results whose block is informational (needs package details and similar). Mutates in place. */
+export function flagInformationalResults(results: any[]): void {
+  for (const r of results) {
+    if (r?.status === 'error' && isInformationalPushCode(r.code ?? r.error)) r.informational = true;
+  }
+}
+
+/** The pushSaleToEbay summary. An informational block is counted as `blocked`, never as `failed`. */
+export function summarizeSalePushResults(results: any[]): { total: number; success: number; failed: number; blocked: number } {
+  return {
+    total: results.length,
+    success: results.filter((r) => r.status === 'success').length,
+    failed: results.filter((r) => r.status === 'error' && !r.informational).length,
+    blocked: results.filter((r) => r.status === 'error' && r.informational).length,
+  };
+}
+
+/**
+ * Push history for a real sale-level push (pushSaleToEbay; never for the fee check or queue mode):
+ *  - a successful item gets a SUCCESS row, so its "last push" is current;
+ *  - an item already on eBay that was stopped before anything reached eBay gets the blocked row (FAILED storage for a real
+ *    problem, informational for a "needs more information" reason, see recordBlockedEbayPush).
+ * Never throws.
+ */
+export async function recordSalePushHistory(input: {
+  results: any[];
+  items: Array<{ id: string; ebayOfferId?: string | null; ebayListingId?: string | null }>;
+  organizerId: string;
+  startedAt: Date;
+}): Promise<void> {
+  for (const r of input.results) {
+    if (r?.status === 'success') {
+      // 'success' means the offer was published and eBay returned a listing id (a failed or unfinished publish is a different
+      // status). Still require the listing id here, so nothing is recorded or acknowledged unless the listing is live.
+      if (!r.ebayListingId) continue;
+      await recordSuccessfulSalePush({ itemId: r.itemId, organizerId: input.organizerId, startedAt: input.startedAt });
+      continue;
+    }
+    if (r?.status !== 'error') continue;
+    const row = input.items.find((it) => it.id === r.itemId);
+    if (!row || (!row.ebayOfferId && !row.ebayListingId)) continue;
+    await recordBlockedEbayPush({ itemId: row.id, organizerId: input.organizerId, code: r.code ?? r.error, message: r.message });
+  }
 }
 
 /** Item.status values whose eBay offer is already withdrawn or ended: never pushed or republished. */

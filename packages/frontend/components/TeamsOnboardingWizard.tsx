@@ -24,18 +24,6 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Handle Escape key to close modal
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && onClose) {
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [onClose]);
-
   // Step 1: Workspace Name
   const [workspaceName, setWorkspaceName] = useState('');
 
@@ -47,7 +35,29 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
   // Upsell Modal state
   const [showSeatUpsellModal, setShowSeatUpsellModal] = useState(false);
   const [seatLimit, setSeatLimit] = useState<number | undefined>(undefined);
-  const [pendingInviteForUpsell, setPendingInviteForUpsell] = useState<InviteeWithRole | null>(null);
+  // Invitees not yet sent because the member cap was hit; retried (all of them) after a seat purchase.
+  const [unsentInvitees, setUnsentInvitees] = useState<InviteeWithRole[]>([]);
+  // For the seat modal's "Seat 1 of 3 needed" line: seats this batch needs in total, and seats bought so far.
+  const [seatsNeededTotal, setSeatsNeededTotal] = useState(0);
+  const [seatsBought, setSeatsBought] = useState(0);
+
+  // Handle Escape key to close the wizard. Ignored while the seat modal is open (it handles its own
+  // Escape) or a request is in flight, so Escape can never unmount the wizard mid-payment.
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && onClose && !showSeatUpsellModal && !isLoading) {
+        onClose();
+      }
+    };
+
+    // This Escape is ignored while the seat modal is open because of the showSeatUpsellModal guard
+    // above. Capture phase makes sure that state is read before the modal's own Escape handler
+    // closes it; in the bubble phase the modal would already be closed and this would also close
+    // the wizard behind it.
+    window.addEventListener('keydown', handleEscape, true);
+    return () => window.removeEventListener('keydown', handleEscape, true);
+  }, [onClose, showSeatUpsellModal, isLoading]);
+
 
   const handleAddInvitee = () => {
     if (!tempEmail.trim()) {
@@ -128,6 +138,50 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
     }
   };
 
+  // Sends invites in order. Stops at the first MEMBER_CAP_EXCEEDED and returns every invitee not yet
+  // sent (that one and all after it) so none are silently dropped. With tolerant=false any other
+  // error is re-thrown; with tolerant=true other failures are collected in `failed` and sending continues.
+  const sendInvites = async (
+    list: InviteeWithRole[],
+    tolerant: boolean
+  ): Promise<{ capHit?: { rest: InviteeWithRole[]; limit?: number }; failed: InviteeWithRole[] }> => {
+    const failed: InviteeWithRole[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const invitee = list[i];
+      try {
+        await api.post('/workspace/invite', { email: invitee.email, role: invitee.role });
+      } catch (inviteErr: any) {
+        if (inviteErr.response?.data?.code === 'MEMBER_CAP_EXCEEDED') {
+          const limit = inviteErr.response?.data?.limit;
+          return { capHit: { rest: list.slice(i), limit: typeof limit === 'number' ? limit : undefined }, failed };
+        }
+        // Already a member / already invited: the person is in, so count it as sent (idempotent retry).
+        if (inviteErr.response?.status === 400 && /already/i.test(String(inviteErr.response?.data?.message || ''))) continue;
+        if (!tolerant) throw inviteErr;
+        failed.push(invitee);
+      }
+    }
+    return { failed };
+  };
+
+  // Marks TEAMS onboarding complete and leaves the wizard for the workspace page.
+  const finishOnboarding = async () => {
+    await api.patch('/users/me', {
+      teamsOnboardingComplete: true,
+    });
+
+    // Update user context immediately to reflect the change
+    updateUser({ teamsOnboardingComplete: true });
+
+    showToast('TEAMS workspace setup complete!', 'success');
+
+    if (onComplete) {
+      onComplete();
+    }
+    // Always navigate to workspace page after completion
+    router.push('/organizer/workspace');
+  };
+
   const handleComplete = async () => {
     setIsLoading(true);
     try {
@@ -151,42 +205,21 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
       }
 
       // Step 2: Invite members
-      for (const invitee of invitees) {
-        try {
-          await api.post('/workspace/invite', {
-            email: invitee.email,
-            role: invitee.role,
-          });
-        } catch (inviteErr: any) {
-          const errorCode = inviteErr.response?.data?.code;
-          if (errorCode === 'MEMBER_CAP_EXCEEDED') {
-            // Show upsell modal and stop processing
-            setIsLoading(false);
-            setPendingInviteForUpsell(invitee);
-            setSeatLimit(typeof inviteErr.response?.data?.limit === 'number' ? inviteErr.response.data.limit : undefined);
-            setShowSeatUpsellModal(true);
-            return; // Exit early. Don't mark onboarding as complete yet
-          }
-          throw inviteErr; // Re-throw other errors
-        }
+      // After a cancelled seat purchase only the held-back invitees are still unsent; resending the
+      // whole list would re-invite people who are already in.
+      const sent = await sendInvites(unsentInvitees.length > 0 ? unsentInvitees : invitees, false);
+      if (sent.capHit) {
+        // Show upsell modal and stop processing; don't mark onboarding as complete yet
+        setIsLoading(false);
+        setUnsentInvitees(sent.capHit.rest);
+        setSeatsNeededTotal(seatsBought + sent.capHit.rest.length);
+        setSeatLimit(sent.capHit.limit);
+        setShowSeatUpsellModal(true);
+        return;
       }
 
       // Step 3: Mark teams onboarding as complete
-      await api.patch('/users/me', {
-        teamsOnboardingComplete: true,
-      });
-
-      // Update user context immediately to reflect the change
-      updateUser({ teamsOnboardingComplete: true });
-
-      showToast('TEAMS workspace setup complete!', 'success');
-
-      // Redirect to workspace management page
-      if (onComplete) {
-        onComplete();
-      }
-      // Always navigate to workspace page after completion
-      router.push('/organizer/workspace');
+      await finishOnboarding();
     } catch (error: any) {
       console.error('Error completing TEAMS onboarding:', error);
       const msg = error.response?.data?.message || error.response?.data?.error || 'Failed to setup workspace';
@@ -196,26 +229,49 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
     }
   };
 
-  const handleUpsellSuccess = async () => {
-    // After seat upsell succeeds, retry completing the onboarding
+  // Escape hatch after a cancelled seat purchase: finish setup without the invitations that need a seat.
+  const handleSkipUnsent = async () => {
+    const skipped = unsentInvitees.map((i) => i.email);
     setIsLoading(true);
     try {
-      // Mark teams onboarding as complete
-      await api.patch('/users/me', {
-        teamsOnboardingComplete: true,
-      });
-
-      // Update user context immediately to reflect the change
-      updateUser({ teamsOnboardingComplete: true });
-
-      showToast('TEAMS workspace setup complete!', 'success');
-
-      // Redirect to workspace management page
-      if (onComplete) {
-        onComplete();
+      setUnsentInvitees([]);
+      setSeatsNeededTotal(0);
+      setSeatsBought(0);
+      if (skipped.length > 0) {
+        showToast(`Skipped ${skipped.length === 1 ? 'this invitation' : 'these invitations'}: ${skipped.join(', ')}. You can invite them later from your workspace page.`, 'warning');
       }
-      // Always navigate to workspace page after completion
-      router.push('/organizer/workspace');
+      await finishOnboarding();
+    } catch (error: any) {
+      console.error('Error finishing TEAMS onboarding:', error);
+      showToast(error.response?.data?.message || error.response?.data?.error || 'Failed to complete setup', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpsellSuccess = async () => {
+    // After a seat purchase, retry EVERY invitee that was held back by the cap, then complete onboarding.
+    setIsLoading(true);
+    setSeatsBought((n) => n + 1);
+    try {
+      const sent = await sendInvites(unsentInvitees, true);
+      if (sent.capHit) {
+        // Still over the cap: ask for another seat; onboarding stays open until every invitee is sent.
+        setUnsentInvitees(sent.capHit.rest);
+        setSeatLimit(sent.capHit.limit);
+        setShowSeatUpsellModal(true);
+        const n = sent.capHit.rest.length;
+        showToast(`${n} more ${n === 1 ? 'invitee needs' : 'invitees need'} a seat before ${n === 1 ? 'it' : 'they'} can be invited.`, 'warning');
+        return;
+      }
+      setUnsentInvitees([]);
+      if (sent.failed.length > 0) {
+        showToast(`These invitations could not be sent: ${sent.failed.map(f => f.email).join(', ')}. You can invite them again from your workspace page.`, 'warning');
+      }
+
+      setSeatsNeededTotal(0);
+      setSeatsBought(0);
+      await finishOnboarding();
     } catch (error: any) {
       console.error('Error completing TEAMS onboarding after upsell:', error);
       const msg = error.response?.data?.message || error.response?.data?.error || 'Failed to complete setup';
@@ -360,6 +416,22 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
                 </p>
               </div>
 
+              {unsentInvitees.length > 0 && !showSeatUpsellModal && (
+                <div role="alert" className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-sm text-amber-800 dark:text-amber-200">
+                  <p className="mb-3">
+                    {unsentInvitees.length} {unsentInvitees.length === 1 ? 'invitation is' : 'invitations are'} waiting for a seat: {unsentInvitees.map((i) => i.email).join(', ')}. Complete Setup will ask for the seat again, or you can skip {unsentInvitees.length === 1 ? 'it' : 'them'} and invite later.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSkipUnsent}
+                    disabled={isLoading}
+                    className="px-4 py-2 min-h-touch border border-amber-300 dark:border-amber-700 rounded-md font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50"
+                  >
+                    Skip these invitations and finish
+                  </button>
+                </div>
+              )}
+
               {/* Review Summary */}
               <div className="space-y-4">
                 <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4">
@@ -450,8 +522,9 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
         isOpen={showSeatUpsellModal}
         onClose={() => setShowSeatUpsellModal(false)}
         onSuccess={handleUpsellSuccess}
-        pendingInvite={pendingInviteForUpsell || undefined}
         memberLimit={seatLimit}
+        pendingCount={seatsNeededTotal}
+        seatNumber={seatsBought + 1}
       />
     </div>
   );

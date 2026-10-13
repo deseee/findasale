@@ -135,3 +135,16 @@ test('badge copy: no em dash, no banned words', () => {
   assert.equal(EBAY_FAILED_BADGE_TEXT, 'eBay update failed');
   assert.equal(EBAY_FAILED_BADGE_ARIA_LABEL, 'eBay update failed, open to review');
 });
+
+test('needs-info chip: label per code, no chip when absent, independent of the failed badge count', async () => {
+  const { needsInfoChipText, needsInfoPushCode } = await import('../addItemsRow');
+  assert.equal(needsInfoChipText({ marketplacePushNeedsInfoCode: 'EBAY_NO_PACKAGE_WEIGHT' }), 'Needs package details');
+  assert.equal(needsInfoChipText({ marketplacePushNeedsInfoCode: 'POLICIES_NOT_CONFIGURED' }), 'Finish eBay setup');
+  assert.equal(needsInfoChipText({ marketplacePushNeedsInfoCode: 'EBAY_BOOK_NO_ISBN' }), 'Needs ISBN');
+  assert.equal(needsInfoChipText({ marketplacePushNeedsInfoCode: null }), null);
+  assert.equal(needsInfoChipText({}), null);
+  assert.equal(needsInfoChipText(null), null);
+  assert.equal(needsInfoChipText({ marketplacePushNeedsInfoCode: 'PUBLISH_FAILED' }), null); // a real failure never gets the amber chip
+  assert.equal(needsInfoPushCode({ marketplacePushNeedsInfoCode: 5 }), null);
+  assert.equal(showEbayFailedBadge({ marketplacePushNeedsInfoCode: 'NEEDS_PACKAGE_DETAILS' } as any), false);
+});

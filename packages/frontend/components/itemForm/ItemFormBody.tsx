@@ -47,6 +47,7 @@ import { EbayMonthlyQuotaCounter } from '../EbayMonthlyQuotaCounter';
 import ItemFormSection from './ItemFormSection';
 import CardRecordPanel from '../CardRecordPanel'; // ADR-134 card details
 import CardConditionConfirm from '../cardRecord/CardConditionConfirm'; // trading card condition (NM/LP/MP/HP/DMG), one-tap confirm
+import ItemPriceLock from '../priceBook/ItemPriceLock'; // ADR-140 (B8): "Keep my price", only for card items when the price book is on
 import { showCardCondition } from '../../lib/cardConditionVisibility';
 import { remainingFromTotal, totalFromRemainingText } from '../../lib/buildItemSavePayload';
 import EtsyListingStatus from '../etsy/EtsyListingStatus'; // ADR-135 Etsy listing section
@@ -59,12 +60,12 @@ import {
 import { buildEditSavePayload } from '../../lib/itemFormSave';
 import { readEditCondition } from '../../lib/itemFormCondition';
 import { eBayConditionPreview, gradeApplies, normalizeCondition, normalizeGrade } from '../../lib/conditionModel';
-import { computeSaveImpact, describeSaveImpact } from '../../lib/marketplaceImpact';
+import { computeSaveImpact, describeSaveImpact, isInformationalPushCode, informationalPushLabel } from '../../lib/marketplaceImpact';
 import { buildPlatformChips } from '../../lib/platformStatusView';
 import { useItemForEdit } from './useItemForEdit';
 import { useItemMarketplace } from './useItemMarketplace';
 import { ConditionSelect, ConditionGradePicker } from './ConditionFields';
-import { PushFailureBanner, SaveOutcomeRow, EbayHoldPanel } from './MarketplaceNotices';
+import { PushFailureBanner, PushNeedsInfoNotice, SaveOutcomeRow, EbayHoldPanel } from './MarketplaceNotices';
 import { PlatformChipStrip, PlatformStatusList } from './PlatformChips';
 
 // Bug fix (2026-08-08, same P1 data-corruption class as add-items.tsx auctionEndTime
@@ -350,6 +351,10 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
   const [impactMobileOpen, setImpactMobileOpen] = useState(false);
   const [showAllFields, setShowAllFields] = useState(false);
   const [whereListedSignal, setWhereListedSignal] = useState(0);
+  // Opens the Shipping & package section from the amber "Go to package details" button (see goToPackageDetails).
+  const [shippingSignal, setShippingSignal] = useState(0);
+  // Opens the Product IDs section from the amber "Go to ISBN field" button (see goToIsbnField).
+  const [productIdsSignal, setProductIdsSignal] = useState(0);
   const pageRootRef = useRef<HTMLDivElement>(null);
   const latestSnapshotRef = useRef<string>('');
   const isDirtyRef = useRef(false);
@@ -556,9 +561,15 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
           : result?.code === 'POLICIES_NOT_CONFIGURED'
           ? 'eBay policies not configured. Complete eBay setup in Settings'
           : result?.message || 'Failed to push item';
-        showToast(errorMsg, 'error');
+        // A "needs more information" block (package weight and similar) is a note, not an error: amber, no failure wording.
+        const needsInfoLabel = result?.informational || isInformationalPushCode(result?.code) ? informationalPushLabel(result?.code) || 'Needs more information' : null;
+        showToast(needsInfoLabel ? `${needsInfoLabel}: ${errorMsg}` : errorMsg, needsInfoLabel ? 'info' : 'error');
         // Keep the reason on screen too (the server also recorded the blocked attempt for a listing already on eBay).
-        mp.showPushResult({ tone: 'error', text: `eBay was not updated: ${errorMsg}`, canRetry: false });
+        mp.showPushResult(
+          needsInfoLabel
+            ? { tone: 'warning', text: `${needsInfoLabel}: ${errorMsg}`, canRetry: false }
+            : { tone: 'error', text: `eBay was not updated: ${errorMsg}`, canRetry: false }
+        );
       }
       setEbayPushPending(false);
     },
@@ -1588,8 +1599,38 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
   // The newest eBay push that failed (or only partly worked) and has not been acknowledged: the banner's detail.
   const failedPushRow =
     (mp.status ? mp.status.recentPushes : []).find(
-      (r) => (r.status === 'FAILED' || r.status === 'PARTIAL') && !(r.acknowledged || r.acknowledgedAt)
+      (r) => (r.status === 'FAILED' || r.status === 'PARTIAL') && !(r.acknowledged || r.acknowledgedAt) && !isInformationalPushCode(r.errorCode)
     ) || null;
+  // The newest push, when it was only blocked because the item needs more information (not a failure): an amber note.
+  const newestPushRow = mp.status && mp.status.recentPushes.length > 0 ? mp.status.recentPushes[0] : null;
+  const needsInfoPushRow =
+    newestPushRow &&
+    (newestPushRow.status === 'FAILED' || newestPushRow.status === 'PARTIAL') &&
+    isInformationalPushCode(newestPushRow.errorCode)
+      ? newestPushRow
+      : null;
+  // "Got it" only collapses the note: the short "Not updated on eBay" line stays until a newer push row exists.
+  const needsInfoCollapsed = !!(needsInfoPushRow && (needsInfoPushRow.acknowledged || needsInfoPushRow.acknowledgedAt));
+  // Opens Shipping & package, then scrolls to and focuses the weight field (box size sits right below it).
+  const goToIsbnField = () => {
+    setProductIdsSignal((n) => n + 1);
+    if (typeof window === 'undefined') return;
+    window.setTimeout(() => {
+      const field = document.getElementById('item-isbn');
+      if (field && typeof field.scrollIntoView === 'function') field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (field) field.focus({ preventScroll: true });
+    }, 80);
+  };
+  const goToPackageDetails = () => {
+    setShippingSignal((n) => n + 1);
+    if (typeof window === 'undefined') return;
+    window.setTimeout(() => {
+      const field = document.getElementById('item-package-weight');
+      const target = field || document.getElementById('section-shipping');
+      if (target && typeof target.scrollIntoView === 'function') target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (field) field.focus({ preventScroll: true });
+    }, 80);
+  };
 
   const submitSave = (skipMarketplaceSync: boolean) => {
     if (!formData.title.trim()) {
@@ -1652,6 +1693,11 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
           {mp.status && mp.status.failedUnacknowledgedPushCount > 0 ? (
             <div className="mb-4">
               <PushFailureBanner row={failedPushRow} onAcknowledge={mp.ack} pending={mp.ackPending} />
+            </div>
+          ) : null}
+          {needsInfoPushRow ? (
+            <div className="mb-4">
+              <PushNeedsInfoNotice row={needsInfoPushRow} collapsed={needsInfoCollapsed} onAcknowledge={mp.ackInfo} pending={mp.ackInfoPending} onGoToPackage={goToPackageDetails} onGoToIsbn={goToIsbnField} />
             </div>
           ) : null}
           {ebayListed && (mp.hold.heldAt || mp.holdResult) ? (
@@ -1973,7 +2019,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                 />
               )}
 
-              <ItemFormSection title="Product IDs" variant="nested" defaultOpen={productIdsDisclosure.open} forceOpen={productIdsDisclosure.open}>
+              <ItemFormSection title="Product IDs" variant="nested" defaultOpen={productIdsDisclosure.open} forceOpen={productIdsDisclosure.open} openSignal={productIdsSignal}>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
@@ -2004,6 +2050,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                       ISBN <span className="text-warm-400 font-normal">(books/comics only)</span>
                     </label>
                     <input
+                      id="item-isbn"
                       type="text"
                       value={formData.isbn}
                       onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
@@ -2175,6 +2222,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                   }
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
+                {id && <ItemPriceLock itemId={String(id)} disabled={updateMutation.isPending} />}
 
                 {/* Smart Price Suggestion (multi-source pricing engine, 2026-08-24): manual
                     re-trigger since descriptions/photos can change after the initial scan.
@@ -2454,7 +2502,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
               </ItemFormSection>
             </ItemFormSection>
 
-            <ItemFormSection id="section-shipping" title="Shipping & package" forceOpen={hasShippingValue} summary={shippingSummary || undefined}>
+            <ItemFormSection id="section-shipping" title="Shipping & package" forceOpen={hasShippingValue} openSignal={shippingSignal} summary={shippingSummary || undefined}>
               {/* eBay local pickup. Same PRO/TEAMS gate as before; moved to the top of Shipping & package.
                               Checking it does NOT collapse or hide any other shipping field. */}
               {tier !== 'SIMPLE' && (
@@ -2790,6 +2838,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                         Weight (oz)
                       </label>
                       <input
+                        id="item-package-weight"
                         type="number"
                         min="0"
                         step="1"

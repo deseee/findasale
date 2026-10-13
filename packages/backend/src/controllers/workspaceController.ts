@@ -6,7 +6,7 @@ import { AuthRequest } from '../middleware/auth';
 import { TIER_LIMITS } from '../constants/tierLimits';
 import { TASK_TEMPLATES } from '../utils/taskTemplates';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
-import { chargeStoredCard, prorateByRemainingDays } from '../services/squareBillingService';
+import { chargeStoredCard, computeSeatQuote, friendlyChargeFailureMessage } from '../services/squareBillingService';
 import { claimBillingCharge, completeBillingCharge, failBillingCharge } from '../services/organizerBillingLedger';
 
 export const createWorkspace = async (req: AuthRequest, res: Response) => {
@@ -1400,6 +1400,39 @@ export const getTaskTemplates = async (req: Request, res: Response) => {
   }
 };
 
+const NO_PAYMENT_METHOD_BODY = { message: 'Add a payment method on your subscription page first, then try again.', code: 'NO_PAYMENT_METHOD' };
+
+/**
+ * GET /workspace/seat-quote
+ * What an extra seat costs today (prorated for the rest of the current billing period), when the
+ * next renewal is, and the monthly price from then on. Same math as addTeamSeat (computeSeatQuote).
+ */
+export const getSeatQuote = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { subscriptionTier: true, isEnterpriseAccount: true, billingProcessor: true, squareCustomerId: true, squareCardId: true, billingCurrentPeriodEnd: true },
+    });
+    if (!organizer) return res.status(404).json({ message: 'Organizer not found' });
+    if (organizer.subscriptionTier !== 'TEAMS') return res.status(403).json({ message: 'Additional seats are only available for TEAMS tier organizers' });
+    if (organizer.isEnterpriseAccount) return res.status(403).json({ message: 'Enterprise accounts have unlimited seats' });
+    if (organizer.billingProcessor !== 'square' || !organizer.squareCustomerId || !organizer.squareCardId || !organizer.billingCurrentPeriodEnd) {
+      return res.status(400).json(NO_PAYMENT_METHOD_BODY);
+    }
+    const quote = computeSeatQuote(organizer.billingCurrentPeriodEnd, new Date());
+    if (!(quote.amountCents > 0)) {
+      return res.status(400).json({ message: 'Your current billing period has already ended. Please try again after your next renewal.' });
+    }
+    return res.json(quote);
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error computing seat quote:', error);
+    return res.status(500).json({ message: 'Failed to load the seat price' });
+  }
+};
+
 /**
  * POST /workspace/add-seat
  * Add an additional team member seat ($20/mo). TEAMS tier only.
@@ -1444,7 +1477,7 @@ export const addTeamSeat = async (req: AuthRequest, res: Response) => {
       !organizer.squareCardId ||
       !organizer.billingCurrentPeriodEnd
     ) {
-      return res.status(400).json({ message: 'Add a payment method on your subscription page first, then try again.', code: 'NO_PAYMENT_METHOD' });
+      return res.status(400).json(NO_PAYMENT_METHOD_BODY);
     }
 
     const workspaceId = organizer.workspace.id;
@@ -1452,10 +1485,22 @@ export const addTeamSeat = async (req: AuthRequest, res: Response) => {
     const currentMaxMembers = Math.max(TIER_LIMITS.TEAMS.maxTeamMembers, settings?.maxMembers ?? TIER_LIMITS.TEAMS.maxTeamMembers);
     const targetMaxMembers = currentMaxMembers + 1;
 
-    const ADDITIONAL_SEAT_PRICE_CENTS = 2000; // $20/mo, flat, not tier-dependent
-    const amountCents = prorateByRemainingDays(ADDITIONAL_SEAT_PRICE_CENTS, organizer.billingCurrentPeriodEnd, new Date());
+    const quote = computeSeatQuote(organizer.billingCurrentPeriodEnd, new Date());
+    const amountCents = quote.amountCents;
     if (!(amountCents > 0)) {
       return res.status(400).json({ message: 'Your current billing period has already ended. Please try again after your next renewal.' });
+    }
+
+    // The person confirmed a specific amount in the modal. If the server-side amount is now
+    // different (the period rolled, the day changed), do NOT charge: hand back the new quote so
+    // the modal can show it and ask for another click.
+    const expected = (req.body as { expectedAmountCents?: unknown } | undefined)?.expectedAmountCents;
+    if (expected !== undefined && expected !== null && expected !== amountCents) {
+      return res.status(409).json({
+        code: 'SEAT_PRICE_CHANGED',
+        message: 'The amount for this seat has changed. Please review the new amount and confirm again.',
+        ...quote,
+      });
     }
 
     // Idempotency: keyed on the TARGET seat count + current period, so a double-submit of the
@@ -1463,13 +1508,40 @@ export const addTeamSeat = async (req: AuthRequest, res: Response) => {
     // seat purchase naturally gets a different key (different targetMaxMembers).
     const periodKey = `seat:${organizerId}:${targetMaxMembers}:${organizer.billingCurrentPeriodEnd.toISOString()}`;
 
-    const claim = await claimBillingCharge({
-      organizerId,
-      periodKey,
-      kind: 'SEAT_ADD',
-      tier: 'TEAMS',
-      amountCents,
+    // Across a period roll the key above changes, so also look for a COMPLETED charge for this same
+    // target seat count made in the last 15 minutes (a retry of the same purchase). If one exists the
+    // customer already paid for exactly this seat: apply it, never charge again. Deliberately NOT a
+    // longer window: maxMembers only ever goes up via this endpoint, but deleteWorkspace cascades the
+    // settings row away, so a recreated workspace is back at the base cap and a long window would
+    // hand out a free seat for the same target count.
+    const recentCutoff = new Date(Date.now() - 15 * 60 * 1000);
+    const priorPaid = await prisma.organizerBillingCharge.findFirst({
+      where: {
+        organizerId,
+        kind: 'SEAT_ADD',
+        status: 'COMPLETED',
+        periodKey: { startsWith: `seat:${organizerId}:${targetMaxMembers}:` },
+        createdAt: { gte: recentCutoff },
+      },
+      select: { id: true, periodKey: true },
     });
+    if (priorPaid && priorPaid.periodKey !== periodKey) {
+      console.warn(`[add-seat] organizer ${organizerId}: seat ${targetMaxMembers} already paid (${priorPaid.periodKey}); applying without a new charge`);
+      Sentry.captureMessage('add-seat: reconciled an existing completed seat charge (no new charge)', {
+        level: 'warning',
+        extra: { organizerId, periodKey, priorPeriodKey: priorPaid.periodKey, targetMaxMembers },
+      });
+    }
+
+    const claim: any = priorPaid && priorPaid.periodKey !== periodKey
+      ? { state: 'already_completed', id: priorPaid.id }
+      : await claimBillingCharge({
+          organizerId,
+          periodKey,
+          kind: 'SEAT_ADD',
+          tier: 'TEAMS',
+          amountCents,
+        });
     if (claim.state === 'in_progress') {
       return res.status(409).json({ code: 'PAYMENT_IN_PROGRESS', message: 'A payment for this seat is already being processed. Please wait a moment and check your team before trying again.' });
     }
@@ -1485,11 +1557,18 @@ export const addTeamSeat = async (req: AuthRequest, res: Response) => {
         requireCompleted: true,
       });
       if (!charge.ok) {
+        // Square's raw wording (charge.message) goes to the log, the ledger and Sentry only; the
+        // user gets a mapped, friendly message.
+        console.warn(`[add-seat] charge failed for organizer ${organizerId}: code=${charge.code ?? 'none'} raw="${charge.message}"`);
+        Sentry.captureMessage('add-seat: stored-card charge failed', {
+          level: 'warning',
+          extra: { organizerId, periodKey, amountCents, code: charge.code ?? null, rawMessage: charge.message },
+        });
         const marked = await failBillingCharge(claim.id, charge.message);
         if (!marked) {
           return res.status(409).json({ code: 'PAYMENT_IN_PROGRESS', message: 'A payment for this seat is already being processed. Please wait a moment and check your team before trying again.' });
         }
-        return res.status(400).json({ message: charge.message || 'Failed to add seat. Please try again.' });
+        return res.status(400).json({ message: friendlyChargeFailureMessage(charge.code), code: 'CARD_CHARGE_FAILED' });
       }
       try {
         await completeBillingCharge(claim.id, charge.paymentId);
@@ -1500,17 +1579,46 @@ export const addTeamSeat = async (req: AuthRequest, res: Response) => {
       console.warn(`[add-seat] organizer ${organizerId} period ${periodKey} already COMPLETED -- re-applying the seat without a new charge`);
     }
 
-    // Conditional increment: only applies if maxMembers is still exactly what this charge was
-    // priced against, so a retried/duplicate request can never increment twice.
-    const updated = await prisma.workspaceSettings.updateMany({
-      where: { workspaceId, maxMembers: currentMaxMembers },
-      data: { maxMembers: targetMaxMembers },
-    });
-    if (updated.count !== 1) {
-      // Charge succeeded (or was already completed) but another request already advanced
-      // maxMembers past currentMaxMembers in the meantime -- don't apply this one on top; the
-      // other request's increment already covers a seat, and double-applying would overcount.
-      console.warn(`[add-seat] organizer ${organizerId} workspace ${workspaceId} maxMembers changed concurrently -- not re-applying this seat's increment`);
+    // Grant the seat. createWorkspace does not create a WorkspaceSettings row (getSettings creates
+    // it lazily), so a brand-new workspace has none: create it at the target cap. Otherwise (or if
+    // another request created the row first) do a conditional increment that only applies while
+    // maxMembers is still at or below what this charge was priced against, so a retried or
+    // duplicate request can never increment twice.
+    let granted = false;
+    if (!settings) {
+      const created = await prisma.workspaceSettings.createMany({
+        data: [{ workspaceId, maxMembers: targetMaxMembers, templateUsed: 'SOLO' }],
+        skipDuplicates: true,
+      });
+      granted = created.count === 1;
+    }
+    if (!granted) {
+      const updated = await prisma.workspaceSettings.updateMany({
+        where: { workspaceId, maxMembers: { lte: currentMaxMembers } },
+        data: { maxMembers: targetMaxMembers },
+      });
+      granted = updated.count === 1;
+    }
+    if (!granted) {
+      const latest = await prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: { maxMembers: true } });
+      if (latest && latest.maxMembers >= targetMaxMembers) {
+        // Another request already advanced maxMembers to (or past) this seat; double-applying
+        // would overcount, so this is a benign no-op.
+        console.warn(`[add-seat] organizer ${organizerId} workspace ${workspaceId} maxMembers already ${latest.maxMembers} -- not re-applying this seat's increment`);
+      } else {
+        // The charge COMPLETED (or was already completed) but the seat was not granted and nothing
+        // else granted it. Never report success here: log loudly, alert, and tell the user the truth.
+        // A retry is safe: the same period key re-applies the seat without charging again.
+        console.error(`[add-seat] CRITICAL: payment completed for organizer ${organizerId} workspace ${workspaceId} (${periodKey}) but the seat was NOT granted (maxMembers=${latest?.maxMembers ?? 'no row'}, target ${targetMaxMembers})`);
+        Sentry.captureMessage('add-seat: payment completed but seat not granted', {
+          level: 'error',
+          extra: { organizerId, workspaceId, periodKey, currentMaxMembers, targetMaxMembers, latestMaxMembers: latest?.maxMembers ?? null },
+        });
+        return res.status(500).json({
+          code: 'SEAT_NOT_APPLIED',
+          message: 'Your payment went through, but the seat was not added to your team yet. Please try again in a moment. You will not be charged twice.',
+        });
+      }
     }
 
     const finalSettings = await prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: { maxMembers: true } });

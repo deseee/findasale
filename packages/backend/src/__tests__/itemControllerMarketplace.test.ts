@@ -99,6 +99,7 @@ jest.mock('../services/marketplace/reverbConnector', () => ({ withdrawReverbList
 ].forEach((p) => jest.mock(p, () => ({})));
 
 // Required AFTER the mocks above (imports are hoisted, so a plain import would load the real modules first).
+const { matchesWhere } = require('./helpers/pushWhere');
 const {
   updateItem, createItem, getItemMarketplaceStatusHandler, acknowledgeItemMarketplacePush, repushItemToEbay, releaseEbayHold,
   getDraftItemsBySaleId, getItemForEdit, publishItem,
@@ -598,6 +599,28 @@ describe('new marketplace handlers: 403/404 matrix', () => {
     expect(mockPrisma.itemMarketplacePush.updateMany.mock.calls[0][0].data.acknowledgedAt).toBeInstanceOf(Date);
   });
 
+  it('ack scope: "Got it" (scope informational) can only clear informational rows, the red banner ack can only clear real failures', async () => {
+    mockPrisma.itemMarketplacePush.updateMany.mockResolvedValue({ count: 1 });
+    const rows = [
+      { id: 'blocked', status: 'FAILED', errorCode: 'NEEDS_PACKAGE_DETAILS', acknowledgedAt: null },
+      { id: 'real', status: 'FAILED', errorCode: 'PUBLISH_FAILED', acknowledgedAt: null },
+      { id: 'realNull', status: 'PARTIAL', errorCode: null, acknowledgedAt: null },
+    ].map((r) => ({ ...r, itemId: 'i1', organizerId: 'org_inv', platform: 'EBAY' }));
+
+    await call(acknowledgeItemMarketplacePush, inventoryItem(), OWNER_USER, { scope: 'informational' });
+    const infoWhere = mockPrisma.itemMarketplacePush.updateMany.mock.calls[0][0].where;
+    expect(rows.filter((r) => matchesWhere(r, infoWhere)).map((r) => r.id)).toEqual(['blocked']); // PUBLISH_FAILED is never cleared
+
+    mockPrisma.itemMarketplacePush.updateMany.mockClear();
+    await call(acknowledgeItemMarketplacePush, inventoryItem(), OWNER_USER, {});
+    const failWhere = mockPrisma.itemMarketplacePush.updateMany.mock.calls[0][0].where;
+    expect(rows.filter((r) => matchesWhere(r, failWhere)).map((r) => r.id)).toEqual(['real', 'realNull']); // the note is not cleared by the banner
+
+    mockPrisma.itemMarketplacePush.updateMany.mockClear();
+    await call(acknowledgeItemMarketplacePush, inventoryItem(), OWNER_USER, { scope: 'everything' }); // unknown scope falls back to the safe default
+    expect(rows.filter((r) => matchesWhere(r, mockPrisma.itemMarketplacePush.updateMany.mock.calls[0][0].where)).map((r) => r.id)).toEqual(['real', 'realNull']);
+  });
+
   it('release clears all three hold columns without pushing', async () => {
     mockPrisma.item.update.mockResolvedValue({});
     const res = await call(releaseEbayHold, ebayListed({ ebaySyncHeldAt: new Date(), ebayHeldFields: ['title'], ebayContentDirtyAt: new Date() }), OWNER_USER);
@@ -645,6 +668,11 @@ describe('new marketplace handlers: 403/404 matrix', () => {
       await repushItemToEbay({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { retry: true } }, res);
       expect(mockPush.mock.calls[0][0]).toEqual({ itemId: 'i1', organizerId: 'org_sale', trigger: 'RETRY', fields: ['title'] });
       expect(mockPrisma.itemMarketplacePush.findFirst.mock.calls[0][0].where).toMatchObject({ itemId: 'i1', organizerId: 'org_sale' });
+      // A blocked push that only needs more information (package weight and similar) is never picked as the push to retry.
+      expect(mockPrisma.itemMarketplacePush.findFirst.mock.calls[0][0].where.OR).toEqual([
+        { errorCode: null },
+        { errorCode: { notIn: expect.arrayContaining(['NEEDS_PACKAGE_DETAILS']) } },
+      ]);
 
       mockPush.mockClear();
       mockPrisma.item.findUnique.mockResolvedValueOnce(ebayListed()).mockResolvedValueOnce({});
@@ -694,6 +722,8 @@ describe('getDraftItemsBySaleId: failed-push badge count (one batched query, no 
     mockPrisma.organizer.findUnique.mockResolvedValue({ ebayConnection: null, shopifyEnabled: false, subscriptionTier: 'PRO', marketplaceAccounts: [] });
     mockPrisma.marketplaceListingJob.findMany.mockResolvedValue([]);
     mockPrisma.itemMarketplacePush.groupBy.mockResolvedValue([{ itemId: 'a', _count: { _all: 2 } }, { itemId: 'c', _count: { _all: 1 } }]);
+    // Newest push row per item: b's newest is a blocked push that only needs package details (amber chip, not a failure).
+    mockPrisma.itemMarketplacePush.findMany.mockResolvedValue([{ itemId: 'b', status: 'FAILED', errorCode: 'NEEDS_PACKAGE_DETAILS' }]);
     const res = makeRes();
     await getDraftItemsBySaleId({ user: asUser(OWNER_USER), query: { saleId: 's1' } }, res);
     expect(res.statusCode).toBe(200);
@@ -704,7 +734,9 @@ describe('getDraftItemsBySaleId: failed-push badge count (one batched query, no 
     });
     // No per-item reads of the push table anywhere.
     expect(mockPrisma.itemMarketplacePush.findFirst).not.toHaveBeenCalled();
-    expect(mockPrisma.itemMarketplacePush.findMany).not.toHaveBeenCalled();
+    // The amber chip is ONE batched read too, never per item, and never feeds the failed count.
+    expect(mockPrisma.itemMarketplacePush.findMany).toHaveBeenCalledTimes(1);
+    expect(Object.fromEntries(res.body.map((i: any) => [i.id, i.marketplacePushNeedsInfoCode]))).toEqual({ a: null, b: 'NEEDS_PACKAGE_DETAILS', c: null });
     expect(mockPrisma.itemMarketplacePush.count).not.toHaveBeenCalled();
   });
 

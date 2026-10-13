@@ -199,6 +199,9 @@ export async function createSquareSharedCardForCart(params: {
 
   const customerResponse = await client.customers.create({
     referenceId: params.cartTransactionId,
+    // Square requires at least one of given_name / family_name / company_name / email_address /
+    // phone_number on a customer (confirmed against the sandbox 2026-10-12).
+    companyName: `FindA.Sale booth cart ${params.cartTransactionId}`.slice(0, 255),
     note: 'FindA.Sale booth-cart QR/in-app rail -- shared-card-on-file platform customer',
   });
   const platformCustomerId = (customerResponse as any)?.customer?.id;
@@ -346,6 +349,7 @@ export async function authorizeSquareBoothCartLeg(
   try {
     const customerResponse = await client.customers.create({
       referenceId: params.cartTransactionId,
+      companyName: `FindA.Sale booth ${params.vendorBoothId}`.slice(0, 255), // Square requires a name field
       note: `FindA.Sale booth-cart QR/in-app rail -- booth ${params.vendorBoothId}`,
     });
     boothCustomerId = (customerResponse as any)?.customer?.id;
@@ -487,6 +491,7 @@ export async function createSquareSharedCardForBoothFee(params: {
 
   const customerResponse = await client.customers.create({
     referenceId: params.vendorBoothId,
+    companyName: `FindA.Sale booth ${params.vendorBoothId}`.slice(0, 255), // Square requires a name field
     note: `FindA.Sale booth-rent auto-pay -- shared-card-on-file platform customer for booth ${params.vendorBoothId}`,
   });
   const platformCustomerId = (customerResponse as any)?.customer?.id;

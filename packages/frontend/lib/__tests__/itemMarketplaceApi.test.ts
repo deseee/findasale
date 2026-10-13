@@ -124,3 +124,12 @@ test('normalizeMarketplaceStatus carries ebayAcceptedConditions: a string list, 
   assert.equal(normalizeMarketplaceStatus({}, 'x').ebayAcceptedConditions, null);
   assert.equal(normalizeMarketplaceStatus(null, 'x').ebayAcceptedConditions, null);
 });
+
+test('ackPushFailures: scope informational is sent only when asked for', async () => {
+  const calls: any[] = [];
+  const client: any = { post: async (url: string, body?: unknown) => { calls.push([url, body]); return { data: { acknowledged: 1 } }; }, get: async () => ({ data: {} }) };
+  await createItemMarketplaceApi(client).ackPushFailures('abc', { scope: 'informational' });
+  await createItemMarketplaceApi(client).ackPushFailures('abc');
+  assert.deepEqual(calls[0], ['/items/abc/marketplace-push/ack', { scope: 'informational' }]);
+  assert.deepEqual(calls[1], ['/items/abc/marketplace-push/ack', undefined]);
+});

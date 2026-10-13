@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ConditionSelect, ConditionGradePicker } from '../../components/itemForm/ConditionFields';
-import { PushFailureBanner, SaveOutcomeRow, EbayHoldPanel } from '../../components/itemForm/MarketplaceNotices';
+import { PushFailureBanner, PushNeedsInfoNotice, SaveOutcomeRow, EbayHoldPanel } from '../../components/itemForm/MarketplaceNotices';
+import { BlockedPushSummary } from '../../components/BlockedPushSummary';
 import { PlatformChipStrip, PlatformStatusList } from '../../components/itemForm/PlatformChips';
 import { buildPlatformChips } from '../platformStatusView';
 
@@ -145,4 +146,80 @@ test('PlatformChipStrip: listed chips, or the empty text', () => {
   assert.ok(html(h(PlatformChipStrip, { chips, onJump: () => undefined, emptyText: 'none' })).includes('eBay live'));
   const none = buildPlatformChips(undefined, {});
   assert.ok(html(h(PlatformChipStrip, { chips: none, onJump: () => undefined, emptyText: 'none' })).includes('none'));
+});
+
+const NEEDS_INFO_ROW = { id: 'p1', status: 'FAILED', fieldsAttempted: [], errorCode: 'NEEDS_PACKAGE_DETAILS', errorMessage: 'Add the package weight and box size.' };
+const noop = () => {};
+
+test('PushNeedsInfoNotice: amber, says nothing failed, has the fix button and Got it, no red or failure wording', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(PushNeedsInfoNotice, { row: NEEDS_INFO_ROW, collapsed: false, onAcknowledge: noop, pending: false, onGoToPackage: noop, onGoToIsbn: noop })
+  );
+  assert.match(html, /Needs package details/);
+  assert.match(html, /Add the package weight and box size\./);
+  assert.match(html, /Nothing went wrong/);
+  assert.match(html, /Go to package details/);
+  assert.match(html, /Got it/);
+  assert.match(html, /amber/);
+  assert.ok(!/red-/.test(html));
+  assert.ok(!/role="alert"/.test(html));
+  assert.ok(!/did not take your last update/.test(html));
+});
+
+test('PushNeedsInfoNotice: after Got it only the long note collapses to a persistent "Not updated on eBay" line', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(PushNeedsInfoNotice, { row: NEEDS_INFO_ROW, collapsed: true, onAcknowledge: noop, pending: false, onGoToPackage: noop, onGoToIsbn: noop })
+  );
+  assert.match(html, /Not updated on eBay/);
+  assert.match(html, /Needs package details/);
+  assert.match(html, /Go to package details/);
+  assert.ok(!/Nothing went wrong/.test(html));
+  assert.ok(!/Got it/.test(html));
+  assert.ok(!/red-/.test(html));
+});
+
+test('PushNeedsInfoNotice: eBay setup codes link to the eBay settings tab instead of the package fields', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(PushNeedsInfoNotice, {
+      row: { id: 'p2', status: 'FAILED', fieldsAttempted: [], errorCode: 'POLICIES_NOT_CONFIGURED', errorMessage: 'Finish eBay setup in Settings.' },
+      collapsed: false,
+      onAcknowledge: noop,
+      pending: false,
+      onGoToPackage: noop,
+      onGoToIsbn: noop,
+    })
+  );
+  assert.match(html, /Finish eBay setup/);
+  assert.match(html, /href="\/organizer\/settings\?tab=ebay"/);
+  assert.ok(!/Go to package details/.test(html));
+});
+
+test('BlockedPushSummary: persistent amber note with titles and a Fix these items link, no ids, no red', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(BlockedPushSummary, {
+      text: '3 items need package details before they can go to eBay',
+      titles: ['Brass lamp', 'Oak table'],
+      count: 3,
+      reviewHref: '/organizer/add-items/sale_1',
+      onDismiss: noop,
+    })
+  );
+  assert.match(html, /3 items need package details before they can go to eBay\./);
+  assert.match(html, /Brass lamp, Oak table and 1 more/);
+  assert.match(html, /href="\/organizer\/add-items\/sale_1"/);
+  assert.match(html, /Fix these items/);
+  assert.match(html, /amber/);
+  assert.ok(!/red-/.test(html));
+});
+
+test('PushNeedsInfoNotice: ISBN code offers Go to ISBN field (expanded and collapsed), not the package button', () => {
+  const row = { id: 'p3', status: 'FAILED', fieldsAttempted: [], errorCode: 'EBAY_BOOK_NO_ISBN', errorMessage: 'Add the ISBN for this book.' };
+  for (const collapsed of [false, true]) {
+    const html = renderToStaticMarkup(
+      React.createElement(PushNeedsInfoNotice, { row, collapsed, onAcknowledge: noop, pending: false, onGoToPackage: noop, onGoToIsbn: noop })
+    );
+    assert.match(html, /Go to ISBN field/);
+    assert.match(html, /Needs ISBN/);
+    assert.ok(!/Go to package details/.test(html));
+  }
 });

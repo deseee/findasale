@@ -799,6 +799,7 @@ export const createSquareBillingSubscription = async (req: AuthRequest, res: Res
         referenceId: organizer.id,
         sourceId,
         note: `FindA.Sale ${validatedTier} subscription billing -- organizer ${organizer.id}`,
+        displayName: organizer.businessName,
       });
       squareCustomerId = card.customerId;
       squareCardId = card.cardId;

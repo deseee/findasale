@@ -33,10 +33,15 @@ import {
   pushItemToEbay,
   classifyShippingResync,
   recordBlockedEbayPush,
+  recordSuccessfulSalePush,
+  recordSalePushHistory,
+  flagInformationalResults,
+  summarizeSalePushResults,
   SHIPPING_BLOCK_MESSAGES,
   PUSH_HISTORY_LIMIT,
   INTERNAL_ERROR_TEXT,
 } from '../services/ebayItemPushService';
+import { isInformationalPushCode, NOT_INFORMATIONAL_PUSH_WHERE } from '../lib/ebayPushInformational';
 
 const PRISMA_CONNECT_ERROR =
   "\nInvalid `prisma.item.findUnique()` invocation in\n/app/packages/backend/src/services/ebayItemPushService.ts:338:42\n\n" +
@@ -693,5 +698,155 @@ describe('hacker pass: pushItemToEbay', () => {
       await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['title'], dirtyBefore: null });
       expect(racing.ebayContentDirtyAt).not.toBeNull(); // still protected from the pull-sync
     });
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------
+// 2026-10-12: sale-level push history (success writes a row) and informational blocks.
+describe('recordSuccessfulSalePush', () => {
+  it('writes one SUCCESS REPUSH row per item with the same shape as a per-item push (fields attempted and pushed)', async () => {
+    const startedAt = new Date('2026-10-12T10:00:00Z');
+    await recordSuccessfulSalePush({ itemId: 'i1', organizerId: 'org1', startedAt });
+    expect(mockPrisma.itemMarketplacePush.create).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.itemMarketplacePush.create.mock.calls[0][0].data).toMatchObject({
+      itemId: 'i1',
+      organizerId: 'org1',
+      platform: 'EBAY',
+      trigger: 'REPUSH',
+      status: 'SUCCESS',
+      fieldsAttempted: ['title', 'description', 'condition', 'price'],
+      fieldsPushed: ['title', 'description', 'condition', 'price'],
+      errorCode: null,
+      errorMessage: null,
+      startedAt,
+    });
+    expect(mockPrisma.itemMarketplacePush.create.mock.calls[0][0].data.finishedAt).toBeInstanceOf(Date);
+  });
+
+  it('acknowledges earlier open failed or blocked rows it covers (a shipping block included)', async () => {
+    mockPrisma.itemMarketplacePush.findMany
+      .mockResolvedValueOnce([]) // prune lookup
+      .mockResolvedValueOnce([
+        { id: 'blocked1', fieldsAttempted: ['shipping'] },
+        { id: 'blockedEmpty', fieldsAttempted: [] },
+        { id: 'other', fieldsAttempted: ['fccId'] },
+      ]);
+    await recordSuccessfulSalePush({ itemId: 'i1', organizerId: 'org1' });
+    const upd = mockPrisma.itemMarketplacePush.updateMany.mock.calls[0][0];
+    expect(upd.where.id.in.sort()).toEqual(['blocked1', 'blockedEmpty']);
+  });
+
+  it('never throws when the database write fails', async () => {
+    mockPrisma.itemMarketplacePush.create.mockRejectedValue(new Error('db down'));
+    await expect(recordSuccessfulSalePush({ itemId: 'i1', organizerId: 'org1' })).resolves.toBeUndefined();
+  });
+});
+
+describe('informational push blocks', () => {
+  it('recognises needs-more-information codes and nothing else', () => {
+    for (const c of ['NEEDS_PACKAGE_DETAILS', 'EBAY_NO_PACKAGE_WEIGHT', 'EBAY_WEIGHT_NOT_CONFIRMED', 'EBAY_PACKAGE_DIMS_NOT_CONFIRMED', 'EBAY_BOOK_NO_ISBN', 'POLICIES_NOT_CONFIGURED', 'NO_FULFILLMENT_POLICY_MATCH']) {
+      expect(isInformationalPushCode(c)).toBe(true);
+    }
+    for (const c of ['INVENTORY_CREATION_FAILED', 'OFFER_CREATION_FAILED', 'PUBLISH_FAILED', 'INTERNAL_ERROR', 'HTTP_500', 'UNEXPECTED', 'NO_TOKEN', null, undefined, '']) {
+      expect(isInformationalPushCode(c as any)).toBe(false);
+    }
+  });
+
+  it('the where fragment keeps NULL error codes (a SUCCESS-like row) and excludes only the informational list', () => {
+    expect(NOT_INFORMATIONAL_PUSH_WHERE.OR[0]).toEqual({ errorCode: null });
+    expect((NOT_INFORMATIONAL_PUSH_WHERE.OR[1] as any).errorCode.notIn).toContain('NEEDS_PACKAGE_DETAILS');
+    expect((NOT_INFORMATIONAL_PUSH_WHERE.OR[1] as any).errorCode.notIn).not.toContain('PUBLISH_FAILED');
+  });
+
+  it('flags informational results and counts them as blocked, not failed; a real eBay error still counts as failed', () => {
+    const results: any[] = [
+      { itemId: 'a', status: 'success' },
+      { itemId: 'b', status: 'error', code: 'EBAY_NO_PACKAGE_WEIGHT', message: 'Add weight' },
+      { itemId: 'c', status: 'error', error: 'NEEDS_PACKAGE_DETAILS', message: 'Add weight' },
+      { itemId: 'd', status: 'error', error: 'PUBLISH_FAILED', message: 'eBay rejected this listing' },
+    ];
+    flagInformationalResults(results);
+    expect(results.map((r) => !!r.informational)).toEqual([false, true, true, false]);
+    expect(summarizeSalePushResults(results)).toEqual({ total: 4, success: 1, failed: 1, blocked: 2 });
+  });
+});
+
+describe('recordSalePushHistory (pushSaleToEbay)', () => {
+  const startedAt = new Date('2026-10-12T10:00:00Z');
+  const items = [
+    { id: 'ok', ebayOfferId: 'o1', ebayListingId: null },
+    { id: 'blocked', ebayOfferId: 'o2', ebayListingId: null },
+    { id: 'realfail', ebayOfferId: 'o3', ebayListingId: null },
+    { id: 'neverOnEbay', ebayOfferId: null, ebayListingId: null },
+  ];
+  const rows = () => mockPrisma.itemMarketplacePush.create.mock.calls.map((c: any) => c[0].data);
+
+  it('success writes a SUCCESS row; a package-details block writes the informational row; a real failure writes FAILED', async () => {
+    await recordSalePushHistory({
+      organizerId: 'org1',
+      startedAt,
+      items,
+      results: [
+        { itemId: 'ok', status: 'success', ebayListingId: 'L1' },
+        { itemId: 'blocked', status: 'error', code: 'EBAY_NO_PACKAGE_WEIGHT', message: 'This item has no package weight.' },
+        { itemId: 'realfail', status: 'error', error: 'PUBLISH_FAILED', message: 'eBay rejected this listing: bad category' },
+      ],
+    });
+    const byItem = Object.fromEntries(rows().map((r: any) => [r.itemId, r]));
+    expect(byItem.ok).toMatchObject({ status: 'SUCCESS', trigger: 'REPUSH', errorCode: null });
+    // Storage of a blocked push is unchanged (no new status value, no migration); it is the code that makes it informational.
+    expect(byItem.blocked).toMatchObject({ status: 'FAILED', errorCode: 'EBAY_NO_PACKAGE_WEIGHT' });
+    expect(isInformationalPushCode(byItem.blocked.errorCode)).toBe(true);
+    expect(byItem.realfail).toMatchObject({ status: 'FAILED', errorCode: 'PUBLISH_FAILED' });
+    expect(isInformationalPushCode(byItem.realfail.errorCode)).toBe(false);
+  });
+
+  it('a success without a live eBay listing id writes nothing and acknowledges nothing', async () => {
+    await recordSalePushHistory({
+      organizerId: 'org1',
+      startedAt,
+      items,
+      results: [
+        { itemId: 'ok', status: 'success', ebayListingId: null },
+        { itemId: 'ok', status: 'success' },
+      ],
+    });
+    expect(mockPrisma.itemMarketplacePush.create).not.toHaveBeenCalled();
+    expect(mockPrisma.itemMarketplacePush.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing for an error on an item that is not on eBay, or for non success/error results', async () => {
+    await recordSalePushHistory({
+      organizerId: 'org1',
+      startedAt,
+      items,
+      results: [
+        { itemId: 'neverOnEbay', status: 'error', code: 'EBAY_NO_PACKAGE_WEIGHT', message: 'x' },
+        { itemId: 'ok', status: 'queued' },
+        { itemId: 'ok', status: 'fee_checked' },
+        { itemId: 'ok', status: 'category_review_needed' },
+      ],
+    });
+    expect(mockPrisma.itemMarketplacePush.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('success-path acknowledgement (ackCoveredFailures)', () => {
+  it('a later sale-level success clears covered failed or blocked rows and keeps rows it did not cover', async () => {
+    mockPrisma.itemMarketplacePush.findMany
+      .mockResolvedValueOnce([]) // prune lookup
+      .mockResolvedValueOnce([
+        { id: 'coveredFail', fieldsAttempted: ['title', 'price'] },
+        { id: 'coveredBlocked', fieldsAttempted: ['shipping'] },
+        { id: 'uncoveredFccId', fieldsAttempted: ['fccId'] },
+        { id: 'uncoveredMixed', fieldsAttempted: ['price', 'upc'] },
+      ]);
+    await recordSuccessfulSalePush({ itemId: 'i1', organizerId: 'org1' });
+    const where = mockPrisma.itemMarketplacePush.findMany.mock.calls[1][0].where;
+    expect(where).toMatchObject({ itemId: 'i1', organizerId: 'org1', platform: 'EBAY', status: { in: ['FAILED', 'PARTIAL'] }, acknowledgedAt: null });
+    const upd = mockPrisma.itemMarketplacePush.updateMany.mock.calls[0][0];
+    expect(upd.where.id.in.sort()).toEqual(['coveredBlocked', 'coveredFail']);
+    expect(upd.data.acknowledgedAt).toBeInstanceOf(Date);
   });
 });

@@ -1,10 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   computeSaveImpact,
   describeSaveImpact,
   describePlan,
   describePushOutcome,
+  isInformationalPushCode,
+  informationalPushLabel,
+  informationalPushFix,
+  describeBlockedPushes,
+  INFORMATIONAL_PUSH_CODES,
+  EBAY_SETTINGS_HREF,
   planExtensionLines,
   findNewPush,
   pollForNewPush,
@@ -370,4 +378,78 @@ test('identifiers: held items report the fields without pushing; not-listed item
 test('identifiers: push outcome rows use the same words', () => {
   const view = describePushOutcome({ status: 'PARTIAL', fieldsAttempted: ['title', 'brand'], fieldsPushed: ['title'], errorMessage: null });
   assert.match(view.text, /Could not update: brand\./);
+});
+
+test('describePushOutcome: a blocked push that needs package details is an amber note, not a failure', () => {
+  const v = describePushOutcome({
+    status: 'FAILED',
+    fieldsAttempted: [],
+    errorCode: 'NEEDS_PACKAGE_DETAILS',
+    errorMessage: 'Shipping was not updated on eBay because this item has no package weight.',
+  });
+  assert.equal(v.tone, 'warning');
+  assert.equal(v.canRetry, false);
+  assert.match(v.text, /^Needs package details: /);
+  assert.ok(!/fail/i.test(v.text));
+  assert.equal(describePushOutcome({ status: 'FAILED', fieldsAttempted: [], errorCode: 'EBAY_NO_PACKAGE_WEIGHT' }).tone, 'warning');
+  assert.match(describePushOutcome({ status: 'FAILED', fieldsAttempted: [], errorCode: 'POLICIES_NOT_CONFIGURED', errorMessage: 'Set up policies.' }).text, /^Finish eBay setup: /);
+});
+
+test('describePushOutcome: a real eBay error is still a red failure with Retry', () => {
+  assert.deepEqual(
+    describePushOutcome({ status: 'FAILED', fieldsAttempted: ['price'], errorCode: 'PUBLISH_FAILED', errorMessage: 'eBay rejected this listing.' }),
+    { tone: 'error', text: 'eBay update failed: eBay rejected this listing.', canRetry: true }
+  );
+  assert.equal(describePushOutcome({ status: 'PARTIAL', fieldsAttempted: ['price', 'title'], fieldsPushed: ['price'], errorCode: 'INVENTORY_PUT_FAILED' }).canRetry, true);
+});
+
+test('informational push codes', () => {
+  assert.equal(isInformationalPushCode('NEEDS_PACKAGE_DETAILS'), true);
+  assert.equal(isInformationalPushCode('PUBLISH_FAILED'), false);
+  assert.equal(isInformationalPushCode(null), false);
+  assert.equal(informationalPushLabel('EBAY_WEIGHT_NOT_CONFIRMED'), 'Needs package details');
+  assert.equal(informationalPushLabel('EBAY_BOOK_NO_ISBN'), 'Needs ISBN');
+  assert.equal(informationalPushLabel('POLICIES_NOT_CONFIGURED'), 'Finish eBay setup');
+  assert.equal(informationalPushLabel('NO_FULFILLMENT_POLICY_MATCH'), 'Finish eBay setup');
+  for (const c of ['NEEDS_PACKAGE_DETAILS', 'EBAY_NO_PACKAGE_WEIGHT', 'EBAY_WEIGHT_NOT_CONFIRMED', 'EBAY_PACKAGE_DIMS_NOT_CONFIRMED']) {
+    assert.equal(informationalPushLabel(c), 'Needs package details');
+    assert.equal(informationalPushFix(c), 'package');
+  }
+  assert.equal(informationalPushFix('POLICIES_NOT_CONFIGURED'), 'ebay-settings');
+  assert.equal(informationalPushFix('PUBLISH_FAILED'), null);
+  assert.equal(EBAY_SETTINGS_HREF, '/organizer/settings?tab=ebay');
+  assert.equal(informationalPushLabel('HTTP_500'), null);
+});
+
+test('describeBlockedPushes: one summary with counts and item titles, never ids; real errors are not included', () => {
+  const titles: Record<string, string> = { a: 'Brass lamp', b: 'Oak table', c: 'Vase', d: 'Rug' };
+  const sum = describeBlockedPushes(
+    [
+      { itemId: 'a', status: 'error', code: 'EBAY_NO_PACKAGE_WEIGHT', informational: true },
+      { itemId: 'b', status: 'error', error: 'NEEDS_PACKAGE_DETAILS', informational: true },
+      { itemId: 'c', status: 'error', code: 'EBAY_WEIGHT_NOT_CONFIRMED', informational: true },
+      { itemId: 'd', status: 'error', code: 'PUBLISH_FAILED' },
+      { itemId: 'e', status: 'success' },
+    ],
+    (id) => titles[id]
+  );
+  assert.ok(sum);
+  assert.equal(sum!.text, '3 items need package details before they can go to eBay');
+  assert.equal(sum!.count, 3);
+  assert.deepEqual(sum!.titles, ['Brass lamp', 'Oak table', 'Vase']);
+  assert.ok(!/\b[abcd]\b/.test(sum!.text));
+  assert.equal(describeBlockedPushes([{ itemId: 'd', status: 'error', code: 'PUBLISH_FAILED' }], () => null), null);
+  assert.equal(describeBlockedPushes([], () => null), null);
+  assert.equal(describeBlockedPushes([{ itemId: 'x', status: 'error', code: 'EBAY_NO_PACKAGE_WEIGHT' }], () => 'Lamp')!.text, '1 item needs package details before it can go to eBay');
+  assert.equal(describeBlockedPushes([{ itemId: 'x', status: 'error', code: 'POLICIES_NOT_CONFIGURED' }], () => 'Lamp')!.text, 'Finish eBay setup before 1 item can go to eBay');
+  assert.equal(describeBlockedPushes([{ itemId: 'x', status: 'error', code: 'EBAY_BOOK_NO_ISBN' }], () => null)!.titles[0], 'Untitled item');
+});
+
+test('parity: the frontend informational code list equals the backend list', () => {
+  const file = path.resolve(__dirname, '../../../backend/src/lib/ebayPushInformational.ts');
+  const src = fs.readFileSync(file, 'utf8');
+  const block = src.match(/INFORMATIONAL_PUSH_CODES[^=]*=\s*\[([\s\S]*?)\];/);
+  assert.ok(block, 'backend list not found');
+  const backend = Array.from(block![1].matchAll(/'([A-Z0-9_]+)'/g)).map((m) => m[1]).sort();
+  assert.deepEqual([...INFORMATIONAL_PUSH_CODES].sort(), backend);
 });

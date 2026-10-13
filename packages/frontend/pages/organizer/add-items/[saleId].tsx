@@ -70,6 +70,7 @@ import {
   buildRowConditionState,
   rowGradeOptions,
   showEbayFailedBadge,
+  needsInfoChipText,
   showRowGradePicker,
 } from '../../../lib/addItemsRow';
 import BulkOperationErrorModal from '../../../components/BulkOperationErrorModal';
@@ -84,6 +85,7 @@ import { ShippingNetPreview } from '../../../components/ShippingNetPreview'; // 
 import CardConditionConfirm from '../../../components/cardRecord/CardConditionConfirm'; // trading card condition (NM/LP/MP/HP/DMG), one-tap confirm
 import { showCardCondition } from '../../../lib/cardConditionVisibility';
 import BulkLotsLink from '../../../components/BulkLotsLink'; // ADR-136 (#659): link to bulk lots, rendered only when the feature is on
+import PriceBookLink from '../../../components/priceBook/PriceBookLink'; // ADR-140 (B8): link to the price book, rendered only when it is on
 import TcgplayerSyncLink from '../../../components/TcgplayerSyncLink'; // ADR-137 (#660): link to TCGplayer sync, rendered only when the feature is on
 import CardScanLink from '../../../components/cardScan/CardScanLink'; // ADR-138 (B7): link to Scan cards, rendered only when scanning is on
 
@@ -310,6 +312,8 @@ interface RapidItem {
   ebayListingId?: string;
   // GET /items/drafts?saleId= returns this per item (failed, unseen marketplace pushes; 0 when none).
   marketplacePushFailedCount?: number;
+  // Newest eBay push was blocked because the item needs more information (error code), else null. Not a failure.
+  marketplacePushNeedsInfoCode?: string | null;
 }
 
 // Add Items collapsed-row multi-channel status (2026-09-14) -- see
@@ -2659,6 +2663,7 @@ const AddItemsDetailPage = () => {
                 className="inline-flex min-h-[44px] items-center px-4 py-2 rounded-lg font-medium bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400 transition-all"
               />
             )}
+            <PriceBookLink className="inline-flex min-h-[44px] items-center px-4 py-2 rounded-lg font-medium bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400 transition-all" />
             {typeof saleId === 'string' && saleId !== '' && (
               <Link
                 href={`/organizer/kits/${encodeURIComponent(saleId)}`}
@@ -3586,12 +3591,25 @@ const AddItemsDetailPage = () => {
                               type="button"
                               onClick={(e) => { e.stopPropagation(); router.push(`/organizer/edit-item/${item.id}`); }}
                               aria-label={EBAY_FAILED_BADGE_ARIA_LABEL}
-                              className="relative mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-[''] dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                              className="relative mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-red-300 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-[''] dark:border-red-700 dark:bg-red-900/30 dark:text-red-200 dark:hover:bg-red-900/50"
                             >
                               <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3 flex-shrink-0">
                                 <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                               </svg>
                               <span className="truncate">{EBAY_FAILED_BADGE_TEXT}</span>
+                            </button>
+                          )}
+                          {/* Blocked eBay push that only needs more information (2026-10-12): an amber note, never a failure.
+                              Driven by the newest push row, so it stays after "Got it" on the item page and clears on a later success. */}
+                          {!showEbayFailedBadge(item) && needsInfoChipText(item) && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); router.push(`/organizer/edit-item/${item.id}`); }}
+                              aria-label={`${needsInfoChipText(item)}, not updated on eBay, open to fix`}
+                              data-testid="add-items-needs-info-chip"
+                              className="relative mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-[''] dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                            >
+                              <span className="truncate">{needsInfoChipText(item)}</span>
                             </button>
                           )}
                         </div>

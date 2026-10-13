@@ -9,6 +9,8 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
+import { describeBlockedPushes } from '../lib/marketplaceImpact';
+import BlockedPushSummary from './BlockedPushSummary';
 import { useToast } from './ToastContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import ShippingNetPreview from './ShippingNetPreview';
@@ -583,6 +585,8 @@ const PostSaleEbayUnsoldSection: React.FC<PostSaleEbayPanelProps> = ({ saleId })
   const queryClient = useQueryClient();
 
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  // Persistent amber summary of items an eBay push held back because they need more information (not a failure).
+  const [blockedSummary, setBlockedSummary] = useState<ReturnType<typeof describeBlockedPushes>>(null);
   const [itemOverrides, setItemOverrides] = useState<Record<string, ShippingOverride>>({});
   const [expandedEditItem, setExpandedEditItem] = useState<string | null>(null);
   const [savingItemId, setSavingItemId] = useState<string | null>(null);
@@ -641,30 +645,31 @@ const PostSaleEbayUnsoldSection: React.FC<PostSaleEbayPanelProps> = ({ saleId })
         ),
       });
     },
+    onMutate: () => setBlockedSummary(null),
     onSuccess: (response) => {
       const results = response.data.results || [];
       const successCount = results.filter((r: any) => r.status === 'success').length;
-      const failureCount = results.filter((r: any) => r.status === 'error').length;
+      const failureCount = results.filter((r: any) => r.status === 'error' && !r.informational).length;
+      // Needs-more-information blocks (package weight and similar) are not failures: shown as a note.
+      const blocked = results.filter((r: any) => r.status === 'error' && r.informational);
 
       if (successCount > 0) {
         showToast(`${successCount} item(s) published to eBay`, 'success');
       }
       if (failureCount > 0) {
-        // Surface the real reason, not just a count. A sale-wide push that fails the
-        // weight guard used to show only "Failed to push N item(s)", which told the
-        // organizer nothing about what to fix. Failures usually share one cause, so
-        // show the distinct messages (capped) instead of one toast per item.
-        const failures = results.filter((r: any) => r.status === 'error');
+        // Surface the real reason, not just a count. Failures usually share one cause, so ONE toast carries the count once
+        // and the distinct messages (capped at three).
+        const failures = results.filter((r: any) => r.status === 'error' && !r.informational);
         const distinctMsgs = Array.from(
           new Set(failures.map((r: any) => r.message || r.error || 'Failed to push item'))
         ) as string[];
-        distinctMsgs.slice(0, 3).forEach((m: string) => {
-          showToast(`${failureCount} item(s) not pushed: ${m}`, 'error');
-        });
-        if (distinctMsgs.length > 3) {
-          showToast(`Plus ${distinctMsgs.length - 3} other error(s) on this push.`, 'error');
-        }
+        const shown = distinctMsgs.slice(0, 3).join(' ');
+        const extra = distinctMsgs.length > 3 ? ` Plus ${distinctMsgs.length - 3} other error(s).` : '';
+        showToast(`${failureCount} item(s) not pushed: ${shown}${extra}`, 'error');
       }
+
+      // Needs-more-information blocks are not failures: one persistent amber summary instead of toasts.
+      setBlockedSummary(describeBlockedPushes(blocked, (itemId) => unsoldData?.items.find((i) => i.id === itemId)?.title));
 
       setSelectedItems(new Set());
       queryClient.invalidateQueries({ queryKey: ['unsold-items', saleId] });
@@ -775,6 +780,15 @@ const PostSaleEbayUnsoldSection: React.FC<PostSaleEbayPanelProps> = ({ saleId })
         <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
           ({alreadyListedCount} already on eBay)
         </p>
+      )}
+      {blockedSummary && (
+        <BlockedPushSummary
+          text={blockedSummary.text}
+          titles={blockedSummary.titles}
+          count={blockedSummary.count}
+          reviewHref={`/organizer/add-items/${saleId}`}
+          onDismiss={() => setBlockedSummary(null)}
+        />
       )}
       <p className="text-xs text-warm-500 dark:text-warm-400 mb-4">
         Heads up: eBay removes listings with links to other sites, so your eBay descriptions are sent without links. On the free plan, photos carry a small FindA.Sale watermark. eBay discourages watermarks but we have not seen it enforce that rule. If eBay ever sends you a notice about a listing, please email support@finda.sale.

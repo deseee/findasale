@@ -43,12 +43,14 @@ jest.mock('../services/ebayRateEstimateService', () => ({
   computeCheapestForOrigin: jest.fn(),
 }));
 
+import { matchesWhere } from './helpers/pushWhere';
 import {
   latestJobByItemPlatform,
   listedExtensionPlatformsByItemId,
   buildItemMarketplaceStatus,
   getItemMarketplaceStatus,
   getFailedPushCountsByItemId,
+  getNeedsInfoPushCodesByItemId,
   EXTENSION_PLATFORMS,
   type MarketplaceJobRow,
 } from '../services/itemMarketplaceStatusService';
@@ -247,6 +249,20 @@ describe('getFailedPushCountsByItemId (one batched query)', () => {
     expect(counts.get('b')).toBeUndefined();
   });
 
+  it('the executed where clause drops informational blocks, keeps NULL error codes and real failures (SQL NULL semantics)', async () => {
+    mockPrisma.itemMarketplacePush.groupBy.mockResolvedValue([]);
+    await getFailedPushCountsByItemId(['a'], 'org1');
+    const where = mockPrisma.itemMarketplacePush.groupBy.mock.calls[0][0].where;
+    const rows = [
+      { id: 'blocked', status: 'FAILED', errorCode: 'NEEDS_PACKAGE_DETAILS', acknowledgedAt: null },
+      { id: 'blockedPartial', status: 'PARTIAL', errorCode: 'EBAY_NO_PACKAGE_WEIGHT', acknowledgedAt: null },
+      { id: 'real', status: 'FAILED', errorCode: 'PUBLISH_FAILED', acknowledgedAt: null },
+      { id: 'realNullCode', status: 'FAILED', errorCode: null, acknowledgedAt: null },
+      { id: 'realAcked', status: 'FAILED', errorCode: 'PUBLISH_FAILED', acknowledgedAt: new Date() },
+      { id: 'success', status: 'SUCCESS', errorCode: null, acknowledgedAt: null },
+    ].map((r) => ({ ...r, itemId: 'a', organizerId: 'org1', platform: 'EBAY' }));
+    expect(rows.filter((r) => matchesWhere(r, where)).map((r) => r.id)).toEqual(['real', 'realNullCode']);
+  });
   it('no items means no query, and a database error yields an empty map instead of failing the list', async () => {
     expect((await getFailedPushCountsByItemId([], 'org1')).size).toBe(0);
     expect(mockPrisma.itemMarketplacePush.groupBy).not.toHaveBeenCalled();
@@ -311,5 +327,35 @@ describe('parity with extensionController.getExtensionItems (marketplaceListed* 
     expect(body.items.find((i: any) => i.id === 'B').marketplaceListedCraigslist).toBe(false);
     expect(body.items.find((i: any) => i.id === 'D').marketplaceListedVinted).toBe(true);
     expect(body.items.find((i: any) => i.id === 'E').marketplaceListedPoshmark).toBe(false);
+  });
+});
+
+describe('getNeedsInfoPushCodesByItemId (amber chip on the Add Items list)', () => {
+  beforeEach(() => mockPrisma.itemMarketplacePush.findMany.mockReset());
+  const row = (itemId: string, status: string, errorCode: string | null) => ({ itemId, status, errorCode });
+
+  it('one bounded query for the page (distinct newest row per item), scoped to the organizer', async () => {
+    mockPrisma.itemMarketplacePush.findMany.mockResolvedValue([
+      row('a', 'FAILED', 'NEEDS_PACKAGE_DETAILS'), // newest for a: blocked -> chip
+      row('b', 'SUCCESS', null), // newest for b is a success -> no chip even though an older block exists
+      row('c', 'FAILED', 'PUBLISH_FAILED'), // real failure -> red badge path, not this chip
+      row('d', 'PARTIAL', 'POLICIES_NOT_CONFIGURED'),
+    ]);
+    const codes = await getNeedsInfoPushCodesByItemId(['a', 'b', 'c', 'd'], 'org1');
+    expect(mockPrisma.itemMarketplacePush.findMany).toHaveBeenCalledTimes(1);
+    const args = mockPrisma.itemMarketplacePush.findMany.mock.calls[0][0];
+    expect(args.where).toMatchObject({ itemId: { in: ['a', 'b', 'c', 'd'] }, organizerId: 'org1', platform: 'EBAY' });
+    expect(args.orderBy).toEqual([{ itemId: 'asc' }, { createdAt: 'desc' }]);
+    expect(args.distinct).toEqual(['itemId']); // bounded: one row per item
+    expect(Object.fromEntries(codes)).toEqual({ a: 'NEEDS_PACKAGE_DETAILS', d: 'POLICIES_NOT_CONFIGURED' });
+  });
+
+  it('is independent of acknowledgement (it does not filter on acknowledgedAt) and never throws', async () => {
+    mockPrisma.itemMarketplacePush.findMany.mockResolvedValue([]);
+    await getNeedsInfoPushCodesByItemId(['a'], 'org1');
+    expect(mockPrisma.itemMarketplacePush.findMany.mock.calls[0][0].where).not.toHaveProperty('acknowledgedAt');
+    expect((await getNeedsInfoPushCodesByItemId([], 'org1')).size).toBe(0);
+    mockPrisma.itemMarketplacePush.findMany.mockRejectedValue(new Error('no table'));
+    expect((await getNeedsInfoPushCodesByItemId(['a'], 'org1')).size).toBe(0);
   });
 });

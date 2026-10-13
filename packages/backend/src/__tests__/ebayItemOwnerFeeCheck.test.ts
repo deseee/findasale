@@ -95,6 +95,7 @@ import fs from 'fs';
 import path from 'path';
 import {
   checkItemEbayFee,
+  pushSaleToEbay,
   getComps,
   getEbayPreview,
   setEbayShippingOverride,
@@ -739,5 +740,31 @@ describe('setEbayShippingOverride: ownership (B1)', () => {
     const res = await runOverride();
     expect(res.statusCode).toBe(200);
     expect(mockPrisma.organizer.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('pushSaleToEbay: response summary separates blocked from failed (2026-10-12)', () => {
+  it('a missing package weight is flagged informational and counted as blocked, a real error as failed, a fee check as neither', async () => {
+    arrangeFeeCheck({
+      saleItems: [
+        pipelineItem({ id: 'noWeight', packageWeightOz: null, aiPackageWeightOz: null, packageConfirmedByOrganizer: false }),
+        pipelineItem({ id: 'alreadyListed', ebayListingId: 'L1' }),
+        pipelineItem({ id: 'good' }),
+      ],
+    });
+    const res = makeRes();
+    await pushSaleToEbay(
+      { params: { saleId: 'sale_1' }, user: { id: USER }, body: { itemIds: ['noWeight', 'alreadyListed', 'good'], feeCheckOnly: true } } as any,
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    const byId = Object.fromEntries(res.body.results.map((r: any) => [r.itemId, r]));
+    expect(byId.noWeight.status).toBe('error');
+    expect(byId.noWeight.informational).toBe(true);
+    expect(byId.alreadyListed.status).toBe('error');
+    expect(byId.alreadyListed.informational).toBeUndefined();
+    expect(byId.good.status).toBe('fee_checked');
+    expect(res.body.summary).toEqual({ total: 3, success: 0, failed: 1, blocked: 1 });
   });
 });

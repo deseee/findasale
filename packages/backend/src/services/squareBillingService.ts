@@ -69,6 +69,30 @@ export function prorateByRemainingDays(amountCents: number, periodEnd: Date, now
   return Math.round((amountCents * remainingDays) / BILLING_INTERVAL_DAYS);
 }
 
+/** Extra TEAMS seat price: $20/mo flat, not tier-dependent. */
+export const ADDITIONAL_SEAT_PRICE_CENTS = 2000;
+
+export interface SeatQuote {
+  /** What is charged today: the seat price prorated for the days left in the current period. */
+  amountCents: number;
+  /** ISO timestamp of the end of the current billing period (the next renewal). */
+  renewsOn: string;
+  /** What each extra seat adds per month from the next renewal. */
+  monthlyCents: number;
+}
+
+/**
+ * The one place the extra-seat charge is computed, shared by GET /workspace/seat-quote (what the
+ * modal shows) and POST /workspace/add-seat (what is actually charged), so the two can never drift.
+ */
+export function computeSeatQuote(periodEnd: Date, now: Date = new Date()): SeatQuote {
+  return {
+    amountCents: prorateByRemainingDays(ADDITIONAL_SEAT_PRICE_CENTS, periodEnd, now),
+    renewsOn: periodEnd.toISOString(),
+    monthlyCents: ADDITIONAL_SEAT_PRICE_CENTS,
+  };
+}
+
 export function computeUpgradeProrationCents(
   fromTier: BillableOrganizerTier,
   toTier: BillableOrganizerTier,
@@ -150,11 +174,19 @@ export async function createPlatformBillingCard(params: {
   referenceId: string; // organizerId or userId -- ties the Square Customer back to our own record
   sourceId: string;
   note: string;
+  /** Optional human-readable name for the Square Customer (e.g. the organizer's business name). */
+  displayName?: string | null;
 }): Promise<{ customerId: string; cardId: string }> {
   const client = getSquarePlatformClient();
 
+  // Square rejects a customer with none of given_name / family_name / company_name /
+  // email_address / phone_number ("At least one of ... is required for a customer", confirmed
+  // against the Square sandbox 2026-10-12), so always send a name. companyName carries the
+  // organizer's business name when the caller has one, else a neutral label tied to referenceId.
+  const customerName = (params.displayName || '').trim() || `FindA.Sale billing ${params.referenceId}`;
   const customerResponse = await client.customers.create({
     referenceId: params.referenceId,
+    companyName: customerName.slice(0, 255),
     note: params.note,
   });
   const customerId = (customerResponse as any)?.customer?.id;
@@ -202,6 +234,38 @@ export interface ChargeStoredCardSuccess {
 export interface ChargeStoredCardFailure {
   ok: false;
   message: string;
+  /** Square's first error code (e.g. CARD_DECLINED, NOT_FOUND) when the failure came from Square. */
+  code?: string;
+}
+
+/**
+ * User-safe wording for a failed stored-card charge, keyed by Square's error code. Square's own
+ * `detail` text (e.g. "Did not find matching card") is for logs and Sentry only, never for users.
+ */
+export function friendlyChargeFailureMessage(code?: string | null): string {
+  switch (code) {
+    case 'NOT_FOUND':
+    case 'INVALID_CARD':
+    case 'INVALID_CARD_DATA':
+    case 'CARD_NOT_SUPPORTED':
+      return 'We could not find a usable card on your subscription. Please update your payment method on your subscription page and try again.';
+    case 'CARD_EXPIRED':
+    case 'EXPIRATION_FAILURE':
+      return 'The card on your subscription has expired. Please update your payment method on your subscription page and try again.';
+    case 'INSUFFICIENT_FUNDS':
+      return 'Your card was declined for insufficient funds. Please try again or update your payment method on your subscription page.';
+    case 'CARD_DECLINED':
+    case 'GENERIC_DECLINE':
+    case 'CARD_DECLINED_VERIFICATION_REQUIRED':
+    case 'CVV_FAILURE':
+    case 'ADDRESS_VERIFICATION_FAILURE':
+    case 'TRANSACTION_LIMIT':
+    case 'PAYMENT_LIMIT_EXCEEDED':
+    case 'NOT_COMPLETED':
+      return 'Your card was declined. Please try again or update your payment method on your subscription page.';
+    default:
+      return 'We could not charge your card. Please try again, or update your payment method on your subscription page.';
+  }
 }
 export type ChargeStoredCardResult = ChargeStoredCardSuccess | ChargeStoredCardFailure;
 
@@ -229,7 +293,7 @@ export async function chargeStoredCard(params: ChargeStoredCardParams): Promise<
     const payment = (response as any)?.payment;
     const statusOk = payment?.status === 'COMPLETED' || (!params.requireCompleted && payment?.status === 'APPROVED');
     if (!payment?.id || !statusOk) {
-      return { ok: false, message: 'Card declined' };
+      return { ok: false, message: 'Card declined', code: 'NOT_COMPLETED' };
     }
     return { ok: true, paymentId: payment.id, status: payment.status };
   } catch (err) {
@@ -238,6 +302,7 @@ export async function chargeStoredCard(params: ChargeStoredCardParams): Promise<
     // even though `message` returned to the caller is deliberately generic for anything
     // that isn't a genuine Square decline -- see extractDeclineMessage's own comment.
     console.warn(`[squareBillingService] chargeStoredCard decline/error (ref ${params.referenceId}):`, err);
-    return { ok: false, message };
+    const code = err instanceof SquareError ? ((err as any).errors?.[0]?.code as string | undefined) : undefined;
+    return { ok: false, message, code };
   }
 }

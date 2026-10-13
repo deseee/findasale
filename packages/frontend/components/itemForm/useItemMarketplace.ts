@@ -163,6 +163,14 @@ export function useItemMarketplace(itemId: string, itemHold?: { heldAt?: string 
     },
   });
 
+  // "Got it" on the amber needs-more-information note: acknowledges informational rows only, never a real failure.
+  const ackInfoMutation = useMutation({
+    mutationFn: () => marketplaceApi.ackPushFailures(itemId, { scope: 'informational' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: statusKey });
+    },
+  });
+
   const repushMutation = useMutation({
     mutationFn: (opts: { retry?: boolean }) => marketplaceApi.repush(itemId, opts),
     onMutate: () => {
@@ -245,6 +253,8 @@ export function useItemMarketplace(itemId: string, itemHold?: { heldAt?: string 
     showPushResult,
     ack: () => ackMutation.mutate(),
     ackPending: ackMutation.isPending,
+    ackInfo: () => ackInfoMutation.mutate(),
+    ackInfoPending: ackInfoMutation.isPending,
     repush: (opts?: { retry?: boolean }) => repushMutation.mutate(opts || {}),
     repushPending: repushMutation.isPending,
     release: () => releaseMutation.mutate(),

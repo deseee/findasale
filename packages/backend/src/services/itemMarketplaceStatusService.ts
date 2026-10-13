@@ -34,6 +34,7 @@ import {
   type PublishedExtensionPlatformsByItemId,
 } from './itemChannelStatusService';
 import { isPlatformPaused, sanitizePausedPlatforms } from './pausedMarketplaces';
+import { NOT_INFORMATIONAL_PUSH_WHERE, isInformationalPushCode } from '../lib/ebayPushInformational';
 
 export const EXTENSION_PLATFORMS = ['FACEBOOK', 'CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI', 'VINTED'] as const;
 export type ExtensionPlatform = (typeof EXTENSION_PLATFORMS)[number];
@@ -413,6 +414,7 @@ export async function getItemMarketplaceStatus(args: {
         platform: 'EBAY',
         status: { in: ['FAILED', 'PARTIAL'] },
         acknowledgedAt: null,
+        ...NOT_INFORMATIONAL_PUSH_WHERE, // blocked pushes (needs package details etc.) are not failures
       },
     }),
     prisma.etsyListing.findFirst({
@@ -476,6 +478,7 @@ export async function getFailedPushCountsByItemId(itemIds: string[], ownerOrgani
         platform: 'EBAY',
         status: { in: ['FAILED', 'PARTIAL'] },
         acknowledgedAt: null,
+        ...NOT_INFORMATIONAL_PUSH_WHERE, // blocked pushes (needs package details etc.) are not failures
       },
       _count: { _all: true },
     });
@@ -484,4 +487,29 @@ export async function getFailedPushCountsByItemId(itemIds: string[], ownerOrgani
     console.warn('[Add Items] failed-push counts could not be loaded (badge hidden for this page):', (err as Error).message);
   }
   return counts;
+}
+
+/**
+ * One batched query for the Add Items list: items whose NEWEST eBay push row is a blocked push that only needs more
+ * information (package weight and similar, see ebayPushInformational). Returns itemId to the row's error code. It is
+ * deliberately independent of acknowledgement ("Got it" only collapses the note): the chip stays until a newer push row
+ * (for example a successful re-push) exists. Never counted as a failure. Never throws: an error only hides the chips.
+ */
+export async function getNeedsInfoPushCodesByItemId(itemIds: string[], ownerOrganizerId: string): Promise<Map<string, string>> {
+  const codes = new Map<string, string>();
+  if (itemIds.length === 0) return codes;
+  try {
+    const rows = await prisma.itemMarketplacePush.findMany({
+      where: { itemId: { in: itemIds }, organizerId: ownerOrganizerId, platform: 'EBAY' },
+      orderBy: [{ itemId: 'asc' }, { createdAt: 'desc' }],
+      distinct: ['itemId'], // newest row per item only (bounded: one row per item, not the whole history)
+      select: { itemId: true, status: true, errorCode: true },
+    });
+    for (const r of rows) {
+      if ((r.status === 'FAILED' || r.status === 'PARTIAL') && isInformationalPushCode(r.errorCode)) codes.set(r.itemId, r.errorCode as string);
+    }
+  } catch (err) {
+    console.warn('[Add Items] needs-info push codes could not be loaded (chips hidden for this page):', (err as Error).message);
+  }
+  return codes;
 }

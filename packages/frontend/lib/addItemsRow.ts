@@ -18,6 +18,7 @@ import {
   normalizeGrade,
   readConditionForForm,
 } from './conditionModel';
+import { informationalPushLabel } from './marketplaceImpact';
 
 // ---------------------------------------------------------------------------
 // Condition and grade in the row quick editor
@@ -94,4 +95,22 @@ export function failedPushCount(item: { marketplacePushFailedCount?: unknown } |
 /** True when the collapsed row should show the amber "eBay update failed" badge. */
 export function showEbayFailedBadge(item: { marketplacePushFailedCount?: unknown } | null | undefined): boolean {
   return failedPushCount(item) > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Amber "needs more information" chip on the collapsed row (a blocked eBay push is not a failure)
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /items/drafts?saleId= returns `marketplacePushNeedsInfoCode` per item: the error code of the newest eBay push row when
+ * it was blocked because the item needs more information, else null. The chip stays until a newer push row exists.
+ */
+export function needsInfoPushCode(item: { marketplacePushNeedsInfoCode?: unknown } | null | undefined): string | null {
+  const c = item?.marketplacePushNeedsInfoCode;
+  return typeof c === 'string' && c.length > 0 ? c : null;
+}
+
+/** The chip text ("Needs package details", "Finish eBay setup", "Needs ISBN"), or null when there is no chip. */
+export function needsInfoChipText(item: { marketplacePushNeedsInfoCode?: unknown } | null | undefined): string | null {
+  return informationalPushLabel(needsInfoPushCode(item));
 }

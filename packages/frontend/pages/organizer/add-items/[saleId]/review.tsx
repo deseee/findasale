@@ -18,6 +18,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../../lib/api';
+import { describeBlockedPushes } from '../../../../lib/marketplaceImpact';
+import BlockedPushSummary from '../../../../components/BlockedPushSummary';
 import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
 import { useEbayConnection } from '../../../../lib/useEbayConnection';
@@ -399,6 +401,8 @@ const ReviewPage = () => {
   const { tier } = useOrganizerTier();
 
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  // Persistent amber summary of items an eBay push held back because they need more information (not a failure).
+  const [blockedSummary, setBlockedSummary] = useState<ReturnType<typeof describeBlockedPushes>>(null);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [editStates, setEditStates] = useState<Map<string, ItemEditState>>(new Map());
   // Tracks which items have had their package weight field edited directly on this
@@ -709,10 +713,12 @@ const ReviewPage = () => {
         itemIds,
       });
     },
+    onMutate: () => setBlockedSummary(null),
     onSuccess: (response) => {
       const results: any[] = response.data?.results || [];
       let successCount = 0;
       let errorCount = 0;
+      setBlockedSummary(describeBlockedPushes(results, (itemId) => items.find((i) => i.id === itemId)?.title));
       results.forEach((result: any) => {
         if (result.status === 'success') {
           successCount++;
@@ -720,6 +726,8 @@ const ReviewPage = () => {
           if (result.warning === 'DRAFT_ON_FINDASALE') {
             showToast('Item pushed to eBay but is still a draft on FindA.Sale. Shoppers won\'t see it until you approve it.', 'info');
           }
+        } else if (result.informational) {
+          // Needs-more-information block (package weight and similar): not an error. The persistent amber summary covers it.
         } else {
           errorCount++;
           // result.message is what the backend pre-publish guards populate
@@ -730,7 +738,8 @@ const ReviewPage = () => {
             : result.error?.includes('POLICIES')
             ? 'eBay policies not configured'
             : result.message || result.error || 'Failed to push item';
-          showToast(`Item ${result.itemId}: ${errorMsg}`, 'error');
+          const itemTitle = items.find((i) => i.id === result.itemId)?.title || 'An item';
+          showToast(`${itemTitle}: ${errorMsg}`, 'error');
         }
       });
       if (successCount > 0) {
@@ -1762,6 +1771,16 @@ const ReviewPage = () => {
 
       <main className="min-h-screen bg-[#F4EFE7] dark:bg-[#1C1C1E]" style={{ fontFamily: 'Inter, sans-serif' }}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-20 pt-8">
+
+          {blockedSummary && saleId && (
+            <BlockedPushSummary
+              text={blockedSummary.text}
+              titles={blockedSummary.titles}
+              count={blockedSummary.count}
+              reviewHref={`/organizer/add-items/${saleId}`}
+              onDismiss={() => setBlockedSummary(null)}
+            />
+          )}
 
           {/* ── Page header ── */}
           <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">

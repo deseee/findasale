@@ -111,8 +111,15 @@ export function createItemMarketplaceApi(client: ApiClientLike) {
       return normalizeMarketplaceStatus(res.data, itemId);
     },
 
-    async ackPushFailures(itemId: string): Promise<{ acknowledged: number }> {
-      const res = await client.post(`/items/${enc(itemId)}/marketplace-push/ack`);
+    /**
+     * Without a scope this acknowledges real failures only (the red banner). With { scope: 'informational' } it acknowledges
+     * only the "needs more information" rows (the amber note's "Got it"). The server keeps the two apart.
+     */
+    async ackPushFailures(itemId: string, opts?: { scope?: 'informational' }): Promise<{ acknowledged: number }> {
+      const res =
+        opts && opts.scope === 'informational'
+          ? await client.post(`/items/${enc(itemId)}/marketplace-push/ack`, { scope: 'informational' })
+          : await client.post(`/items/${enc(itemId)}/marketplace-push/ack`);
       return { acknowledged: typeof res.data?.acknowledged === 'number' ? res.data.acknowledged : 0 };
     },
 

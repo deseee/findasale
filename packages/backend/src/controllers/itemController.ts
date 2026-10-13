@@ -70,7 +70,8 @@ import { normalizeCondition, normalizeGrade, type ConditionGrade } from '../util
 import { pushItemToEbay, computeEbayPushFields, buildEbayPlan, buildExtensionPlan, EBAY_CONTENT_FIELDS, EBAY_PUSH_FIELDS, type EbayPushField, type MarketplacePlan } from '../services/ebayItemPushService'; // 2026-10-04 (U1/U2): structured, recorded eBay push extracted from updateItem
 import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: a local category/tags/photos edit must survive the next import
 import { loadShadowPricingByItemId, shadowDtoFromCompRow, isAudioFormatItem } from '../services/shadowPricingStore'; // shadow mode (2026-10-11): model price + market estimate side by side (read-only)
-import { listedExtensionPlatformsByItemId, getItemMarketplaceStatus, getFailedPushCountsByItemId, ITEM_STATUS_SELECT, EXTENSION_PLATFORMS } from '../services/itemMarketplaceStatusService'; // 2026-10-04 (U3): newest-row-wins listing status shared by the Add Items list and GET /items/:id/marketplace-status
+import { listedExtensionPlatformsByItemId, getItemMarketplaceStatus, getFailedPushCountsByItemId, getNeedsInfoPushCodesByItemId, ITEM_STATUS_SELECT, EXTENSION_PLATFORMS } from '../services/itemMarketplaceStatusService'; // 2026-10-04 (U3): newest-row-wins listing status shared by the Add Items list and GET /items/:id/marketplace-status
+import { NOT_INFORMATIONAL_PUSH_WHERE, INFORMATIONAL_ONLY_PUSH_WHERE } from '../lib/ebayPushInformational';
 
 /**
  * Bug #469: Live-listing edit propagation.
@@ -1232,6 +1233,9 @@ export const getItemMarketplaceStatusHandler = async (req: AuthRequest, res: Res
 };
 
 // POST /api/items/:id/marketplace-push/ack: dismisses this organizer's own FAILED or PARTIAL eBay push rows for the item.
+// Scoped so the two kinds can never clear each other: body { scope: 'informational' } ("Got it" on the amber needs-more-information
+// note) acknowledges ONLY informational rows; anything else (the red failure banner) acknowledges ONLY real failures, so a real
+// failure such as PUBLISH_FAILED can never be cleared by the amber note and vice versa.
 export const acknowledgeItemMarketplacePush = async (req: AuthRequest, res: Response) => {
   try {
     const loaded = await loadOwnedItemForMarketplace(req, res, {});
@@ -1244,6 +1248,7 @@ export const acknowledgeItemMarketplacePush = async (req: AuthRequest, res: Resp
         platform: 'EBAY',
         status: { in: ['FAILED', 'PARTIAL'] },
         acknowledgedAt: null,
+        ...((req.body as { scope?: unknown } | undefined)?.scope === 'informational' ? INFORMATIONAL_ONLY_PUSH_WHERE : NOT_INFORMATIONAL_PUSH_WHERE),
       },
       data: { acknowledgedAt: new Date() },
     });
@@ -1296,7 +1301,7 @@ export const repushItemToEbay = async (req: AuthRequest, res: Response) => {
 
     if (retry) {
       const failed = await prisma.itemMarketplacePush.findFirst({
-        where: { itemId: item.id, organizerId: owner.id, platform: 'EBAY', status: { in: ['FAILED', 'PARTIAL'] } },
+        where: { itemId: item.id, organizerId: owner.id, platform: 'EBAY', status: { in: ['FAILED', 'PARTIAL'] }, ...NOT_INFORMATIONAL_PUSH_WHERE },
         orderBy: { createdAt: 'desc' },
         select: { fieldsAttempted: true, fieldsPushed: true },
       });
@@ -4943,6 +4948,8 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     // U1 (2026-10-04): ONE batched query for the whole page (never per item): unacknowledged FAILED or PARTIAL eBay
     // pushes per item, scoped to this sale's organizer. Drives the warning badge on the list row.
     const failedPushCounts = await getFailedPushCountsByItemId(itemIds, sale.organizerId);
+    // Blocked pushes that only need more information (package weight and similar): a separate amber chip, never counted as failures.
+    const needsInfoPushCodes = await getNeedsInfoPushCodesByItemId(itemIds, sale.organizerId);
 
     // Shadow mode (2026-10-11): ONE batched ItemCompLookup read for the page (never per item). Best-effort: returns an
     // empty map on any error, so the list never fails because of it. Display only; never touches price.
@@ -4967,6 +4974,8 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
       channelStatus: channelStatusByItemId[item.id] ?? null,
       // U1 (2026-10-04): failed, unacknowledged eBay push attempts for this item (0 = no badge).
       marketplacePushFailedCount: failedPushCounts.get(item.id) ?? 0,
+      // Newest eBay push for the item was blocked because it needs more information (error code), else null. Stays until a newer push row exists.
+      marketplacePushNeedsInfoCode: needsInfoPushCodes.get(item.id) ?? null,
       // Shadow mode: { smartPrice, marketPrice, marketConfidence, compsFound } or null (no market estimate saved).
       shadowPricing: shadowPricingByItemId.get(item.id) ?? null,
     }));

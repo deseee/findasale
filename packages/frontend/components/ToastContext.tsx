@@ -58,7 +58,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       {children}
 
       {/* Standard toasts: top-right, cleared above header */}
-      <div className="fixed top-14 md:top-20 right-4 z-50 space-y-2">
+      <div className="fixed top-14 md:top-20 right-4 z-[70] space-y-2">
         {standardToasts.map((toast) => (
           <div
             key={toast.id}
@@ -77,7 +77,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       </div>
 
       {/* Points toasts: bottom-right, above BottomTabNav */}
-      <div className="fixed bottom-20 right-4 z-50 space-y-2">
+      <div className="fixed bottom-20 right-4 z-[70] space-y-2">
         {pointsToasts.map((toast) => (
           <div
             key={toast.id}
