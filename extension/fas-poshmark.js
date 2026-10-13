@@ -2280,6 +2280,7 @@
     }
     await tryFill('Title', poshTitle, (v) => fillText('Title', v));
     await tryFill('Description', item.description, (v) => fillText('Description', v));
+    try { if (self.FAS_QTY) self.FAS_QTY.fillQuantity(item); } catch (e) { /* kits: best-effort Quantity field, never blocks */ }
     if (item.price != null && isFinite(Number(item.price))) {
       const priceOk = await tryFill('Price', item.price, (v) => fillPoshmarkPrice(String(Math.max(1, Math.round(Number(v))))));
       // BUG FIX 2026-08-22 (S-EXT-POSHMARK-PRICE-ILLEGAL-INVOCATION, Patrick live-console-report):

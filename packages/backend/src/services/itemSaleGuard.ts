@@ -31,6 +31,7 @@ import { Item, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { InsufficientStockError } from './itemStockErrors';
 import { KIT_LISTING_TYPE, commitKitSale, recomputeKitsForComponents } from './itemKitStock';
+import { scheduleKitRelatedStockSync } from './kitStockSyncTrigger'; // 2026-10-13: re-push the kit / component stock number to every market after the sale
 
 /**
  * Thrown when commitItemSale() cannot legally perform the requested
@@ -154,8 +155,10 @@ export async function commitItemSale(
         }
         throw err;
       }
+      scheduleKitRelatedStockSync(itemId, 'kit', 'manual kit sale');
     } else if (committed.isKitComponent) {
       await recomputeKitsForComponents(client, [itemId]);
+      scheduleKitRelatedStockSync(itemId, 'component', 'manual component sale');
     }
   }
 

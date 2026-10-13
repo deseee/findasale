@@ -77,6 +77,7 @@ import { modelTokenFrom } from '../services/ebayCatalogLookup';
 import { fetchAndCacheEbayStoreSubscription } from '../services/ebayStoreSubscriptionService';
 import { csvCell } from '../utils/csvSafe'; // CSV formula-injection-safe cell writer
 import { inStockOf } from '../services/inventoryStockMath'; // 2026-10-13: the ONE in-stock number (pure module, no import cycle with inventoryStockSync)
+import { loadKitComponentLines, withKitIncludes } from '../services/itemKitListing'; // 2026-10-13: a kit's eBay description lists its components
 import { resolveItemOwnerOrganizer } from '../utils/itemOwner'; // B1: inventory-safe, default-deny item ownership
 
 /**
@@ -2495,6 +2496,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             roomTag: true,
             stockTotal: true,
             stockSold: true,
+            listingType: true,
             qrAssetReady: true,
             card: { select: EBAY_CARD_SELECT },
           },
@@ -2512,6 +2514,16 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
     if (sale.items.length === 0) {
       return res.status(400).json({ message: 'No available items to push' });
+    }
+
+    // Kits (2026-10-13): a kit lists like any item, with its own title, price, photos and the one stock number (quantity below), but its
+    // eBay description must also say what is in the box. Built here from the current components; the stored description is not changed.
+    const kitIdsInPush = sale.items.filter((i) => i.listingType === 'KIT').map((i) => i.id);
+    if (kitIdsInPush.length > 0) {
+      const kitLines = await loadKitComponentLines(kitIdsInPush);
+      for (const it of sale.items) {
+        if (it.listingType === 'KIT') it.description = withKitIncludes(it.description, kitLines.get(it.id) ?? []);
+      }
     }
 
     // Resolve or create a merchant location key (required by eBay for Item.Country)
@@ -4093,6 +4105,8 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         costBasis: true,
         roomTag: true,
         condition: true,
+        organizerId: true, // 2026-10-13: a saleless kit is owned through Item.organizerId
+        listingType: true,
         // Pre-publish validation guard inputs (2026-07-16): price + weight fields
         // so publishItemOffer can reject sub-$0.99 / no-weight items with a clear
         // message instead of letting eBay fail publish with 25016 / 25101.
@@ -4120,10 +4134,11 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Inventory items without a sale can't be published this way.
-    if (!item.sale) {
+    // Inventory items without a sale can't be published this way (a kit is allowed: it is owned through Item.organizerId).
+    if (!item.sale && item.listingType !== 'KIT') {
       return res.status(400).json({ message: 'Item is not attached to a sale' });
     }
+    const publishOwnerId = item.sale?.organizerId ?? item.organizerId ?? null;
 
     // Organizer ownership check
     const organizer = await prisma.organizer.findUnique({
@@ -4133,7 +4148,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     if (!organizer) {
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
-    if (item.sale.organizerId !== organizer.id) {
+    if (publishOwnerId !== organizer.id) {
       return res.status(403).json({ message: 'Not authorized to publish this item' });
     }
 
@@ -4511,7 +4526,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     // organizer-facing fee warning from the check made before publish above.
     if (manualFeeCheck.status === 'free') {
       try {
-        await recordFreeEbayInsertion(item.sale.organizerId);
+        await recordFreeEbayInsertion(publishOwnerId ?? organizer.id);
       } catch (e: any) {
         console.warn(`[eBay PublishNow] item=${item.id} failed to record free-insertion count (non-fatal):`, e?.message || e);
       }

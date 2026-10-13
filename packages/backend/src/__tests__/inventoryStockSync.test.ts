@@ -14,6 +14,7 @@ const mockPrisma: any = {
   etsyListing: { findUnique: jest.fn() },
   shopifyListing: { findUnique: jest.fn(), updateMany: jest.fn() },
   marketplaceListingJob: { findMany: jest.fn() },
+  itemKitComponent: { findMany: jest.fn() },
 };
 const mockEbayFetch = jest.fn();
 const mockRefresh = jest.fn();
@@ -118,6 +119,7 @@ beforeEach(() => {
   mockPrisma.etsyListing.findUnique.mockResolvedValue(null);
   mockPrisma.shopifyListing.findUnique.mockResolvedValue(null);
   mockPrisma.marketplaceListingJob.findMany.mockResolvedValue([]);
+  mockPrisma.itemKitComponent.findMany.mockResolvedValue([]);
   mockRefresh.mockResolvedValue('tok');
   mockRateLimited.mockReturnValue(false);
   mockEndEbay.mockResolvedValue(true);
@@ -176,11 +178,22 @@ describe('syncItemStock: reading and never throwing', () => {
     expect(mockRecompute).not.toHaveBeenCalled();
   });
 
-  it('a kit is never listed as a unit quantity on any market', async () => {
-    state.row = row({ listingType: 'KIT' });
-    const r = await syncItemStock('item_1', 'test');
-    expect(mockEbayFetch).not.toHaveBeenCalled();
-    expect(r.outcomes.find((o) => o.market === 'ebay')).toBeUndefined();
+  it('a kit syncs like any item: its own derived stock number is pushed to eBay (no early exit)', async () => {
+    state.row = row({ listingType: 'KIT', stockTotal: 3, stockSold: 0, ebayQuantityAvailable: 3 });
+    routeEbay({ liveQty: 9 });
+    const r = await syncItemStock('item_1', 'component sold');
+    expect(r.inStock).toBe(3);
+    expect(ebayOutcome(r)).toMatchObject({ status: 'synced', expected: 3 });
+    expect((puts()[0].body as any).availability.shipToLocationAvailability.quantity).toBe(3);
+  });
+
+  it('a kit whose derived stock is 0 has its eBay listing ended (zero stock flows to removal)', async () => {
+    state.row = row({ listingType: 'KIT', stockTotal: 2, stockSold: 2 });
+    const r = await syncItemStock('item_1', 'component sold out');
+    expect(r.inStock).toBe(0);
+    expect(mockPrisma.item.updateMany).toHaveBeenCalledWith({ where: { id: 'item_1', status: 'AVAILABLE' }, data: { status: 'SOLD' } });
+    expect(mockEndEbay).toHaveBeenCalledWith('item_1');
+    expect(puts()).toHaveLength(0);
   });
 
   it('kits that CONTAIN the item are recomputed on every real run, never on checkOnly', async () => {
@@ -564,5 +577,71 @@ describe('syncItemStock: one run per item at a time', () => {
     expect([ra.inStock, rb.inStock, rc.inStock]).toEqual([4, 4, 4]);
     const offerGets = ebayCalls().filter((x) => x.method === 'GET' && x.path === '/sell/inventory/v1/offer/offer_1');
     expect(offerGets).toHaveLength(2);
+  });
+});
+
+
+describe('syncItemStock: kit cascade (kit <-> components, both directions, always terminates)', () => {
+  const flush = async () => { for (let i = 0; i < 12; i += 1) await new Promise((r) => setImmediate(r)); };
+  const rows: Record<string, Row> = {};
+  const lookedUp = () => mockPrisma.item.findUnique.mock.calls.map((c: any[]) => c[0].where.id as string);
+
+  beforeEach(() => {
+    for (const k of Object.keys(rows)) delete rows[k];
+    rows.k1 = row({ id: 'k1', listingType: 'KIT', stockTotal: 3, stockSold: 0, ebayOfferId: null, ebayListingId: null });
+    rows.c1 = row({ id: 'c1', isKitComponent: true, ebayOfferId: null, ebayListingId: null });
+    rows.c2 = row({ id: 'c2', isKitComponent: true, ebayOfferId: null, ebayListingId: null });
+    mockPrisma.item.findUnique.mockImplementation(async ({ where }: any) => rows[where.id] ?? null);
+    mockPrisma.itemKitComponent.findMany.mockImplementation(async ({ where }: any) => {
+      if (where.kitItemId === 'k1') return [{ componentItemId: 'c1' }, { componentItemId: 'c2' }];
+      if (where.componentItemId) return [{ kitItemId: 'k1' }];
+      return [];
+    });
+  });
+
+  it('a kit sale re-syncs each component, and the components do not bounce back to the same kit', async () => {
+    await syncItemStock('k1', 'kit sold');
+    await flush();
+    const ids = lookedUp();
+    expect(ids.filter((i) => i === 'c1')).toHaveLength(1);
+    expect(ids.filter((i) => i === 'c2')).toHaveLength(1);
+    expect(ids.filter((i) => i === 'k1')).toHaveLength(1); // exceptKitIds stops the chain
+  });
+
+  it('a component sale re-syncs each kit containing it, without cascading back down', async () => {
+    await syncItemStock('c1', 'component sold');
+    await flush();
+    const ids = lookedUp();
+    expect(ids.filter((i) => i === 'k1')).toHaveLength(1);
+    expect(ids.filter((i) => i === 'c1')).toHaveLength(1);
+    expect(ids).not.toContain('c2'); // the kit run is a leaf (noCascade)
+  });
+
+  it('noCascade and checkOnly never cascade', async () => {
+    await syncItemStock('k1', 'leaf', { noCascade: true });
+    await syncItemStock('c1', 'audit', { checkOnly: true });
+    await flush();
+    expect(lookedUp().sort()).toEqual(['c1', 'k1']);
+    expect(mockPrisma.itemKitComponent.findMany).not.toHaveBeenCalled();
+  });
+
+  it('exceptKitIds skips the named kit', async () => {
+    await syncItemStock('c1', 'component sold', { exceptKitIds: ['k1'] });
+    await flush();
+    expect(lookedUp()).toEqual(['c1']);
+  });
+
+  it('an ordinary item (not a kit, not a component) fires no cascade query', async () => {
+    rows.i1 = row({ id: 'i1', ebayOfferId: null, ebayListingId: null });
+    await syncItemStock('i1', 'sold');
+    await flush();
+    expect(mockPrisma.itemKitComponent.findMany).not.toHaveBeenCalled();
+  });
+
+  it('a failing cascade lookup never breaks the sync result', async () => {
+    mockPrisma.itemKitComponent.findMany.mockRejectedValue(new Error('db'));
+    const r = await syncItemStock('k1', 'kit sold');
+    await flush();
+    expect(r.inStock).toBe(3);
   });
 });

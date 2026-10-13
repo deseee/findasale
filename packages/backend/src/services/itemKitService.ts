@@ -15,12 +15,15 @@
  *  - Components cannot be changed once the kit has sold (a later refund restocks the CURRENT components, so the recipe must not move).
  *    Title, description and price can always be edited.
  *  - An ordinary item can be turned into a kit in place (convertItemToKit): it keeps its own title, photos, description and price.
- *  - Kits are excluded from markdown automation and are never listed on eBay in Phase 1 (ebayShippingOverride DONT_LIST).
+ *  - Kits are excluded from markdown automation (excludeFromMarkdown). They ARE listable on every marketplace (2026-10-13): a kit gets
+ *    no ebayShippingOverride of its own (the old Phase 1 DONT_LIST is gone) and carries the one platform stock number like any item.
+ *    fixLegacyKitDontList() clears DONT_LIST once from kits that got it before that change.
  */
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { KIT_LISTING_TYPE, computeKitAvailability, materializedKitStockTotal, recomputeKitStock } from './itemKitStock';
 import { organizerEditStampAlways } from '../utils/organizerEdit';
+import { scheduleKitRelatedStockSync } from './kitStockSyncTrigger';
 
 export const KIT_LIMITS = { maxComponents: 25, maxQuantity: 1000, maxTitle: 200, maxDescription: 5000, maxPrice: 1_000_000 } as const;
 
@@ -292,7 +295,7 @@ async function toView(db: Db, kitId: string): Promise<KitView> {
 async function loadOwnedKit(db: Db, organizerId: string, kitId: string) {
   const kit = await db.item.findUnique({
     where: { id: kitId },
-    select: { id: true, organizerId: true, listingType: true, deletedAt: true, stockSold: true, kitComponents: { select: { componentItemId: true } } },
+    select: { id: true, organizerId: true, listingType: true, deletedAt: true, stockSold: true, price: true, title: true, description: true, kitComponents: { select: { componentItemId: true } } },
   });
   if (!kit || kit.organizerId !== organizerId || kit.listingType !== KIT_LISTING_TYPE || kit.deletedAt) throw new KitError('KIT_NOT_FOUND', 404, 'Kit not found.');
   return kit;
@@ -339,7 +342,6 @@ export async function createKit(organizerId: string, raw: unknown): Promise<KitV
         listingType: KIT_LISTING_TYPE,
         stockTotal: available,
         excludeFromMarkdown: true, // kits are priced by the organizer, never marked down by the markdown crons
-        ebayShippingOverride: 'DONT_LIST', // Phase 1: no external marketplace listing for kits
         isKitComponent: false,
         kitComponents: { create: rows.map((r) => ({ componentItemId: r.item.id, quantity: r.quantity })) },
       },
@@ -378,8 +380,8 @@ export function convertIneligibleReason(item: {
 
 /**
  * Turns an existing ordinary item into a kit IN PLACE (one transaction). The item keeps its id, title, description, price and photos;
- * only its listing type, stock and recipe change. Refuses (409) when the item is live on another marketplace, because the kit is
- * never listed externally and the listing would be left behind.
+ * only its listing type, stock and recipe change. Refuses (409) when the item is already live on a marketplace: that listing was made for the plain item, so it must be taken
+ * down first; the kit is then listed afresh (own listing, own stock, Includes list) like any item.
  */
 export async function convertItemToKit(organizerId: string, itemId: string, rawComponents: unknown): Promise<KitView> {
   const components = parseKitComponents(rawComponents);
@@ -421,7 +423,7 @@ export async function convertItemToKit(organizerId: string, itemId: string, rawC
       throw new KitError(
         'KIT_CONVERT_HAS_LISTINGS',
         409,
-        'This item is listed on another marketplace. Take those listings down first, then make it a kit. Kits are not listed on other marketplaces yet.',
+        'This item is already listed on a marketplace. Take those listings down first, then make it a kit; the kit can then be listed on any marketplace as its own listing with its own stock.',
       );
     }
     const rows = await loadEligibleComponents(db, organizerId, components);
@@ -438,7 +440,6 @@ export async function convertItemToKit(organizerId: string, itemId: string, rawC
         stockSold: 0,
         isKitComponent: false,
         excludeFromMarkdown: true,
-        ebayShippingOverride: 'DONT_LIST',
         ...organizerEditStampAlways(),
       },
     });
@@ -447,17 +448,49 @@ export async function convertItemToKit(organizerId: string, itemId: string, rawC
   });
 }
 
+/**
+ * Fire-and-forget (2026-10-13): a kit that is live on eBay gets its edited title / description / price pushed, the same live-edit push an
+ * ordinary item gets from the item editor (ebayItemPushService), and its Shopify price is updated. Not-listed kits are a silent no-op there.
+ * The other markets are reached by the extension price-sync queues (the price edit stamps priceUpdatedAt). Never throws; skipped under jest.
+ */
+function fireKitMarketplaceEditPush(organizerId: string, kitId: string, fields: Array<'title' | 'description' | 'price'>, price: number | undefined): void {
+  if (fields.length === 0 || process.env.JEST_WORKER_ID) return;
+  (async () => {
+    const { pushItemToEbay } = await import('./ebayItemPushService');
+    await pushItemToEbay({ itemId: kitId, organizerId, trigger: 'SAVE', fields });
+    if (price !== undefined) {
+      const { updateShopifyProductFields } = await import('./shopifyService');
+      await updateShopifyProductFields(kitId, { price });
+    }
+  })().catch((err: any) => console.warn(`[Kit] marketplace edit push failed for kit ${kitId}:`, err?.message));
+}
+
 export async function updateKit(organizerId: string, kitId: string, raw: unknown): Promise<KitView> {
   const input = parseKitUpdate(raw);
-  return prisma.$transaction(async (txClient) => {
+  const pushFields: Array<'title' | 'description' | 'price'> = [];
+  let pushPrice: number | undefined;
+  const view = await prisma.$transaction(async (txClient) => {
     const db = txClient as unknown as Db;
     const kit = await loadOwnedKit(db, organizerId, kitId);
     const data: Prisma.ItemUpdateInput = {};
-    if (input.title !== undefined) data.title = input.title;
-    if (input.description !== undefined) data.description = input.description;
+    if (input.title !== undefined) {
+      data.title = input.title;
+      if (input.title !== kit.title) pushFields.push('title');
+    }
+    if (input.description !== undefined) {
+      data.description = input.description;
+      if ((input.description ?? '') !== (kit.description ?? '')) pushFields.push('description');
+    }
     if (input.price !== undefined) {
       data.price = input.price;
       data.originalPrice = input.price;
+      // Same rule as itemController.updateItem: a real price change is stamped so the marketplace price sync (extension price-sync queue,
+      // eBay propagation) sees it. A resave of the unchanged price must not reset it.
+      if (input.price !== kit.price) {
+        data.priceUpdatedAt = new Date();
+        pushFields.push('price');
+        pushPrice = input.price;
+      }
     }
     if (input.components) {
       if (kit.stockSold > 0) {
@@ -473,8 +506,12 @@ export async function updateKit(organizerId: string, kitId: string, raw: unknown
     }
     if (Object.keys(data).length > 0) await db.item.update({ where: { id: kitId }, data });
     if (input.components) await recomputeKitStock(db, [kitId]);
+    // The recipe changed the kit's derived stock: re-push it to every market once the transaction has committed.
+    if (input.components) scheduleKitRelatedStockSync(kitId, 'kit', 'kit components edited');
     return toView(db, kitId);
   });
+  fireKitMarketplaceEditPush(organizerId, kitId, pushFields, pushPrice);
+  return view;
 }
 
 export async function getKit(organizerId: string, kitId: string): Promise<KitView> {
@@ -583,4 +620,30 @@ export async function listKitsForComponent(organizerId: string, itemId: string):
     take: 100,
   });
   return shapeKitMemberships(rows);
+}
+
+/** ProcessedWebhookEvent id that records the one-time legacy cleanup below (the table's eventId is its primary key). */
+export const KIT_DONT_LIST_FIX_MARKER = 'one-time:kit-dont-list-fix:v1';
+
+/**
+ * One-time, idempotent code-path fix (2026-10-13): kits created before kits became listable on every marketplace carry
+ * ebayShippingOverride 'DONT_LIST' (written by createKit / convertItemToKit), which hides them from the extension queues.
+ * Clears exactly that value on listingType 'KIT' rows. The marker row and the update share one transaction, so a concurrent
+ * or repeated call finds the marker (createMany skipDuplicates -> count 0) and changes nothing, and a failed update leaves no
+ * marker (the next call retries). A kit an organizer sets to DONT_LIST AFTER this ran is never touched again.
+ */
+export async function fixLegacyKitDontList(): Promise<{ ran: boolean; fixed: number }> {
+  return prisma.$transaction(async (txRaw) => {
+    const tx = txRaw as any;
+    const claimed = await tx.processedWebhookEvent.createMany({
+      data: [{ eventId: KIT_DONT_LIST_FIX_MARKER, status: 'COMPLETED' }],
+      skipDuplicates: true,
+    });
+    if (!claimed || claimed.count === 0) return { ran: false, fixed: 0 };
+    const res = await tx.item.updateMany({
+      where: { listingType: KIT_LISTING_TYPE, ebayShippingOverride: 'DONT_LIST' },
+      data: { ebayShippingOverride: null },
+    });
+    return { ran: true, fixed: res?.count ?? 0 };
+  });
 }

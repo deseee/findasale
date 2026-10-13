@@ -34,6 +34,8 @@ header { padding: 8px 10px; border-bottom: 1px solid #26362d; display: flex; ali
 .item .p { color: #9fb6a8; font-size: 12px; }
 .item .badge { font-size: 10px; color: #14201a; background: #6fd08c; border-radius: 4px; padding: 1px 5px; font-weight: 700; white-space: nowrap; flex: 0 0 auto; }
 .item .badge-blocked { color: #2a1414; background: #e08a7a; margin-left: 4px; }
+.item .badge-kit { color: #10202e; background: #8ec5f0; margin-right: 4px; }
+.item .kitline { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item .cb:disabled { opacity: .35; cursor: not-allowed; }
 .item .markPostedBtn { flex: 0 0 auto; font-size: 10px; color: #6fd08c; background: none; border: 1px solid #3c8c5a; border-radius: 4px; padding: 2px 6px; cursor: pointer; white-space: nowrap; }
 .item .markPostedBtn:hover { background: #1d2a22; }

@@ -175,7 +175,8 @@ export async function pushItemAction(req: AuthRequest, res: Response) {
       include: { sale: true },
     });
 
-    if (!item || item.sale?.organizerId !== organizer.id) {
+    // 2026-10-13: a kit may live outside any sale, so ownership falls back to Item.organizerId.
+    if (!item || (item.sale?.organizerId ?? item.organizerId) !== organizer.id) {
       return res.status(403).json({ message: 'Item not found or does not belong to this organizer' });
     }
 

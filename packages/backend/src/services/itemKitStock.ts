@@ -28,6 +28,7 @@
 import { Prisma } from '@prisma/client';
 import type { prisma } from '../lib/prisma';
 import { InsufficientStockError, KitComponentShortError } from './itemStockErrors';
+import { scheduleKitRelatedStockSync } from './kitStockSyncTrigger';
 
 export const KIT_LISTING_TYPE = 'KIT';
 
@@ -315,5 +316,7 @@ export async function restockKitIfKit(client: KitStockClient, itemId: string, ki
   const row = await asTx(client).item.findUnique({ where: { id: itemId }, select: { listingType: true } });
   if (!row || row.listingType !== KIT_LISTING_TYPE) return false;
   await restockKitComponents(client, itemId, kitUnits, deps);
+  // 2026-10-13: a refunded kit puts stock back on the kit and its components: re-push both to every market after the refund commits.
+  scheduleKitRelatedStockSync(itemId, 'kit', 'kit refund');
   return true;
 }

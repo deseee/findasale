@@ -10,6 +10,7 @@ import { organizerHasTier } from '../utils/tierAccess';
 import { facebookMarketplaceCondition, facebookCommerceCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary
 import { csvCell } from '../utils/csvSafe'; // formula-injection-safe cell writer (leading = + - @, tab, CR, LF)
 import { filterBulkLotsForExport } from '../services/bulkLot/bulkLotExportFilter'; // ADR-136 Addendum C (#659): bulk lots are left out of every platform export
+import { applyKitIncludes } from '../services/itemKitListing'; // 2026-10-13: kits listed everywhere
 
 /**
  * Category mapping from FindA.Sale to EstateSales.NET format
@@ -118,6 +119,7 @@ export const exportEstatesalesCSV = async (
             title: true,
             price: true,
             description: true,
+            listingType: true, // 2026-10-13: a kit's description gets its Includes list
             category: true,
             condition: true,
             photoUrls: true,
@@ -135,6 +137,7 @@ export const exportEstatesalesCSV = async (
       res.status(400).json({ message: 'Sale not found' });
       return;
     }
+    sale.items = await applyKitIncludes(sale.items); // 2026-10-13: kits list their components in the exported description
 
     // Verify organizer ownership
     if (sale.organizer.userId !== userId) {
@@ -269,6 +272,7 @@ export const exportFacebookJSON = async (
             title: true,
             price: true,
             description: true,
+            listingType: true, // 2026-10-13: a kit's description gets its Includes list
             category: true,
             condition: true,
             photoUrls: true,
@@ -286,6 +290,7 @@ export const exportFacebookJSON = async (
       res.status(400).json({ message: 'Sale not found' });
       return;
     }
+    sale.items = await applyKitIncludes(sale.items); // 2026-10-13: kits list their components in the exported description
 
     // Verify organizer ownership
     if (sale.organizer.userId !== userId) {
@@ -418,6 +423,7 @@ export const exportCraigslistText = async (
             title: true,
             price: true,
             description: true,
+            listingType: true, // 2026-10-13: a kit's description gets its Includes list
             condition: true,
             photoUrls: true,
             qrEmbedEnabled: true,
@@ -432,6 +438,7 @@ export const exportCraigslistText = async (
       res.status(400).json({ message: 'Sale not found' });
       return;
     }
+    sale.items = await applyKitIncludes(sale.items); // 2026-10-13: kits list their components in the exported description
 
     // Verify organizer ownership
     if (sale.organizer.userId !== userId) {
@@ -837,6 +844,7 @@ export const exportFacebookXLSX = async (
             title: true,
             price: true,
             description: true,
+            listingType: true, // 2026-10-13: a kit's description gets its Includes list
             category: true,
             condition: true,
             photoUrls: true,
@@ -853,6 +861,7 @@ export const exportFacebookXLSX = async (
       res.status(400).json({ message: 'Sale not found' });
       return;
     }
+    sale.items = await applyKitIncludes(sale.items); // 2026-10-13: kits list their components in the exported description
 
     // Verify organizer ownership
     if (sale.organizer.userId !== userId) {
@@ -1006,6 +1015,7 @@ export const exportCommerceManagerFeed = async (
             id: true,
             title: true,
             description: true,
+            listingType: true, // 2026-10-13
             price: true,
             condition: true,
             brand: true,
@@ -1022,6 +1032,7 @@ export const exportCommerceManagerFeed = async (
       res.status(404).json({ message: 'Sale not found' });
       return;
     }
+    sale.items = await applyKitIncludes(sale.items ?? []); // 2026-10-13: kits list their components in the feed description
 
     // Only include items that have at least one photo (image_link is required by FB)
     // ADR-136 Addendum C (#659): a bulk lot is never in a catalog feed (its price is per 1,000 cards).

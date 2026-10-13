@@ -1936,6 +1936,7 @@
     // never sees the raw over-length title at all.
     await tryFill('Title', truncateGrailedTitle(item.title), async (v) => (await fillText('Title', v)) || (await fillText('Item Name', v)));
     await tryFill('Description', item.description, (v) => fillText('Description', v));
+    try { if (self.FAS_QTY) self.FAS_QTY.fillQuantity(item); } catch (e) { /* kits: best-effort Quantity field, never blocks */ }
     // pickMarketTier() call removed (BUG FIX 2026-08-19, S-EXT-BATCH-2) -- see pickCategory's own
     // comment above; there is no separate Market-tier field on the real form to fill.
     // Category is now picked BEFORE fillDesigner() in run() -- see BUG FIX 2026-08-19

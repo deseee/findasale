@@ -2336,6 +2336,7 @@
     }
     await guardedFill('Title', item.title, (v) => fillText('Title', v));
     await guardedFill('Description', padDescriptionForMercariMinimum(appendColorToDescription(item.description, item.color), item), (v) => fillText('Description', v));
+    try { if (self.FAS_QTY && !interstitialAt && !navigatedAwayFrom) self.FAS_QTY.fillQuantity(item); } catch (e) { /* kits: best-effort Quantity field, never blocks */ }
     // Category BEFORE brand -- Mercari's brand list is category-aware (see fillBrand comment).
     // S-EXT-BATCH-12: pass categoryBreadcrumb alongside the clean category -- pickCategory uses
     // the breadcrumb for less-specific fallback segments (and to derive the men's/women's gender
@@ -3432,6 +3433,9 @@
       try { chrome.runtime.sendMessage({ type: 'mercariPricePushFailed', itemId: item.id, reason: 'price_field_not_confirmed' }); } catch (e) {}
       return;
     }
+    // Kits (2026-10-16): a quantity change (e.g. a component sold) rides the same edit visit; only when the record
+    // carries a stock field and the edit page has a Quantity input -- otherwise a no-op.
+    try { if (self.FAS_QTY && self.FAS_QTY.hasStockField && self.FAS_QTY.hasStockField(item)) self.FAS_QTY.fillQuantity(item, { force: true }); } catch (e) { /* best-effort */ }
     await sleep(300);
     const saveBtn = mercPricePushFindSaveButton();
     if (!saveBtn) {

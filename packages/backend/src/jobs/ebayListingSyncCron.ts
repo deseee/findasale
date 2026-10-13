@@ -122,6 +122,7 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
       id: true,
       title: true,
       description: true,
+      listingType: true,
       price: true,
       condition: true,
       conditionGrade: true,
@@ -410,7 +411,9 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
           }
 
           // Description — skip if organizer has a template (eBay stores expanded HTML; pulling back would clobber the clean item description)
-          if (!hasDescriptionTemplate) {
+          // Kits (2026-10-13): eBay's description is the kit description PLUS the Includes list; pulling it back would store the list in
+          // Item.description and append it a second time on the next push, so a kit's description is never pulled.
+          if (!hasDescriptionTemplate && item.listingType !== 'KIT') {
             const ebayDescription = inventoryData.product?.description?.trim();
             if (ebayDescription && ebayDescription !== (item.description ?? '')) {
               updates.description = ebayDescription;

@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { prisma } from '../lib/prisma';
 import { Organizer, Item } from '@prisma/client';
+import { loadPublishText } from './itemKitListing'; // 2026-10-13: a kit's Shopify body lists its components
 
 /**
  * Feature: Shopify Cross-Listing
@@ -47,7 +48,8 @@ export async function pushItemToShopify(
 
     // Prepare product payload
     const effectivePrice = item.price || 0;
-    const images = item.photos
+    const publishText = await loadPublishText(item); // kit: description + Includes list; any other item: unchanged
+    let images = item.photos
       ? item.photos
           .filter((p) => p.url)
           .map((p) => ({
@@ -55,11 +57,15 @@ export async function pushItemToShopify(
             alt: item.title,
           }))
       : [];
+    // A kit has photoUrls (copied from its components) but no Photo rows.
+    if (images.length === 0 && Array.isArray(item.photoUrls)) {
+      images = item.photoUrls.filter(Boolean).slice(0, 10).map((u) => ({ src: u, alt: item.title }));
+    }
 
     const productPayload = {
       product: {
         title: item.title,
-        body_html: item.description || '',
+        body_html: publishText.description || '',
         vendor: organizer.businessName,
         product_type: item.category || 'General',
         tags: (item.tags || []).join(','),

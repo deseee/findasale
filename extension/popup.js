@@ -547,7 +547,7 @@ function render() {
     // ineligible items -- fold facebookRestricted into the same default-hide filter.
     if (!showAll && (isIneligibleOnCurrentChannel(it) || (currentChannel() === 'facebook' && it.facebookRestricted === true))) { hiddenIneligibleCount++; return; }
     if (q) {
-      const haystack = ((it.title || '') + ' ' + (it.category || '')).toLowerCase();
+      const haystack = ((it.title || '') + ' ' + (it.category || '') + ' ' + self.FAS_KIT.kitComponents(it).map((c) => c.title).join(' ')).toLowerCase();
       if (!haystack.includes(q)) { hiddenBySearchCount++; return; }
     }
     const bySale = (groups[it.saleTitle] = groups[it.saleTitle] || {});
@@ -658,9 +658,17 @@ function row(it) {
   // and there is deliberately no server-side reject for these 4 platforms (see extensionController.ts
   // markItemListed's comment) specifically so this override can actually be used, not just viewed.
   const ineligible = isIneligibleOnCurrentChannel(it);
+  // Kits (2026-10-16): a clear KIT badge, the quantity that will be listed, and the component list, so the operator
+  // sees exactly what is being posted. Everything else about the row is identical to a normal item.
+  const kit = self.FAS_KIT.isKit(it);
+  const kitComps = kit ? self.FAS_KIT.kitComponents(it) : [];
+  const qty = self.FAS_KIT.itemQuantity(it);
+  const kitSummary = kitComps.map((c) => (c.quantity > 1 ? c.quantity + ' x ' : '') + c.title).join(', ');
   d.innerHTML = img +
     '<div class="meta"><div class="t">' + esc(it.title) + '</div><div class="p">$' + (it.price != null ? Number(it.price).toFixed(2) : '—') +
-    ' · ' + esc(it.condition || '') + '</div></div>' +
+    ' · ' + esc(it.condition || '') + (qty > 1 ? ' · qty ' + qty : '') + '</div>' +
+    (kit ? '<div class="p kitline" title="' + esc(kitSummary) + '">Includes: ' + (kitSummary ? esc(kitSummary) : '(no components listed)') + '</div>' : '') + '</div>' +
+    (kit ? '<span class="badge badge-kit" title="Kit: ' + esc(kitSummary || 'bundle of items') + '">KIT</span>' : '') +
     (currentListedFlag(it) ? '<span class="badge">LISTED</span>' : '') +
     (fbBlocked ? '<span class="badge badge-blocked" title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '">NOT ALLOWED ON FB</span>' : '') +
     (ineligible ? '<span class="badge badge-blocked" title="' + esc(ineligibleReason(it)) + '">MAY NOT FIT</span>' : '') +
@@ -760,7 +768,10 @@ async function startQueue() {
     .map((it) => ({
     id: it.id, title: it.title, price: it.price, condition: it.condition,
     conditionRaw: it.conditionRaw, conditionGrade: it.conditionGrade, // fas-condition.js
-    description: it.description, category: it.category,
+    // Kits (2026-10-16): description (with the "Includes:" list ensured), quantity (the item's current stock),
+    // isKit and kitComponents. Applies to every item; a non-kit gets isKit:false and its own description unchanged.
+    ...self.FAS_KIT.queueFields(it),
+    category: it.category,
     // S-EXT-BATCH-12 (2026-08-20): categoryBreadcrumb -- the original full eBay-taxonomy breadcrumb,
     // now sent alongside the cleaner `category` (see extensionController.ts's comment on the `category`
     // field build for the full reasoning). Passed through unconditionally the same way every other

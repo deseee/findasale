@@ -30,7 +30,8 @@ export function scheduleWebhookEventPruneJob(): void {
       const { count } = await prisma.processedWebhookEvent.deleteMany({
         where: {
           OR: [
-            { processedAt: { lt: cutoff }, NOT: [{ eventId: { startsWith: 'square-dispute-step:' } }, { eventId: { startsWith: 'sold-unit:' } }] },
+            // 2026-10-13: 'one-time:' markers (e.g. itemKitService.fixLegacyKitDontList) are never pruned: pruning one would let its one-time fix run again.
+            { processedAt: { lt: cutoff }, NOT: [{ eventId: { startsWith: 'square-dispute-step:' } }, { eventId: { startsWith: 'sold-unit:' } }, { eventId: { startsWith: 'one-time:' } }] },
             { processedAt: { lt: markerCutoff }, OR: [{ eventId: { startsWith: 'square-dispute-step:' } }, { eventId: { startsWith: 'sold-unit:' } }] },
           ],
         },

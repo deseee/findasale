@@ -49,6 +49,15 @@ browser session. Full rationale: `claude_docs/architecture/ADR-084-marketplace-a
 - `fas-selectors.js` → the ONLY place Facebook's form is located, by role/aria/text
   (never Facebook's CSS classes). If Facebook changes their form, update this file.
 
+## Kits / bundles
+A kit (`listingType: 'KIT'`) posts exactly like any other item on every marketplace. The backend sends
+`isKit`, `kitComponents: [{ title, quantity }]` and a description that already ends with an "Includes:" list;
+`config.js` (`FAS_KIT`) forwards those fields through the queue entries and sets `quantity` from the item's
+current stock. The popup shows a KIT badge and the component list. `fas-quantity.js` fills a listing form's
+Quantity input when the form has one (a no-op elsewhere). Stock changes caused by a component sale reach the
+extension through the same `/extension/pending-updates` and `/extension/price-sync-queue` notifications as
+price changes (Mercari applies them silently on its edit page).
+
 ## Guardrails
 - Stops on hard errors only (a required field or step button genuinely not found) —
   never guesses past a step it can't confidently complete, never marks an item listed

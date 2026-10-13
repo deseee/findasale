@@ -21,6 +21,7 @@
  */
 
 import { isInformationalPushCode } from '../lib/ebayPushInformational';
+import { loadKitComponentLines, withKitIncludes } from './itemKitListing'; // 2026-10-13: a kit's live eBay description keeps its Includes list
 import { prisma } from '../lib/prisma';
 import { ebayPublishWithSelfHeal, ensureConditionValidForCategory, getRequiredAspectsForCategory } from './ebayPublishService';
 import { applyFccIdAspect } from '../utils/ebayFccAspect'; // FCC ID item specific, shared with the first-publish path
@@ -607,6 +608,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
         ebayListingId: true,
         ebayContentDirtyAt: true,
         status: true,
+        listingType: true,
       },
     });
 
@@ -667,7 +669,9 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
     const templateHtml = organizer.ebayPolicyMapping?.defaultDescriptionHtml ?? null;
     let finalDescription = '';
     if (requested.includes('description')) {
-      const raw = item.description ?? '';
+      let raw = item.description ?? '';
+      // Kits: the live eBay description is the kit's description plus the Includes list (built now, never stored).
+      if (item.listingType === 'KIT') raw = withKitIncludes(raw, (await loadKitComponentLines([item.id])).get(item.id) ?? []);
       finalDescription = raw;
       if (templateHtml) {
         // Bug #424: split/join replaces ALL occurrences of {{DESCRIPTION}}.

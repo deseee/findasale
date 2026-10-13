@@ -8,7 +8,7 @@ jest.mock('../lib/prisma', () => ({
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { KitError, convertIneligibleReason, convertItemToKit } from '../services/itemKitService';
+import { KitError, convertIneligibleReason, convertItemToKit, createKit, fixLegacyKitDontList } from '../services/itemKitService';
 
 const target = (over: Record<string, unknown> = {}) => ({
   id: 'k1',
@@ -93,7 +93,9 @@ describe('convertItemToKit', () => {
     });
     const upd = mockTx.item.update.mock.calls[0][0];
     expect(upd.where).toEqual({ id: 'k1' });
-    expect(upd.data).toMatchObject({ listingType: 'KIT', stockTotal: 1, stockSold: 0, isKitComponent: false, excludeFromMarkdown: true, ebayShippingOverride: 'DONT_LIST' });
+    expect(upd.data).toMatchObject({ listingType: 'KIT', stockTotal: 1, stockSold: 0, isKitComponent: false, excludeFromMarkdown: true });
+    // Kits are listable on every marketplace now: no DONT_LIST stamp.
+    expect(upd.data).not.toHaveProperty('ebayShippingOverride');
     expect(upd.data.lastEditedAt).toBeInstanceOf(Date);
     for (const k of ['title', 'description', 'price', 'photoUrls', 'originalPrice']) expect(upd.data).not.toHaveProperty(k);
     expect(mockTx.item.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['a', 'b'] } }, data: { isKitComponent: true } });
@@ -120,6 +122,16 @@ describe('convertItemToKit', () => {
   it('refuses an item with sales', () => refuses('KIT_CONVERT_HAS_SALES', 409, { item: target({ stockSold: 1 }) }));
   it('refuses an item that is a component of another kit', () => refuses('KIT_CONVERT_IS_COMPONENT', 409, { asComponent: 1 }));
   it('refuses an item that is live on eBay', () => refuses('KIT_CONVERT_HAS_LISTINGS', 409, { item: target({ ebayListingId: '123' }) }));
+  it('explains the listings refusal: take them down first, the kit can then list anywhere', async () => {
+    setup({ item: target({ ebayListingId: '123' }) });
+    const err: any = await convertItemToKit('o1', 'k1', parts).catch((e) => e);
+    expect(err).toBeInstanceOf(KitError);
+    expect(err.code).toBe('KIT_CONVERT_HAS_LISTINGS');
+    expect(err.message).toMatch(/already listed on a marketplace/i);
+    expect(err.message).toMatch(/Take those listings down first/);
+    expect(err.message).toMatch(/any marketplace/);
+    expect(err.message).not.toMatch(/never|cannot be listed|not listed/i);
+  });
   it('refuses an item with a marketplace job or Shopify or Etsy listing', async () => {
     await refuses('KIT_CONVERT_HAS_LISTINGS', 409, { jobs: 1 });
     await refuses('KIT_CONVERT_HAS_LISTINGS', 409, { shopify: 1 });
@@ -134,6 +146,44 @@ describe('convertItemToKit', () => {
     await refuses('KIT_COMPONENT_SELF', 400, {}, [{ itemId: 'k1', quantity: 1 }]);
     setup();
     await expect(convertItemToKit('o1', 'k1', [])).rejects.toBeInstanceOf(KitError);
+  });
+});
+
+describe('createKit', () => {
+  it('creates a kit with no DONT_LIST stamp so it can be listed on every marketplace', async () => {
+    setup();
+    mockTx.sale = { findUnique: jest.fn() };
+    mockTx.item.create = jest.fn().mockResolvedValue({ id: 'k9' });
+    mockTx.item.findUnique.mockResolvedValue({
+      id: 'k9', title: 'T', description: null, price: 5, saleId: null, status: 'AVAILABLE', stockSold: 0, stockTotal: 1, kitComponents: [],
+    });
+    await createKit('o1', { title: 'Kit', price: 5, components: parts });
+    const data = mockTx.item.create.mock.calls[0][0].data;
+    expect(data).toMatchObject({ listingType: 'KIT', stockTotal: 1, excludeFromMarkdown: true });
+    expect(data).not.toHaveProperty('ebayShippingOverride');
+  });
+});
+
+describe('fixLegacyKitDontList (one-time, idempotent)', () => {
+  const setupFix = (claimedCount: number, fixed = 3) => {
+    mockTx.processedWebhookEvent = { createMany: jest.fn().mockResolvedValue({ count: claimedCount }) };
+    mockTx.item = { updateMany: jest.fn().mockResolvedValue({ count: fixed }) };
+  };
+  it('first run claims the marker and clears DONT_LIST on kits only', async () => {
+    setupFix(1, 3);
+    await expect(fixLegacyKitDontList()).resolves.toEqual({ ran: true, fixed: 3 });
+    const claim = mockTx.processedWebhookEvent.createMany.mock.calls[0][0];
+    expect(claim.skipDuplicates).toBe(true);
+    expect(claim.data[0].eventId).toBe('one-time:kit-dont-list-fix:v1');
+    expect(mockTx.item.updateMany).toHaveBeenCalledWith({
+      where: { listingType: 'KIT', ebayShippingOverride: 'DONT_LIST' },
+      data: { ebayShippingOverride: null },
+    });
+  });
+  it('second run finds the marker and touches nothing', async () => {
+    setupFix(0);
+    await expect(fixLegacyKitDontList()).resolves.toEqual({ ran: false, fixed: 0 });
+    expect(mockTx.item.updateMany).not.toHaveBeenCalled();
   });
 });
 

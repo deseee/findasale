@@ -72,6 +72,7 @@ import {
   applyOrganizerRecordIdentity,
 } from './recordIdentity';
 import type { RecordIdentitySources, RecordIdentityValues } from './recordIdentity';
+import { withKitListingText } from '../itemKitListing';
 
 const DISCOGS_API_BASE = 'https://api.discogs.com';
 const DISCOGS_USER_AGENT = 'FindA.Sale/1.0 +https://finda.sale';
@@ -829,7 +830,7 @@ export async function upsertDiscogsListingForItem(
     if (!pushable) {
       throw new DiscogsNeedsSelectionError();
     }
-    const listing = await createDiscogsListing(organizerId, item, { ...options, publish });
+    const listing = await createDiscogsListing(organizerId, await withKitListingText(item), { ...options, publish }); // kit: description gets its Includes list
     // listing_id is Discogs's own documented POST /marketplace/listings response field; the
     // response is untyped, so read it defensively.
     const listingId = listing && listing.listing_id != null ? String(listing.listing_id) : null;
@@ -885,6 +886,7 @@ export async function withdrawDiscogsListingIfExists(itemId: string): Promise<vo
       where: { id: itemId },
       select: {
         discogsListingId: true,
+        organizerId: true, // 2026-10-13: a saleless kit is owned through Item.organizerId
         sale: { select: { organizerId: true } },
       },
     });
@@ -894,7 +896,7 @@ export async function withdrawDiscogsListingIfExists(itemId: string): Promise<vo
       return;
     }
 
-    const organizerId = item.sale?.organizerId ?? null;
+    const organizerId = item.sale?.organizerId ?? item.organizerId ?? null;
     if (!organizerId) {
       console.warn(`[Discogs] Could not resolve organizerId for item ${itemId} -- skipping withdraw`);
       return;

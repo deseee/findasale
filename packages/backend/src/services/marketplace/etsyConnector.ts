@@ -52,6 +52,7 @@ import type { FetchedEtsyImage } from './etsyImageFetch';
 import { ensureEtsyTaxonomyLoaded, ETSY_TAXONOMY_MAX_NODE_ID, getEtsyTaxonomyNode } from './etsyTaxonomy';
 import type { EtsyTaxonomyDeps } from './etsyTaxonomy';
 import { ETSY_WHO_MADE_DEFAULT } from '../../config/etsyWhenMade';
+import { withKitListingText } from '../itemKitListing';
 
 // ---------------------------------------------------------------------------------------------
 // Constants
@@ -289,12 +290,15 @@ export function describeEtsyResponse(
 /** The item, only when it belongs to this organizer (directly or through its sale) and is not deleted. */
 export async function loadOwnedEtsyItem(organizerId: string, itemId: string, deps: EtsyConnectorDeps = {}): Promise<any | null> {
   if (typeof itemId !== 'string' || !itemId || itemId.length > 100) return null;
-  return (
+  const item =
     (await getDb(deps).item.findFirst({
       where: { id: itemId, deletedAt: null, OR: [{ organizerId }, { sale: { organizerId } }] },
       include: { card: true },
-    })) ?? null
-  );
+    })) ?? null;
+  // Kits (2026-10-13): the Etsy listing text (mapping reads item.description) gets the Includes list. The returned object is a copy used to
+  // build the listing; the stored description is never changed.
+  if (item && item.listingType === 'KIT') return withKitListingText(item, getDb(deps) as any);
+  return item;
 }
 
 async function loadListingRow(organizerId: string, itemId: string, deps: EtsyConnectorDeps): Promise<EtsyListingRow | null> {

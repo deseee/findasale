@@ -156,9 +156,29 @@ async function isKitItem(itemId: string): Promise<boolean> {
 }
 
 /**
+ * True when the item has a MarketplaceListingJob row on `platform` (latest row that is not a failed REMOVE/SKIPPED attempt): the
+ * app knows a listing of this item there, so the per-listing idempotent path (commitPlatformUnitSale) can decide whether the sale is
+ * new. False = the app holds no record of any listing there (e.g. a hand-made Vinted listing of a kit).
+ */
+async function hasPlatformListingRow(itemId: string, platform: string): Promise<boolean> {
+  try {
+    const latest = await prisma.marketplaceListingJob.findFirst({
+      where: { itemId, platform: platform as any, NOT: { action: 'REMOVE', status: 'SKIPPED' } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    return !!latest;
+  } catch (err: any) {
+    console.warn(`[commitFacebookNativeSale] listing-row lookup failed for item ${itemId}:`, err?.message);
+    return false;
+  }
+}
+
+/**
  * After a kit sale took its components' stock (sellItemUnits -> sellKitComponents recomputes the kits but never pushes the new
- * component counts to the markets), re-push every component's in-stock number. A kit is never a unit listing on any market, so
- * syncing the kit itself does nothing; the components are what eBay / Shopify / ... carry. Fire-and-forget per component; never throws.
+ * component counts to the markets), re-push every component's in-stock number (and, through inventoryStockSync's cascade, every other
+ * kit that shares a component). The kit's own listings are re-synced / withdrawn separately (fireItemStockSync / fanOutWithdrawals).
+ * Fire-and-forget per component; never throws.
  */
 async function fireKitComponentStockSync(kitItemId: string, soldVia: string): Promise<void> {
   try {
@@ -217,6 +237,7 @@ async function commitPlatformUnitSale(
   soldVia: string,
   sold: NonNullable<CommitFacebookNativeSaleOptions['soldOnPlatform']>,
   skip: Set<string>,
+  isKit = false,
 ): Promise<CommitFacebookNativeSaleResult | null> {
   const { platform } = sold;
   const reportedId = String(sold.remoteListingId ?? '').trim();
@@ -358,12 +379,14 @@ async function commitPlatformUnitSale(
     );
     // Single in-stock number: re-push it to every market that carries a quantity (fire-and-forget, never throws).
     fireItemStockSync(itemId, `sold-on-${platform.toLowerCase()}`);
+    if (isKit) await fireKitComponentStockSync(itemId, soldVia);
     return { ok: true, alreadyCommitted: false, partial: true, remainingStock: outcome.remainingStock };
   }
 
   // Last unit gone: same as any other sold-elsewhere SOLD (sellItemUnits already set status).
   await prisma.item.update({ where: { id: itemId }, data: { lastSoldVia: soldVia } });
   fanOutWithdrawals(itemId, soldVia, skip);
+  if (isKit) await fireKitComponentStockSync(itemId, soldVia);
   return { ok: true, alreadyCommitted: false };
 }
 
@@ -432,12 +455,17 @@ export async function commitFacebookNativeSale(
     }
   }
   const skip = new Set<string>(options.skipWithdraw ?? []);
-  // 2026-10-13 (kit sold on a marketplace): a kit is never listed per platform through the app, so the platform path below (which
-  // needs a live MarketplaceListingJob row as its idempotency key) would find none and take no unit. The caller asserts a real sale,
-  // so a kit takes exactly ONE kit unit through the deduped path even when soldOnPlatform is set (no listing exists to withdraw).
+  // 2026-10-13 (kits listable everywhere): a kit can have its own listing on any market, so it follows the SAME rule as every item.
+  // Deterministic choice for a sale seen on `soldOnPlatform`:
+  //   - the app has a MarketplaceListingJob row for that platform (live, or already closed by an earlier sale): the idempotent
+  //     per-listing path (commitPlatformUnitSale) decides whether this sale is new; sellItemUnits inside it takes the components too;
+  //   - the app has NO row there (a hand-made listing of the kit): that path would find no live row and take nothing, so the sale
+  //     takes exactly one kit unit through the deduped path (commitDedupedUnitSale).
+  // Both paths drop every component and re-sync every market (fireKitComponentStockSync + the kit's own fireItemStockSync).
   const isKit = await isKitItem(itemId);
-  if (options.soldOnPlatform && !isKit) {
-    const unit = await commitPlatformUnitSale(itemId, soldVia, options.soldOnPlatform, skip);
+  const useListingPath = !!options.soldOnPlatform && (!isKit || (await hasPlatformListingRow(itemId, options.soldOnPlatform.platform)));
+  if (useListingPath && options.soldOnPlatform) {
+    const unit = await commitPlatformUnitSale(itemId, soldVia, options.soldOnPlatform, skip, isKit);
     if (unit) return unit;
   } else {
     // 2026-10-13 (S-SINGLE-INVENTORY-NUMBER): no per-listing platform named (Discogs / Reverb polls, operator route ...). A multi-unit

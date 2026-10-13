@@ -6908,6 +6908,10 @@ model MarketplaceListingJob {
   // Null or older than Item.priceUpdatedAt means this platform's live price has not caught up
   // yet -- see getPriceSyncQueue (extensionController.ts).
   priceSyncedAt    DateTime?
+  // 2026-10-13 (kits listable everywhere): the quantity last confirmed on this POST row's live listing (the one platform stock number at the
+  // time it was posted / last synced). Differs from COALESCE(Item.stockTotal,1) - Item.stockSold = quantity drift, offered to the extension by
+  // getPriceSyncQueue / getPendingUpdates. NULL = never recorded, read as 1.
+  syncedQuantity   Int?
   createdAt        DateTime                  @default(now())
   updatedAt        DateTime                  @updatedAt
 

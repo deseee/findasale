@@ -1060,6 +1060,7 @@
     const body = q('#PostingBody') || q('textarea[name="PostingBody"]');
     if (!body) throw hardError('Details', 'Couldn\'t find the posting Description field.');
     setInputValue(body, item.description || '');
+    try { if (self.FAS_QTY) self.FAS_QTY.fillQuantity(item); } catch (e) { /* kits: best-effort Quantity field, never blocks */ }
 
     // BUG FIX (2026-08-31, live-reproduced -- Patrick stuck on "Please supply a value for the
     // 'condition' field" posting furniture): this field was never filled at all. Only EXISTS

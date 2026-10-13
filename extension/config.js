@@ -59,3 +59,76 @@ self.FAS_CONFIG = {
   // organizer's own Craigslist postings, so it doubles as the Craigslist "my listings" page.
   CRAIG_MANAGE_URL: 'https://www.craigslist.org/account'
 };
+
+// ---- Kits / bundles (Item.listingType 'KIT') -- shared, pure helpers (2026-10-16) ----
+// A kit is an ordinary listing as far as every marketplace is concerned: its title, description (the backend
+// appends the "Includes:" component list), price, photos and stock arrive on the same /extension/* item records
+// as any other item, plus `isKit: true` and `kitComponents: [{ title, quantity }]`. Nothing in the extension
+// filters, skips or special-cases a kit. These helpers only (1) normalize the stock number into one
+// `quantity` field the content scripts can read, and (2) forward the kit fields through the queue-entry
+// whitelists (popup.js startQueue, background.js buildRenewalQueueItem / checkAutoListQueue), which otherwise
+// drop every field they do not name. Loaded by popup.html and background.js (importScripts) via this file.
+self.FAS_KIT = (function () {
+  var MAX_QTY = 999;
+  function toInt(v) {
+    if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
+    var n = Number(v);
+    return isFinite(n) ? Math.floor(n) : null;
+  }
+  // Units currently in stock for this item. Reads the first usable of the fields the backend may send
+  // (`quantity`, `stockRemaining`, `stockAvailable`, `availableStock`, `remainingStock`, `stock`,
+  // `stockQuantity`), else stockTotal - stockSold (the backend's own formula, a kit's stockTotal is already
+  // derived), else 1. Never below 1 (a 0-stock item is excluded server-side; this only sizes a form field)
+  // and never above MAX_QTY.
+  function itemQuantity(it) {
+    if (!it) return 1;
+    var keys = ['quantity', 'stockRemaining', 'stockAvailable', 'availableStock', 'remainingStock', 'stock', 'stockQuantity'];
+    for (var i = 0; i < keys.length; i++) {
+      var n = toInt(it[keys[i]]);
+      if (n !== null) return Math.min(Math.max(n, 1), MAX_QTY);
+    }
+    var total = toInt(it.stockTotal);
+    if (total !== null) {
+      var sold = toInt(it.stockSold) || 0;
+      return Math.min(Math.max(total - sold, 1), MAX_QTY);
+    }
+    return 1;
+  }
+  function kitComponents(it) {
+    var raw = it && Array.isArray(it.kitComponents) ? it.kitComponents : [];
+    var out = [];
+    for (var i = 0; i < raw.length && out.length < 50; i++) {
+      var c = raw[i];
+      if (!c || typeof c.title !== 'string' || !c.title.trim()) continue;
+      var q = toInt(c.quantity);
+      out.push({ title: c.title.trim().slice(0, 200), quantity: q !== null && q > 0 ? q : 1 });
+    }
+    return out;
+  }
+  function isKit(it) {
+    return !!it && (it.isKit === true || it.listingType === 'KIT' || kitComponents(it).length > 0);
+  }
+  // The "Includes:" list as plain text, same shape the backend appends.
+  function includesText(components) {
+    return 'Includes:\n' + components.map(function (c) { return '- ' + (c.quantity > 1 ? c.quantity + ' x ' : '') + c.title; }).join('\n');
+  }
+  // Description for a kit: the backend's already has the Includes list; if a stale/cached record lacks it,
+  // append it so a kit is never posted without its component list.
+  function kitDescription(it) {
+    var d = (it && it.description) || '';
+    var comps = kitComponents(it);
+    if (!isKit(it) || !comps.length || /\bincludes\s*:/i.test(d)) return d;
+    return (d ? d + '\n\n' : '') + includesText(comps);
+  }
+  // Fields to spread into a queue-entry object literal. Applies to every item (quantity is always set).
+  function queueFields(it) {
+    var comps = kitComponents(it);
+    return {
+      description: kitDescription(it),
+      quantity: itemQuantity(it),
+      isKit: isKit(it),
+      kitComponents: comps
+    };
+  }
+  return { itemQuantity: itemQuantity, kitComponents: kitComponents, isKit: isKit, includesText: includesText, kitDescription: kitDescription, queueFields: queueFields };
+})();

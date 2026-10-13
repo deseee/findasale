@@ -34,6 +34,7 @@
 
 import { prisma } from '../lib/prisma';
 import { csvCell } from '../utils/csvSafe'; // CSV formula-injection-safe cell writer
+import { loadKitComponentLines, withKitIncludes } from './itemKitListing';
 
 // Shape of the fields this service actually reads off Item — kept narrow and explicit so a
 // future schema rename breaks this file loudly (TS error) rather than silently mismapping.
@@ -231,6 +232,7 @@ export async function getOwnedItemsForLiveAuctioneersExport(
     auctionReservePrice: true,
     condition: true,
     photoUrls: true,
+    listingType: true,
   } as const;
 
   let items: LiveAuctioneersExportItem[] = [];
@@ -253,6 +255,13 @@ export async function getOwnedItemsForLiveAuctioneersExport(
       },
       select: itemSelect,
     });
+  }
+
+  // Kits (2026-10-13): the LiveAuctioneers description lists what is in the kit. Built from the current components; nothing is stored.
+  const kitIds = (items as Array<{ id: string; listingType?: string | null }>).filter((i) => i.listingType === 'KIT').map((i) => i.id);
+  if (kitIds.length > 0) {
+    const kitLines = await loadKitComponentLines(kitIds);
+    items = items.map((i) => (kitIds.includes(i.id) ? { ...i, description: withKitIncludes(i.description, kitLines.get(i.id) ?? []) } : i));
   }
 
   return { organizer, items };

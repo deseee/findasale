@@ -914,8 +914,8 @@ async function checkPendingUpdates() {
     iconUrl: 'icon128.png',
     title: 'FindA.Sale',
     message: items.length === 1
-      ? '1 item\'s price changed on FindA.Sale -- update it on Facebook Marketplace too.'
-      : items.length + ' items\' prices changed on FindA.Sale -- update them on Facebook Marketplace too.',
+      ? '1 item\'s price or quantity changed on FindA.Sale -- update it on Facebook Marketplace too.'
+      : items.length + ' items\' prices or quantities changed on FindA.Sale -- update them on Facebook Marketplace too.',
     priority: 1
   });
   return 'notified:' + items.length;
@@ -956,8 +956,8 @@ async function checkPriceSyncQueue() {
       iconUrl: 'icon128.png',
       title: 'FindA.Sale',
       message: items.length === 1
-        ? '1 item\'s price changed on FindA.Sale -- update it on ' + label + ' too.'
-        : items.length + ' items\' prices changed on FindA.Sale -- update them on ' + label + ' too.',
+        ? '1 item\'s price or quantity changed on FindA.Sale -- update it on ' + label + ' too.'
+        : items.length + ' items\' prices or quantities changed on FindA.Sale -- update them on ' + label + ' too.',
       priority: 1
     });
     outcomes.push(platform + ':notified_' + items.length);
@@ -1682,7 +1682,9 @@ async function checkAutoListQueue() {
     // there is no msg.autoPublish to read -- preserve whatever the organizer already has stored
     // for this platform (st[cfg.autoPublish]) and only fall back to the same default TRUE those
     // handlers use (msg.autoPublish !== false) when nothing has ever been stored yet.
-    const writeObj = { [cfg.queue]: items, [cfg.index]: 0 };
+    // Kits (2026-10-16): autolist entries are stored as the server sent them (no whitelist), so add the normalized
+    // quantity/isKit/kitComponents (and a guaranteed "Includes:" description) the content scripts read. Original fields kept.
+    const writeObj = { [cfg.queue]: items.map((q) => Object.assign({}, q, self.FAS_KIT.queueFields(q))), [cfg.index]: 0 };
     if (cfg.autoPublish) writeObj[cfg.autoPublish] = st[cfg.autoPublish] !== false;
     if (cfg.setAt) writeObj[cfg.setAt] = Date.now();
     await chrome.storage.local.set(writeObj);
@@ -1726,7 +1728,9 @@ function buildRenewalQueueItem(it, organizerEmail) {
   return {
     id: it.id, title: it.title, price: it.price, condition: it.condition,
     conditionRaw: it.conditionRaw, conditionGrade: it.conditionGrade, // fas-condition.js
-    description: it.description, category: it.category, photoUrls: it.photoUrls || [],
+    // Kits (2026-10-16): description (Includes list ensured), quantity (current stock), isKit, kitComponents -- see config.js FAS_KIT.
+    ...self.FAS_KIT.queueFields(it),
+    category: it.category, photoUrls: it.photoUrls || [],
     // S-EXT-CATEGORY-MAPS (2026-10-05): renewals use the same exact category leaves as popup.js's queue map
     // (/extension/items carries them; absent stays undefined and the content script falls back to its own search).
     vintedCategoryId: it.vintedCategoryId, vintedCategoryPath: it.vintedCategoryPath,

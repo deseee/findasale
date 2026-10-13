@@ -916,6 +916,7 @@
                       description: await fillText(LABELS.description, item.descriptionWithBacklink || item.description) };
     if (!results.title) throw hardError('Item details', 'Couldn\'t find the Title field.');
     if (!results.price) throw hardError('Item details', 'Couldn\'t find the Price field.');
+    try { if (self.FAS_QTY) self.FAS_QTY.fillQuantity(item); } catch (e) { /* kits: best-effort Quantity field, never blocks */ }
 
     await selectConditionRequired(item.condition); // REQUIRED field: retries + verifies, hard-errors if unset (2026-07-16 flaky-stall fix)
     const catResult = await selectCategory(item.category); // auto-resolves to FB's top suggestion when ambiguous

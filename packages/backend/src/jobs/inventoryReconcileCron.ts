@@ -7,6 +7,8 @@
  * comparing each market's live count to the platform number and pushing the platform number out again.
  *
  * What it does, per run:
+ *  0. One-time legacy cleanup (deps.fixLegacyKitDontList, itemKitService.fixLegacyKitDontList): clears the old Phase 1 'DONT_LIST' override
+ *     from kits created before kits became listable on every marketplace. Marker-guarded, so it changes anything exactly once.
  *  1. Kit sweep: kits whose stored stockTotal no longer matches their components are recomputed (derived totals only).
  *     Recomputed kits are then pushed to their markets with syncItemStock.
  *  2. For each organizer, a bounded, rotating batch of candidate items (live on eBay, Etsy or Shopify, or multi-unit on a
@@ -29,6 +31,7 @@ import { syncItemStock } from '../services/inventoryStockSync';
 import type { MarketName, MarketSyncStatus, StockSyncResult } from '../services/inventoryStockSync';
 import { findStaleKits, recomputeAllKitStock } from '../services/itemKitStock';
 import type { StaleKit } from '../services/itemKitStock';
+import { fixLegacyKitDontList } from '../services/itemKitService';
 
 export const INVENTORY_RECONCILE_ALERT_TYPE = 'inventory_reconcile_drift';
 const ALERT_DEDUPE_DAYS = 3;
@@ -72,6 +75,8 @@ export interface InventoryReconcileReport {
   organizersFailed: number;
   stoppedEarly?: 'item_cap' | 'ebay_rate_limited';
   notified: number;
+  /** Set only on the run that performed the one-time legacy kit DONT_LIST cleanup. */
+  kitsDontListCleared?: number;
 }
 
 export interface ReconcileCandidate {
@@ -90,6 +95,8 @@ export interface ReconcileDeps {
   createAlert(input: { userId: string; title: string; body: string; link: string }): Promise<void>;
   isEbayRateLimited(): boolean;
   now(): Date;
+  /** Optional (2026-10-13): the one-time clean-up of DONT_LIST on kits. Absent in fakes that predate it = skipped. */
+  fixLegacyKitDontList?(): Promise<{ ran: boolean; fixed: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +151,7 @@ async function loadCandidatesReal(organizerId: string, afterId: string | null, t
       deletedAt: null,
       status: { in: CANDIDATE_STATUSES },
       draftStatus: { not: 'DRAFT' },
-      listingType: { notIn: ['CONSIGNOR_TAG', 'KIT'] },
+      listingType: { notIn: ['CONSIGNOR_TAG'] }, // 2026-10-13: kits are listed on markets like any item, so they are swept too
       bulkLot: { is: null },
       ...(afterId ? { id: { gt: afterId } } : {}),
     } as any,
@@ -188,6 +195,7 @@ export const realReconcileDeps: ReconcileDeps = {
   },
   isEbayRateLimited: reconcileEbayBudgetSpent,
   now: () => new Date(),
+  fixLegacyKitDontList: () => fixLegacyKitDontList(),
 };
 
 // ---------------------------------------------------------------------------
@@ -343,6 +351,19 @@ export async function runInventoryReconcile(
   const dryRun = !!opts.dryRun;
   const report = emptyReport();
   let budget = maxItemsPerRun();
+
+  // 0. One-time legacy cleanup (kits that still carry the old Phase 1 DONT_LIST override). Never blocks the sweep.
+  if (!dryRun && deps.fixLegacyKitDontList) {
+    try {
+      const fix = await deps.fixLegacyKitDontList();
+      if (fix.ran) {
+        report.kitsDontListCleared = fix.fixed;
+        console.log(`[Inventory Reconcile] cleared the legacy DONT_LIST override on ${fix.fixed} kit(s)`);
+      }
+    } catch (err) {
+      console.error('[Inventory Reconcile] legacy kit DONT_LIST cleanup failed (will retry next run):', err);
+    }
+  }
 
   // 1. Kit sweep first: derived kit totals, then push the corrected number to the kits' markets.
   try {

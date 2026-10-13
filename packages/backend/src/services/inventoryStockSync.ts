@@ -14,8 +14,12 @@
  *     reads the latest state), so two sales landing together cannot double push;
  *   - checkOnly: compares against the live market value, reports 'drift', changes NOTHING (no write, no market call that
  *     changes anything, no status flip, no kit recompute);
- *   - kits: a kit is never listed as a unit quantity anywhere (DONT_LIST on eBay); only the kits that CONTAIN this item are
- *     recomputed (recomputeKitsForComponents), on every non-checkOnly call;
+ *   - kits (2026-10-13): a kit is a normal item here. It has its own listings on every market and is pushed its own in-stock number
+ *     (min over components of floor(remaining / quantity), already materialized in stockTotal) exactly like any item. The kits that
+ *     CONTAIN this item are recomputed (recomputeKitsForComponents) on every non-checkOnly call, and then CASCADE: a synced component
+ *     fires a sync of each kit that contains it (opts.noCascade stops the chain), and a synced kit fires a sync of each of its
+ *     components (a kit sale took their stock) with opts.exceptKitIds so the chain cannot return to the kit. Cascades are
+ *     fire-and-forget (never awaited, so the per-item lock cannot deadlock) and never run on checkOnly;
  *   - eBay (items with an offer id; sale items and inventory items alike, tenant isolation by item id only):
  *       in stock >= 1  PUT the inventory item quantity (GET, merge, PUT; the real SKU comes from the offer GET, the SKU
  *                      guess is only a fallback). Skipped while the item is on hold (the field is added to ebayHeldFields so
@@ -89,6 +93,17 @@ export interface StockSyncResult {
 export interface StockSyncOptions {
   /** checkOnly: compare against the live market value, report 'drift', change NOTHING. */
   checkOnly?: boolean;
+  /** Do not fan out to the kits that contain this item / the components of this kit (sweeps that already visit every item). */
+  noCascade?: boolean;
+  /** Kit ids the component -> kit cascade must skip (the kit whose own sale started the chain). */
+  exceptKitIds?: string[];
+}
+
+interface InternalOpts {
+  checkOnly: boolean;
+  ignoreHold: boolean;
+  noCascade?: boolean;
+  exceptKitIds?: string[];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -209,7 +224,7 @@ function runExclusive(itemId: string, fn: () => Promise<StockSyncResult>): Promi
  * `reason` is free text for logs ('edit', 'sale', 'refund', 'sweep', ...).
  */
 export async function syncItemStock(itemId: string, reason: string, opts: StockSyncOptions = {}): Promise<StockSyncResult> {
-  return syncInternal(itemId, reason, { checkOnly: opts.checkOnly === true, ignoreHold: false });
+  return syncInternal(itemId, reason, { checkOnly: opts.checkOnly === true, ignoreHold: false, noCascade: opts.noCascade === true, exceptKitIds: opts.exceptKitIds });
 }
 
 /**
@@ -220,7 +235,7 @@ export async function syncItemStockForPush(itemId: string, reason: string): Prom
   return syncInternal(itemId, reason, { checkOnly: false, ignoreHold: true });
 }
 
-async function syncInternal(itemId: string, reason: string, o: { checkOnly: boolean; ignoreHold: boolean }): Promise<StockSyncResult> {
+async function syncInternal(itemId: string, reason: string, o: InternalOpts): Promise<StockSyncResult> {
   try {
     if (typeof itemId !== 'string' || itemId.length === 0) return { itemId: String(itemId), inStock: -1, outcomes: [] };
     // checkOnly writes nothing, so it does not need the lock.
@@ -240,7 +255,7 @@ function unexpected(itemId: string, reason: string, err: unknown): StockSyncResu
 // One run
 // ---------------------------------------------------------------------------------------------
 
-async function runSync(itemId: string, reason: string, o: { checkOnly: boolean; ignoreHold: boolean }): Promise<StockSyncResult> {
+async function runSync(itemId: string, reason: string, o: InternalOpts): Promise<StockSyncResult> {
   const absorbed = new Set<string>();
 
   for (let pass = 0; pass < 2; pass++) {
@@ -284,9 +299,6 @@ async function runSync(itemId: string, reason: string, o: { checkOnly: boolean; 
         outcomes.push(failedOutcome('kits', inStock, kitErr));
       }
     }
-
-    // A kit is never a unit listing on any market.
-    if (item.listingType === 'KIT') return { itemId, inStock, outcomes };
 
     // Zero transition: an AVAILABLE item with nothing left is SOLD (same semantics as sellItemUnits).
     if (inStock === 0 && !o.checkOnly && item.status === 'AVAILABLE') {
@@ -339,11 +351,41 @@ async function runSync(itemId: string, reason: string, o: { checkOnly: boolean; 
     if (outcomes.some((x) => x.status === 'failed' || x.status === 'drift')) {
       console.warn(`[StockSync] item ${itemId} (${reason}) in stock ${inStock}: ${outcomes.map((x) => `${x.market}=${x.status}`).join(', ')}`);
     }
+    if (!o.checkOnly && !o.noCascade) fireKitCascade(item, reason, o);
     return { itemId, inStock, outcomes };
   }
 
   // Unreachable in practice (pass 1 never restarts), kept so the function always returns.
   return { itemId, inStock: -1, outcomes: [] };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Kit cascade (fire-and-forget, never awaited: the caller holds this item's lock)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * kit -> its components (a kit sale / restock changed their stock), component -> the kits that contain it (their derived stock
+ * changed). The kit side is a leaf (noCascade) and the component side skips `exceptKitIds`, so the chain always ends.
+ */
+function fireKitCascade(item: SyncItem, reason: string, o: InternalOpts): void {
+  const isKit = item.listingType === 'KIT';
+  if (!isKit && !item.isKitComponent) return;
+  (async () => {
+    const db = prisma as any;
+    if (isKit) {
+      const rows: Array<{ componentItemId: string }> = (await db.itemKitComponent.findMany({ where: { kitItemId: item.id }, select: { componentItemId: true } })) ?? [];
+      for (const r of rows) {
+        await syncItemStock(r.componentItemId, `${reason} (kit ${item.id})`, { exceptKitIds: [item.id, ...(o.exceptKitIds ?? [])] });
+      }
+    } else {
+      const rows: Array<{ kitItemId: string }> = (await db.itemKitComponent.findMany({ where: { componentItemId: item.id }, select: { kitItemId: true } })) ?? [];
+      const skip = new Set(o.exceptKitIds ?? []);
+      for (const r of rows) {
+        if (skip.has(r.kitItemId)) continue;
+        await syncItemStock(r.kitItemId, `${reason} (component ${item.id})`, { noCascade: true });
+      }
+    }
+  })().catch((err: any) => console.warn(`[StockSync] kit cascade for item ${item.id} failed:`, err?.message));
 }
 
 // ---------------------------------------------------------------------------------------------

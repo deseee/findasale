@@ -16,6 +16,7 @@ import { resolveMercariCategory } from '../services/mercariCategoryResolver';
 import { resolveGrailedCategory } from '../services/grailedCategoryResolver';
 import { resolveCraigslistCategory } from '../services/craigslistCategoryResolver';
 import { suggestNativeShippingPrice, ShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // S-VINTED-SHIPPING-FALLBACK-PRICE: same buyer-facing shipping number FindA.Sale itself suggests (ShippingHardBlockError is the same class re-exported from ebayRateEstimateService)
+import { loadListingExtras, listingExtraFields, organizerListableScope, stockRemainingOf } from '../services/itemKitListing'; // 2026-10-13: kits listable everywhere + the one stock number on every queue entry
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
 
@@ -319,12 +320,13 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // The OR keeps NULL-override items while still excluding explicit DONT_LIST.
     where: {
       // 2026-07-26 (S1169): sale.deletedAt filter -- see matching comment on the sales query above.
-      sale: { organizerId: organizer.id, deletedAt: null },
+      AND: [{ OR: organizerListableScope(organizer.id) }], // sale items + the organizer's saleless kits
       status: 'AVAILABLE',
       draftStatus: 'PUBLISHED', // 2026-10-11: a Draft / Pending Review item is never listed, price-synced or renewed on a marketplace
       OR: [
         { ebayShippingOverride: null },
         { ebayShippingOverride: { not: 'DONT_LIST' } },
+        { listingType: 'KIT' }, // 2026-10-13: a kit is listable everywhere; a legacy DONT_LIST on a kit never hides it
       ],
     },
     take: 2000,
@@ -648,6 +650,14 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     vintedPricingByItemId.set(it.id, await computeVintedFallbackShipping(it, { basePrice, zip, organizer, cap: VINTED_SHIPPING_CAP }));
   }
 
+  // 2026-10-13 (kits listable everywhere): the one stock number on every entry, and for a kit the component list plus a description with
+  // the "Includes:" list appended. Built here at response time from the current rows; the stored description is never changed.
+  const listingExtras = await loadListingExtras(items.map((i) => i.id));
+  const descriptionOf = (it: { id: string; description: string | null }) => {
+    const x = listingExtras.get(it.id);
+    return x?.isKit && x.description !== undefined ? x.description : it.description;
+  };
+
   const shaped = items.map((it) => ({
     id: it.id,
     saleId: it.saleId,
@@ -661,8 +671,8 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // Canonical condition and grade as stored, for the extension's fas-condition.js (read-only additions).
     conditionRaw: it.condition ?? null,
     conditionGrade: it.conditionGrade ?? null,
-    description: buildDescription(it.description, it.saleId),
-    descriptionWithBacklink: buildDescriptionWithBacklink(it.description, it.saleId),
+    description: buildDescription(descriptionOf(it), it.saleId),
+    descriptionWithBacklink: buildDescriptionWithBacklink(descriptionOf(it), it.saleId),
     // S-EXT-BATCH-12 (2026-08-20, Patrick + live-Chrome-confirmed root cause): `category` on Item
     // is documented as "eBay L1 category name" (schema.prisma) but in practice holds whatever the
     // AI-tagging pipeline wrote, which for this item was a full colon-delimited eBay-taxonomy
@@ -899,6 +909,8 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // organizer-set floor, exactly as fas-mercari.js's own consumer treats it).
     saleMarkdownEnabled: saleLocationById.get(it.saleId || '')?.markdownEnabled === true,
     saleMarkdownFloor: saleLocationById.get(it.saleId || '')?.markdownFloor ?? null,
+    // stockRemaining (every item) + isKit / kitComponents (kits only). description is NOT re-spread: it was built above from the kit text.
+    ...listingExtraFields(listingExtras.get(it.id), { keepDescription: false }),
   }));
 
   // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
@@ -941,12 +953,27 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   });
 };
 
+// 2026-10-13 (quantity drift): records the quantity now shown on the item's live listing for `platform` (its latest POST/POSTED row).
+// Never throws into the caller's response: a failed stamp only means the entry is offered again.
+async function stampSyncedQuantity(itemId: string, platform: string, quantity: number): Promise<void> {
+  try {
+    const latest = await prisma.marketplaceListingJob.findFirst({
+      where: { itemId, platform: platform as any, action: 'POST', status: 'POSTED' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (latest) await prisma.marketplaceListingJob.update({ where: { id: latest.id }, data: { syncedQuantity: quantity } });
+  } catch (err: any) {
+    console.warn(`[extension] could not record the synced quantity for item ${itemId} on ${platform}:`, err?.message);
+  }
+}
+
 // Verify an item belongs to the requesting organizer; returns the organizer id or null.
 async function assertItemOwned(userId: string, itemId: string): Promise<boolean> {
   const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
   if (!organizer) return false;
   const item = await prisma.item.findFirst({
-    where: { id: itemId, sale: { organizerId: organizer.id } },
+    where: { id: itemId, OR: [{ sale: { organizerId: organizer.id } }, { saleId: null, organizerId: organizer.id, listingType: 'KIT' }] },
     select: { id: true },
   });
   return !!item;
@@ -1107,8 +1134,15 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
     return;
   }
 
+  // 2026-10-13 (quantity drift): remember the quantity this listing was posted with (the one stock number, read fresh). A failed read
+  // leaves it null, which getPendingUpdates / getPriceSyncQueue read as 1.
+  let postedQuantity: number | null = null;
+  try {
+    const stockRow = await prisma.item.findUnique({ where: { id: itemId }, select: { stockTotal: true, stockSold: true } });
+    if (stockRow && (typeof stockRow.stockSold === 'number' || stockRow.stockTotal != null)) postedQuantity = stockRemainingOf(stockRow);
+  } catch { /* quantity stays unrecorded */ }
   await prisma.marketplaceListingJob.create({
-    data: { itemId, action: 'POST', status: 'POSTED', remoteListingId, platform, renewDueAt },
+    data: { itemId, action: 'POST', status: 'POSTED', remoteListingId, platform, renewDueAt, ...(postedQuantity !== null ? { syncedQuantity: postedQuantity } : {}) },
   });
   res.json({ ok: true });
 };
@@ -1424,7 +1458,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   const soldItems = await prisma.item.findMany({
     // 2026-07-26 (S1169): same sale.deletedAt gap as getExtensionItems -- a sold item under a
     // soft-deleted sale must not keep surfacing as a pending Facebook removal forever.
-    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } },
+    where: { OR: organizerListableScope(organizer.id), status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } }, // 2026-10-13: includes saleless kits
     select: { id: true, title: true },
   });
   // (2026-09-30) The old `if (!soldItems.length) return empty` early exit lived here. It also
@@ -1931,7 +1965,7 @@ export const setItemRemoteListingId = async (req: AuthRequest, res: Response): P
       action: 'POST',
       status: 'POSTED',
       itemId: { not: itemId },
-      item: { sale: { organizerId: organizer.id } },
+      item: { OR: [{ sale: { organizerId: organizer.id } }, { saleId: null, organizerId: organizer.id, listingType: 'KIT' }] },
     },
     select: { id: true },
   });
@@ -2050,30 +2084,34 @@ export const getPendingUpdates = async (req: AuthRequest, res: Response): Promis
   const items = await prisma.item.findMany({
     where: {
       // 2026-07-26 (S1169): sale.deletedAt filter -- see matching comment in getExtensionItems.
-      sale: { organizerId: organizer.id, deletedAt: null },
+      AND: [{ OR: organizerListableScope(organizer.id) }], // sale items + the organizer's saleless kits
       status: 'AVAILABLE',
       draftStatus: 'PUBLISHED', // 2026-10-11: a Draft / Pending Review item is never listed, price-synced or renewed on a marketplace
       OR: [
         { ebayShippingOverride: null },
         { ebayShippingOverride: { not: 'DONT_LIST' } },
+        { listingType: 'KIT' }, // 2026-10-13: a kit is listable everywhere; a legacy DONT_LIST on a kit never hides it
       ],
     },
-    select: { id: true, title: true, price: true, marketplaceListedPrice: true },
+    select: { id: true, title: true, price: true, marketplaceListedPrice: true, stockTotal: true, stockSold: true },
   });
   if (!items.length) { res.json({ items: [] }); return; }
 
   const itemIds = items.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, remoteListingId: true, createdAt: true },
+    select: { itemId: true, action: true, status: true, remoteListingId: true, createdAt: true, platform: true, syncedQuantity: true },
     orderBy: { createdAt: 'desc' },
   });
   const postedByItem = new Set<string>();
   const removedByItem = new Set<string>();
   const remoteListingIdByItem = new Map<string, string | null>();
+  // QUANTITY DRIFT (2026-10-13): the quantity last confirmed on this item's live FACEBOOK listing (null = never recorded, read as 1).
+  const syncedQtyByItem = new Map<string, number | null>();
   for (const j of jobs) {
     if (j.action === 'POST' && j.status === 'POSTED') {
       postedByItem.add(j.itemId);
+      if ((j as any).platform === 'FACEBOOK' && !syncedQtyByItem.has(j.itemId)) syncedQtyByItem.set(j.itemId, (j as any).syncedQuantity ?? null);
       // jobs is ordered createdAt desc, so the first POST/POSTED row seen per item is the
       // most recent one -- only set it once so an older job can't overwrite a newer remoteListingId.
       if (!remoteListingIdByItem.has(j.itemId)) remoteListingIdByItem.set(j.itemId, j.remoteListingId);
@@ -2081,10 +2119,28 @@ export const getPendingUpdates = async (req: AuthRequest, res: Response): Promis
     if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
   }
 
-  const pending = items
+  // An entry is due when the PRICE drifted (unchanged rule) OR the one stock number differs from the quantity last confirmed on the
+  // Facebook listing (a component sale that only shrank a kit, a sale elsewhere of a multi-unit item). markItemPriceSynced clears both.
+  const quantityDrifted = (it: { id: string; stockTotal: number | null; stockSold: number }): boolean =>
+    syncedQtyByItem.has(it.id) && (syncedQtyByItem.get(it.id) ?? 1) !== stockRemainingOf(it);
+  const priceDrifted = (it: { price: number | null; marketplaceListedPrice: number | null }): boolean =>
+    it.price != null && Math.round(it.price) !== it.marketplaceListedPrice;
+
+  const dueItems = items
     .filter((it) => postedByItem.has(it.id) && !removedByItem.has(it.id))
-    .filter((it) => it.price != null && Math.round(it.price) !== it.marketplaceListedPrice)
-    .map((it) => ({ id: it.id, title: it.title, newPrice: Math.round(it.price as number), remoteListingId: remoteListingIdByItem.get(it.id) || null }))
+    .filter((it) => it.price != null && (priceDrifted(it) || quantityDrifted(it)));
+  const extras = await loadListingExtras(dueItems.map((i) => i.id));
+  const pending = dueItems
+    .map((it) => ({
+      id: it.id,
+      title: it.title,
+      newPrice: Math.round(it.price as number),
+      remoteListingId: remoteListingIdByItem.get(it.id) || null,
+      priceDrift: priceDrifted(it),
+      quantityDrift: quantityDrifted(it),
+      quantity: stockRemainingOf(it),
+      ...listingExtraFields(extras.get(it.id)),
+    }))
     // Fail-closed: skip any item without a confirmed remoteListingId (legal condition 2).
     .filter((it) => !!it.remoteListingId);
 
@@ -2101,13 +2157,15 @@ export const markItemPriceSynced = async (req: AuthRequest, res: Response): Prom
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
   if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
 
-  const item = await prisma.item.findUnique({ where: { id: itemId }, select: { price: true } });
+  const item = await prisma.item.findUnique({ where: { id: itemId }, select: { price: true, stockTotal: true, stockSold: true } });
   if (!item || item.price == null) { res.status(404).json({ message: 'Item not found' }); return; }
 
   await prisma.item.update({
     where: { id: itemId },
     data: { marketplaceListedPrice: Math.round(item.price) },
   });
+  // 2026-10-13: the same confirmation records the quantity now shown on the live Facebook listing (read fresh, never client-supplied).
+  await stampSyncedQuantity(itemId, 'FACEBOOK', stockRemainingOf(item as any));
   res.json({ ok: true });
 };
 
@@ -2146,7 +2204,7 @@ export const getPendingSoldChecks = async (req: AuthRequest, res: Response): Pro
   if (isPlatformPaused((organizer as any).pausedMarketplaces, 'FACEBOOK')) { res.json({ items: [], paused: true, vintedSoldCheckRequested, vintedBundleOrders }); return; }
 
   const availableItems = await prisma.item.findMany({
-    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE', draftStatus: 'PUBLISHED' }, // 2026-10-11: unpublished items are never re-renewed / re-checked on a marketplace
+    where: { OR: organizerListableScope(organizer.id), status: 'AVAILABLE', draftStatus: 'PUBLISHED' }, // 2026-10-11: unpublished items are never re-renewed / re-checked on a marketplace
     select: { id: true, title: true },
   });
   if (!availableItems.length) { res.json({ items: [], vintedSoldCheckRequested, vintedBundleOrders }); return; }
@@ -2163,9 +2221,9 @@ export const getPendingSoldChecks = async (req: AuthRequest, res: Response): Pro
     if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
   }
 
-  const items = availableItems
-    .filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id))
-    .map((i) => ({ id: i.id, title: i.title }));
+  const liveItems = availableItems.filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id));
+  const soldCheckExtras = await loadListingExtras(liveItems.map((i) => i.id));
+  const items = liveItems.map((i) => ({ id: i.id, title: i.title, ...listingExtraFields(soldCheckExtras.get(i.id)) }));
 
   res.json({ items, vintedSoldCheckRequested, vintedBundleOrders });
 };
@@ -2198,7 +2256,7 @@ export const getPendingRenewals = async (req: AuthRequest, res: Response): Promi
   // here). Without this filter, auto-renew would keep refreshing/reposting an already-live
   // Facebook coin listing forever.
   const availableItems = await prisma.item.findMany({
-    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE', draftStatus: 'PUBLISHED' }, // 2026-10-11: unpublished items are never re-renewed / re-checked on a marketplace
+    where: { OR: organizerListableScope(organizer.id), status: 'AVAILABLE', draftStatus: 'PUBLISHED' }, // 2026-10-11: unpublished items are never re-renewed / re-checked on a marketplace
     select: { id: true, title: true, saleId: true, category: true, ebayCategoryId: true },
   });
   if (!availableItems.length) { res.json({ items: [] }); return; }
@@ -2398,7 +2456,7 @@ export const getSyncHealth = async (req: AuthRequest, res: Response): Promise<vo
   // an item that has since sold or been archived, unlike the AVAILABLE-only scoping
   // getExtensionItems/getPendingUpdates use for their listable-item sets above.
   const allItems = await prisma.item.findMany({
-    where: { sale: { organizerId: organizer.id, deletedAt: null } },
+    where: { OR: organizerListableScope(organizer.id) },
     select: { id: true },
   });
   const allItemIds = allItems.map((i) => i.id);
@@ -2429,7 +2487,7 @@ export const getSyncHealth = async (req: AuthRequest, res: Response): Promise<vo
   // MAX_REMOVAL_SKIP_ATTEMPTS threshold declared above, same soldItems/jobs shape),
   // with a saleTitle join and lastAttemptAt surfaced for display on this card.
   const soldItems = await prisma.item.findMany({
-    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } },
+    where: { OR: organizerListableScope(organizer.id), status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } }, // 2026-10-13: includes saleless kits
     select: { id: true, title: true, saleId: true },
   });
   const soldItemIds = soldItems.map((i) => i.id);
@@ -2524,7 +2582,7 @@ export const getSyncHealth = async (req: AuthRequest, res: Response): Promise<vo
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const fbNativeSoldItems = await prisma.item.findMany({
     where: {
-      sale: { organizerId: organizer.id, deletedAt: null },
+      OR: organizerListableScope(organizer.id),
       status: 'SOLD',
       lastSoldVia: 'FB_NATIVE',
       updatedAt: { gte: thirtyDaysAgo },
@@ -2589,7 +2647,7 @@ export const decideMessageAutosendForItem = async (req: AuthRequest, res: Respon
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
   const item = await prisma.item.findFirst({
-    where: { id: itemId, sale: { organizerId: organizer.id } },
+    where: { id: itemId, OR: [{ sale: { organizerId: organizer.id } }, { saleId: null, organizerId: organizer.id, listingType: 'KIT' }] },
     select: { id: true, price: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true },
   });
   if (!item) { res.status(404).json({ message: 'Item not found' }); return; }
@@ -2679,12 +2737,13 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
 
   const items = await prisma.item.findMany({
     where: {
-      sale: { organizerId: organizer.id, deletedAt: null },
+      AND: [{ OR: organizerListableScope(organizer.id) }],
       draftStatus: 'PUBLISHED',
       status: 'AVAILABLE',
       OR: [
         { ebayShippingOverride: null },
         { ebayShippingOverride: { not: 'DONT_LIST' } },
+        { listingType: 'KIT' }, // 2026-10-13: a kit is listable everywhere; a legacy DONT_LIST on a kit never hides it
       ],
     },
     take: 2000,
@@ -2754,6 +2813,13 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     it.packageConfirmedByOrganizer === true ||
     (it.packageEstimateSource != null && !UNTRUSTED_PACKAGE_SOURCES.includes(it.packageEstimateSource));
 
+  // 2026-10-13 (kits listable everywhere): same stock number + kit fields as getExtensionItems.
+  const listingExtras = await loadListingExtras(items.map((i) => i.id));
+  const descriptionOf = (it: { id: string; description: string | null }) => {
+    const x = listingExtras.get(it.id);
+    return x?.isKit && x.description !== undefined ? x.description : it.description;
+  };
+
   const shapeItem = (it: (typeof items)[number]) => ({
     id: it.id,
     saleId: it.saleId,
@@ -2764,13 +2830,14 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     // Canonical condition and grade as stored, for the extension's fas-condition.js (read-only additions).
     conditionRaw: it.condition ?? null,
     conditionGrade: it.conditionGrade ?? null,
-    description: buildDescription(it.description, it.saleId),
-    descriptionWithBacklink: buildDescriptionWithBacklink(it.description, it.saleId),
+    description: buildDescription(descriptionOf(it), it.saleId),
+    descriptionWithBacklink: buildDescriptionWithBacklink(descriptionOf(it), it.saleId),
     category: it.ebayCategoryName || it.category || null,
     categoryBreadcrumb: it.category || null,
     ...vintedCategoryFields(it),
     // S-EXT-CATEGORY-MAPS: Poshmark/Mercari/Grailed/Craigslist exact leaves -- see marketplaceCategoryFields.
     ...marketplaceCategoryFields(it),
+    ...listingExtraFields(listingExtras.get(it.id), { keepDescription: false }),
     photoUrls: applyWatermark
       ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false, it.qrAssetReady))
       : (it.photoUrls || []),
@@ -2897,7 +2964,7 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
   });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
-  const emptyQueues: Record<PriceSyncPlatform, { id: string; title: string; price: number | null; remoteListingId?: string }[]> = {
+  const emptyQueues: Record<PriceSyncPlatform, Array<Record<string, unknown> & { id: string; title: string; price: number | null; remoteListingId?: string }>> = {
     CRAIGSLIST: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
   };
 
@@ -2906,12 +2973,16 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
   // ALREADY-live listing honest, not about creating a new one the organizer never opted into.
   const items = await prisma.item.findMany({
     where: {
-      sale: { organizerId: organizer.id, deletedAt: null },
+      AND: [
+        { OR: organizerListableScope(organizer.id) },
+        // Price drift candidates (priceUpdatedAt) PLUS quantity drift candidates: multi-unit items and kits (2026-10-13). A single-unit
+        // item can never have a quantity different from the 1 its listing carries, so it is only a candidate on price.
+        { OR: [{ priceUpdatedAt: { not: null } }, { stockTotal: { gt: 1 } }, { listingType: 'KIT' }] },
+      ],
       status: 'AVAILABLE',
-      priceUpdatedAt: { not: null },
     },
     take: 2000,
-    select: { id: true, title: true, price: true, priceUpdatedAt: true },
+    select: { id: true, title: true, price: true, priceUpdatedAt: true, stockTotal: true, stockSold: true },
   });
 
   if (items.length === 0) {
@@ -2922,9 +2993,9 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
   const itemIds = items.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, platform: true, createdAt: true, priceSyncedAt: true, remoteListingId: true },
+    select: { itemId: true, action: true, status: true, platform: true, createdAt: true, priceSyncedAt: true, remoteListingId: true, syncedQuantity: true },
   });
-  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; priceSyncedAt: Date | null; remoteListingId: string | null }>();
+  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; priceSyncedAt: Date | null; remoteListingId: string | null; syncedQuantity: number | null }>();
   for (const j of jobs) {
     // 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): ignore REMOVE/SKIPPED (failed removal attempt,
     // listing still live) -- otherwise a still-live platform silently dropped out of price sync.
@@ -2932,22 +3003,28 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
     const key = `${j.itemId}:${j.platform}`;
     const existing = latestByItemPlatform.get(key);
     if (!existing || j.createdAt > existing.createdAt) {
-      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, priceSyncedAt: j.priceSyncedAt, remoteListingId: j.remoteListingId ?? null });
+      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, priceSyncedAt: j.priceSyncedAt, remoteListingId: j.remoteListingId ?? null, syncedQuantity: (j as any).syncedQuantity ?? null });
     }
   }
 
   // 2026-09-30 per-marketplace pause: skip paused platforms.
   const PRICE_SYNC_PLATFORMS: PriceSyncPlatform[] = filterPausedPlatforms(['CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI'] as PriceSyncPlatform[], organizer.pausedMarketplaces);
-  const queues: Record<PriceSyncPlatform, { id: string; title: string; price: number | null; remoteListingId?: string }[]> = {
+  const queues: Record<PriceSyncPlatform, Array<Record<string, unknown> & { id: string; title: string; price: number | null; remoteListingId?: string }>> = {
     CRAIGSLIST: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
   };
 
+  const priceSyncExtras = await loadListingExtras(items.map((i) => i.id));
   for (const it of items) {
     for (const platform of PRICE_SYNC_PLATFORMS) {
       const latest = latestByItemPlatform.get(`${it.id}:${platform}`);
       const isLive = !!latest && latest.action === 'POST' && latest.status === 'POSTED';
       if (!isLive) continue;
-      const needsSync = latest!.priceSyncedAt == null || (it.priceUpdatedAt != null && latest!.priceSyncedAt < it.priceUpdatedAt);
+      // PRICE drift is unchanged (and only for items with a recorded price change); QUANTITY drift (2026-10-13): the one stock number
+      // differs from the quantity last confirmed on this platform's listing (null = never recorded, read as 1).
+      const priceDrift = it.priceUpdatedAt != null && (latest!.priceSyncedAt == null || latest!.priceSyncedAt < it.priceUpdatedAt);
+      const remaining = stockRemainingOf(it);
+      const quantityDrift = (latest!.syncedQuantity ?? 1) !== remaining;
+      const needsSync = priceDrift || quantityDrift;
       if (!needsSync) continue;
       // S-EXT-MERCARI-PRICE-PUSH (2026-09-27, Patrick-approved): Phase B (background price-push)
       // is id-first-only, no title-based fallback -- an item with no captured remoteListingId is
@@ -2958,6 +3035,10 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
         id: it.id,
         title: it.title,
         price: it.price != null ? Number(it.price.toFixed(2)) : null,
+        priceDrift,
+        quantityDrift,
+        quantity: remaining,
+        ...listingExtraFields(priceSyncExtras.get(it.id)),
         ...(platform === 'MERCARI' ? { remoteListingId: latest!.remoteListingId as string } : {}),
       });
     }
@@ -3001,9 +3082,11 @@ export const markItemPriceSyncedForPlatform = async (req: AuthRequest, res: Resp
   });
   if (!latest) { res.status(404).json({ message: 'No live listing found for this item on that platform' }); return; }
 
+  const stockRow = await prisma.item.findUnique({ where: { id: itemId }, select: { stockTotal: true, stockSold: true } });
   await prisma.marketplaceListingJob.update({
     where: { id: latest.id },
-    data: { priceSyncedAt: new Date() },
+    // 2026-10-13: also records the quantity now shown on this platform's listing (fresh read), clearing quantity drift.
+    data: { priceSyncedAt: new Date(), ...(stockRow ? { syncedQuantity: stockRemainingOf(stockRow as any) } : {}) },
   });
   res.json({ ok: true });
 };

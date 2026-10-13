@@ -18,6 +18,8 @@ import {
   resetReconcileCursors,
 } from '../jobs/inventoryReconcileCron';
 import type { ReconcileDeps } from '../jobs/inventoryReconcileCron';
+import { realReconcileDeps } from '../jobs/inventoryReconcileCron';
+import { prisma } from '../lib/prisma';
 
 const syncMock = syncItemStock as unknown as jest.Mock;
 
@@ -382,5 +384,51 @@ describe('buildReconcileMessage', () => {
     });
     expect(m?.body).toContain('Stock counts were corrected on eBay for 1 item.');
     expect(m?.body).toContain('1 item still shows');
+  });
+});
+
+
+describe('kits in the reconcile sweep (2026-10-13, kits listable everywhere)', () => {
+  it('runs the one-time legacy DONT_LIST cleanup first and reports how many kits it cleared', async () => {
+    const fix = jest.fn().mockResolvedValue({ ran: true, fixed: 4 });
+    const { deps } = makeDeps({}, { fixLegacyKitDontList: fix });
+    const r = await runInventoryReconcile({}, deps);
+    expect(fix).toHaveBeenCalledTimes(1);
+    expect(r.kitsDontListCleared).toBe(4);
+  });
+
+  it('a later run (marker already claimed) reports nothing', async () => {
+    const fix = jest.fn().mockResolvedValue({ ran: false, fixed: 0 });
+    const { deps } = makeDeps({}, { fixLegacyKitDontList: fix });
+    const r = await runInventoryReconcile({}, deps);
+    expect(fix).toHaveBeenCalledTimes(1);
+    expect(r.kitsDontListCleared).toBeUndefined();
+  });
+
+  it('a dry run never performs the cleanup', async () => {
+    const fix = jest.fn().mockResolvedValue({ ran: true, fixed: 1 });
+    const { deps } = makeDeps({}, { fixLegacyKitDontList: fix });
+    await runInventoryReconcile({ dryRun: true }, deps);
+    expect(fix).not.toHaveBeenCalled();
+  });
+
+  it('a failing cleanup never stops the sweep', async () => {
+    const w = newWorld();
+    w.inStock.a = 2;
+    w.live.a = { ebay: 2 };
+    installSyncFake(w);
+    const { deps } = makeDeps({ org1: [{ id: 'a', title: 'A' }] }, { fixLegacyKitDontList: jest.fn().mockRejectedValue(new Error('db')) });
+    const r = await runInventoryReconcile({}, deps);
+    expect(w.checkCalls).toContain('a');
+    expect(r.kitsDontListCleared).toBeUndefined();
+  });
+
+  it('the real candidate query no longer excludes kits (only consignor tags)', async () => {
+    const findMany = jest.fn().mockResolvedValue([{ id: 'kit1', title: 'Kit' }]);
+    (prisma as any).etsyListing = { findMany: jest.fn().mockResolvedValue([]) };
+    (prisma as any).item = { findMany };
+    const rows = await realReconcileDeps.loadCandidates('org1', null, 10);
+    expect(rows).toEqual([{ id: 'kit1', title: 'Kit' }]);
+    expect(findMany.mock.calls[0][0].where.listingType).toEqual({ notIn: ['CONSIGNOR_TAG'] });
   });
 });

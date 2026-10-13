@@ -23,6 +23,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { InsufficientStockError } from './itemStockErrors';
 import { KIT_LISTING_TYPE, recomputeKitsForComponents, sellKitComponents, undoKitCounter } from './itemKitStock';
+import { scheduleKitRelatedStockSync } from './kitStockSyncTrigger'; // 2026-10-13: kits are listed on every market, so a kit/component sale re-pushes the stock number
 
 // Moved to itemStockErrors.ts (shared with itemKitStock.ts without a circular import); re-exported so every import keeps working.
 export { InsufficientStockError };
@@ -163,6 +164,9 @@ export async function sellItemUnits(
     }
   }
 
+  if (updated.listingType === KIT_LISTING_TYPE) scheduleKitRelatedStockSync(itemId, 'kit', 'kit sale');
+  else if (updated.isKitComponent) scheduleKitRelatedStockSync(itemId, 'component', 'component sale');
+
   return {
     fullySoldOut,
     remainingStock: Math.max(total - updated.stockSold, 0),
@@ -230,6 +234,8 @@ export async function sellItemUnitsInTransaction(
   } else if (row.isKitComponent) {
     await recomputeKitsForComponents(client, [itemId]);
   }
+  if (row.listingType === KIT_LISTING_TYPE) scheduleKitRelatedStockSync(itemId, 'kit', 'kit sale');
+  else if (row.isKitComponent) scheduleKitRelatedStockSync(itemId, 'component', 'component sale');
   return {
     fullySoldOut: sold >= total,
     remainingStock: Math.max(total - sold, 0),

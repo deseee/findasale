@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "FindA.Sale \u2014 Marketplace Autofill",
   "short_name": "FindA.Sale",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Fill your Facebook Marketplace listings from your FindA.Sale inventory \u2014 title, price, condition, description, and photos. You review and publish.",
   "permissions": [
     "storage",
@@ -52,6 +52,7 @@
       ],
       "js": [
         "fas-selectors.js",
+        "fas-quantity.js",
         "fas-content.js"
       ],
       "run_at": "document_idle"
@@ -72,6 +73,7 @@
       ],
       "js": [
         "fas-condition.js",
+        "fas-quantity.js",
         "fas-craigslist.js"
       ],
       "run_at": "document_idle"
@@ -126,6 +128,7 @@
       "js": [
         "fas-condition.js",
         "fas-challenge.js",
+        "fas-quantity.js",
         "fas-poshmark.js"
       ],
       "run_at": "document_idle"
@@ -137,6 +140,7 @@
       "js": [
         "fas-condition.js",
         "fas-challenge.js",
+        "fas-quantity.js",
         "fas-mercari.js"
       ],
       "run_at": "document_idle"
@@ -169,6 +173,7 @@
       "js": [
         "fas-condition.js",
         "fas-challenge.js",
+        "fas-quantity.js",
         "fas-grailed.js"
       ],
       "run_at": "document_idle"

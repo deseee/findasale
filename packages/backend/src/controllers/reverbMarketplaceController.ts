@@ -27,6 +27,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { marketplaceLotRefusal } from '../services/bulkLot/bulkLotExportFilter';
+import { withKitListingText } from '../services/itemKitListing'; // 2026-10-13: a kit's Reverb description lists its components
 import {
   connectReverbAccount,
   disconnectReverbAccount,
@@ -228,7 +229,7 @@ export const pushItemToReverb = async (req: AuthRequest, res: Response) => {
     const publish = req.body?.publish === true;
     const reverbCategoryUuid = typeof req.body?.reverbCategoryUuid === 'string' ? req.body.reverbCategoryUuid : undefined;
 
-    const reverbResponse = await createReverbListing(organizer.id, item, { publish, reverbCategoryUuid });
+    const reverbResponse = await createReverbListing(organizer.id, await withKitListingText(item), { publish, reverbCategoryUuid });
     // BUG FIX 2026-09-14 (live-verified via a real push against Patrick's own Reverb account,
     // item cmt3betxs01nra4xv0dtry9kr -- "Planet Waves XLR Microphone Cable"): Reverb's
     // create-listing response wraps the actual listing under a `listing` key -- confirmed from

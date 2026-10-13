@@ -3,9 +3,10 @@
  * not DELETE the Discogs listing that just sold, while still withdrawing eBay and Shopify.
  */
 
+const mockJobFindFirst = jest.fn();
 const mockTx: any = { $queryRaw: jest.fn(), marketplaceListingJob: { findFirst: jest.fn(), create: jest.fn(async () => ({})) } };
 jest.mock('../../lib/prisma', () => ({
-  prisma: { item: { update: jest.fn(async () => ({})), findUnique: jest.fn(async () => ({ listingType: null })) }, $transaction: jest.fn(async (cb: any) => cb(mockTx)) },
+  prisma: { marketplaceListingJob: { findFirst: (...a: any[]) => mockJobFindFirst(...a) }, item: { update: jest.fn(async () => ({})), findUnique: jest.fn(async () => ({ listingType: null })) }, $transaction: jest.fn(async (cb: any) => cb(mockTx)) },
 }));
 jest.mock('../itemStockService', () => ({ sellItemUnits: jest.fn() }));
 jest.mock('../itemKitStock', () => ({ KIT_LISTING_TYPE: 'KIT', loadKitComponents: jest.fn(async () => []) }));
@@ -34,7 +35,7 @@ import { syncMarketplaceStock } from '../marketplaceStockSyncService';
 import { syncItemStock } from '../inventoryStockSync';
 import { loadKitComponents } from '../itemKitStock';
 
-beforeEach(() => { jest.clearAllMocks(); mockTx.$queryRaw.mockReset(); mockTx.marketplaceListingJob.findFirst.mockReset(); });
+beforeEach(() => { jest.clearAllMocks(); mockJobFindFirst.mockReset().mockResolvedValue(null); mockTx.$queryRaw.mockReset(); mockTx.marketplaceListingJob.findFirst.mockReset(); });
 
 it('withdraws from eBay, Shopify, Discogs, Reverb and Etsy and tags lastSoldVia by default', async () => {
   const r = await commitFacebookNativeSale('item_1', 'MERCARI');
@@ -314,7 +315,7 @@ describe('soldOnPlatform unit sale (multi-quantity items)', () => {
   });
 });
 
-describe('KIT item sold on a marketplace (no MarketplaceListingJob row exists for a kit)', () => {
+describe('KIT item sold on a marketplace: a kit with a listing row uses the per-listing idempotent path, a kit with no row takes one unit through the deduped path', () => {
   const kit = (status = 'AVAILABLE', stockTotal: number | null = 17) => {
     (prisma as any).item.findUnique.mockResolvedValueOnce({ listingType: 'KIT' });
     mockTx.$queryRaw.mockResolvedValueOnce([{ status, stockTotal, listingType: 'KIT' }]);
@@ -323,7 +324,7 @@ describe('KIT item sold on a marketplace (no MarketplaceListingJob row exists fo
   const vinted = { soldOnPlatform: { platform: 'VINTED' as const, remoteListingId: '999', trustedOrder: true } };
   const components = [{ componentItemId: 'cmp_a', quantity: 2 }, { componentItemId: 'cmp_b', quantity: 1 }];
 
-  it('with soldOnPlatform VINTED and no listing row: takes exactly one kit unit, stays AVAILABLE, syncs every component', async () => {
+  it('NO-ROW kit: with soldOnPlatform VINTED and no listing row, takes exactly one kit unit, stays AVAILABLE, syncs every component', async () => {
     kit();
     (loadKitComponents as jest.Mock).mockResolvedValueOnce(components);
     (sellItemUnits as jest.Mock).mockResolvedValueOnce({ fullySoldOut: false, remainingStock: 16 });
@@ -332,6 +333,8 @@ describe('KIT item sold on a marketplace (no MarketplaceListingJob row exists fo
     expect(r).toEqual({ ok: true, alreadyCommitted: false, partial: true, remainingStock: 16 });
     expect(sellItemUnits).toHaveBeenCalledTimes(1);
     expect(sellItemUnits).toHaveBeenCalledWith('kit_1', 1, mockTx);
+    // The row lookup (outside the transaction) found nothing, so the deduped path was chosen.
+    expect(mockJobFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ itemId: 'kit_1', platform: 'VINTED' }) }));
     // No platform listing row is read or written for a kit.
     expect(mockTx.marketplaceListingJob.findFirst).not.toHaveBeenCalled();
     expect(mockTx.marketplaceListingJob.create).not.toHaveBeenCalled();
@@ -341,6 +344,66 @@ describe('KIT item sold on a marketplace (no MarketplaceListingJob row exists fo
     expect(loadKitComponents).toHaveBeenCalledWith(expect.anything(), 'kit_1');
     expect(syncItemStock).toHaveBeenCalledWith('cmp_a', 'kit-sold-on-vinted');
     expect(syncItemStock).toHaveBeenCalledWith('cmp_b', 'kit-sold-on-vinted');
+  });
+
+  const withRow = () => mockJobFindFirst.mockImplementation(async (a: any) => (a?.where?.NOT ? { id: 'row_1' } : null));
+
+  it('ROW kit: a kit with a Vinted listing row consumes the live row, writes the REMOVE row, takes one unit and syncs components', async () => {
+    withRow();
+    kit();
+    mockTx.marketplaceListingJob.findFirst.mockResolvedValueOnce({ action: 'POST', status: 'POSTED', remoteListingId: '999', createdAt: new Date() });
+    (loadKitComponents as jest.Mock).mockResolvedValueOnce(components);
+    (sellItemUnits as jest.Mock).mockResolvedValueOnce({ fullySoldOut: false, remainingStock: 16 });
+    const r = await commitFacebookNativeSale('kit_1', 'VINTED', vinted);
+    await flush();
+    expect(r).toEqual({ ok: true, alreadyCommitted: false, partial: true, remainingStock: 16 });
+    expect(mockTx.marketplaceListingJob.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ itemId: 'kit_1', platform: 'VINTED', action: 'REMOVE', status: 'REMOVED', remoteListingId: '999' }),
+    }));
+    expect(sellItemUnits).toHaveBeenCalledTimes(1);
+    expect(sellItemUnits).toHaveBeenCalledWith('kit_1', 1, mockTx);
+    expect(syncItemStock).toHaveBeenCalledWith('kit_1', 'sold-on-vinted');
+    expect(syncItemStock).toHaveBeenCalledWith('cmp_a', 'kit-sold-on-vinted');
+    expect(syncItemStock).toHaveBeenCalledWith('cmp_b', 'kit-sold-on-vinted');
+  });
+
+  it('ROW kit: the same sale reported again takes no second unit (idempotent per listing)', async () => {
+    withRow();
+    kit();
+    // the first delivery already closed the listing: latest row is the REMOVE row that carries this listing id
+    mockTx.marketplaceListingJob.findFirst
+      .mockResolvedValueOnce({ action: 'REMOVE', status: 'REMOVED', remoteListingId: '999', lastErrorMessage: 'sold_on_vinted', createdAt: new Date(Date.now() - 40 * 86400000) })
+      .mockResolvedValueOnce({ id: 'row_1' });
+    const r = await commitFacebookNativeSale('kit_1', 'VINTED', { soldOnPlatform: { platform: 'VINTED' as const, remoteListingId: '999' } });
+    await flush();
+    expect(r).toMatchObject({ ok: true, alreadyCommitted: true, noopReason: 'no_live_posted_row', alreadyCounted: true });
+    expect(sellItemUnits).not.toHaveBeenCalled();
+    expect(syncItemStock).not.toHaveBeenCalled();
+  });
+
+  it('ROW kit, last unit: goes SOLD, lastSoldVia stamped, other markets withdrawn, components synced', async () => {
+    withRow();
+    kit('AVAILABLE', 5);
+    mockTx.marketplaceListingJob.findFirst.mockResolvedValueOnce({ action: 'POST', status: 'POSTED', remoteListingId: null, createdAt: new Date() });
+    (loadKitComponents as jest.Mock).mockResolvedValueOnce(components);
+    (sellItemUnits as jest.Mock).mockResolvedValueOnce({ fullySoldOut: true, remainingStock: 0 });
+    const r = await commitFacebookNativeSale('kit_1', 'VINTED', { soldOnPlatform: { platform: 'VINTED' as const, remoteListingId: null } });
+    await flush();
+    expect(r).toEqual({ ok: true, alreadyCommitted: false });
+    expect((prisma as any).item.update).toHaveBeenCalledWith({ where: { id: 'kit_1' }, data: { lastSoldVia: 'VINTED' } });
+    expect(endEbayListingIfExists).toHaveBeenCalledWith('kit_1');
+    expect(syncItemStock).toHaveBeenCalledWith('cmp_a', 'kit-sold-on-vinted');
+  });
+
+  it('a kit sold with no platform named (Discogs / Reverb poll) takes one unit through the deduped path', async () => {
+    kit();
+    (sellItemUnits as jest.Mock).mockResolvedValueOnce({ fullySoldOut: false, remainingStock: 3 });
+    (loadKitComponents as jest.Mock).mockResolvedValueOnce(components);
+    const r = await commitFacebookNativeSale('kit_1', 'DISCOGS');
+    await flush();
+    expect(r).toEqual({ ok: true, alreadyCommitted: false, partial: true, remainingStock: 3 });
+    expect(mockJobFindFirst).not.toHaveBeenCalled();
+    expect(syncItemStock).toHaveBeenCalledWith('cmp_a', 'kit-sold-on-discogs');
   });
 
   it('last kit unit: item goes SOLD (via sellItemUnits), lastSoldVia is stamped, components are synced', async () => {
