@@ -94,13 +94,17 @@ describe('bulk lots and the older eBay write paths', () => {
   const stock = require('../services/marketplaceStockSyncService') as typeof import('../services/marketplaceStockSyncService');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const price = require('../services/ebayPriceRevisionService') as typeof import('../services/ebayPriceRevisionService');
+  // marketplaceStockSyncService lazy-imports inventoryStockSync, so the jest.mock factories that publish the __guard* handles
+  // (prisma, ebayPublishService, bulkLotEbayWiring) would not have run when beforeEach reads them. Load it up front.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('../services/inventoryStockSync');
 
   beforeEach(() => {
     setFlags(false, false);
     g.__guardLotFind.mockReset().mockResolvedValue([]);
     g.__guardItemFind.mockReset().mockResolvedValue(syncRow());
     g.__guardReconcile.mockReset();
-    g.__guardEbayFetch.mockClear();
+    g.__guardEbayFetch.mockReset().mockResolvedValue({ ok: false, status: 500, text: async () => 'boom', json: async () => ({}) });
     fetchMock.mockReset().mockResolvedValue({ ok: false, status: 500, text: async () => 'boom', json: async () => ({}) });
     (global as any).fetch = fetchMock;
     jest.spyOn(console, 'log').mockImplementation(() => undefined);

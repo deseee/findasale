@@ -1,7 +1,7 @@
 /**
  * Single inventory number (2026-10-13): after a card import changed the unit count of existing items, bring every market in line with
  * the new in-stock number. Kept in its own tiny module so the card intake stays free of marketplace imports: the intake's import
- * graph is asserted (cardIntakeCopyAndIsolation.test.ts) to contain no AI service, HTTP client or tier module, and that walk follows
+ * graph is asserted (cardIntakeCopyAndIsolation.test.ts) to contain no image-analysis service, HTTP client or tier module, and that walk follows
  * dynamic imports too. So this module imports NOTHING from the sync engine. The app registers the runner once at startup
  * (index.ts calls setStockSyncRunner(syncItemStock)); until then, and under test, a call does nothing. Never throws.
  */
