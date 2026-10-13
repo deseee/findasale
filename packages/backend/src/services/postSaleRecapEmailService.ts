@@ -216,7 +216,7 @@ export async function sendPostSaleRecap(saleId: string): Promise<boolean> {
     businessName: sale.organizer?.businessName || 'your business',
     saleTitle: sale.title,
     metrics,
-    newSaleUrl: `${FRONTEND_URL}/organizer/sales/new`,
+    newSaleUrl: `${FRONTEND_URL}/organizer/create-sale`,
     testimonialUrl: `${FRONTEND_URL}/testimonial?saleId=${sale.id}`,
     referralCode,
     unsubUrl,

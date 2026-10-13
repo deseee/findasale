@@ -20,6 +20,8 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import Tooltip from '../../components/Tooltip';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
+import SaleNameHint from '../../components/SaleNameHint';
+import PublishWithoutItemsDialog from '../../components/PublishWithoutItemsDialog';
 import LocationSelector from '../../components/LocationSelector';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import Head from 'next/head';
@@ -166,7 +168,7 @@ interface WizardFormData {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WIZARD_STEPS = [
-  { n: 1, key: 'type', label: 'Type & name' },
+  { n: 1, key: 'type', label: 'Sale type & name' },
   { n: 2, key: 'where', label: 'Dates & location' },
   { n: 3, key: 'photos', label: 'Photos' },
   { n: 4, key: 'details', label: 'Details' },
@@ -674,9 +676,44 @@ function Step1({ c, form, setForm, vendorBooths, vendorBoothsLoading }: Step1Pro
       <WizardHeader
         eyebrow="Step 1 of 5"
         title="What kind of sale are you putting on?"
-        sub="Pick the closest fit. You can fine-tune the details after."
+        sub="A sale is the event: what kind, when, and where. You'll add the things you're selling right after."
         c={c}
       />
+
+      {/* Guided first-sale flow (2026-10-12): a sale is the event, items come next. */}
+      <ol
+        aria-label="How it works"
+        style={{
+          listStyle: 'none', margin: '0 0 20px', padding: 0,
+          display: 'flex', flexWrap: 'wrap', gap: 8,
+          fontFamily: 'Inter, sans-serif',
+        }}
+      >
+        {['Set up the sale', 'Add your items', 'Shoppers browse and buy'].map((label, i) => (
+          <li
+            key={label}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 12px', borderRadius: 999,
+              background: c.chipBg, border: `1px solid ${c.border}`,
+              fontSize: 13, color: c.text,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 20, height: 20, borderRadius: 999,
+                background: i === 0 ? c.accent : c.surfaceElevated,
+                color: i === 0 ? c.accentInk : c.textDim,
+                border: i === 0 ? 'none' : `1px solid ${c.border}`,
+                fontSize: 11, fontWeight: 600,
+              }}
+            >{i + 1}</span>
+            <span><span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{i + 1}. </span>{label}</span>
+          </li>
+        ))}
+      </ol>
 
       {/* 2×2 tile grid */}
       <div style={{
@@ -880,23 +917,21 @@ function Step1({ c, form, setForm, vendorBooths, vendorBoothsLoading }: Step1Pro
           fontFamily: '"JetBrains Mono", monospace',
           fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
           color: c.textFaint, marginBottom: 14,
-        }}>Now name it</div>
+        }}>Name your sale</div>
 
         <label style={{
           display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12,
           fontFamily: 'Inter, sans-serif',
         }}>
           <span style={{ fontSize: 13, fontWeight: 500, color: c.text }}>
-            Sale title{' '}
-            <span style={{ fontSize: 11, color: c.textFaint, fontWeight: 400 }}>
-             . Shows on the map and in search
-            </span>
+            Sale name
           </span>
           <input
             type="text"
             value={form.title}
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            placeholder={selectedTile ? `e.g., ${titleSuggestions[selectedTile.key][0]}` : 'e.g., Your Sale Name'}
+            placeholder={selectedTile ? `e.g., ${titleSuggestions[selectedTile.key][0]}` : 'e.g., Saturday Moving Sale on Elm St'}
+            aria-describedby="sale-name-helper sale-name-hint"
             required
             style={{
               padding: '11px 14px', borderRadius: 8,
@@ -907,6 +942,17 @@ function Step1({ c, form, setForm, vendorBooths, vendorBoothsLoading }: Step1Pro
             }}
           />
         </label>
+        <p id="sale-name-helper" style={{ margin: '-4px 0 12px', fontSize: 12, color: c.textDim, fontFamily: 'Inter, sans-serif' }}>
+          Name the event, not an item. Shoppers see this on the map and in search.
+        </p>
+
+        <SaleNameHint
+          id="sale-name-hint"
+          value={form.title}
+          suggestion={selectedTile ? titleSuggestions[selectedTile.key][0] : undefined}
+          onUseSuggestion={(name) => setForm(f => ({ ...f, title: name }))}
+          c={c}
+        />
 
         {/* Suggestions */}
         {selectedTile && (
@@ -1444,9 +1490,9 @@ function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
   return (
     <div style={{ padding: '0 0 24px' }}>
       <WizardHeader
-        eyebrow="Step 3 of 5 · the most important step"
-        title="Photos do the selling."
-        sub="Upload at least 3 to publish. Drag to reorder. The first becomes your cover. We'll resize and optimize automatically."
+        eyebrow="Step 3 of 5"
+        title="Photos of the sale"
+        sub="Show shoppers the setting: the house, the driveway, the tables. These are cover photos for the sale. You'll photograph each item after this."
         c={c}
       />
 
@@ -1626,7 +1672,7 @@ function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
           {[
             { stat: '3×', text: 'more saves when your cover is a wide room shot, not a single object.' },
             { stat: '+47%', text: 'view-through when photos show 3+ rooms or sale areas.' },
-            { stat: '15s', text: 'Smart tagging scans your photos and pre-fills item titles & prices.' },
+            { stat: '15s', text: 'per item once you start adding items. Smart tagging suggests a title and price from one photo.' },
           ].map((t, i) => (
             <div key={i} style={{ fontSize: 12.5, color: c.textDim, fontFamily: 'Inter, sans-serif' }}>
               <div style={{
@@ -1969,6 +2015,7 @@ function Step5({
         : (form.address ? `${form.address}, ${form.city}, ${form.state}` : '(address not set)'),
     },
     { icon: '📷', label: 'Photos', value: `${photoCount} photo${photoCount !== 1 ? 's' : ''}${photoCount > 0 ? ' · cover set' : ' · none added'}` },
+    { icon: '📦', label: 'Items', value: "None yet. You'll add them next." },
     { icon: '✨', label: 'Tags', value: form.tags.length > 0 ? form.tags.join(', ') : 'None' },
     {
       icon: '📝', label: 'Notes',
@@ -2118,6 +2165,13 @@ function Step5({
               fontSize: 17, fontWeight: 600, color: c.text,
             }}>Publish options</div>
 
+            <p style={{
+              margin: 0, fontSize: 12.5, lineHeight: 1.5, color: c.textDim,
+              fontFamily: 'Inter, sans-serif',
+            }}>
+              Next up: add your items. Your sale page shows the dates and place. Items are what shoppers browse and buy.
+            </p>
+
             <button
               type="button"
               onClick={onPublish}
@@ -2229,6 +2283,17 @@ interface SuccessStateProps {
   onAddItems: () => void;
 }
 function SuccessState({ c, saleTitle, saleId, onAddItems }: SuccessStateProps) {
+  // Under 520px the next-step row wraps and the button goes full width (same matchMedia
+  // pattern as Step5's mobile detection).
+  const [isNarrow, setIsNarrow] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 519px)');
+    setIsNarrow(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
   return (
     <div style={{
       minHeight: '100vh', background: c.bg, color: c.text,
@@ -2266,7 +2331,7 @@ function SuccessState({ c, saleTitle, saleId, onAddItems }: SuccessStateProps) {
             fontSize: 15, color: c.textDim, marginTop: 12, lineHeight: 1.55,
             maxWidth: 520, margin: '12px auto 0',
           }}>
-            Shoppers can now see it on the map. Share the link to drive more traffic.
+            Shoppers can find it on the map. Next, add the things you&apos;re selling so they have something to browse.
           </p>
         </div>
 
@@ -2275,6 +2340,7 @@ function SuccessState({ c, saleTitle, saleId, onAddItems }: SuccessStateProps) {
           marginTop: 28, padding: 22,
           background: c.accentSoft, border: `1px solid ${c.accentSoft}`,
           borderRadius: 14, display: 'flex', alignItems: 'center', gap: 16,
+          flexWrap: 'wrap',
         }}>
           <div style={{
             width: 44, height: 44, borderRadius: 10,
@@ -2282,26 +2348,28 @@ function SuccessState({ c, saleTitle, saleId, onAddItems }: SuccessStateProps) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0, fontSize: 20,
           }}>🛒</div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
               fontFamily: '"Inter Tight", "Inter", sans-serif',
               fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em', color: c.text,
-            }}>Now add your items</div>
+            }}>Add your first item</div>
             <div style={{ fontSize: 13, color: c.textDim, marginTop: 3 }}>
-              Snap a photo. Smart will suggest a title &amp; price. Review, save, repeat. About 15 seconds per item.
+              Snap a photo and Smart tagging suggests a title and price. Review, save, repeat. About 15 seconds per item.
             </div>
           </div>
           <button
             type="button"
             onClick={onAddItems}
+            autoFocus
             style={{
               padding: '12px 22px', borderRadius: 10,
               background: c.accent, color: c.accentInk,
               border: 'none', fontWeight: 600, fontSize: 14,
               cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-              flexShrink: 0,
+              flexShrink: 0, minHeight: 44,
+              width: isNarrow ? '100%' : undefined,
             }}
-          >Add items →</button>
+          >Add your first item</button>
         </div>
 
         <div style={{
@@ -2309,11 +2377,11 @@ function SuccessState({ c, saleTitle, saleId, onAddItems }: SuccessStateProps) {
           justifyContent: 'center', fontSize: 13, color: c.textFaint,
         }}>
           <Link href="/organizer/dashboard" style={{ color: c.textFaint }}>
-            Skip for now. Go to dashboard
+            I&apos;ll add items later
           </Link>
           <span>·</span>
-          <Link href={`/sales/${saleId}`} style={{ color: c.accent }}>
-            View public listing
+          <Link href={`/sales/${saleId}`} style={{ color: c.textFaint }}>
+            View your sale page
           </Link>
         </div>
       </div>
@@ -2346,16 +2414,23 @@ function ProModal({ c, saleId, onClose }: { c: typeof LIGHT; saleId: string; onC
         <p style={{ fontSize: 14, color: c.textDim, marginBottom: 20, lineHeight: 1.6 }}>
           We&apos;ve unlocked PRO features for your first sale. Unlimited item listings, up to 10 photos per item, Smart auto-tagging, and priority placement on FindA.Sale.
         </p>
+        <p style={{
+          fontSize: 14, color: c.text, marginBottom: 20, lineHeight: 1.6,
+          padding: '12px 14px', borderRadius: 10, background: c.accentSoft,
+        }}>
+          Your sale is live with no items yet. Shoppers can see the dates and place, but there&apos;s nothing to browse until you add the things you&apos;re selling.
+        </p>
         <button
           type="button"
           onClick={onClose}
+          autoFocus
           style={{
-            width: '100%', padding: '14px', borderRadius: 10,
+            width: '100%', padding: '14px', borderRadius: 10, minHeight: 44,
             background: c.accent, color: c.accentInk,
             border: 'none', fontWeight: 600, fontSize: 15, cursor: 'pointer',
           }}
         >
-          Start Adding Items →
+          Add your first item
         </button>
       </div>
     </div>
@@ -2397,6 +2472,10 @@ const CreateSalePage: React.FC = () => {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [published, setPublished] = useState(false);
+  // Guided first-sale flow (2026-10-12): a wizard sale always has zero items at publish time,
+  // so "Publish now" opens a confirm that offers "Add items first" (save as draft -> add-items).
+  const [showPublishDialog, setShowPublishDialog] = useState(false);
+  const [publishDialogBusy, setPublishDialogBusy] = useState<'publish' | 'draft' | null>(null);
 
   // ADR vendor-booth-sale-onboarding-gate (2026-09-25): the user's own claimed vendor
   // booths, fetched lazily the first time 'BOOTH' is selected as the sale type (same
@@ -2545,7 +2624,7 @@ const CreateSalePage: React.FC = () => {
         }
       }
       if (!form.title.trim()) {
-        showToast('Please enter a sale title.', 'error');
+        showToast('Please enter a sale name.', 'error');
         return false;
       }
     }
@@ -2729,7 +2808,42 @@ const CreateSalePage: React.FC = () => {
 
   const handlePublish = async () => {
     if (!validateStep(currentStep)) return;
-    await publishSale(buildPayload(), form.saleType);
+    setShowPublishDialog(true);
+  };
+
+  const trackPublishChoice = (choice: 'publish' | 'items_first' | 'cancel') => {
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'publish_without_items_choice', { choice });
+    }
+  };
+
+  const handleDialogPublish = async () => {
+    trackPublishChoice('publish');
+    setPublishDialogBusy('publish');
+    try {
+      await publishSale(buildPayload(), form.saleType);
+    } finally {
+      // Success swaps in the success screen / PRO modal; an error closes the dialog so the
+      // page's own error panel (tier limit, storefront, booth) is visible.
+      setPublishDialogBusy(null);
+      setShowPublishDialog(false);
+    }
+  };
+
+  const handleDialogAddItemsFirst = async () => {
+    trackPublishChoice('items_first');
+    setPublishDialogBusy('draft');
+    try {
+      await handleSaveAsDraft();
+    } finally {
+      setPublishDialogBusy(null);
+      setShowPublishDialog(false);
+    }
+  };
+
+  const handleDialogCancel = () => {
+    trackPublishChoice('cancel');
+    setShowPublishDialog(false);
   };
 
   // Bug fix (2026-07-03, revised): Patrick pushed back on the first version of this fix —
@@ -2782,7 +2896,7 @@ const CreateSalePage: React.FC = () => {
       router.push(`/organizer/add-items/${response.data.id}`);
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || 'Failed to save draft', 'error');
+      showToast(err.response?.data?.message || "We couldn't save your sale. Check your connection and try again.", 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -2842,6 +2956,15 @@ const CreateSalePage: React.FC = () => {
           }}
         />
       )}
+
+      <PublishWithoutItemsDialog
+        isOpen={showPublishDialog}
+        onPublish={handleDialogPublish}
+        onAddItemsFirst={handleDialogAddItemsFirst}
+        onCancel={handleDialogCancel}
+        busy={publishDialogBusy}
+        addItemsFirstHelper="Your sale stays a draft until you publish it."
+      />
 
       <div style={{
         minHeight: '100vh', background: c.bg, color: c.text,

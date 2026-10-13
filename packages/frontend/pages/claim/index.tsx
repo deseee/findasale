@@ -42,6 +42,13 @@ export default function ClaimLandingPage() {
             >
               Find Your Sale
             </Link>
+
+            {/* ADR-139: double-opt-in interest form */}
+            <p className="mt-5 text-sm text-gray-600 dark:text-gray-400">
+              <Link href="/recruit/interest?src=claim_page" className="text-amber-600 dark:text-amber-400 underline">
+                Not ready yet? Get a short guide by email.
+              </Link>
+            </p>
           </div>
         </div>
       </div>

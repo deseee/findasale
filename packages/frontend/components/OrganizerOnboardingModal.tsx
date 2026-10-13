@@ -12,20 +12,20 @@ const STEPS = [
     headline: 'Welcome to FindA.Sale',
     subtext: "You're 5 minutes from your first sale. Here's how it works.",
     visual: (
-      <div className="flex justify-center items-center gap-4 mb-6">
-        <div className="flex flex-col items-center">
+      <div className="flex justify-center items-start gap-2 sm:gap-4 mb-6">
+        <div className="flex flex-col items-center flex-1 min-w-0 text-center">
           <div className="text-3xl mb-2">📋</div>
-          <div className="text-xs font-semibold text-warm-700 dark:text-warm-300">1 • Describe</div>
+          <div className="text-xs font-semibold text-warm-700 dark:text-warm-300">1 • Set up the sale</div>
         </div>
-        <div className="text-warm-400">→</div>
-        <div className="flex flex-col items-center">
+        <div className="text-warm-400 pt-2" aria-hidden="true">→</div>
+        <div className="flex flex-col items-center flex-1 min-w-0 text-center">
           <div className="text-3xl mb-2">📷</div>
-          <div className="text-xs font-semibold text-warm-700 dark:text-warm-300">2 • Add Photos</div>
+          <div className="text-xs font-semibold text-warm-700 dark:text-warm-300">2 • Add items</div>
         </div>
-        <div className="text-warm-400">→</div>
-        <div className="flex flex-col items-center">
+        <div className="text-warm-400 pt-2" aria-hidden="true">→</div>
+        <div className="flex flex-col items-center flex-1 min-w-0 text-center">
           <div className="text-3xl mb-2">🚀</div>
-          <div className="text-xs font-semibold text-warm-700 dark:text-warm-300">3 • Publish</div>
+          <div className="text-xs font-semibold text-warm-700 dark:text-warm-300">3 • Go live</div>
         </div>
       </div>
     ),
@@ -34,7 +34,7 @@ const STEPS = [
   {
     headline: 'Great photos = more sales',
     subtext:
-      'Use your phone camera. Smart tagging automatically suggests descriptions and prices. Blurry photos get flagged. We\'ll tell you which ones to retake.',
+      'When you add items, use your phone camera. Smart tagging suggests descriptions and prices. Blurry photos get flagged. We\'ll tell you which ones to retake.',
     visual: (
       <div className="text-center mb-6">
         <div className="text-6xl">📷</div>

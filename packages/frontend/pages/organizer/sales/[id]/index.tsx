@@ -17,6 +17,7 @@ import { PostSaleEbayPanel, EbayWeightReviewQueue } from '../../../../components
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../../components/Skeleton';
+import SaleItemsNudgeBanner from '../../../../components/SaleItemsNudgeBanner'; // guided first-sale flow (2026-10-12)
 import { getItemImageUrl } from '../../../../lib/imageUtils';
 
 interface Item {
@@ -272,6 +273,8 @@ const SaleDetailPage = () => {
             </p>
           </div>
 
+          {typeof id === 'string' && <SaleItemsNudgeBanner saleId={id} className="mb-6" />}
+
           {/* Items Grid */}
           {availableItems.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -429,8 +432,21 @@ const SaleDetailPage = () => {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
+            <div className="text-center py-12 px-4">
               <p className="text-warm-600 dark:text-warm-400">No items in this sale yet</p>
+              {items.length === 0 && typeof id === 'string' && (
+                <>
+                  <p className="mt-1 text-sm text-warm-600 dark:text-warm-400">
+                    Add items so shoppers have something to browse.
+                  </p>
+                  <Link
+                    href={`/organizer/add-items/${id}`}
+                    className="mt-4 inline-flex items-center justify-center min-h-[44px] px-5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
+                  >
+                    Add items
+                  </Link>
+                </>
+              )}
             </div>
           )}
 

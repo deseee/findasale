@@ -233,6 +233,8 @@ const nextConfig = {
         permanent: true,
       },
       { source: '/create-sale', destination: '/organizer/create-sale', permanent: true },
+      // Onboarding, abandoned-signup, recap and win-back emails linked here; no such page exists ([id] caught "new")
+      { source: '/organizer/sales/new', destination: '/organizer/create-sale', permanent: false },
       { source: '/manage-sales', destination: '/organizer/sales', permanent: true },
       { source: '/organizer/manage-sales', destination: '/organizer/sales', permanent: true },
       // S237: /auth/* used to be valid routes — redirect to /login to prevent 404s from old bookmarks/emails

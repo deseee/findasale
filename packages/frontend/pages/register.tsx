@@ -566,8 +566,8 @@ const RegisterPage = () => {
               <p className="text-sm text-amber-700 dark:text-amber-200 font-medium">Quebec support is coming soon</p>
               <p className="text-sm text-amber-600 dark:text-amber-300 mt-1">
                 We&apos;re actively working on provincial compliance.{' '}
-                <a href="https://finda.sale/waitlist" className="underline hover:text-amber-800 dark:hover:text-amber-100">Join the waitlist</a>{''}
-                {''} to be notified when Quebec launches.
+                <a href="/contact" className="underline hover:text-amber-800 dark:hover:text-amber-100">Contact us</a>{' '}
+                to be notified when Quebec launches.
               </p>
             </div>
           )}

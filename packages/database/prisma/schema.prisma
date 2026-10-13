@@ -609,6 +609,8 @@ model Organizer {
   websiteEnrichmentExhausted      Boolean                        @default(false) // set when its website domain reaches TERMINAL fetch state
   isHiddenFromDirectory           Boolean                        @default(false) // True = hidden from public directory/search; set for scraped orgs, cleared on claim
   claimEmails                     DirectoryClaimEmail[]
+  // ADR-139: organizer recruit channel leads (relation only, no column on Organizer)
+  recruitLeads                    RecruitLead[]                  @relation("OrganizerRecruitLeads")
   // ADR-073: Verified Organizer autofill sources (migration 20260430300000)
   verificationSource              String?
   googlePlaceId                   String?                        @unique
@@ -8718,4 +8720,130 @@ model BoothCartBulkLine {
 
   @@index([boothCartTransactionId, status])
   @@index([itemId, status])
+}
+
+// ---------------------------------------------------------------------------
+// ADR-139 (2026-10-12): organizer recruit email channel. Additive only.
+// Ships disabled: RECRUIT_TRANSPORT=none, RECRUIT_SEND_ENABLED unset, FeatureFlag
+// recruit_send_enabled=false. Never shares credentials, mailbox, quota table or
+// kill switch with the outreach cron or the transactional rail.
+// ---------------------------------------------------------------------------
+
+enum RecruitLeadSource {
+  DIRECTORY // Organizer row with publicly listed business email (isClaimed=false)
+  OPT_IN_FORM // double-opt-in interest form
+  MANUAL // admin-entered with a required written consent note
+}
+
+enum RecruitLeadStatus {
+  PENDING_CONFIRM // opt-in form submitted, confirm not done yet
+  QUEUED
+  APPROVED // in the sequence, waiting for its next step (nextSendAt)
+  SENDING // claimed by the cron (atomic), prevents double send
+  SENT // sequence finished
+  SKIPPED // guard rejected it; skipReason says why
+  FAILED
+  BOUNCED
+  COMPLAINED
+  UNSUBSCRIBED
+}
+
+enum RecruitChannelEventType {
+  PAUSED
+  RESUMED
+  AUTO_PAUSED
+  CAP_REACHED
+  BATCH_APPROVED
+  TEST_SENT
+}
+
+model RecruitLead {
+  id                String            @id @default(cuid())
+  email             String            @unique // always stored lowercased; one lead per address
+  businessName      String
+  state             String? // 2-letter US state
+  source            RecruitLeadSource
+  sourceDetail      String? // interest-form `src` value (profile, claim_page, claim_email, city, other)
+  organizerId       String?
+  organizer         Organizer?        @relation("OrganizerRecruitLeads", fields: [organizerId], references: [id], onDelete: SetNull)
+  consentAt         DateTime? // REQUIRED non-null for resend_optin transport
+  consentSource     String? // "interest_form:v1" | "manual:<note>"
+  consentIpHash     String? // sha256(ip + RECRUIT_UNSUB_SECRET); never raw IP
+  status            RecruitLeadStatus @default(QUEUED)
+  sequenceStep      Int               @default(0) // last sequence email sent (0 = none, max 3)
+  nextSendAt        DateTime? // when the next sequence step is due
+  confirmSentCount  Int               @default(0) // confirmation emails sent (max 3 ever)
+  lastConfirmSentAt DateTime? // max 1 confirmation per 24h
+  batchId           String?
+  batch             RecruitBatch?     @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  approvedAt        DateTime?
+  approvedBy        String? // admin User.id or "system:auto-approve"
+  sentAt            DateTime? // most recent sequence send
+  transport         String? // transport used for the most recent send
+  providerMessageId String?           @unique // most recent provider message id (all ids live on RecruitSend)
+  skipReason        String?
+  lastError         String?
+  bouncedAt         DateTime?
+  complainedAt      DateTime?
+  unsubscribedAt    DateTime?
+  convertedAt       DateTime? // set when this address is found registered as an organizer
+  convertedUserId   String? // User.id of that organizer account
+  createdBy         String? // admin User.id or "system:directory" / "public:form"
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  sends             RecruitSend[]
+
+  @@index([status, source])
+  @@index([status, nextSendAt])
+  @@index([batchId])
+  @@index([organizerId])
+  @@index([sentAt])
+}
+
+// One row per email the recruit channel sends (confirmation, sequence steps, admin test).
+// Health window (bounce / complaint auto-pause) and webhook mapping read this table.
+model RecruitSend {
+  id                String      @id @default(cuid())
+  leadId            String
+  lead              RecruitLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  kind              String // "CONFIRM" | "STEP_1" | "STEP_2" | "STEP_3" | "TEST"
+  transport         String
+  providerMessageId String?     @unique
+  sentAt            DateTime    @default(now())
+  bouncedAt         DateTime?
+  complainedAt      DateTime?
+
+  @@index([sentAt])
+  @@index([leadId])
+  @@index([bouncedAt])
+  @@index([complainedAt])
+}
+
+model RecruitBatch {
+  id         String        @id @default(cuid())
+  approvedBy String // admin User.id
+  approvedAt DateTime      @default(now())
+  leadCount  Int
+  note       String?
+  leads      RecruitLead[]
+
+  @@index([approvedAt])
+}
+
+// Recruit-only daily counter. Separate from EmailQuotaLog and OutreachQuotaLog on purpose.
+model RecruitQuotaLog {
+  date      String   @id // YYYY-MM-DD (UTC)
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model RecruitChannelEvent {
+  id        String                  @id @default(cuid())
+  type      RecruitChannelEventType
+  reason    String?
+  metrics   Json? // snapshot: sent/bounced/complained in window
+  actorId   String? // admin User.id or "system:auto-pause"
+  createdAt DateTime                @default(now())
+
+  @@index([type, createdAt])
 }

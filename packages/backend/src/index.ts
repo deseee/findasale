@@ -114,6 +114,9 @@ import organizerDigestRoutes from './routes/organizerDigest'; // Organizer weekl
 import buyingPoolRoutes from './routes/buyingPools'; // Group Buying Pools
 import adminRoutes from './routes/admin'; // Admin panel
 import adminAffiliateRoutes from './routes/adminAffiliate'; // Admin: Creator/Affiliate management
+import adminRecruitRoutes from './routes/adminRecruit'; // ADR-139: admin API for the organizer recruit channel
+import recruitRoutes from './routes/recruit'; // ADR-139: public recruit interest form, confirm, unsubscribe
+import { scheduleRecruitSendCron } from './jobs/recruitSendCron'; // ADR-139: recruit sender (ships disabled)
 import devRoutes from './routes/dev'; // Dev utilities
 import notificationInboxRoutes from './routes/notificationInbox'; // Notification inbox
 import waitlistRoutes from './routes/waitlist'; // Item Waitlist / "Notify Me"
@@ -808,6 +811,7 @@ app.use('/api/buying-pools', buyingPoolRoutes); // Group Buying Pools
 app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly digest manual trigger
 app.use('/api/admin', adminRoutes); // Admin panel
 app.use('/api/admin/affiliate', adminAffiliateRoutes); // Admin: Creator/Affiliate management
+app.use('/api/admin/recruit', adminRecruitRoutes); // ADR-139: organizer recruit channel admin (authenticate + requireAdmin inside)
 if (process.env.NODE_ENV !== 'production') {
   app.use('/api/dev', devRoutes); // Dev utilities — NOT in production (privilege escalation risk)
 }
@@ -893,6 +897,7 @@ app.use('/api/widget', (req, res, next) => {
   next();
 }, widgetRoutes);                                                          // Public embeddable widget (embed feature)
 app.use('/api/outreach', outreachRoutes);                             // Phase 1: Cold outreach email pipeline
+app.use('/api/recruit', recruitRoutes);                               // ADR-139: organizer recruit channel public endpoints
 app.use('/api/unsubscribe', unsubscribeRoutes);                        // Unsubscribe / Preferences
 app.use('/api/earnings', earningsPdfRoutes);                           // Payout PDF Export (/api/earnings/pdf)
 app.use('/api/ab', abTestRoutes);                                      // A/B Testing Infrastructure
@@ -1260,6 +1265,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // S-BATCH-STUCK-2026-09-18: register footage stalled-batch watchdog cron (daily)
   scheduleFootageStalledBatchCron();
+
+  // ADR-139: organizer recruit channel sender. Ships disabled (RECRUIT_TRANSPORT=none, RECRUIT_SEND_ENABLED unset, flag off).
+  scheduleRecruitSendCron();
 
   // S-BATCH-STUCK-2026-09-18 follow-up: also reconcile immediately at boot (single-replica
   // service -- see runFootageBootReconciliation's doc comment) instead of waiting up to ~24h

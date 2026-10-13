@@ -8,6 +8,7 @@ interface AccessibleModalProps {
   modalId?: string;
   ariaLabelledBy?: string;
   ariaLabel?: string;
+  ariaDescribedBy?: string;
   className?: string;
   overlayClassName?: string;
   contentClassName?: string;
@@ -31,9 +32,10 @@ const AccessibleModal: React.FC<AccessibleModalProps> = ({
   modalId,
   ariaLabelledBy,
   ariaLabel,
+  ariaDescribedBy,
   className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4',
   overlayClassName,
-  contentClassName = 'bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6',
+  contentClassName = 'bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 max-h-full overflow-y-auto',
 }) => {
   // Fallback focus target so the trap does not throw when the dialog has no
   // tabbable element at mount (e.g. content that loads later, like a payment iframe).
@@ -81,6 +83,7 @@ const AccessibleModal: React.FC<AccessibleModalProps> = ({
           role="dialog"
           aria-modal="true"
           id={modalId}
+          aria-describedby={ariaDescribedBy}
           {...ariaAttrs}
         >
           {children}

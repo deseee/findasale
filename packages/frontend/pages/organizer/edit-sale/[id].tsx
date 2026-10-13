@@ -26,6 +26,9 @@ import AlaCartePublishModal from '../../../components/AlaCartePublishModal'; // 
 import TreasureHuntQRManager from '../../../components/TreasureHuntQRManager'; // Feature #85
 import SaleCoverPhotoManager from '../../../components/SaleCoverPhotoManager';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import PublishWithoutItemsDialog from '../../../components/PublishWithoutItemsDialog'; // guided first-sale flow (2026-10-12)
+import SaleItemsNudgeBanner from '../../../components/SaleItemsNudgeBanner';
+import { useSaleItemStatus, getSaleItemState } from '../../../hooks/useSaleItemStatus';
 import { AUCTION_BUYER_PREMIUM_LABEL } from '../../../lib/platformFees'; // platform-set auction buyer premium — not organizer-configurable
 
 // ADR vendor-booth-sale-onboarding-gate (2026-09-25): shape returned by
@@ -52,6 +55,11 @@ const EditSalePage = () => {
   const [entrancePinTooFar, setEntrancePinTooFar] = useState(false);
   const [showPublishCelebration, setShowPublishCelebration] = useState(false);
   const [showAlaCarteModal, setShowAlaCarteModal] = useState(false); // #132: À La Carte
+  // Guided first-sale flow (2026-10-12): publishing a draft with zero items asks first.
+  const [showPublishWithoutItems, setShowPublishWithoutItems] = useState(false);
+  const { findSale: findMySale, isLoading: mySalesLoading } = useSaleItemStatus();
+  const publishBannerButtonRef = useRef<HTMLButtonElement>(null);
+  const publishFocusDone = useRef(false);
   const [isSendingApproachNotification, setIsSendingApproachNotification] = useState(false); // Feature #84: Approach Notes notification
   const [geocodingAttempted, setGeocodingAttempted] = useState(false); // Track whether geocoding has been attempted
   const [isAutoGeocodingOnLoad, setIsAutoGeocodingOnLoad] = useState(false); // Track auto-geocoding in progress
@@ -445,8 +453,41 @@ const EditSalePage = () => {
     }
   };
 
-  const handleToggleSaleStatus = async () => {
+  // Direct publish used after the "Publish without items?" dialog (same request + error handling as
+  // the confirm path below).
+  const publishNow = async () => {
+    try {
+      await api.patch(`/sales/${id}/status`, { status: 'PUBLISHED' });
+      setShowPublishCelebration(true);
+      showSurvey('OG-1');
+    } catch (error: any) {
+      if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+        setTierLimitError(error.response.data);
+        showToast(error.response.data.message, 'error');
+      } else {
+        showToast(error.response?.data?.message || 'Failed to update sale status', 'error');
+      }
+    } finally {
+      setIsTogglingStatus(false);
+    }
+  };
+
+  // Total items in this sale (any review state), from GET /sales/mine. undefined = unknown.
+  const mySale = typeof id === 'string' ? findMySale(id) : undefined;
+  const totalItemCount: number | undefined = mySale?.stats?.itemCount;
+
+  const handleToggleSaleStatus = async (opts?: { confirmedWithoutItems?: boolean }) => {
     if (!id || !sale) return;
+
+    // Guided first-sale flow: a DRAFT with zero items gets "Publish without items?" INSTEAD of the
+    // generic confirm, and BEFORE the SIMPLE-tier à la carte modal, so nobody pays for an empty
+    // sale without seeing it. Unknown counts (status still loading/failed) never block publishing.
+    const publishingDraft = sale.status === 'DRAFT';
+    if (publishingDraft && !opts?.confirmedWithoutItems && mySale && getSaleItemState(mySale) === 'DRAFT_EMPTY') {
+      setShowPublishWithoutItems(true);
+      return;
+    }
+
     setIsTogglingStatus(true);
     try {
       const newStatus = sale.status === 'PUBLISHED' ? 'ENDED' : 'PUBLISHED';
@@ -455,6 +496,12 @@ const EditSalePage = () => {
       if (newStatus === 'PUBLISHED' && sale.status === 'DRAFT' && user?.organizerTier === 'SIMPLE') {
         setShowAlaCarteModal(true);
         setIsTogglingStatus(false);
+        return;
+      }
+
+      // Already confirmed in the "Publish without items?" dialog: publish straight away.
+      if (opts?.confirmedWithoutItems && newStatus === 'PUBLISHED') {
+        await publishNow();
         return;
       }
 
@@ -532,6 +579,18 @@ const EditSalePage = () => {
       },
     });
   };
+
+  // ?publish=1 (from the dashboard "Review and publish" card): bring the Ready-to-publish banner
+  // into view and focus its Publish button once. One more tap publishes through the normal path.
+  useEffect(() => {
+    if (publishFocusDone.current) return;
+    if (router.query.publish !== '1' || !sale || sale.status !== 'DRAFT' || mySalesLoading) return;
+    const btn = publishBannerButtonRef.current;
+    if (!btn) return;
+    publishFocusDone.current = true;
+    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    btn.focus({ preventScroll: true });
+  });
 
   const handlePublishCelebrationClose = () => {
     setShowPublishCelebration(false);
@@ -659,6 +718,24 @@ const EditSalePage = () => {
         saleId={String(id) || ''}
         salePhotoUrl={sale?.photoUrls?.[0] || null}
         onClose={handlePublishCelebrationClose}
+        itemCount={totalItemCount}
+        onAddItems={() => {
+          setShowPublishCelebration(false);
+          router.push(`/organizer/add-items/${id}`);
+        }}
+      />
+
+      <PublishWithoutItemsDialog
+        isOpen={showPublishWithoutItems}
+        onPublish={() => {
+          setShowPublishWithoutItems(false);
+          handleToggleSaleStatus({ confirmedWithoutItems: true });
+        }}
+        onAddItemsFirst={() => {
+          setShowPublishWithoutItems(false);
+          router.push(`/organizer/add-items/${id}`);
+        }}
+        onCancel={() => setShowPublishWithoutItems(false)}
       />
 
       {/* #132: À La Carte Publish Modal */}
@@ -672,22 +749,19 @@ const EditSalePage = () => {
 
       <div className="min-h-screen bg-white dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 py-8">
-          {/* No items yet banner */}
-          {sale && sale.items && sale.items.length === 0 && (
-            <div className="mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg flex items-start gap-3">
-              <span className="text-xl flex-shrink-0">📦</span>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                  Your sale has no items yet
-                </p>
-                <Link
-                  href={`/organizer/add-items/${sale.id}`}
-                  className="inline-block text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 hover:underline"
-                >
-                  Add Items Now →
-                </Link>
-              </div>
-            </div>
+          {/* Items banner (guided first-sale flow, 2026-10-12). Replaces the old "no items yet" banner,
+              which read sale.items (shopper-visible items only) and told organizers with unreviewed
+              items that their sale had none. */}
+          {sale && typeof id === 'string' && (
+            <SaleItemsNudgeBanner
+              ref={publishBannerButtonRef}
+              saleId={id}
+              onPublish={() => handleToggleSaleStatus()}
+              publishBusy={isTogglingStatus}
+              fallbackLiveCount={sale.items?.length}
+              fallbackStatus={sale.status}
+              className="mb-8"
+            />
           )}
 
           {/* Feature #249: Tier limit error modal */}
@@ -740,7 +814,7 @@ const EditSalePage = () => {
                 )}
                 <button
                   type="button"
-                  onClick={handleToggleSaleStatus}
+                  onClick={() => handleToggleSaleStatus()}
                   disabled={isTogglingStatus}
                   className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded disabled:opacity-50 font-medium flex-shrink-0"
                 >

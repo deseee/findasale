@@ -179,7 +179,7 @@ export async function sendOrganizerWinBack(organizerId: string): Promise<boolean
   const html = buildWinBackHtml({
     businessName: organizer.businessName || 'your business',
     metro,
-    newSaleUrl: `${FRONTEND_URL}/organizer/sales/new`,
+    newSaleUrl: `${FRONTEND_URL}/organizer/create-sale`,
     unsubUrl,
   });
 

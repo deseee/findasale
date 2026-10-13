@@ -21,6 +21,9 @@ interface PublishCelebrationProps {
   saleId: string;
   salePhotoUrl?: string | null;
   onClose: () => void;
+  /** Guided first-sale flow (2026-10-12): total items in the sale. 0 + onAddItems shows the add-items variant. */
+  itemCount?: number;
+  onAddItems?: () => void;
 }
 
 const PublishCelebration: React.FC<PublishCelebrationProps> = ({
@@ -29,19 +32,25 @@ const PublishCelebration: React.FC<PublishCelebrationProps> = ({
   saleId,
   salePhotoUrl,
   onClose,
+  itemCount,
+  onAddItems,
 }) => {
   const [showConfetti, setShowConfetti] = useState(false);
+  // A live sale with no items: the next step is adding items, so the modal stays until the
+  // organizer picks "Add your first item" or "Later" (no 5-second auto-dismiss).
+  const isEmptySale = itemCount === 0 && typeof onAddItems === 'function';
 
   useEffect(() => {
     if (isOpen) {
       setShowConfetti(true);
+      if (isEmptySale) return;
       // Auto-dismiss after 5 seconds
       const timer = setTimeout(() => {
         onClose();
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isEmptySale]);
 
   if (!isOpen) return null;
 
@@ -84,23 +93,51 @@ const PublishCelebration: React.FC<PublishCelebrationProps> = ({
             </div>
           )}
 
-          {/* Subtext */}
-          <p className="text-warm-600 dark:text-gray-300 mb-8 text-lg">
-            Your sale is published and ready for shoppers.
-          </p>
+          {isEmptySale ? (
+            <>
+              {/* Subtext */}
+              <p className="text-warm-600 dark:text-gray-300 mb-8 text-lg">
+                Shoppers can see your dates and place. Add items so they have something to browse.
+              </p>
 
-          {/* CTA */}
-          <button
-            onClick={onClose}
-            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
-          >
-            Continue <span className="text-lg">→</span>
-          </button>
+              {/* CTA */}
+              <button
+                type="button"
+                onClick={onAddItems}
+                autoFocus
+                className="w-full min-h-[44px] bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
+              >
+                Add your first item
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-3 min-h-[44px] px-4 text-sm underline text-warm-600 dark:text-gray-300"
+              >
+                Later
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Subtext */}
+              <p className="text-warm-600 dark:text-gray-300 mb-8 text-lg">
+                Your sale is published and ready for shoppers.
+              </p>
 
-          {/* Hint: click to close */}
-          <p className="text-xs text-warm-400 dark:text-gray-500 mt-6">
-            Click anywhere to dismiss
-          </p>
+              {/* CTA */}
+              <button
+                onClick={onClose}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                Continue <span className="text-lg">→</span>
+              </button>
+
+              {/* Hint: click to close */}
+              <p className="text-xs text-warm-400 dark:text-gray-500 mt-6">
+                Click anywhere to dismiss
+              </p>
+            </>
+          )}
         </div>
       </div>
 

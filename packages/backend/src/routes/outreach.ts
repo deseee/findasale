@@ -5,6 +5,7 @@ import { Webhook } from 'svix';
 import { prisma } from '../lib/prisma';
 import { suppressionService } from '../services/suppressionService';
 import { classifyDiagnosticKeywords } from '../services/bounceSuppressService';
+import { applyProviderEvent as applyRecruitProviderEvent } from '../services/recruit/recruitLeadService'; // ADR-139
 
 const router = express.Router();
 
@@ -298,6 +299,15 @@ async function handleResendWebhook(payload: any, res: express.Response): Promise
     if (type === 'email.failed') {
       console.warn(`[OutreachWebhook] email.failed for ${addr} — reason: ${data?.bounce?.message || payload?.reason || 'unknown'}`);
     }
+  }
+
+  // ADR-139: mirror bounce/complaint onto recruit-channel send rows (no-op for any other email id).
+  // Additive, after the existing suppression writes; applyProviderEvent never throws, and the
+  // try/catch makes sure it can never change this handler's response.
+  try {
+    await applyRecruitProviderEvent(emailId, type, bounceType);
+  } catch (recruitErr: any) {
+    console.error('[OutreachWebhook] recruit event mirror failed:', recruitErr?.message);
   }
 
   res.status(200).json({ ok: true });

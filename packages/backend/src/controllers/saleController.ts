@@ -14,7 +14,7 @@ import { markSalePublished } from '../services/mailerliteService';
 import { sendSaleLiveEmail } from '../services/saleLiveEmailService';
 import { pingIndexNowForSale } from '../services/indexNowService';
 import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
-import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
+import { PUBLIC_ITEM_FILTER, isPublicItem } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { canRemoveWatermark } from '../utils/watermarkPolicy'; // #27b: iCal watermark footer
 import { buildSaleIcs } from '../utils/icalBuilder'; // RFC 5545 builder for GET /sales/:id/calendar.ics
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
@@ -439,7 +439,7 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
         isAuctionSale: true,
         isPinned: true,
         organizer: { select: { userId: true, businessName: true, phone: true, address: true } },
-        items: { where: { listingType: { not: 'CONSIGNOR_TAG' } }, select: { id: true, title: true, price: true, status: true, organizerDiscountAmount: true } },
+        items: { where: { listingType: { not: 'CONSIGNOR_TAG' } }, select: { id: true, title: true, price: true, status: true, organizerDiscountAmount: true, draftStatus: true, isActive: true, listingType: true } },
         _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } } }
       },
       take: 50
@@ -488,6 +488,9 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
         maxOrganizerDiscount: maxOrganizerDiscount || null,
         stats: {
           itemCount: s._count.items,
+          // Items shoppers can actually see (same conditions as PUBLIC_ITEM_FILTER). Drives the
+          // first-sale "add items" / "review items" / "ready to publish" nudges on the organizer side.
+          liveItemCount: (s.items ?? []).filter((item: any) => isPublicItem(item)).length,
           holdCount: holdCountsMap.get(s.id) ?? 0,
           visitorCount: s.qrScanCount
         }

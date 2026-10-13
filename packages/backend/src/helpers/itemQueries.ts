@@ -47,6 +47,25 @@ export const PUBLIC_ITEM_FILTER: Prisma.ItemWhereInput = {
 };
 
 /**
+ * isPublicItem(item) — in-memory mirror of PUBLIC_ITEM_FILTER, condition for condition.
+ * Use it when items are already loaded and a second query would be wasteful
+ * (e.g. getMySales' stats.liveItemCount). Keep it in sync with PUBLIC_ITEM_FILTER above.
+ */
+export function isPublicItem(item: {
+  isActive?: boolean | null;
+  status?: string | null;
+  draftStatus?: string | null;
+  listingType?: string | null;
+}): boolean {
+  return (
+    item.isActive === true &&
+    item.status !== 'GRACE_LOCKED' &&
+    item.draftStatus === 'PUBLISHED' &&
+    item.listingType !== 'CONSIGNOR_TAG'
+  );
+}
+
+/**
  * getPublicItemsBySaleId(saleId)
  *
  * Fetches all PUBLISHED items for a sale.

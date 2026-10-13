@@ -752,6 +752,11 @@ const AdminDashboard = () => {
           <p className="text-warm-600 dark:text-warm-400 text-sm">What shoppers searched for but couldn't find</p>
         </Link>
 
+        <Link href="/admin/recruit" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-amber-50 dark:bg-amber-900/20 border border-amber-100 transition">
+          <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Recruit Channel</h3>
+          <p className="text-warm-600 dark:text-warm-400 text-sm">Opt-in organizer leads, send switch, bounces and complaints</p>
+        </Link>
+
         <Link href="/admin/waitlist" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-sky-50 dark:bg-sky-900/20 border border-sky-100 transition">
           <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Notify Me Waitlist</h3>
           <p className="text-warm-600 dark:text-warm-400 text-sm">Shoppers waiting for specific item types to go on sale</p>

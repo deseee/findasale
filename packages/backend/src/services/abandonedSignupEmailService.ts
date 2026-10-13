@@ -7,16 +7,18 @@
  *
  * ── Overlap with existing onboarding (IMPORTANT) ───────────────────────────────
  * Organizer onboarding (the Day-0 / Day-2 / Day-7 "5a / 5b / 5c" drip) is run by
- * MailerLite, not by this backend — organizers are enrolled at signup via
- * mailerliteService.addOrganizerSubscriber(), and the automation EXITS when they
- * publish (sale_published custom field flips to "yes" via markSalePublished).
- * The SES sendOnboardingEmail5a/5b/5c functions are NOT wired to any trigger.
+ * this backend: jobs/organizerOnboardingDripJob.ts calls sendOnboardingEmail5a/5b/5c
+ * directly (decision: claude_docs/feature-notes/adr-dormant-email-functions-2026-09-06.md).
+ * 5b/5c stop once the organizer has a published or ended sale. The same job also sends
+ * the one-time "sale is live but has no items" and "items ready, publish your sale" nudges.
+ * (This header previously said MailerLite owned the drip and the SES functions were
+ * unwired. That stopped being true when organizerOnboardingDripJob.ts shipped.)
  *
- * To avoid double-sending against the MailerLite Day-2 / Day-7 touches, this
- * service ships ONLY the genuine gap MailerLite does not cover: a single
+ * To avoid double-sending against the Day-2 / Day-7 drip touches, this
+ * service ships ONLY the genuine gap the drip does not cover: a single
  * same-day 1-hour SOFT nudge for organizers who registered but haven't published
  * within ~1 hour. The 24-hour "final" nudge is intentionally NOT sent here — it
- * overlaps the MailerLite Day-2 touch and is flagged as DECISION NEEDED in the
+ * overlaps the drip's Day-0 / Day-2 touches and is flagged as DECISION NEEDED in the
  * handoff rather than shipped.
  *
  * Reuses the FindA.Sale email design system (emailTemplateService) and the
@@ -139,7 +141,7 @@ export async function sendAbandonedSignup1h(organizerId: string): Promise<boolea
 
   const html = buildSignup1hHtml({
     firstName: firstNameOf(organizer.user?.name),
-    newSaleUrl: `${FRONTEND_URL}/organizer/sales/new`,
+    newSaleUrl: `${FRONTEND_URL}/organizer/create-sale`,
     unsubUrl,
   });
 

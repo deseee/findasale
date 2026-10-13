@@ -498,6 +498,15 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
                   <p className="text-xs text-center text-gray-500 dark:text-gray-400">
                     Free forever &middot; No credit card needed
                   </p>
+                  {/* ADR-139: double-opt-in interest form for visitors not ready to sign up yet */}
+                  <p className="text-xs text-center mt-2">
+                    <Link
+                      href={`/recruit/interest?src=profile&org=${encodeURIComponent(organizer.id)}&name=${encodeURIComponent(organizer.businessName || '')}`}
+                      className="text-orange-600 dark:text-orange-400 underline"
+                    >
+                      Not ready yet? Get a short guide by email.
+                    </Link>
+                  </p>
                 </div>
               )}
               {organizer.foundingShoppers && organizer.foundingShoppers.length > 0 && (

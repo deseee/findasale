@@ -28,6 +28,8 @@ import OnboardingWizard from '../../components/OnboardingWizard';
 import OrganizerOnboardingModal from '../../components/OrganizerOnboardingModal';
 import TeamsOnboardingWizard from '../../components/TeamsOnboardingWizard';
 import SimpleModePanel from '../../components/SimpleModePanel';
+import FirstSaleNudge from '../../components/FirstSaleNudge'; // guided first-sale flow (2026-10-12)
+import { useSaleItemStatus } from '../../hooks/useSaleItemStatus';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
 import SaleProgressWidget from '../../components/SaleProgressWidget';
 import SecondarySaleCard from '../../components/SecondarySaleCard';
@@ -88,6 +90,9 @@ interface Sale {
   state: string;
   description?: string;
   items?: Array<{ id: string; title: string; price?: number; status: string; organizerDiscountAmount?: number }>;
+  updatedAt?: string;
+  // GET /sales/mine per-sale stats. liveItemCount (2026-10-12) may be missing on an older backend.
+  stats?: { itemCount: number; liveItemCount?: number; holdCount: number; visitorCount: number };
 }
 
 const OrganizerDashboard = () => {
@@ -97,6 +102,9 @@ const OrganizerDashboard = () => {
   const { showToast } = useToast();
   const { tier: orgTier, isSimple, isTeams, canAccess, isLapsed, inDunning, entitlementEndsAt } = useOrganizerTier();
   const { data: existingWorkspace, isLoading: workspaceLoading } = useMyWorkspace();
+  // Which sale (if any) the FirstSaleNudge card is featuring, so the Next Action Zone does not repeat it.
+  const { nudges: firstSaleNudges } = useSaleItemStatus();
+  const nudgedSaleId: string | undefined = firstSaleNudges[0]?.sale.id;
   const [isClient, setIsClient] = useState(false);
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
@@ -683,12 +691,19 @@ const OrganizerDashboard = () => {
 
       {/* Simple Mode View */}
       {isSimpleMode && (
-        <SimpleModePanel
-          onExitSimpleMode={() => {
-            setIsSimpleMode(false);
-            localStorage.setItem('findasale_simple_mode', 'false');
-          }}
-        />
+        <>
+          {firstSaleNudges.length > 0 && (
+            <div className="max-w-5xl mx-auto px-4 pt-6">
+              <FirstSaleNudge />
+            </div>
+          )}
+          <SimpleModePanel
+            onExitSimpleMode={() => {
+              setIsSimpleMode(false);
+              localStorage.setItem('findasale_simple_mode', 'false');
+            }}
+          />
+        </>
       )}
 
       {/* Main Dashboard */}
@@ -1083,6 +1098,10 @@ const OrganizerDashboard = () => {
               </div>
             </div>
           )}
+
+          {/* Guided first-sale flow (2026-10-12): live sale with no items / draft ready to publish.
+              Renders nothing while loading, on error, or when no sale qualifies. */}
+          <FirstSaleNudge />
 
           {/* STATE-AWARE CONTENT */}
 
@@ -1547,11 +1566,39 @@ const OrganizerDashboard = () => {
                 // Condition 6: Default (healthy): smart contextual nudge
                 // Check item count first (use draft count if available)
                 const itemCount = available || (statsData.items.total - statsData.items.draft) || 0;
+                // Bug fix (2026-10-12): the old test also fired for a DRAFT sale whose items were all
+                // item-published (items.draft === 0), telling an organizer with 14 items to add their
+                // first items. Use this sale's own total item count (any review state) when available.
+                const activeTotalItems = statsData.activeSale.totalItemCount;
+                const hasNoItems = typeof activeTotalItems === 'number' ? activeTotalItems === 0 : itemCount === 0;
 
-                if (itemCount === 0 || (status === 'DRAFT' && statsData.items.draft === 0)) {
+                if (hasNoItems) {
+                  // FirstSaleNudge already features this sale with its own button: do not repeat it.
+                  if (nudgedSaleId === id) return null;
                   return (
                     <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-sm text-amber-800 dark:text-amber-200">
-                      Add your first items to go live
+                      <Link
+                        href={`/organizer/add-items/${id}`}
+                        className="inline-flex items-center min-h-[44px] font-semibold underline text-amber-800 dark:text-amber-200 hover:text-amber-900 dark:hover:text-amber-100"
+                      >
+                        Add your first item
+                      </Link>
+                    </div>
+                  );
+                }
+
+                // Never show "live" wording for a DRAFT sale.
+                if (status === 'DRAFT') {
+                  if (nudgedSaleId === id) return null;
+                  return (
+                    <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-sm text-amber-800 dark:text-amber-200">
+                      This sale is a draft. Shoppers can&apos;t see it until you publish it.{' '}
+                      <Link
+                        href={`/organizer/edit-sale/${id}?publish=1`}
+                        className="inline-flex items-center min-h-[44px] font-semibold underline text-amber-800 dark:text-amber-200 hover:text-amber-900 dark:hover:text-amber-100"
+                      >
+                        Review and publish
+                      </Link>
                     </div>
                   );
                 }
