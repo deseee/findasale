@@ -4891,12 +4891,22 @@
       const url = location.origin + '/api/v2/wardrobe/' + encodeURIComponent(memberId) +
         '/items?page=' + page + '&per_page=' + VINT_SOLD_PER_PAGE;
       let res;
+      let timer = null;
       try {
-        res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
-      } catch (e) { return { ok: false, why: 'fetch_error' }; }
-      if (!res || !res.ok) return { ok: false, why: 'http_' + (res ? res.status : 'none') };
+        // 2026-10-12: bounded wait so a hung request reports 'timeout' (mirrors the bundle-order read).
+        const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+        if (ctrl) timer = setTimeout(() => { try { ctrl.abort(); } catch (e2) { /* ignore */ } }, 20000);
+        res = await fetch(url, ctrl ? { credentials: 'include', headers: { Accept: 'application/json' }, signal: ctrl.signal } : { credentials: 'include', headers: { Accept: 'application/json' } });
+      } catch (e) {
+        return { ok: false, why: (e && e.name === 'AbortError') ? 'timeout' : 'network' };
+      } finally { if (timer) clearTimeout(timer); }
+      if (!res || !res.ok) {
+        // Reason codes only (fixed words / status number): never cookies, tokens, URLs or response bodies.
+        const st = res ? res.status : 0;
+        return { ok: false, why: st === 401 ? 'not_logged_in' : (st ? 'http_' + st : 'network') };
+      }
       let data;
-      try { data = await res.json(); } catch (e) { return { ok: false, why: 'non_json' }; }
+      try { data = await res.json(); } catch (e) { return { ok: false, why: 'not_json' }; }
       const items = data && Array.isArray(data.items) ? data.items : null;
       if (!items) return { ok: false, why: 'no_items_array' };
       let recognized = 0;
@@ -4951,8 +4961,11 @@
       await vintRemStorageSet(VINT_SOLD_LAST_CHECK_KEY, Date.now());
       const read = await vintSoldReadWardrobe(memberId);
       if (!read.ok) {
+        const failReason = String(read.why || 'unknown').replace(/[^a-z0-9_:.-]/gi, '').slice(0, 120) || 'unknown';
         console.log('[FAS Vinted] sold-check: wardrobe read incomplete (' + read.why + ') -- nothing sent.');
         await vintRemStorageSet(VINT_SOLD_LAST_OUTCOME_KEY, { at: Date.now(), outcome: 'read_incomplete:' + read.why });
+        // 2026-10-12: also report the reason to the backend log (source vintedSoldReadFailed) so it is visible without the Vinted tab console.
+        try { await chrome.runtime.sendMessage({ type: 'reportVintedSold', items: [], readFailed: true, failReason: failReason }); } catch (e) { /* best effort */ }
         return;
       }
       const reported = new Set((await vintRemStorageGet(VINT_SOLD_REPORTED_KEY)) || []);

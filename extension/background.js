@@ -2632,7 +2632,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               .slice(0, 200)
               .map((e) => ({ vintedId: String(e.vintedId), title: e.title.slice(0, 500) }))
           : [];
-        if (!/^https:\/\/www\.vinted\.com\//.test(senderUrl) || !entries.length) {
+        // 2026-10-12: a failed wardrobe read arrives with no items; log its short reason code (re-sanitized, never free text).
+        const soldFailReason = msg.readFailed === true && typeof msg.failReason === 'string'
+          ? msg.failReason.replace(/[^a-z0-9_:.-]/gi, '').slice(0, 120) : '';
+        if (/^https:\/\/www\.vinted\.com\//.test(senderUrl) && msg.readFailed === true && !entries.length) {
+          const reason = soldFailReason || 'unknown';
+          fasLog('warn', 'vintedSoldReadFailed', 'vinted sold-check wardrobe read failed: ' + reason, { reason: reason }, { platform: 'vinted' });
+          console.log('[FAS reportVintedSold]', JSON.stringify({ readFailed: true, failReason: reason }));
+          sendResponse({ ok: true, status: 200, data: { logged: true } });
+        } else if (!/^https:\/\/www\.vinted\.com\//.test(senderUrl) || !entries.length) {
           sendResponse({ ok: false, status: 400, error: 'invalid_request' });
         } else {
           const r = await apiFetch('/extension/vinted-sold', { method: 'POST', body: { items: entries } });
