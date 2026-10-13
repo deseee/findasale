@@ -13,7 +13,9 @@
  *   - a test transaction gives no stock back
  */
 jest.mock('@sentry/node', () => ({ captureException: jest.fn(), captureMessage: jest.fn() }));
-jest.mock('../lib/prisma', () => ({ prisma: { purchase: { findUnique: jest.fn() }, $transaction: jest.fn() } }));
+jest.mock('../lib/prisma', () => ({ prisma: { purchase: { findUnique: jest.fn() }, $transaction: jest.fn(), $executeRaw: jest.fn() } }));
+// Single-inventory-number work: refunds/sold-elsewhere fire a background syncItemStock; this suite does not exercise it.
+jest.mock('../services/inventoryStockSync', () => ({ syncItemStock: jest.fn(async () => ({ outcomes: [] })) }));
 jest.mock('../utils/stripe', () => ({ getStripe: () => ({ refunds: { create: jest.fn() } }), isStripeNotConfiguredError: () => false }));
 jest.mock('../services/vendorBoothSaleNotificationService', () => ({ notifyVendorBoothSaleRefunded: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../controllers/vendorBoothCartController', () => ({ settleHubOwnerReversalForLeg: jest.fn() }));

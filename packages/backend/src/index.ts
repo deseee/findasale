@@ -354,11 +354,14 @@ import widgetRoutes from './routes/widget'; // Public embeddable widget inventor
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
+import { setStockSyncRunner } from './services/cardIntake/stockSyncHook'; // 2026-10-13: card import re-syncs the one in-stock number (kept out of the intake import graph)
+import { syncItemStock } from './services/inventoryStockSync';
 export { prisma };
 
 // S1032 guardrail (b): server start time for uptimeSec in /health freshness endpoint
 const SERVER_START_TIME = Date.now();
 
+setStockSyncRunner(syncItemStock);
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 // V1: Wrap Express in a bare HTTP server so Socket.io can share the same port

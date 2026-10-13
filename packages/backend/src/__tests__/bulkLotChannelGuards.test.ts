@@ -15,6 +15,9 @@ jest.mock('../services/notificationService', () => ({ createNotification: jest.f
 jest.mock('../services/itemStockService', () => ({ sellItemUnits: jest.fn(), InsufficientStockError: class extends Error {} }));
 jest.mock('../services/soldFanOutService', () => ({ fanOutItemSoldWithdrawals: jest.fn() }));
 jest.mock('../services/marketplaceStockSyncService', () => ({ syncMarketplaceStock: jest.fn() }));
+// 2026-10-13: a sold-elsewhere call with no platform first asks the multi-unit step (prisma.$transaction, not faked here) whether the item
+// holds more than one unit; this test is about the lot check, so that step is faked as a single-unit answer.
+jest.mock('../services/soldElsewhereUnitSale', () => ({ takeSoldElsewhereUnit: jest.fn(), fireItemStockSync: jest.fn() }));
 jest.mock('../services/squareCheckoutLinkService', () => ({ createSquareCheckoutLink: jest.fn() }));
 jest.mock('../services/squarePaymentService', () => ({ buildSquareIdempotencyKey: jest.fn() }));
 jest.mock('../services/xpService', () => ({ awardXp: jest.fn(), applyHuntPassMultiplier: jest.fn(), XP_AWARDS: {}, checkMonthlyXpCap: jest.fn() }));
@@ -34,6 +37,7 @@ import { createNotification } from '../services/notificationService';
 import { commitItemSale } from '../services/itemSaleGuard';
 import { closeAuction } from '../services/auctionService';
 import { commitFacebookNativeSale } from '../services/facebookNativeSaleService';
+import { takeSoldElsewhereUnit } from '../services/soldElsewhereUnitSale';
 
 const ip: any = indexPrisma;
 const lp: any = libPrisma;
@@ -94,6 +98,7 @@ describe('commitFacebookNativeSale and a bulk lot', () => {
   it('a plain item goes on to be marked SOLD', async () => {
     lp.itemBulkLot.findMany.mockResolvedValue([]);
     (commitItemSale as any).mockResolvedValue(undefined);
+    (takeSoldElsewhereUnit as any).mockResolvedValue({ kind: 'single' });
     try {
       await commitFacebookNativeSale('item9', 'facebook-native');
     } catch {

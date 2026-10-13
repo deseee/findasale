@@ -8,6 +8,7 @@ jest.mock('../../lib/prisma', () => ({
   prisma: { item: { update: jest.fn(async () => ({})), findUnique: jest.fn() }, marketplaceListingJob: mockJob, $transaction: jest.fn(async (cb: any) => cb(mockTx)) },
 }));
 jest.mock('../itemStockService', () => ({ sellItemUnits: jest.fn() }));
+jest.mock('../inventoryStockSync', () => ({ syncItemStock: jest.fn(async () => ({ outcomes: [] })) })); // fireItemStockSync lazy-loads this
 jest.mock('../marketplaceStockSyncService', () => ({ syncMarketplaceStock: jest.fn(async () => undefined) }));
 jest.mock('../itemSaleGuard', () => {
   class ItemAlreadyCommittedError extends Error {}

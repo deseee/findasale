@@ -660,7 +660,7 @@ describe('new marketplace handlers: 403/404 matrix', () => {
         .mockResolvedValueOnce({ ebaySyncHeldAt: null, ebayHeldFields: [], ebayContentDirtyAt: null });
       const res = makeRes();
       await repushItemToEbay({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: {} }, res);
-      expect(mockPush).toHaveBeenCalledWith({ itemId: 'i1', organizerId: 'org_sale', trigger: 'REPUSH', fields: ['price'] });
+      expect(mockPush).toHaveBeenCalledWith({ itemId: 'i1', organizerId: 'org_sale', trigger: 'REPUSH', fields: ['price', 'quantity'] }); // quantity is always part of an explicit push (2026-10-13)
       expect(res.body.outcome.status).toBe('SUCCESS');
       expect(res.body.ebayHold).toEqual({ heldAt: null, heldFields: [], contentDirtyAt: null });
       expect(res.body.message).toBe('eBay is up to date.');
@@ -670,7 +670,7 @@ describe('new marketplace handlers: 403/404 matrix', () => {
       mockPrisma.item.findUnique.mockResolvedValueOnce(ebayListed()).mockResolvedValueOnce({ ebaySyncHeldAt: null, ebayHeldFields: [], ebayContentDirtyAt: null });
       const res = makeRes();
       await repushItemToEbay({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: {} }, res);
-      expect(mockPush.mock.calls[0][0].fields.sort()).toEqual(['condition', 'description', 'price', 'title']);
+      expect(mockPush.mock.calls[0][0].fields.sort()).toEqual(['condition', 'description', 'price', 'quantity', 'title']);
     });
 
     it('retry: true retries only what the newest failed push left undone, as a RETRY; truthy strings are ignored', async () => {

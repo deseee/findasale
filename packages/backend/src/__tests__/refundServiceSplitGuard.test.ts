@@ -17,8 +17,11 @@ jest.mock('../lib/prisma', () => ({
     organizer: { updateMany: jest.fn() },
     boothCartLeg: { findUnique: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
     user: { findUnique: jest.fn() },
+    $executeRaw: jest.fn().mockResolvedValue(0), // guarded 0 -> 1 in-stock status flip after a refund
   },
 }));
+// Single-inventory-number work: refunds/sold-elsewhere fire a background syncItemStock; this suite does not exercise it.
+jest.mock('../services/inventoryStockSync', () => ({ syncItemStock: jest.fn(async () => ({ outcomes: [] })) }));
 const mockRefundsCreate = jest.fn();
 jest.mock('../utils/stripe', () => ({ getStripe: () => ({ refunds: { create: (...a: any[]) => mockRefundsCreate(...a) } }) }));
 jest.mock('../services/vendorBoothSaleNotificationService', () => ({

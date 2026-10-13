@@ -36,6 +36,7 @@ jest.mock('../lib/prisma', () => ({
   },
 }));
 jest.mock('@sentry/node', () => ({ captureMessage: jest.fn(), captureException: jest.fn() }));
+jest.mock('../services/inventoryStockSync', () => ({ syncItemStock: jest.fn(async () => ({ outcomes: [] })) })); // refund fires a background stock sync; not under test here
 
 const mockRefundPayment = jest.fn();
 const mockRefundsGet = jest.fn();

@@ -91,12 +91,12 @@ jest.mock('../marketplace/reverbConnector', () => ({
   fetchRecentReverbSellerOrders: jest.fn(),
 }));
 jest.mock('../marketplace/etsyConnector', () => ({ withdrawEtsyListingIfExists: jest.fn(async () => 'skipped') }));
-// Created concurrently by the stock-sync work; virtual so this suite does not depend on it existing yet.
-jest.mock(
-  '../inventoryStockSync',
-  () => ({ syncItemStock: jest.fn(async (itemId: string) => ({ itemId, inStock: 0, outcomes: [] })) }),
-  { virtual: true }
-);
+// The real module exists now. It must NOT be a virtual mock: a virtual mock is keyed by the extension-less path, so the lazy
+// `import('./inventoryStockSync')` in soldElsewhereUnitSale.ts (which resolves to the real .ts file) bypassed it, ran the real
+// syncItemStock against this suite's prisma stub, and the spy below was never called.
+jest.mock('../inventoryStockSync', () => ({
+  syncItemStock: jest.fn(async (itemId: string) => ({ itemId, inStock: 0, outcomes: [] })),
+}));
 
 import { commitFacebookNativeSale } from '../facebookNativeSaleService';
 import { commitItemSale } from '../itemSaleGuard';

@@ -20,10 +20,14 @@ jest.mock('../lib/prisma', () => {
   return {
     prisma: {
       itemBulkLot: { findMany: lotFind },
-      item: { findUnique: itemFind },
-      sale: { findUnique: jest.fn(async () => ({ organizerId: 'org_1' })) },
+      item: { findUnique: itemFind, updateMany: async () => ({ count: 1 }) },
+      sale: { findUnique: async () => ({ organizerId: 'org_1' }) },
+      // inventoryStockSync also looks at the other markets after eBay; this test has none of them (plain functions so a mock reset cannot wipe them).
+      etsyListing: { findUnique: async () => null },
+      shopifyListing: { findUnique: async () => null },
+      marketplaceListingJob: { findMany: async () => [] },
       organizer: {
-        findUnique: jest.fn(async () => ({ id: 'org_1', skuAppendDate: false, skuAppendCost: false, skuAppendLocation: false, ebayConnection: { lastEbaySoldSyncAt: new Date() } })),
+        findUnique: async () => ({ id: 'org_1', skuAppendDate: false, skuAppendCost: false, skuAppendLocation: false, ebayConnection: { lastEbaySoldSyncAt: new Date() } }),
       },
     },
   };
