@@ -4313,13 +4313,35 @@
     await vintRemMarkDeleteSubmitted(item);
     vintRemSyntheticClick(deleteBtn);
 
-    // Wait up to ~3s for EITHER path to show itself.
+    // Wait up to ~8s for EITHER path to show itself (was 3s; a slow render or a background tab missed it).
+    // The modal is matched by its testid OR by any visible dialog carrying the delete confirmation control.
+    const findDeleteModal = () => {
+      const byId = document.querySelector('[data-testid="item-delete-modal"]');
+      if (byId) return byId;
+      if (document.querySelector('[data-testid="item-delete-confirmation-button"]')) {
+        return document.querySelector('[role="dialog"]') || document.body;
+      }
+      return null;
+    };
     let modal = null;
-    const promptDeadline = Date.now() + 3000;
+    let promptDeadline = Date.now() + 8000;
+    let reclicked = false;
     while (Date.now() < promptDeadline) {
       if (bridgeOutcome === 'confirmFired' || bridgeOutcome === 'confirmMismatch') break;
-      modal = document.querySelector('[data-testid="item-delete-modal"]');
+      modal = findDeleteModal();
       if (modal) break;
+      // Nothing appeared after ~3.5s and the delete button is still there: the synthetic click may have been
+      // ignored. Click once more with the element's own click() (re-arming the bridge first so a native
+      // confirm is still answered). One retry only.
+      if (!reclicked && promptDeadline - Date.now() < 4500 && bridgeOutcome == null && document.querySelector('button[data-testid="item-delete-button"]')) {
+        reclicked = true;
+        const re = await vintRemBridgeCall('armConfirmOverride', { timeoutMs: 4000 }, 1000);
+        if (re && re.ok && re.armed) {
+          vintRemWaitForBridgeEvent(re.requestId, 4500).then((o) => { bridgeOutcome = o; });
+          try { document.querySelector('button[data-testid="item-delete-button"]').click(); } catch (e) { /* fall through */ }
+          promptDeadline = Date.now() + 4500;
+        }
+      }
       await sleep(150);
     }
 
@@ -4368,7 +4390,13 @@
       consecutive = successNow() ? consecutive + 1 : 0;
       if (consecutive >= 2) return 'deleted';
     }
-    return confirmedBy ? 'delete_not_confirmed' : 'no_confirmation_prompt';
+    if (confirmedBy) return 'delete_not_confirmed';
+    // Diagnostics so the next report says what the page actually showed (testids only, no personal data).
+    try {
+      const seen = Array.from(document.querySelectorAll('[role="dialog"], [data-testid*="modal" i], [data-testid*="delete" i]'))
+        .map((el) => (el.getAttribute('data-testid') || el.getAttribute('role') || el.tagName) + (el.offsetParent !== null ? '' : '(hidden)')).slice(0, 8).join(',');
+      return 'no_confirmation_prompt[hidden=' + document.hidden + ',bridge=' + bridgeOutcome + ',reclick=' + reclicked + ',seen=' + (seen || 'none') + ']';
+    } catch (e) { return 'no_confirmation_prompt'; }
   }
 
   // TRANSITION OWNERSHIP 2026-09-04 (S-EXT-REMOVAL-BACKGROUND-OWNED-TRANSITION): the removal-report
@@ -4614,7 +4642,7 @@
       // background retries this same item rather than reporting it permanently skipped.
       vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, 'interstitial');
     } else {
-      overlayWarn('Could not find the delete action on this Vinted listing page (UNVERIFIED selectors -- reason: ' + result + ') -- please delete it yourself.' + button('fas-vin-close', 'Close', false));
+      overlayWarn('Could not complete the delete on this Vinted listing page -- FindA.Sale will retry automatically (reason: ' + result + ')' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
       // TRANSIENT too (missing menu / delete action / confirmation control on this render). The
       // background holds the item and retries; only after FAS_REMOVAL_MAX_ATTEMPTS does it treat
