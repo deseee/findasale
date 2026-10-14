@@ -504,6 +504,73 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// ---------------------------------------------------------------------------------------------
+// Public sale page privacy gates (2026-10-13, Patrick-approved).
+//  1) Embargoed items: early-access / Legendary items stay hidden from viewers without early access,
+//     the same rules as the items list (rarity delay, Legendary legendaryVisibleAt) plus the item-level
+//     earlyAccessUntil embargo that syndicationFormatterService already honours.
+//  2) Street address: shown only to signed-in shoppers, and only from the day before the sale starts
+//     (sale local time). Everyone else gets city / state / postal-level location only. Organizer owner
+//     and admin always see everything.
+// ---------------------------------------------------------------------------------------------
+const DEFAULT_SALE_TIMEZONE = 'America/Detroit';
+
+function localDateKey(d: Date, timeZone: string): string {
+  const fmt = (tz: string) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  try {
+    return fmt(timeZone);
+  } catch {
+    return fmt(DEFAULT_SALE_TIMEZONE); // invalid IANA zone stored on the organizer
+  }
+}
+
+export type SaleAddressGate =
+  | { visible: true }
+  | { visible: false; reason: 'SIGN_IN' | 'NOT_YET'; revealsOn: string };
+
+/**
+ * Decides whether the full street address of a sale may be shown to a viewer.
+ * Calendar day of the sale start: date-only starts are stored as 00:00:00Z (the UTC date IS the intended
+ * day); timed starts are real instants, so their day is read in the sale's local time zone.
+ * Visible when viewer is signed in AND today (sale local time) >= start day - 1.
+ */
+export function getSaleAddressGate(
+  sale: { startDate: Date | string | null },
+  timeZone: string | null | undefined,
+  signedIn: boolean,
+  now: Date = new Date()
+): SaleAddressGate {
+  const tz = timeZone || DEFAULT_SALE_TIMEZONE;
+  const start = sale.startDate ? new Date(sale.startDate) : null;
+  let revealsOn = '';
+  let reached = true;
+  if (start && !Number.isNaN(start.getTime())) {
+    const dateOnly = start.getUTCHours() === 0 && start.getUTCMinutes() === 0 && start.getUTCSeconds() === 0;
+    const startDay = dateOnly ? start.toISOString().slice(0, 10) : localDateKey(start, tz);
+    const [y, m, d] = startDay.split('-').map(Number);
+    revealsOn = new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+    reached = localDateKey(now, tz) >= revealsOn;
+  }
+  if (!reached) return { visible: false, reason: 'NOT_YET', revealsOn };
+  if (!signedIn) return { visible: false, reason: 'SIGN_IN', revealsOn };
+  return { visible: true };
+}
+
+/** True when the viewer is NOT entitled to see this item yet (embargo / early-access windows). */
+function isItemEmbargoedForViewer(item: any, viewer: any, now: Date = new Date()): boolean {
+  const hasHuntPass = Boolean(viewer?.huntPassActive && viewer?.huntPassExpiry && new Date(viewer.huntPassExpiry) > now);
+  const isSageOrHigher = ['SAGE', 'GRANDMASTER'].includes(viewer?.explorerRank ?? 'INITIATE');
+  const ageHours = item.createdAt ? (now.getTime() - new Date(item.createdAt).getTime()) / 3600000 : Infinity;
+  if (!hasHuntPass) {
+    if (item.rarity === 'LEGENDARY' && ageHours < 12) return true;
+    if (item.rarity === 'RARE' && ageHours < 6) return true;
+    if (item.earlyAccessUntil && new Date(item.earlyAccessUntil) > now) return true;
+  }
+  if (item.isLegendary && item.legendaryVisibleAt && !isSageOrHigher && new Date(item.legendaryVisibleAt) > now) return true;
+  return false;
+}
+
 export const getSale = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -517,6 +584,7 @@ export const getSale = async (req: Request, res: Response) => {
             id: true, userId: true, businessName: true, phone: true, address: true,
             tier: true, verificationStatus: true, verificationSource: true, subscriptionTier: true, removeWatermarkEnabled: true,
             isClaimed: true, isUnmanagedListing: true,
+            timezone: true, // address gate: sale-local day of the start date
             // Square migration cart-checkout fix (2026-09-10, findasale-dev, P0): CartDrawer.tsx
             // needs to know which processor this organizer is actually live on BEFORE calling
             // checkout so it can route to Stripe's create-cart-checkout-session or Square's
@@ -539,7 +607,9 @@ export const getSale = async (req: Request, res: Response) => {
             organizerDiscountAmount: true, organizerDiscountXp: true,
             priceBeforeMarkdown: true, markdownApplied: true,
             rarity: true, // #57: Shiny/Rare Item Badges
-            roomTag: true // #416: Floor map room routing
+            roomTag: true, // #416: Floor map room routing
+            // Embargo gate inputs (stripped from the response for non-privileged viewers below)
+            createdAt: true, isLegendary: true, legendaryVisibleAt: true, earlyAccessUntil: true
           }
         }
       }
@@ -560,6 +630,13 @@ export const getSale = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
+    // Street address gate (signed-in shoppers only, from the day before the sale starts, sale local time).
+    const addressGate: SaleAddressGate = (isOrganizer || isAdmin || !sale.address) // online-only sales have no street address to protect
+      ? { visible: true }
+      : getSaleAddressGate(sale, (sale.organizer as any).timezone, Boolean(authReq.user?.id));
+    // Without the street address the exact pin would give it away, so coordinates drop to ~1 km precision.
+    const coarse = (n: number | null) => (n == null ? n : Math.round(n * 100) / 100);
+
     if (!isOrganizer && !isAdmin && sale.status === 'PUBLISHED' && sale.publishedAt) {
       // Get user's rank (default INITIATE if unauthenticated)
       const userRank = authReq.user?.explorerRank || 'INITIATE';
@@ -573,11 +650,13 @@ export const getSale = async (req: Request, res: Response) => {
         return res.json({
           id: sale.id,
           title: sale.title,
-          address: sale.address,
+          address: addressGate.visible ? sale.address : '',
+          addressGate,
           city: sale.city,
           state: sale.state,
-          lat: sale.lat,
-          lng: sale.lng,
+          zip: sale.zip,
+          lat: addressGate.visible ? sale.lat : coarse(sale.lat),
+          lng: addressGate.visible ? sale.lng : coarse(sale.lng),
           neighborhood: sale.neighborhood,
           photoUrls: sale.photoUrls,
           locked: true,
@@ -615,13 +694,34 @@ export const getSale = async (req: Request, res: Response) => {
     // anonymous users, the frontend, and the public MCP server at mcp.finda.sale).
     const isPrivilegedViewer = isOrganizer || isAdmin;
 
+    // Embargoed early-access / Legendary items never reach viewers without early access (organizer + admin keep all).
+    const now = new Date();
+    const visibleItems = isPrivilegedViewer
+      ? sale.items
+      : sale.items
+          .filter((item: any) => !isItemEmbargoedForViewer(item, authReq.user, now))
+          .map((item: any) => {
+            const { createdAt, isLegendary, legendaryVisibleAt, earlyAccessUntil, ...publicItem } = item;
+            return publicItem;
+          });
+
     const responseSale: any = {
       ...sale,
+      items: visibleItems,
+      ...(addressGate.visible ? {} : {
+        address: '',
+        lat: coarse(sale.lat),
+        lng: coarse(sale.lng),
+        entranceLat: null,
+        entranceLng: null,
+      }),
+      addressGate,
       locked: false,
       organizer: {
         id: organizer.id, userId: organizer.userId, businessName: organizer.businessName,
         ...(isPrivilegedViewer ? { phone: organizer.phone } : {}),
-        address: organizer.address, badges, avgRating,
+        // Organizer business address can equal the sale address: gated the same way.
+        address: addressGate.visible ? organizer.address : '', badges, avgRating,
         reviewCount,
         tier: organizer.tier, verificationStatus: organizer.verificationStatus, verificationSource: organizer.verificationSource,
         subscriptionTier: organizer.subscriptionTier, removeWatermarkEnabled: organizer.removeWatermarkEnabled,
@@ -1514,7 +1614,7 @@ export const generateIcal = async (req: Request, res: Response) => {
 
     const sale = await prisma.sale.findUnique({
       where: { id },
-      include: { organizer: { select: { businessName: true, subscriptionTier: true, removeWatermarkEnabled: true } } },
+      include: { organizer: { select: { userId: true, businessName: true, subscriptionTier: true, removeWatermarkEnabled: true, timezone: true } } },
     });
 
     // Public route: never expose drafts or deleted sales.
@@ -1529,17 +1629,22 @@ export const generateIcal = async (req: Request, res: Response) => {
     // RFC 5545 output (CRLF, folding, escaping, ORGANIZER, UID, DTSTAMP, UTC times) is built and
     // unit tested in utils/icalBuilder.ts. #27b: TEAMS organizers with removeWatermarkEnabled get no
     // "Shared via FindA.Sale" footer (utils/watermarkPolicy.canRemoveWatermark).
+    // Street address gate (same rule as GET /sales/:id): the calendar file would otherwise leak it to anyone.
+    const icalViewer = (req as any).user;
+    const icalGate: SaleAddressGate = (icalViewer?.role === 'ADMIN' || icalViewer?.id === sale.organizer?.userId)
+      ? { visible: true }
+      : getSaleAddressGate(sale, sale.organizer?.timezone, Boolean(icalViewer?.id));
     const ical = buildSaleIcs(
       {
         id,
         title: sale.title,
         description: sale.description,
-        address: sale.address,
+        address: icalGate.visible ? sale.address : '',
         city: sale.city,
         state: sale.state,
         zip: sale.zip,
-        lat: sale.lat,
-        lng: sale.lng,
+        lat: icalGate.visible || sale.lat == null ? sale.lat : Math.round(sale.lat * 100) / 100,
+        lng: icalGate.visible || sale.lng == null ? sale.lng : Math.round(sale.lng * 100) / 100,
         startDate: new Date(sale.startDate),
         endDate: new Date(sale.endDate),
         updatedAt: sale.updatedAt,
@@ -1551,7 +1656,7 @@ export const generateIcal = async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
     // inline lets iOS Safari offer "Add to Calendar" directly; desktop browsers download the file.
     res.setHeader('Content-Disposition', `inline; filename="sale-${id}.ics"`);
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('Cache-Control', 'private, max-age=300'); // varies by viewer (address gate)
     res.send(ical);
   } catch (error) {
     console.error('Error generating iCal:', error);

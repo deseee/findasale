@@ -1391,6 +1391,10 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
     // Try to get user from AuthRequest (optional — public endpoint)
     const user = (req as any).user;
 
+    // Item-level early-access embargo (earlyAccessUntil): hidden from everyone except Hunt Pass holders,
+    // the sale owner and admins (same rule as syndicationFormatterService + GET /sales/:id).
+    let viewerOwnsSaleOrAdmin = user?.role === 'ADMIN';
+
     // Security: gate items of non-published (DRAFT/ENDED) sales. Owner + admin may
     // still preview their own draft sale's items; everyone else gets an empty list.
     if (saleId && typeof saleId === 'string') {
@@ -1400,6 +1404,7 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
       });
       const isSaleOwner = !!user && parentSale?.organizer?.userId === user.id;
       const isSaleAdmin = user?.role === 'ADMIN';
+      if (isSaleOwner || isSaleAdmin) viewerOwnsSaleOrAdmin = true;
       // S1099: ENDED sales allowed through (matches getSale/getItemById) — only DRAFT/CANCELLED
       // (and any future non-public status) are hidden from non-owner/non-admin callers.
       if (parentSale && parentSale.status !== 'PUBLISHED' && parentSale.status !== 'ENDED' && !isSaleOwner && !isSaleAdmin) {
@@ -1419,6 +1424,13 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
       saleId: saleId as string,
       ...PUBLIC_ITEM_FILTER,
     };
+
+    if (!hasHuntPass && !viewerOwnsSaleOrAdmin) {
+      filterWhere.AND = [
+        ...(Array.isArray(filterWhere.AND) ? filterWhere.AND : []),
+        { OR: [{ earlyAccessUntil: null }, { earlyAccessUntil: { lte: new Date() } }] },
+      ];
+    }
 
     // POS / organizer item search: respect ?status=AVAILABLE to exclude PENDING_REVIEW items,
     // and ?q= for title/description text filtering. Both params are optional (public browse ignores them).

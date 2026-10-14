@@ -125,6 +125,9 @@ interface Sale {
   startDate: string;
   endDate: string;
   address: string;
+  // Server-side street address gate (GET /sales/:id): address is '' unless the viewer is signed in and
+  // it is the day before the sale or later (sale local time). Organizer + admin always get it.
+  addressGate?: { visible: true } | { visible: false; reason: 'SIGN_IN' | 'NOT_YET'; revealsOn: string };
   city: string;
   state: string;
   zip: string;
@@ -348,6 +351,18 @@ const GuestSaleAlert: React.FC<{ saleTitle: string; saleCity: string }> = ({ sal
           </form>
         </>
       )}
+    </div>
+  );
+};
+
+const AddressGateNote: React.FC<{ gate?: Sale['addressGate'] }> = ({ gate }) => {
+  if (!gate || gate.visible) return null;
+  const when = new Date(`${gate.revealsOn}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return (
+    <div className="text-xs mb-1 text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">
+      {gate.reason === 'SIGN_IN'
+        ? 'Sign in to see the full street address.'
+        : `Signed-in shoppers see the full street address starting ${when}.`}
     </div>
   );
 };
@@ -1619,6 +1634,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   <div className="text-xs uppercase tracking-widest mb-2.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>Where</div>
                   <div className="text-sm leading-relaxed">
                     {sale.address && <div className="font-medium">{sale.address}</div>}
+                    {!sale.address && <AddressGateNote gate={sale.addressGate} />}
                     <div className="text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">{sale.city}, {sale.state} {sale.zip}</div>
                     <button
                       className="mt-2 text-xs font-medium flex items-center gap-1 hover:underline"
@@ -1672,6 +1688,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               <div className="px-4 pt-4 pb-2">
                 <div className="text-xs uppercase tracking-widest mb-1.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>Where to go</div>
                 {sale.address && <div className="text-sm font-medium">{sale.address}</div>}
+                {!sale.address && <AddressGateNote gate={sale.addressGate} />}
                 <div className="text-xs mb-2 text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">{sale.city}, {sale.state} {sale.zip}</div>
               </div>
               {sale.lat && sale.lng ? (
@@ -2353,6 +2370,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               <div className="px-4 pt-4 pb-2">
                 <div className="text-xs uppercase tracking-widest mb-1.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>Where to go</div>
                 {sale.address && <div className="text-sm font-medium">{sale.address}</div>}
+                {!sale.address && <AddressGateNote gate={sale.addressGate} />}
                 <div className="text-xs mb-2 text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">{sale.city}, {sale.state} {sale.zip}</div>
               </div>
               {sale.lat && sale.lng ? (

@@ -607,7 +607,7 @@ router.get('/mine', authenticate, getMySales);
 // Specific /:id/* routes MUST come before generic /:id to prevent catch-all matching
 router.get('/:id/activity', getSaleActivity); // Real-time activity feed (public)
 router.get('/:id/status', getSaleStatus); // Feature #14: Real-time status (public)
-router.get('/:id/calendar.ics', generateIcal); // BUG FIX #184: public, no auth needed — must be before /:id
+router.get('/:id/calendar.ics', optionalAuthenticate, generateIcal); // BUG FIX #184: public, no auth needed — must be before /:id
 router.get('/:saleId/labels', authenticate, getSaleLabels); // W2: all-items label PDF
 router.get('/:id/markdown-config', authenticate, getMarkdownConfig);
 // Feature #91: Auto-Markdown. 2026-09-29 (Patrick D3): the default Day-2 (50%) / Day-3+ (75%) schedule is a
