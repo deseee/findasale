@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
+import { isItemEmbargoedForViewer } from '../lib/saleLocationPrivacy'; // 2026-10-13 early-access embargo
 
 // GET /api/items/:id/price-history
 export const getPriceHistory = async (req: AuthRequest, res: Response) => {
@@ -15,6 +16,12 @@ export const getPriceHistory = async (req: AuthRequest, res: Response) => {
         saleId: true,
         organizerId: true, // inventory items (saleId null): ownership resolves through Item.organizerId plus the caller's userId
         draftStatus: true,
+        // Embargo gate inputs (2026-10-13): an early-access item's price history stays hidden like the item itself.
+        rarity: true,
+        createdAt: true,
+        earlyAccessUntil: true,
+        isLegendary: true,
+        legendaryVisibleAt: true,
         sale: {
           select: {
             status: true,
@@ -53,6 +60,11 @@ export const getPriceHistory = async (req: AuthRequest, res: Response) => {
 
       // P1-B: Return 404 if item itself is not published/visible
       if (item.draftStatus && item.draftStatus !== 'PUBLISHED') {
+        return res.status(404).json({ message: 'Item not found' });
+      }
+
+      // 2026-10-13: an item still inside its early-access window is invisible to this viewer, so is its history.
+      if (isItemEmbargoedForViewer(item, req.user)) {
         return res.status(404).json({ message: 'Item not found' });
       }
     }

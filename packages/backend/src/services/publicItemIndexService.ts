@@ -14,6 +14,7 @@
 
 import { prisma } from '../lib/prisma';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
+import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
 
 export const SITEMAP_ITEMS_DEFAULT_LIMIT = 5000;
 export const SITEMAP_ITEMS_MAX_LIMIT = 10000;
@@ -48,6 +49,8 @@ export async function listPublicItemIds(paging: SitemapPaging, now: Date = new D
   const rows = await prisma.item.findMany({
     where: {
       ...PUBLIC_ITEM_FILTER,
+      // Early-access / embargoed items are not public yet (2026-10-13).
+      AND: [notEmbargoedForPublicWhere(now)],
       sale: {
         status: 'PUBLISHED',
         deletedAt: null,

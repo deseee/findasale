@@ -12,6 +12,7 @@
 
 import { Server } from 'socket.io';
 import { prisma } from '../lib/prisma';
+import { publicItemWhere } from '../lib/publicSaleGate';
 
 export interface SaleStatus {
   saleId: string;
@@ -21,6 +22,24 @@ export interface SaleStatus {
   revenueToday: number; // in dollars
   timestamp: Date;
 }
+
+/**
+ * Public view of a sale's status (2026-10-13, security). Revenue, sold counts and hold counts are the
+ * organizer's business data: only the sale's organizer, its workspace staff and admins receive them
+ * (GET /api/sales/:id/status gates with canAccessOrganizerSales; the socket push goes to the private
+ * sale-status:<id> room). Everyone else gets only the public, non-embargoed items-remaining count.
+ */
+export interface PublicSaleStatus {
+  saleId: string;
+  itemsRemaining: number;
+  timestamp: Date;
+}
+
+export const toPublicSaleStatus = (status: SaleStatus): PublicSaleStatus => ({
+  saleId: status.saleId,
+  itemsRemaining: status.itemsRemaining,
+  timestamp: status.timestamp,
+});
 
 /**
  * Get current status counters for a sale
@@ -64,11 +83,13 @@ export const getSaleStatus = async (saleId: string): Promise<SaleStatus> => {
       },
     });
 
-    // Items remaining — AVAILABLE or RESERVED items
+    // Items remaining — AVAILABLE or RESERVED items that shoppers can actually see.
+    // 2026-10-13 (security): GET /api/sales/:id/status is public, so this count must not reveal
+    // draft / hidden / consignor-tag items or items still inside an early-access window.
     const itemsRemaining = await prisma.item.count({
       where: {
         saleId,
-        status: { in: ['AVAILABLE', 'RESERVED'] },
+        AND: [{ status: { in: ['AVAILABLE', 'RESERVED'] } }, publicItemWhere(now)],
       },
     });
 
@@ -111,7 +132,10 @@ export const getSaleStatus = async (saleId: string): Promise<SaleStatus> => {
 export const pushSaleStatus = async (io: Server, saleId: string): Promise<void> => {
   try {
     const status = await getSaleStatus(saleId);
-    io.to(`sale:${saleId}`).emit('SALE_STATUS_UPDATE', status);
+    // 2026-10-13 (security): revenue and hold counts go to the private sale-status:<id> room
+    // (organizer / staff / admin, see lib/socket canJoinPrivateSaleRoom), never to the public
+    // sale:<id> room that anonymous shoppers join for the live feed.
+    io.to(`sale-status:${saleId}`).emit('SALE_STATUS_UPDATE', status);
     console.log(
       `[saleStatus] Pushed update: ${status.itemsSoldToday} sold, ${status.activeHolds} holds, ${status.itemsRemaining} remaining, $${status.revenueToday.toFixed(2)} revenue`
     );

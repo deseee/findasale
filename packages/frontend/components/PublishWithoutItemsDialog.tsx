@@ -1,7 +1,9 @@
 /**
  * PublishWithoutItemsDialog: confirm step before publishing a sale that has no items
  * (guided first-sale flow spec, section A1). Publishing stays one extra tap away; nothing is blocked.
- * Used by create-sale Step 5 and edit-sale's status toggle.
+ * Used by create-sale Step 5 and, through hooks/useGuardedPublish.tsx, by every other publish path
+ * (edit-sale, dashboard). The server refuses an empty publish with 409 EMPTY_SALE_PUBLISH; only the
+ * "Publish, then add items" choice here sends allowEmpty (lib/publishSale.ts).
  */
 import React, { useEffect, useRef } from 'react';
 import AccessibleModal from './AccessibleModal';

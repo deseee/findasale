@@ -3,8 +3,28 @@ import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/a
 import { prisma } from '../lib/prisma';
 import { getTodayHunt, getHuntItemStatus, claimDailyHunt } from '../services/treasureHuntService';
 import { XP_AWARDS } from '../services/xpService';
+import { isItemEmbargoedForViewer } from '../lib/saleLocationPrivacy';
 
 const router = Router();
+
+/**
+ * Early-access gate (2026-10-13): an item still inside its early-access window is answered exactly like a
+ * missing item for viewers without access, so its id cannot be used to probe or claim it early. The
+ * item's own organizer and admins are never blocked.
+ */
+async function isHiddenEarlyAccessItem(itemId: string, viewer: any): Promise<boolean> {
+  const item = await prisma.item.findUnique({
+    where: { id: itemId },
+    select: {
+      rarity: true, createdAt: true, earlyAccessUntil: true, isLegendary: true, legendaryVisibleAt: true,
+      sale: { select: { organizer: { select: { userId: true } } } },
+    },
+  });
+  if (!item) return false; // the hunt service answers NOT_FOUND itself
+  if (viewer?.role === 'ADMIN') return false;
+  if (viewer?.id && item.sale?.organizer?.userId === viewer.id) return false;
+  return isItemEmbargoedForViewer(item, viewer);
+}
 
 /**
  * GET /api/treasure-hunt/today
@@ -55,6 +75,9 @@ router.get('/item/:itemId', optionalAuthenticate, async (req: AuthRequest, res: 
     if (!itemId) {
       return res.status(400).json({ message: 'itemId required' });
     }
+    if (await isHiddenEarlyAccessItem(itemId, req.user)) {
+      return res.json({ state: 'NOT_FOUND', loggedIn: !!req.user });
+    }
     const status = await getHuntItemStatus(itemId, req.user?.id);
     res.json({ ...status, loggedIn: !!req.user });
   } catch (err) {
@@ -85,6 +108,10 @@ router.post('/found', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'itemId required' });
     }
     const clientHuntId = typeof huntId === 'number' && Number.isInteger(huntId) ? huntId : undefined;
+
+    if (await isHiddenEarlyAccessItem(itemId, req.user)) {
+      return res.status(404).json({ success: false, state: 'NOT_FOUND', message: 'Item not found' });
+    }
 
     const result = await claimDailyHunt(req.user.id, itemId, clientHuntId);
 

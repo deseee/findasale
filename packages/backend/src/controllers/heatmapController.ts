@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { getOrComputeHeatmapTiles } from '../services/heatmapService';
+import { isAdminRequest } from '../utils/adminRequest';
 
 const heatmapQuerySchema = z.object({
   lat: z.string().optional(),
@@ -20,8 +21,12 @@ export const getHeatmapHandler = async (
 ): Promise<void> => {
   try {
     const query = heatmapQuerySchema.parse(req.query);
-    const daysWindow = parseInt(query.days);
-    const forceRefresh = query.forceRefresh === 'true';
+    // 2026-10-13 (security): the service caches one result per day regardless of `days`, so an
+    // unbounded window computed on a cache miss would be served to everyone for 6 hours. Clamp it.
+    const parsedDays = parseInt(query.days, 10);
+    const daysWindow = Number.isFinite(parsedDays) ? Math.min(Math.max(parsedDays, 1), 30) : 7;
+    // ?forceRefresh=true bypasses the cache and recomputes; on this public route only an admin may use it.
+    const forceRefresh = query.forceRefresh === 'true' && (await isAdminRequest(req, res));
 
     // NOTE (Phase 2): Validate lat/lng/zoom bounds if needed in Phase 2
     // For now, return global heatmap (all cells)

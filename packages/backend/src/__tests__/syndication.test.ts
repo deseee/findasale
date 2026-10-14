@@ -106,20 +106,30 @@ describe('generateSyndicationBundle', () => {
     expect(json).not.toContain('telephone');
   });
 
-  it('includes the sale street address, which the public sale page already shows', async () => {
+  // 2026-10-13 address gate: the feed is anonymous and cached, so it is location by city / region / postal only.
+  it('never includes the sale street address (city, region and postal code only)', async () => {
     mockSaleFindFirst.mockResolvedValue(baseSale());
     const bundle = await generateSyndicationBundle('sale1');
-    expect((bundle.event.location as any).streetAddress).toBe('12 Oak Street');
+    expect(mockSaleFindFirst.mock.calls[0][0].select.address).toBeUndefined();
+    expect(bundle.event.location).toEqual({
+      '@type': 'PostalAddress',
+      addressLocality: 'Denver',
+      addressRegion: 'CO',
+      postalCode: '80202',
+      addressCountry: 'US',
+    });
+    expect((bundle.dataCommons.location.address as any).streetAddress).toBeUndefined();
+    expect(JSON.stringify(bundle)).not.toContain('Oak Street');
   });
 
-  it('omits the street address for online-only sales', async () => {
+  it('omits the location for online-only sales', async () => {
     mockSaleFindFirst.mockResolvedValue(baseSale({ isOnlineOnly: true }));
     const bundle = await generateSyndicationBundle('sale1');
     expect((bundle.event.location as any)['@type']).toBe('VirtualLocation');
-    expect(bundle.dataCommons.location.address.streetAddress).toBe('');
+    expect((bundle.dataCommons.location.address as any).streetAddress).toBeUndefined();
   });
 
-  it('omits latitude/longitude for online-only sales but keeps them for physical sales', async () => {
+  it('omits latitude/longitude for online-only sales and coarsens them for physical sales', async () => {
     mockSaleFindFirst.mockResolvedValue(baseSale({ isOnlineOnly: true }));
     const online = await generateSyndicationBundle('sale1');
     expect(online.dataCommons.location.geo).toBeUndefined();

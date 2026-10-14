@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
 import { isSaleLocked } from './rankService';
 import { normalizeCondition } from '../utils/conditionMapping'; // U4: one condition vocabulary
+import { coarseCoord, notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
 
 // ─── Input Types ─────────────────────────────────────────────────────────────
 
@@ -12,7 +13,8 @@ export interface SaleWithItems {
   startDate: Date;
   endDate: Date;
   isOngoing: boolean;
-  address: string;
+  // No street address: the feed is anonymous and cached, and the street address is only shown to signed-in
+  // shoppers from the day before the sale starts (2026-10-13). lat/lng are coarse (2 decimals, ~1 km).
   city: string;
   state: string;
   zip: string;
@@ -67,7 +69,7 @@ export interface ItemForSyndication {
 
 export interface SchemaOrgPostalAddress {
   '@type': 'PostalAddress';
-  streetAddress: string;
+  // streetAddress is deliberately absent (public feed, 2026-10-13 address gate).
   addressLocality: string;
   addressRegion: string;
   postalCode: string;
@@ -153,7 +155,6 @@ export interface DataCommonsEntry {
     name: string;
     address: {
       '@type': 'PostalAddress';
-      streetAddress: string;
       addressLocality: string;
       addressRegion: string;
       postalCode: string;
@@ -249,15 +250,9 @@ function buildPriceRange(items: ItemForSyndication[]): { low: number; high: numb
   };
 }
 
-function buildPostalAddress(
-  address: string,
-  city: string,
-  state: string,
-  zip: string
-): SchemaOrgPostalAddress {
+function buildPostalAddress(city: string, state: string, zip: string): SchemaOrgPostalAddress {
   return {
     '@type': 'PostalAddress',
-    streetAddress: address,
     addressLocality: city,
     addressRegion: state,
     postalCode: zip,
@@ -278,7 +273,7 @@ export function formatSaleForSchemaOrg(sale: SaleWithItems): SchemaOrgEvent {
 
   const location: SchemaOrgEvent['location'] = isOnline
     ? { '@type': 'VirtualLocation', url: saleUrl }
-    : buildPostalAddress(sale.address, sale.city, sale.state, sale.zip);
+    : buildPostalAddress(sale.city, sale.state, sale.zip);
 
   const event: SchemaOrgEvent = {
     '@context': 'https://schema.org',
@@ -384,7 +379,6 @@ export function formatSaleForDataCommons(sale: SaleWithItems): DataCommonsEntry 
       name: `${sale.city}, ${sale.state}`,
       address: {
         '@type': 'PostalAddress',
-        streetAddress: sale.address,
         addressLocality: sale.city,
         addressRegion: sale.state,
         postalCode: sale.zip,
@@ -401,12 +395,13 @@ export function formatSaleForDataCommons(sale: SaleWithItems): DataCommonsEntry 
     sourceUrl: `${BASE_URL}/sales/${sale.id}`,
   };
 
-  // Online-only sales have no physical location: never emit coordinates for them.
+  // Online-only sales have no physical location: never emit coordinates for them. Physical sales get
+  // coarse coordinates only (2 decimals, ~1 km), so the pin cannot stand in for the withheld street address.
   if (!sale.isOnlineOnly && sale.lat && sale.lng) {
     entry.location.geo = {
       '@type': 'GeoCoordinates',
-      latitude: sale.lat,
-      longitude: sale.lng,
+      latitude: coarseCoord(sale.lat),
+      longitude: coarseCoord(sale.lng),
     };
   }
 
@@ -502,10 +497,11 @@ export const SYNDICATION_MAX_ITEMS = 500;
  *    Legendary items before legendaryVisibleAt, and items still under an earlyAccessUntil embargo are
  *    withheld. Soft-deleted items are excluded, and while a sale's prelaunchAt (Sage+ preview) is in
  *    the future no items are syndicated at all.
- *  - The sale street address IS public (the sale page prints it), so it is included; for online-only
- *    sales it is omitted. Organizer phone (GET /api/sales/:id returns it only to the owner or an admin)
- *    and organizer street address are never selected here. Note GET /api/sales/:id itself still returns
- *    organizer.address to anonymous callers; the feed is deliberately stricter than that.
+ *  - Location is city / state / postal code only (2026-10-13 address gate): the street address is shown
+ *    only to signed-in shoppers from the day before the sale starts, and this feed is anonymous and
+ *    cached, so the street address is never selected and coordinates are coarsened to 2 decimals
+ *    (~1 km). Online-only sales carry no location at all. Organizer phone and organizer street address
+ *    are never selected here.
  *
  * Throws SyndicationNotAvailableError when the sale is missing or not syndicable.
  */
@@ -522,7 +518,6 @@ export async function generateSyndicationBundle(saleId: string, now: Date = new 
       startDate: true,
       endDate: true,
       isOngoing: true,
-      address: true,
       city: true,
       state: true,
       zip: true,
@@ -533,7 +528,6 @@ export async function generateSyndicationBundle(saleId: string, now: Date = new 
       status: true,
       saleType: true,
       isOnlineOnly: true,
-      notes: true,
       publishedAt: true,
       prelaunchAt: true,
       organizer: {
@@ -570,6 +564,8 @@ export async function generateSyndicationBundle(saleId: string, now: Date = new 
             { OR: [{ isLegendary: false }, { legendaryVisibleAt: null }, { legendaryVisibleAt: { lte: now } }] },
             // Hunt Pass embargo on the item itself.
             { OR: [{ earlyAccessUntil: null }, { earlyAccessUntil: { lte: now } }] },
+            // Shared public embargo gate (lib/saleLocationPrivacy), same as every other public item list.
+            notEmbargoedForPublicWhere(now),
           ],
         },
         orderBy: [{ status: 'asc' }, { id: 'asc' }],
@@ -611,19 +607,20 @@ export async function generateSyndicationBundle(saleId: string, now: Date = new 
     startDate: sale.startDate,
     endDate: sale.endDate,
     isOngoing: sale.isOngoing,
-    address: sale.isOnlineOnly ? '' : sale.address,
     city: sale.city,
     state: sale.state,
     zip: sale.zip,
-    // Online-only sales have no physical location, so coordinates are withheld (address is blanked above).
-    lat: sale.isOnlineOnly ? null : sale.lat,
-    lng: sale.isOnlineOnly ? null : sale.lng,
+    // Online-only sales have no physical location, so coordinates are withheld; physical sales get coarse
+    // coordinates only (the street address is never selected).
+    lat: sale.isOnlineOnly ? null : coarseCoord(sale.lat),
+    lng: sale.isOnlineOnly ? null : coarseCoord(sale.lng),
     photoUrls: sale.photoUrls,
     tags: sale.tags,
     status: sale.status,
     saleType: sale.saleType,
     isOnlineOnly: sale.isOnlineOnly,
-    notes: sale.notes,
+    // Day-of approach notes (parking, entrance) can point at the house: never part of the public feed.
+    notes: null,
     organizer: {
       id: sale.organizer.id,
       businessName: sale.organizer.businessName,

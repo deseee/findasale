@@ -17,7 +17,6 @@ import {
   cloneSale,
   getSaleActivity,
   generateSaleDescriptionHandler,
-  getSaleStatus,
   getCities,
   updateMarkdownConfig,
   getMarkdownConfig,
@@ -37,13 +36,16 @@ import { exportSaleToEbay } from '../controllers/ebayController'; // Feature #24
 import { exportCommerceManagerFeed } from '../controllers/exportController'; // Commerce Manager data feed
 import { returnItemsToInventoryHandler } from '../controllers/returnToInventoryController'; // Feature #300: Return to Inventory
 import { toggleSaleRSVP, removeRSVP, getRSVPCount, getMyRSVPStatus, getRSVPAttendees, setRSVPNameVisibility } from '../controllers/rsvpController'; // Feature #154: Sale RSVP
-import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, optionalAuthenticate, lenientOptionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { requireOrganizer } from '../middleware/auth';
+import { getSaleStatusForViewer } from '../controllers/saleStatusController';
 import { requireTier } from '../middleware/requireTier';
 import { trackScanLimiter } from '../middleware/trackScanLimiter'; // per-IP/per-sale cap for the public track-scan route
 import { prisma } from '../lib/prisma';
 import { geocodeCityStateWithStatus, type GeocodeCityStateResult } from '../services/geocodingService'; // ADR-091: radius-aware city pages
 import { getSaleOgBuyerCount } from '../services/badgeService'; // Feature #404: OG Buyer count
+import { redactSalesForViewer, notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy'; // public address gate + early-access embargo
+import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
 
 const router = Router();
 
@@ -318,7 +320,7 @@ router.get('/by-city/:citySlug', async (req, res) => {
           scrapedMetadata: true,
           lat: true,
           lng: true,
-          organizer: { select: { id: true, businessName: true } },
+          organizer: { select: { id: true, businessName: true, timezone: true } }, // timezone: address gate input only, stripped below
         },
         take: 2000, // bounding box can be broad in dense metros; trimmed by haversine + fetchLimit below
       });
@@ -375,7 +377,7 @@ router.get('/by-city/:citySlug', async (req, res) => {
           sourceUrl: true,
           sourceName: true,
           scrapedMetadata: true,
-          organizer: { select: { id: true, businessName: true } },
+          organizer: { select: { id: true, businessName: true, timezone: true } }, // timezone: address gate input only, stripped below
         },
         take: 2000,
       });
@@ -440,10 +442,14 @@ router.get('/by-city/:citySlug', async (req, res) => {
     const categorySet = new Set<string>(candidateSales.map((s: any) => s.saleType));
     const categories = Array.from(categorySet);
 
-    const serialized = capped.map((s: any) => {
+    // Street address gate (2026-10-13): this public route has no auth, so every caller is anonymous and
+    // gets city-level location only (lib/saleLocationPrivacy.ts). Online-only sales keep an empty address.
+    const serialized = redactSalesForViewer(capped as Array<Record<string, any>>, (req as any).user).map((s: any) => {
       const { scrapedMetadata, lat, lng, ...rest } = s;
+      const { timezone: _tz, ...organizer } = (rest.organizer ?? {}) as Record<string, any>;
       return {
         ...rest,
+        ...(rest.organizer ? { organizer } : {}),
         startDate: s.startDate instanceof Date ? s.startDate.toISOString() : s.startDate,
         endDate: s.endDate instanceof Date ? s.endDate.toISOString() : s.endDate,
         photoUrl: s.photoUrls?.[0] ?? null,
@@ -606,8 +612,10 @@ router.get('/mine', authenticate, getMySales);
 
 // Specific /:id/* routes MUST come before generic /:id to prevent catch-all matching
 router.get('/:id/activity', getSaleActivity); // Real-time activity feed (public)
-router.get('/:id/status', getSaleStatus); // Feature #14: Real-time status (public)
-router.get('/:id/calendar.ics', optionalAuthenticate, generateIcal); // BUG FIX #184: public, no auth needed — must be before /:id
+// Feature #14: Real-time status. Public subset (items remaining) for everyone; revenue / sold / holds only
+// for the sale's organizer, staff and admin (2026-10-13, see controllers/saleStatusController).
+router.get('/:id/status', optionalAuthenticate, getSaleStatusForViewer);
+router.get('/:id/calendar.ics', lenientOptionalAuthenticate, generateIcal); // BUG FIX #184: public, no auth needed — must be before /:id. Lenient: a calendar app or a plain link cannot refresh an expired token, so a bad/expired token is anonymous (city-level calendar), never a 401.
 router.get('/:saleId/labels', authenticate, getSaleLabels); // W2: all-items label PDF
 router.get('/:id/markdown-config', authenticate, getMarkdownConfig);
 // Feature #91: Auto-Markdown. 2026-09-29 (Patrick D3): the default Day-2 (50%) / Day-3+ (75%) schedule is a
@@ -651,10 +659,13 @@ router.patch('/:id/coordinates', authenticate, requireOrganizer, async (req: Aut
 router.get('/:id/bundles', async (req, res) => {
   try {
     const { id } = req.params;
+    // Public list: only bundles of publicly viewable sales, and never an item that is hidden or still inside
+    // its early-access window (anonymous-level, same rule as the public item lists).
     const bundles = await prisma.itemBundle.findMany({
-      where: { saleId: id, isActive: true },
+      where: { saleId: id, isActive: true, sale: { status: { in: ['PUBLISHED', 'ENDED'] }, deletedAt: null } },
       include: {
         items: {
+          where: { AND: [PUBLIC_ITEM_FILTER, notEmbargoedForPublicWhere(new Date())] },
           select: { id: true, title: true, photoUrls: true, status: true }
         }
       },
@@ -807,7 +818,7 @@ router.delete('/:id', authenticate, deleteSale);
 router.post('/:id/clone', authenticate, cloneSale);
 
 // Feature #84: Approach Notes — day-of notifications with parking/entrance info
-router.get('/:saleId/approach-notes', getApproachNotes); // Public read for saved sales, organizer only for unsaved
+router.get('/:saleId/approach-notes', optionalAuthenticate, getApproachNotes); // optional auth (2026-10-13): the controller's own inline optionalAuthenticate fallback only runs when req.user is unset, so this does not double-identify. Public read for saved sales, organizer only for unsaved
 router.post('/:saleId/approach-notes', authenticate, requireOrganizer, updateApproachNotes); // Organizer only
 router.post('/:saleId/send-approach-notification', authenticate, requireOrganizer, sendApproachNotification); // Organizer triggers notification
 
@@ -836,6 +847,10 @@ router.put('/:id/rsvp/name-visibility', authenticate, setRSVPNameVisibility); //
 router.use('/:saleId/ripples', rippleRoutes);
 
 // Feature #39: Photo Op Stations — photo spot management
+// Optional auth for the public station list only (GET /:saleId/photo-ops): runs, then next() falls through to the
+// mounted router below. Scoped to that one GET so the public share/like POSTs keep their current anonymous behavior.
+// photoOpController.listStations keeps its inline fallback, which only runs when req.user is unset.
+router.get('/:saleId/photo-ops', optionalAuthenticate);
 router.use('/:saleId/photo-ops', photoOpsRoutes);
 
 // Feature #85: Treasure Hunt QR — per-sale scavenger hunt

@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { isPublicItem } from '../helpers/itemQueries';
+import { isItemEmbargoedForViewer } from '../lib/saleLocationPrivacy';
+import { canAccessOrganizerSales } from '../utils/saleStaffAccess';
 
 // Types for request bodies
 interface SubmitPhotoRequest {
@@ -89,11 +92,50 @@ export const getApprovedPhotosForSale = async (req: Request, res: Response) => {
 };
 
 /**
- * Get approved photos for an item (public endpoint)
+ * Get approved photos for an item (public endpoint, optionalAuthenticate)
+ * 2026-10-13 (security): 404 unless the item itself is publicly visible (published, active, not
+ * deleted, in a PUBLISHED or ENDED sale) and not inside an early-access window for this viewer. The sale's
+ * organizer, its workspace staff and admins always see their own item's photos.
  */
 export const getApprovedPhotosForItem = async (req: Request, res: Response) => {
   try {
     const { itemId } = req.params;
+    const viewer = (req as AuthRequest).user;
+    const now = new Date();
+
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        organizerId: true,
+        isActive: true,
+        status: true,
+        draftStatus: true,
+        listingType: true,
+        deletedAt: true,
+        rarity: true,
+        createdAt: true,
+        earlyAccessUntil: true,
+        isLegendary: true,
+        legendaryVisibleAt: true,
+        sale: { select: { status: true, organizerId: true, deletedAt: true } },
+      },
+    });
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    const ownerOrganizerId = item.sale?.organizerId ?? item.organizerId;
+    const privileged = viewer ? await canAccessOrganizerSales(viewer, ownerOrganizerId) : false;
+    if (!privileged) {
+      const publiclyVisible =
+        isPublicItem(item) &&
+        !item.deletedAt &&
+        // same sale-state rule as GET /items/:id: only PUBLISHED or ENDED sales are public
+        (!item.sale || ((item.sale.status === 'PUBLISHED' || item.sale.status === 'ENDED') && !item.sale.deletedAt));
+      if (!publiclyVisible || isItemEmbargoedForViewer(item, viewer, now)) {
+        return res.status(404).json({ message: 'Item not found' });
+      }
+    }
 
     const photos = await prisma.uGCPhoto.findMany({
       where: {

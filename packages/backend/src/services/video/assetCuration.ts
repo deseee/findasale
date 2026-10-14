@@ -28,6 +28,7 @@
  */
 
 import { prisma } from '../../lib/prisma';
+import { notEmbargoedForPublicWhere } from '../../lib/saleLocationPrivacy';
 
 /**
  * ADR-079 (Motion Footage Extension): Cloudinary URLs are self-describing —
@@ -171,7 +172,9 @@ async function curateFromSale(saleId: string, maxShots: number): Promise<AssetCu
     where: { id: saleId },
     include: {
       items: {
-        where: { isActive: true, deletedAt: null, status: 'AVAILABLE' },
+        // Videos are published to public social channels: never feature an item still inside its
+        // early-access window (rarity delay, Legendary embargo, earlyAccessUntil). 2026-10-13.
+        where: { isActive: true, deletedAt: null, status: 'AVAILABLE', ...notEmbargoedForPublicWhere(new Date()) },
         include: {
           photos: {
             orderBy: [{ isPrimary: 'desc' }, { orderIndex: 'asc' }],

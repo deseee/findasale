@@ -2749,7 +2749,10 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
       id: sale.id,
       title: sale.title || '',
       description: sale.description || '',
-      address: sale.address || '',
+      // Location privacy (2026-10-13): ISR HTML is cached for anonymous visitors, so the street
+      // address never ships in SSR props, whatever the backend returned. Signed-in viewers get it
+      // from the client-side fetch once the address gate opens.
+      address: '',
       city: sale.city || '',
       state: sale.state || '',
       zip: sale.zip || '',

@@ -15,6 +15,7 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import { buildListingEvent, JsonLdNode } from '@/lib/seo/eventJsonLd';
+import { toPublicSaleList } from '@/lib/seo/publicSaleLocation';
 import Head from 'next/head';
 import Link from 'next/link';
 import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
@@ -521,7 +522,7 @@ export const getStaticProps: GetStaticProps<CityCategoryPageProps> = async ({ pa
     throw new Error(`[city/category] geocoderStatus=error for ${citySlug}/${categorySlug}`);
   }
 
-  sales = data.sales ?? [];
+  sales = toPublicSaleList(data.sales); // location privacy: no street address / exact coords in cached HTML
   totalCount = data.totalCount ?? 0;
   allCategories = data.categories ?? [];
   activeByType = data.activeByType ?? {};

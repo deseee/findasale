@@ -28,6 +28,7 @@ import { sendCompliantSmsBatch, sendConsentConfirmationSms } from '../services/c
 import { getClientIp } from '../utils/getClientIp';
 import { escapeHtml, safeHttpsUrl } from '../utils/htmlEscape';
 import { maskEmail, safeErrorForLog } from '../utils/logMask';
+import { messageSaleLocation } from '../lib/messageSaleLocation';
 
 // Lazy-loaded Twilio client
 let _twilioClient: any = null;
@@ -619,8 +620,15 @@ const firstNameOf = (name: string | null | undefined): string => {
 };
 
 // Helper: build the HTML for a weekly digest email (exported so the escaping can be unit tested)
-export const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, unsubUrl: string, nearYou: boolean): string => {
+export const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, unsubUrl: string, nearYou: boolean, now: Date = new Date()): string => {
   const saleCards = sales.map((sale) => {
+    // 2026-10-13: digest recipients are account holders, but a sale's street address only goes out from the day
+    // before it starts (organizer time zone, evaluated at send time). Before that: city, state zip + a link.
+    const location = messageSaleLocation(sale, sale.organizer?.timezone, true, now);
+    const saleHref = `${escapeHtml(frontendUrl)}/sales/${escapeHtml(sale.id)}`;
+    const locationNote = location.note
+      ? `<p style="margin:0 0 6px;font-size:12px;"><a href="${saleHref}" style="color:#2563eb;text-decoration:none;">${escapeHtml(location.note)}</a></p>`
+      : '';
     const startDate = new Date(sale.startDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     const endDate = new Date(sale.endDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     // Untrusted text (sale titles, addresses, business names) and the photo URL are escaped / validated:
@@ -633,7 +641,8 @@ export const buildDigestHtml = (userName: string, sales: any[], frontendUrl: str
         ${photo}
         <div style="padding:14px;">
           <h3 style="margin:0 0 4px;font-size:16px;color:#111827;">${escapeHtml(sale.title)}</h3>
-          <p style="margin:0 0 6px;font-size:13px;color:#6b7280;">${escapeHtml(sale.address)}, ${escapeHtml(sale.city)}, ${escapeHtml(sale.state)}</p>
+          <p style="margin:0 0 6px;font-size:13px;color:#6b7280;">${escapeHtml(location.line)}</p>
+          ${locationNote}
           <p style="margin:0 0 10px;font-size:13px;color:#374151;">${startDate} – ${endDate}</p>
           <p style="margin:0 0 10px;font-size:12px;color:#9ca3af;">By ${escapeHtml(sale.organizer?.businessName || 'Unknown Organizer')}</p>
           <a href="${escapeHtml(frontendUrl)}/sales/${escapeHtml(sale.id)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;">View Sale →</a>
@@ -745,7 +754,8 @@ export const sendWeeklyDigest = async () => {
       },
       include: {
         organizer: {
-          select: { businessName: true },
+          // timezone: the address gate reads the sale's local day (2026-10-13)
+          select: { businessName: true, timezone: true },
         },
       },
       orderBy: { startDate: 'asc' },
@@ -817,7 +827,7 @@ export const sendWeeklyDigest = async () => {
           }
         }
 
-        const html = buildDigestHtml(user.name, salesForUser, frontendUrl, unsubUrl, nearYou);
+        const html = buildDigestHtml(user.name, salesForUser, frontendUrl, unsubUrl, nearYou, new Date());
 
         const digestMessage = {
           // No explicit from: transactionalEmailService resolves RESEND_FROM_EMAIL (verified finda.sale root domain).

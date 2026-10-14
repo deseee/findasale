@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { publicItemWhere } from '../lib/publicSaleGate';
 
 export const getClearanceItems = async (req: Request, res: Response) => {
   try {
@@ -22,6 +23,8 @@ export const getClearanceItems = async (req: Request, res: Response) => {
       },
       ...(category ? { category: { equals: category, mode: 'insensitive' } } : {}),
       ...(maxPrice !== undefined ? { price: { lte: maxPrice } } : {}),
+      // Public list and count (2026-10-13): published items only, never early-access / embargoed ones.
+      AND: [publicItemWhere(new Date())],
     };
 
     const [items, total] = await Promise.all([

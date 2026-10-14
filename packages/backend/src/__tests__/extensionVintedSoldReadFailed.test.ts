@@ -81,6 +81,10 @@ describe('vintedSoldReadFailed log entries', () => {
     expect(fn).toContain("'http_' + st");
     expect(vinted).toContain("type: 'reportVintedSold', items: [], readFailed: true");
     expect(bg).toContain("fasLog('warn', 'vintedSoldReadFailed'");
-    expect(JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8')).version).toBe('1.0.4');
+    // The reason-code logging shipped in extension 1.0.4. Assert "at least 1.0.4" instead of an exact pin,
+    // so every later extension version bump (1.0.5, 1.0.7, ...) does not turn CI red.
+    const manifestVersion = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8')).version as string;
+    const [maj, min, pat] = manifestVersion.split('.').map(Number);
+    expect(maj * 1e6 + min * 1e3 + pat).toBeGreaterThanOrEqual(1 * 1e6 + 0 * 1e3 + 4);
   });
 });

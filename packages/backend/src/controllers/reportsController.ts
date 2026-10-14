@@ -15,6 +15,7 @@
 
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { publicItemWhere } from '../lib/publicSaleGate';
 
 interface MonthlyReportData {
   year: number;
@@ -116,6 +117,8 @@ export const getMonthlyReport = async (req: Request, res: Response): Promise<voi
       where: {
         deletedAt: null,
         category: { not: null },
+        // Public counts never include draft/hidden items or items still inside an early-access window (2026-10-13).
+        AND: [publicItemWhere(now)],
         sale: {
           deletedAt: null,
           status: { in: ['PUBLISHED', 'ENDED'] },

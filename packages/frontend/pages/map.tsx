@@ -11,6 +11,7 @@ import { useHeatmapTiles } from '../hooks/useHeatmapTiles';
 import RouteBuilder from '../components/RouteBuilder';
 import type { HeatmapTile } from '../types/heatmap';
 import { serverFetch } from '@/lib/serverFetch';
+import { toPublicSaleList } from '@/lib/seo/publicSaleLocation';
 
 interface Sale {
   id: string;
@@ -570,7 +571,8 @@ export async function getStaticProps() {
     if (res.ok) {
       const data = await res.json();
       const salesData = data.sales ?? data;
-      initialSales = Array.isArray(salesData) ? salesData : [];
+      // Location privacy: ISR HTML is cached for anonymous visitors, so no street address or exact coords.
+      initialSales = toPublicSaleList(Array.isArray(salesData) ? salesData : []);
     }
   } catch (err) {
     console.error('[map] getStaticProps fetch error:', err);

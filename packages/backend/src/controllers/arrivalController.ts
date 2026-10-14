@@ -7,8 +7,10 @@
 
 import { Response } from 'express';
 import { prisma } from '../index';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest, optionalAuthenticate } from '../middleware/auth';
 import { sendPushNotification } from '../utils/webpush';
+import { saleAddressGateForViewer } from '../lib/saleLocationPrivacy';
+import { messageSaleLocation } from '../lib/messageSaleLocation';
 
 /**
  * GET /api/sales/:saleId/approach-notes
@@ -19,6 +21,14 @@ import { sendPushNotification } from '../utils/webpush';
 export const getApproachNotes = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
+
+    // 2026-10-13: the route (routes/sales.ts) mounts no auth middleware, so req.user was always undefined
+    // and every anonymous caller got the full street address + entrance note. Resolve the viewer here.
+    if (!req.user) {
+      let proceed = false;
+      await optionalAuthenticate(req, res, () => { proceed = true; });
+      if (!proceed) return; // optionalAuthenticate already answered (expired token -> 401 so the client refreshes)
+    }
 
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
@@ -32,6 +42,7 @@ export const getApproachNotes = async (req: AuthRequest, res: Response) => {
         startDate: true,
         endDate: true,
         organizerId: true,
+        organizer: { select: { userId: true, timezone: true } },
       },
     });
 
@@ -39,8 +50,11 @@ export const getApproachNotes = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
+    const isOwner = Boolean(req.user?.id && sale.organizer?.userId === req.user.id);
+    const isAdmin = req.user?.role === 'ADMIN' || req.user?.roles?.includes?.('ADMIN');
+
     // If user is authenticated and is not the organizer, check if they have saved the sale
-    if (req.user && req.user.id !== sale.organizerId) {
+    if (req.user && !isOwner && !isAdmin) {
       const hasSaved = await prisma.saleSubscriber.findUnique({
         where: {
           saleId_userId: {
@@ -55,12 +69,16 @@ export const getApproachNotes = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Street address + entrance note only for signed-in viewers from the day before the sale (owner/admin always).
+    const gate = saleAddressGateForViewer(sale, sale.organizer?.timezone, req.user, isOwner || isAdmin);
+    const locality = `${sale.city}, ${sale.state} ${sale.zip}`;
     res.json({
       saleId: sale.id,
-      entranceNote: sale.entranceNote ?? null,
-      address: `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}`,
+      entranceNote: gate.visible ? (sale.entranceNote ?? null) : null,
+      address: gate.visible && sale.address ? `${sale.address}, ${locality}` : locality,
       startDate: sale.startDate,
       endDate: sale.endDate,
+      ...(gate.visible ? {} : { addressHidden: true, addressRevealsOn: gate.revealsOn, addressHiddenReason: gate.reason }),
     });
   } catch (error) {
     console.error('Get approach notes error:', error);
@@ -153,6 +171,7 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
         zip: true,
         startDate: true,
         organizerId: true,
+        organizer: { select: { timezone: true } },
       },
     });
 
@@ -163,6 +182,12 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
     if (sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'You do not own this sale' });
     }
+
+    // 2026-10-13: recipients are account holders (savers with a userId), but the street address and the entrance
+    // note (which gives the address away) only go out from the day before the sale starts (organizer time zone,
+    // send time), same as GET /approach-notes. Before that the push points to the sale page.
+    const location = messageSaleLocation(sale, sale.organizer?.timezone, true, new Date());
+    const entranceNote = location.visible ? sale.entranceNote : null;
 
     // Get all shoppers who have saved this sale
     const subscribers = await prisma.saleSubscriber.findMany({
@@ -217,8 +242,8 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
               payload: {
                 saleId: sale.id,
                 saleTitle: sale.title,
-                entranceNote: sale.entranceNote ?? undefined,
-                address: `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}`,
+                entranceNote: entranceNote ?? undefined,
+                address: location.line,
                 startDate: sale.startDate,
               },
             },
@@ -249,9 +274,11 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
         chunkSubscriptions.map(ps =>
           sendPushNotification(ps, {
             title: `Approach notes: ${sale.title}`,
-            body: sale.entranceNote
-              ? sale.entranceNote.slice(0, 120)
-              : `Parking and entrance info for ${sale.title}`,
+            body: entranceNote
+              ? entranceNote.slice(0, 120)
+              : location.visible
+                ? `Parking and entrance info for ${sale.title}`
+                : `Parking and entrance info for ${sale.title} is on the sale page the day before it starts`,
             url: `/sales/${sale.id}`,
           }, { userId: ps.userId, type: 'APPROACH_NOTES_DELIVERY' }).catch(err =>
             console.warn(

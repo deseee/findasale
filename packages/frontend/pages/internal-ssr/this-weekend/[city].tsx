@@ -25,6 +25,7 @@
 import { GetServerSideProps } from 'next';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import { buildListingEvent, JsonLdNode } from '@/lib/seo/eventJsonLd';
+import { toPublicSaleList } from '@/lib/seo/publicSaleLocation';
 import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
 import { hasKnownCityRegion } from '@/lib/seo/cityRegion';
 import Head from 'next/head';
@@ -436,7 +437,7 @@ export const getServerSideProps: GetServerSideProps<ThisWeekendPageProps> = asyn
       } };
   }
 
-  allSales = data.sales ?? [];
+  allSales = toPublicSaleList(data.sales); // location privacy: no street address / exact coords in cached HTML
   // City-wide ACTIVE (any-type) count -- same field the sitemap gate reads
   // via /sales/by-city's activeCount. Used only for isGatedThin above.
   activeCount = Number(data.activeCount) || 0;

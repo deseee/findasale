@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import jwt from 'jsonwebtoken';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
+import { publicItemWhere } from '../lib/publicSaleGate';
 import { sendPushNotification } from '../utils/webpush';
 import { buildEmail } from '../services/emailTemplateService';
 import { emailService, QuotaExceededError } from '../lib/emailService';
@@ -98,6 +99,8 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
           },
         },
         items: {
+          // Featured categories count public, non-embargoed items only (early-access items stay hidden).
+          where: publicItemWhere(new Date()),
           select: {
             category: true,
             status: true,

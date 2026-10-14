@@ -98,9 +98,11 @@ export function CityRecentSales({ citySlug, sales }: CityRecentSalesProps) {
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white truncate hover:text-blue-600 dark:hover:text-blue-400">
                     {sale.title}
                   </h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 truncate">
-                    {sale.address}
-                  </p>
+                  {sale.address && (
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 truncate">
+                      {sale.address}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2 mt-3">
                     <span className="text-xs text-slate-500 dark:text-slate-400">
                       {formatDate(sale.startDate)}, {formatDate(sale.endDate)}

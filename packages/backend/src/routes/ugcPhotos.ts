@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
+import { authenticate, optionalAuthenticate } from '../middleware/auth';
 import {
   submitPhoto,
   getApprovedPhotosForSale,
@@ -22,7 +22,7 @@ const router = Router();
 
 // Public routes
 router.get('/sale/:saleId', getApprovedPhotosForSale);
-router.get('/item/:itemId', getApprovedPhotosForItem);
+router.get('/item/:itemId', optionalAuthenticate, getApprovedPhotosForItem); // viewer needed for early-access check
 
 // Authenticated routes
 router.post('/', authenticate, submitPhoto);

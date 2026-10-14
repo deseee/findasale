@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
+import { isItemEmbargoedForViewer } from '../lib/saleLocationPrivacy';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 
@@ -25,6 +26,14 @@ export const createPool = async (req: AuthRequest, res: Response) => {
     });
 
     if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // 2026-10-13: an early-access / embargoed item does not exist yet for a viewer without access
+    // (the response would reveal its title and price). The item's own organizer and admins are exempt.
+    const isItemOrganizer = Boolean(item.sale?.organizer?.userId && item.sale.organizer.userId === req.user.id);
+    const isAdminViewer = req.user?.role === 'ADMIN' || req.user?.roles?.includes?.('ADMIN');
+    if (!isItemOrganizer && !isAdminViewer && isItemEmbargoedForViewer(item, req.user)) {
       return res.status(404).json({ message: 'Item not found' });
     }
 

@@ -18,6 +18,7 @@ import { GetStaticProps, GetStaticPaths } from 'next';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import { hasKnownCityRegion } from '@/lib/seo/cityRegion';
 import { buildListingEvent, JsonLdNode } from '@/lib/seo/eventJsonLd';
+import { toPublicSaleList } from '@/lib/seo/publicSaleLocation';
 import Head from 'next/head';
 import Link from 'next/link';
 import {
@@ -552,7 +553,7 @@ export const getStaticProps: GetStaticProps<EstateSalesCityPageProps> = async ({
     throw new Error(`[estate-sales/[city-slug]] geocoderStatus=error for ${citySlug}`);
   }
 
-  sales = data.sales ?? [];
+  sales = toPublicSaleList(data.sales); // location privacy: no street address / exact coords in cached HTML
   totalCount = data.totalCount ?? 0;
 
   // Per-type active counts for this city (drives the stats block and FAQ 3)

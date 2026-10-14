@@ -4,7 +4,9 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { isTrustedServerRequest } from '../middleware/rateLimitShared';
 import { prisma } from '../index';
-import { authenticate, AuthRequest, checkTierLapse, requireOrganizer, requireAdmin } from '../middleware/auth';
+import { authenticate, optionalAuthenticate, AuthRequest, checkTierLapse, requireOrganizer, requireAdmin } from '../middleware/auth';
+import { gateSalesForViewer } from '../lib/publicSaleGate';
+import { coarseCoord } from '../lib/saleLocationPrivacy';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
 import { exportOrganizer, exportOrganizerCommerceManagerFeed } from '../controllers/exportController';
 import { getCsvExportHandler } from '../controllers/csvExportController';
@@ -1204,7 +1206,7 @@ router.get('/pos-tiers', authenticate, getPosTierStatus);
 // Public: get organizer profile + their upcoming/active sales + badges + reputation
 // Supports lookup by ID (CUID) or by customStorefrontSlug (user-friendly slug)
 // P1 Security: Strip PII (phone, address) from unauthenticated responses
-router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Response) => {
+router.get('/:id', publicDirectoryRateLimiter, optionalAuthenticate, async (req: AuthRequest, res: Response) => {
   try {
     // Try lookup by ID first (internal CUID)
     let organizer = await prisma.organizer.findUnique({
@@ -1364,32 +1366,43 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
     const reviewCount = reviewAgg._count;
     const avgRating = reviewAgg._avg.rating ?? 0;
 
-    // Check if requesting user follows this organizer
+    // Check if requesting user follows this organizer (viewer resolved by optionalAuthenticate: cookie or Bearer)
     let isFollowing = false;
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
+    const viewer = req.user;
+    if (viewer?.id) {
       try {
-        const jwt = require('jsonwebtoken');
-        const decoded: any = jwt.verify(authHeader.slice(7), process.env.JWT_SECRET!, { algorithms: ['HS256'] });
         const follow = await prisma.follow.findUnique({
-          where: { userId_organizerId: { userId: decoded.id, organizerId: organizer.id } },
+          where: { userId_organizerId: { userId: viewer.id, organizerId: organizer.id } },
         });
         isFollowing = !!follow;
       } catch {
-        // Not logged in or invalid token — isFollowing stays false
+        // isFollowing stays false
       }
     }
+
+    // 2026-10-13 privacy gate: organizer phone / street address / exact pin only for the owner or admin.
+    // Sale street addresses follow the public sale gate (signed in AND from the day before start).
+    const isAdminViewer = viewer?.role === 'ADMIN' || (viewer as any)?.roles?.includes?.('ADMIN');
+    const isOwnerViewer = Boolean(viewer?.id && organizer.userId && organizer.userId === viewer.id);
+    const privilegedViewer = Boolean(isAdminViewer || isOwnerViewer);
+    const gatedSales = gateSalesForViewer(
+      (organizer.sales || []).map((s: any) => ({
+        ...s,
+        organizer: { userId: organizer!.userId, timezone: organizer!.timezone },
+      })),
+      isAdminViewer ? { id: viewer!.id, role: 'ADMIN' } : viewer
+    ).map(({ organizer: _o, ...s }: any) => s);
 
     const responseData: any = {
       id: organizer.id,
       businessName: organizer.businessName,
       reputationTier: organizer.reputationTier,
-      // Public business contact details — these are directory-listing info
-      // meant to help shoppers reach the organizer (claimed and unclaimed listings).
-      phone: organizer.phone,
-      address: organizer.address,
-      lat: organizer.lat,
-      lng: organizer.lng,
+      // Phone and street address are never public (2026-10-13, Patrick-approved): only the owner / admin
+      // get them back. Everyone else gets a coarse (~1 km) pin.
+      phone: privilegedViewer ? organizer.phone : null,
+      address: privilegedViewer ? organizer.address : '',
+      lat: privilegedViewer ? organizer.lat : coarseCoord(organizer.lat),
+      lng: privilegedViewer ? organizer.lng : coarseCoord(organizer.lng),
       contactEmail: organizer.contactEmail || organizer.scrapedEmail || null,
       businessCategory: organizer.businessCategory,
       // Profile fields (S609 + storefront)
@@ -1422,7 +1435,7 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
       byAppointment: organizer.byAppointment,
       hours: (organizer as any).hours || [],
       // Sales (includes isPinned for #359, attendanceCount for #362)
-      sales: organizer.sales,
+      sales: gatedSales,
       // Feature #356: Latest Broadcast
       latestBroadcast: (organizer as any).broadcasts?.[0] || null,
       badges: organizer.user?.userBadges?.map((ub: any) => ({

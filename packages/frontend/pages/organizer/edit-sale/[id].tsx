@@ -26,7 +26,8 @@ import AlaCartePublishModal from '../../../components/AlaCartePublishModal'; // 
 import TreasureHuntQRManager from '../../../components/TreasureHuntQRManager'; // Feature #85
 import SaleCoverPhotoManager from '../../../components/SaleCoverPhotoManager';
 import ConfirmDialog from '../../../components/ConfirmDialog';
-import PublishWithoutItemsDialog from '../../../components/PublishWithoutItemsDialog'; // guided first-sale flow (2026-10-12)
+import { useGuardedPublish } from '../../../hooks/useGuardedPublish'; // shows PublishWithoutItemsDialog on the server's empty-sale 409 (2026-10-13)
+import { isTierLimitPublishError } from '../../../lib/publishSale';
 import SaleItemsNudgeBanner from '../../../components/SaleItemsNudgeBanner';
 import { useSaleItemStatus, getSaleItemState } from '../../../hooks/useSaleItemStatus';
 import { AUCTION_BUYER_PREMIUM_LABEL } from '../../../lib/platformFees'; // platform-set auction buyer premium — not organizer-configurable
@@ -55,10 +56,11 @@ const EditSalePage = () => {
   const [entrancePinTooFar, setEntrancePinTooFar] = useState(false);
   const [showPublishCelebration, setShowPublishCelebration] = useState(false);
   const [showAlaCarteModal, setShowAlaCarteModal] = useState(false); // #132: À La Carte
-  // Guided first-sale flow (2026-10-12): publishing a draft with zero items asks first.
-  const [showPublishWithoutItems, setShowPublishWithoutItems] = useState(false);
+  // À la carte fee paid on this page this visit (the sale query may not have refetched yet).
+  const [alaCartePaidHere, setAlaCartePaidHere] = useState(false);
   const { findSale: findMySale, isLoading: mySalesLoading } = useSaleItemStatus();
   const publishBannerButtonRef = useRef<HTMLButtonElement>(null);
+  const headerStatusButtonRef = useRef<HTMLButtonElement>(null);
   const publishFocusDone = useRef(false);
   const [isSendingApproachNotification, setIsSendingApproachNotification] = useState(false); // Feature #84: Approach Notes notification
   const [geocodingAttempted, setGeocodingAttempted] = useState(false); // Track whether geocoding has been attempted
@@ -453,20 +455,38 @@ const EditSalePage = () => {
     }
   };
 
-  // Direct publish used after the "Publish without items?" dialog (same request + error handling as
-  // the confirm path below).
+  // Shared publish error handling (tier limit gets its own panel; anything else a toast).
+  const handlePublishError = (error: any, fallback = 'Failed to update sale status') => {
+    if (isTierLimitPublishError(error)) {
+      setTierLimitError(error.response.data);
+      showToast(error.response.data.message, 'error');
+    } else {
+      showToast(error?.response?.data?.message || fallback, 'error');
+    }
+  };
+
+  const onPublishedHere = () => {
+    setShowPublishCelebration(true);
+    showSurvey('OG-1');
+  };
+
+  // Every publish on this page goes through the guarded helper: the server answers 409
+  // EMPTY_SALE_PUBLISH for a sale with no items, the helper shows "Publish without items?", and
+  // only the organizer's yes there sends allowEmpty (2026-10-13).
+  const guardedPublish = useGuardedPublish();
+  // Set when the organizer already said yes in "Publish without items?" for this publish attempt,
+  // so the SIMPLE-tier à la carte step that follows can publish without asking twice.
+  const emptyPublishConfirmedRef = useRef(false);
+
+  // Direct publish used after the "Publish without items?" dialog.
   const publishNow = async () => {
+    if (!id || typeof id !== 'string') return;
     try {
-      await api.patch(`/sales/${id}/status`, { status: 'PUBLISHED' });
-      setShowPublishCelebration(true);
-      showSurvey('OG-1');
-    } catch (error: any) {
-      if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
-        setTierLimitError(error.response.data);
-        showToast(error.response.data.message, 'error');
-      } else {
-        showToast(error.response?.data?.message || 'Failed to update sale status', 'error');
-      }
+      await guardedPublish.publish(id, {
+        allowEmpty: emptyPublishConfirmedRef.current,
+        onPublished: onPublishedHere,
+        onError: (error) => handlePublishError(error),
+      });
     } finally {
       setIsTogglingStatus(false);
     }
@@ -483,8 +503,12 @@ const EditSalePage = () => {
     // generic confirm, and BEFORE the SIMPLE-tier à la carte modal, so nobody pays for an empty
     // sale without seeing it. Unknown counts (status still loading/failed) never block publishing.
     const publishingDraft = sale.status === 'DRAFT';
+    emptyPublishConfirmedRef.current = !!opts?.confirmedWithoutItems;
     if (publishingDraft && !opts?.confirmedWithoutItems && mySale && getSaleItemState(mySale) === 'DRAFT_EMPTY') {
-      setShowPublishWithoutItems(true);
+      guardedPublish.askToPublishEmpty({
+        saleId: String(id),
+        onConfirm: () => handleToggleSaleStatus({ confirmedWithoutItems: true }),
+      });
       return;
     }
 
@@ -492,8 +516,11 @@ const EditSalePage = () => {
     try {
       const newStatus = sale.status === 'PUBLISHED' ? 'ENDED' : 'PUBLISHED';
 
-      // #132: À La Carte: Show modal if trying to publish and on SIMPLE tier
-      if (newStatus === 'PUBLISHED' && sale.status === 'DRAFT' && user?.organizerTier === 'SIMPLE') {
+      // #132: À La Carte: Show modal if trying to publish and on SIMPLE tier, unless this sale's
+      // listing fee is already paid (Sale.alaCarteFeePaid, or paid on this page a moment ago and the
+      // organizer chose not to publish yet). Never ask an organizer to pay twice for one sale.
+      const alaCarteAlreadyPaid = !!sale.alaCarteFeePaid || alaCartePaidHere;
+      if (newStatus === 'PUBLISHED' && sale.status === 'DRAFT' && user?.organizerTier === 'SIMPLE' && !alaCarteAlreadyPaid) {
         setShowAlaCarteModal(true);
         setIsTogglingStatus(false);
         return;
@@ -516,19 +543,27 @@ const EditSalePage = () => {
         title: 'Confirm Status Change',
         message: getConfirmMessage(sale.status),
         onConfirm: async () => {
-          try {
-            await api.patch(`/sales/${id}/status`, { status: newStatus });
-
-            // Show celebration only when publishing (transitioning to PUBLISHED)
-            if (newStatus === 'PUBLISHED') {
-              setShowPublishCelebration(true);
-              showSurvey('OG-1');
-            } else {
-              showToast('Sale is now hidden', 'success');
-              // Refetch the sale data
-              await new Promise(resolve => setTimeout(resolve, 500));
-              router.push(`/organizer/edit-sale/${id}`);
+          // Publishing (draft or reopen) goes through the guarded helper so an empty sale gets
+          // "Publish without items?" from the server's 409 even when the item count is unknown here.
+          if (newStatus === 'PUBLISHED') {
+            setConfirmState(s => ({ ...s, open: false }));
+            try {
+              await guardedPublish.publish(String(id), {
+                onPublished: onPublishedHere,
+                onError: (error) => handlePublishError(error),
+              });
+            } finally {
+              setIsTogglingStatus(false);
             }
+            return;
+          }
+          try {
+            // Only ENDED reaches this point; publishing returned above.
+            await api.patch(`/sales/${id}/status`, { status: newStatus });
+            showToast('Sale is now hidden', 'success');
+            // Refetch the sale data
+            await new Promise(resolve => setTimeout(resolve, 500));
+            router.push(`/organizer/edit-sale/${id}`);
           } catch (error: any) {
             // Feature #249: Handle concurrent sales tier limit (409)
             if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
@@ -585,7 +620,9 @@ const EditSalePage = () => {
   useEffect(() => {
     if (publishFocusDone.current) return;
     if (router.query.publish !== '1' || !sale || sale.status !== 'DRAFT' || mySalesLoading) return;
-    const btn = publishBannerButtonRef.current;
+    // The banner only has a Publish button once the sale has items; for an empty draft (e.g. the
+    // add-items "Publish sale" link) fall back to the header Publish button, which asks first.
+    const btn = publishBannerButtonRef.current ?? headerStatusButtonRef.current;
     if (!btn) return;
     publishFocusDone.current = true;
     btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -601,22 +638,31 @@ const EditSalePage = () => {
   };
 
   // #132: À La Carte: Update sale status after successful checkout
+  // Payment is done at this point. If the sale is still empty and the organizer has not already
+  // said yes, the server's 409 brings up "Publish without items?": publishing stays their choice.
+  // Going back leaves the sale a paid DRAFT that they can publish later from here or the dashboard.
   const handleAlaCarteSuccess = async () => {
     if (!id || !sale) return;
-    try {
-      await api.patch(`/sales/${id}/status`, { status: 'PUBLISHED' });
-      setShowAlaCarteModal(false);
-      setShowPublishCelebration(true);
-      showSurvey('OG-1');
-    } catch (error: any) {
-      // Feature #249: Handle concurrent sales tier limit (409)
-      if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
-        setTierLimitError(error.response.data);
-        showToast(error.response.data.message, 'error');
-      } else {
-        showToast(error.response?.data?.message || 'Failed to publish sale', 'error');
-      }
-    }
+    const confirmedEmpty = emptyPublishConfirmedRef.current;
+    setAlaCartePaidHere(true);
+    setShowAlaCarteModal(false);
+    queryClient.invalidateQueries({ queryKey: ['sale', id] });
+    await guardedPublish.publish(String(id), {
+      allowEmpty: confirmedEmpty,
+      onPublished: onPublishedHere,
+      onError: (error) => handlePublishError(error, 'Payment received, but we could not publish your sale. Try Publish again from this page.'),
+      onDeclined: () => {
+        queryClient.invalidateQueries({ queryKey: ['organizer-sales'] });
+        showToast(
+          "Payment received. Your sale is still a draft. Publish it any time from this page or your dashboard, you won't be charged again.",
+          'info'
+        );
+      },
+      onAddItemsFirst: (saleId) => {
+        showToast("Payment received. Add your items, then publish from this page or your dashboard.", 'info');
+        router.push(`/organizer/add-items/${saleId}`);
+      },
+    });
   };
 
   if (authLoading || isLoading || organizerProfilePending) {
@@ -725,18 +771,8 @@ const EditSalePage = () => {
         }}
       />
 
-      <PublishWithoutItemsDialog
-        isOpen={showPublishWithoutItems}
-        onPublish={() => {
-          setShowPublishWithoutItems(false);
-          handleToggleSaleStatus({ confirmedWithoutItems: true });
-        }}
-        onAddItemsFirst={() => {
-          setShowPublishWithoutItems(false);
-          router.push(`/organizer/add-items/${id}`);
-        }}
-        onCancel={() => setShowPublishWithoutItems(false)}
-      />
+      {/* "Publish without items?" for every publish path on this page (useGuardedPublish). */}
+      {guardedPublish.dialog}
 
       {/* #132: À La Carte Publish Modal */}
       <AlaCartePublishModal
@@ -813,10 +849,11 @@ const EditSalePage = () => {
                   </span>
                 )}
                 <button
+                  ref={headerStatusButtonRef}
                   type="button"
                   onClick={() => handleToggleSaleStatus()}
                   disabled={isTogglingStatus}
-                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded disabled:opacity-50 font-medium flex-shrink-0"
+                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 min-h-[44px] rounded disabled:opacity-50 font-medium flex-shrink-0"
                 >
                   {isTogglingStatus ? 'Updating...' : (sale.status === 'PUBLISHED' ? 'Close Early' : sale.status === 'ENDED' ? 'Reopen' : 'Publish')}
                 </button>

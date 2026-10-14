@@ -201,14 +201,19 @@ export const getLootLogItem = async (req: Request, res: Response) => {
 };
 
 /**
- * Get public loot log for a user (if user has public profile or public loot log setting)
+ * Get public loot log for a user (optionalAuthenticate).
+ * 2026-10-13 (privacy): honors User.purchasesVisible ("show/hide purchase history on public profile",
+ * the same setting the public shopper profile and the live sale feed already respect). When it is off,
+ * only the shopper themself or an admin sees the list; everyone else gets the same 404 the page shows
+ * as "not found or is private". Page size is capped.
  */
 export const getPublicLootLog = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 12;
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 12, 1), 50);
     const skip = (page - 1) * limit;
+    const viewer = (req as any).user as { id?: string; role?: string; roles?: string[] } | undefined;
 
     // Check if user exists
     const user = await prisma.user.findUnique({
@@ -216,11 +221,18 @@ export const getPublicLootLog = async (req: Request, res: Response) => {
       select: {
         id: true,
         name: true,
+        purchasesVisible: true,
       },
     });
 
     if (!user) {
       return res.status(404).json({ message: 'User profile not found' });
+    }
+    const isSelfOrAdmin = Boolean(
+      viewer?.id && (viewer.id === user.id || viewer.roles?.includes('ADMIN') || viewer.role === 'ADMIN')
+    );
+    if (!user.purchasesVisible && !isSelfOrAdmin) {
+      return res.status(404).json({ message: 'Loot Log not found or is private' });
     }
 
     const [purchases, total] = await Promise.all([

@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { regionConfig } from '../config/regionConfig';
+import { coarseCoord } from '../lib/saleLocationPrivacy';
 
 export interface SaleWithScore {
   id: string;
@@ -72,9 +73,12 @@ export async function getPersonalizedFeed(
   };
 
   // Add bounding box when user coords are available
+  // Location oracle guard (2026-10-13): the box edge and every distance below are evaluated on coarse
+  // (2-decimal) coordinates, so moving the caller-supplied lat/lng cannot binary-search an exact pin.
+  // The SQL box is padded by 0.01 and the exact edge is applied on coarse coords after the query.
   if (effectiveLat !== undefined && effectiveLng !== undefined) {
-    whereClause.lat = { gte: effectiveLat - GEO_DELTA, lte: effectiveLat + GEO_DELTA };
-    whereClause.lng = { gte: effectiveLng - GEO_DELTA, lte: effectiveLng + GEO_DELTA };
+    whereClause.lat = { gte: effectiveLat - GEO_DELTA - 0.01, lte: effectiveLat + GEO_DELTA + 0.01 };
+    whereClause.lng = { gte: effectiveLng - GEO_DELTA - 0.01, lte: effectiveLng + GEO_DELTA + 0.01 };
   }
 
   // Fetch published sales — select only SaleWithScore fields (Sentry NODEJS-10: omit scrapedMetadata blobs)
@@ -109,6 +113,9 @@ export async function getPersonalizedFeed(
           businessName: true,
           reputationTier: true,
           tier: true,
+          // Address gate (2026-10-13): owner check + sale time zone; stripped again in routes/feed.ts
+          userId: true,
+          timezone: true,
         },
       },
       _count: {
@@ -127,7 +134,12 @@ export async function getPersonalizedFeed(
     findManyOptions.take = 500;
   }
 
-  const sales = await prisma.sale.findMany(findManyOptions) as any[];
+  const sales = (await prisma.sale.findMany(findManyOptions) as any[]).filter((s) => {
+    if (s.lat == null || s.lng == null) return true;
+    const cLat = coarseCoord(s.lat as number);
+    const cLng = coarseCoord(s.lng as number);
+    return Math.abs(cLat - effectiveLat) <= GEO_DELTA && Math.abs(cLng - effectiveLng) <= GEO_DELTA;
+  });
 
   // BoostPurchase has no direct FK on Sale — query separately by targetId
   const saleIds = sales.map((s) => s.id);
@@ -164,7 +176,7 @@ export async function getPersonalizedFeed(
     const scored = serializedSales
       .filter((sale) => sale.lat !== null && sale.lng !== null)
       .map((sale) => {
-        const distance = haversineDistance(userLat, userLng, sale.lat!, sale.lng!);
+        const distance = haversineDistance(userLat, userLng, coarseCoord(sale.lat!), coarseCoord(sale.lng!));
       const dayOffset = Math.max(0, (sale.startDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
       const recencyBonus = Math.max(0, 5 - dayOffset); // 5 pts if today, 0 if 5+ days away
       let score = recencyBonus + (distance < 25 ? 3 : 0); // Slight bonus for proximity
@@ -262,7 +274,7 @@ export async function getPersonalizedFeed(
 
     // Distance bonus: +15 if within 25 miles
     if (lat !== undefined && lng !== undefined && sale.lat !== null && sale.lng !== null) {
-      const distance = haversineDistance(lat, lng, sale.lat, sale.lng);
+      const distance = haversineDistance(lat, lng, coarseCoord(sale.lat), coarseCoord(sale.lng));
       if (distance < 25) {
         score += 15;
       }

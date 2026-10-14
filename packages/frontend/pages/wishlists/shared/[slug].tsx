@@ -32,7 +32,6 @@ interface Wishlist {
   user: {
     id: string;
     name: string;
-    email: string;
   };
 }
 
@@ -52,7 +51,7 @@ const SharedWishlistPage = () => {
     queryKey: ['public-wishlist', slug],
     queryFn: async () => {
       if (!slug) throw new Error('No slug provided');
-      const response = await api.get(`/wishlists/public/${slug}`);
+      const response = await api.get(`/wishlists/share/${slug}`);
       return response.data as Wishlist;
     },
     enabled: !!slug,

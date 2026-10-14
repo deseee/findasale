@@ -9,6 +9,16 @@
 
 import { prisma } from '../lib/prisma';
 import { conditionFilterValues, canonicalConditionCounts } from '../utils/conditionFilter';
+import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
+
+// 2026-10-13: public search never lists or counts an item still inside an early-access window (Hunt Pass
+// embargo, fresh RARE / LEGENDARY rarity delay, Legendary before legendaryVisibleAt). SQL mirror of
+// notEmbargoedForPublicWhere (lib/saleLocationPrivacy), used by every raw query below.
+const NOT_EMBARGOED_SQL = `
+      AND (i."earlyAccessUntil" IS NULL OR i."earlyAccessUntil" <= NOW())
+      AND NOT (i.rarity = 'LEGENDARY' AND i."createdAt" > NOW() - INTERVAL '12 hours')
+      AND NOT (i.rarity = 'RARE' AND i."createdAt" > NOW() - INTERVAL '6 hours')
+      AND NOT (i."isLegendary" = true AND i."legendaryVisibleAt" IS NOT NULL AND i."legendaryVisibleAt" > NOW())`;
 
 export interface SearchQuery {
   q?: string;
@@ -149,7 +159,7 @@ async function ftsSearch(params: {
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
-      AND i."saleId" IS NOT NULL
+      AND i."saleId" IS NOT NULL${NOT_EMBARGOED_SQL}
       AND (
         i."searchVector" @@ plainto_tsquery('english', $${idx + 1})
         OR o."businessName" ILIKE '%' || $${idx} || '%'
@@ -223,7 +233,7 @@ async function ilikeSearch(params: {
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
-      AND i."saleId" IS NOT NULL
+      AND i."saleId" IS NOT NULL${NOT_EMBARGOED_SQL}
       AND (
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
@@ -279,7 +289,7 @@ async function filteredSearch(params: Omit<SearchQuery, 'q'> & Required<Pick<Sea
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
-      AND i."saleId" IS NOT NULL
+      AND i."saleId" IS NOT NULL${NOT_EMBARGOED_SQL}
   `);
 
   idx = appendFilters(sqlParts, sqlParams, idx, { category, condition, saleId, priceMin, priceMax });
@@ -315,7 +325,7 @@ async function countFts(
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
-      AND i."saleId" IS NOT NULL
+      AND i."saleId" IS NOT NULL${NOT_EMBARGOED_SQL}
       AND (
         i."searchVector" @@ plainto_tsquery('english', $${idx})
         OR o."businessName" ILIKE '%' || $${idx} || '%'
@@ -349,7 +359,7 @@ async function countIlike(
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
-      AND i."saleId" IS NOT NULL
+      AND i."saleId" IS NOT NULL${NOT_EMBARGOED_SQL}
       AND (
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
@@ -384,7 +394,7 @@ async function countFiltered(
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
-      AND i."saleId" IS NOT NULL
+      AND i."saleId" IS NOT NULL${NOT_EMBARGOED_SQL}
   `);
   appendFilters(sqlParts, sqlParams, idx, filters);
 
@@ -487,18 +497,18 @@ export async function getItemFacets(
   const [categoryRows, conditionRows, priceRows] = await Promise.all([
     prisma.item.groupBy({
       by: ['category'],
-      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, category: { not: null }, draftStatus: 'PUBLISHED' },
+      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, category: { not: null }, draftStatus: 'PUBLISHED', AND: [notEmbargoedForPublicWhere(new Date())] },
       _count: { id: true },
       orderBy: { _count: { id: 'desc' } },
     }),
     prisma.item.groupBy({
       by: ['condition'],
-      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, condition: { not: null }, draftStatus: 'PUBLISHED' },
+      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, condition: { not: null }, draftStatus: 'PUBLISHED', AND: [notEmbargoedForPublicWhere(new Date())] },
       _count: { id: true },
       orderBy: { _count: { id: 'desc' } },
     }),
     prisma.item.aggregate({
-      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, price: { not: null } },
+      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, price: { not: null }, AND: [notEmbargoedForPublicWhere(new Date())] },
       _min: { price: true },
       _max: { price: true },
     }),
@@ -521,7 +531,7 @@ export async function getItemFacets(
 export async function getItemCategories(): Promise<Record<string, number>> {
   const rows = await prisma.item.groupBy({
     by: ['category'],
-    where: { status: 'AVAILABLE', isActive: true, sale: { status: 'PUBLISHED' }, category: { not: null }, draftStatus: 'PUBLISHED' },
+    where: { status: 'AVAILABLE', isActive: true, sale: { status: 'PUBLISHED' }, category: { not: null }, draftStatus: 'PUBLISHED', AND: [notEmbargoedForPublicWhere(new Date())] },
     _count: { id: true },
     orderBy: { _count: { id: 'desc' } },
   });

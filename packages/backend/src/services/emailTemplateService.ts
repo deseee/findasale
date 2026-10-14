@@ -312,6 +312,9 @@ export function buildSaleCardModule(sale: {
   saleType?: string;
   hours?: string;
   statusLabel?: string;
+  /** Withheld-street hint (2026-10-13): plain text, linked to addressNoteUrl (or ctaUrl). */
+  addressNote?: string;
+  addressNoteUrl?: string;
 }): string {
   const salePhoto = safeHttpsUrl(sale.photoUrl);
   const photoBlock = salePhoto
@@ -327,6 +330,9 @@ export function buildSaleCardModule(sale: {
   const hoursLine = sale.hours
     ? `<div style="font-size:13px; color:${T.inkDim}; padding:2px 0;">&#128336; ${escapeHtml(sale.hours)}</div>`
     : '';
+  const addressNoteLine = sale.addressNote
+    ? `<div style="font-size:12px; padding:2px 0;"><a href="${escapeHtml(sale.addressNoteUrl || sale.ctaUrl)}" style="color:${T.accent}; text-decoration:none;">${escapeHtml(sale.addressNote)}</a></div>`
+    : '';
 
   return `
 <tr><td style="padding:12px 28px 20px;">
@@ -340,6 +346,7 @@ export function buildSaleCardModule(sale: {
         <div>&#128197; ${escapeHtml(sale.dateRange)}</div>
         ${hoursLine}
         <div>&#128205; ${escapeHtml(sale.address)}</div>
+        ${addressNoteLine}
       </div>
       <div style="margin-top:14px;">
         <a href="${escapeHtml(sale.ctaUrl)}" style="color:${T.accent}; font-weight:600; font-size:14px; text-decoration:none;">${escapeHtml(sale.ctaLabel || 'View the sale')} &rarr;</a>
@@ -558,6 +565,7 @@ export function buildNewSaleAlertEmail(opts: {
     saleUrl: string;
     saleType?: string;
     hours?: string;
+    addressNote?: string;
   };
   featuredItems?: Array<{
     title: string;
@@ -583,7 +591,7 @@ export function buildNewSaleAlertEmail(opts: {
 
   const content = `
     ${buildHero({ eyebrow: 'From an organizer you follow', title: `${escapeHtml(organizerName)} just posted something near you.`, sub: `Here are the details, plus a few items worth a look.` })}
-    ${buildSaleCardModule({ title: sale.title, dateRange: sale.dateRange, address: sale.address, photoUrl: sale.photoUrl, ctaUrl: sale.saleUrl, ctaLabel: 'View the sale', saleType: sale.saleType, hours: sale.hours })}
+    ${buildSaleCardModule({ title: sale.title, dateRange: sale.dateRange, address: sale.address, photoUrl: sale.photoUrl, ctaUrl: sale.saleUrl, ctaLabel: 'View the sale', saleType: sale.saleType, hours: sale.hours, addressNote: sale.addressNote })}
     ${itemsSection}
     ${buildCTARow('View the sale →', sale.saleUrl, referralLine)}
   `;
@@ -597,6 +605,8 @@ export function buildSaleDayReminderEmail(opts: {
   saleDate: string;
   saleTime: string;
   saleAddress: string;
+  /** Withheld-street hint (2026-10-13), linked to ctaUrl. Omit when the full address is included. */
+  addressNote?: string;
   mapUrl?: string;
   organizerNotes?: string;
   savedItems?: Array<{ title: string; price: number; photoUrl?: string; category?: string; itemUrl: string }>;
@@ -618,7 +628,8 @@ export function buildSaleDayReminderEmail(opts: {
   <div style="margin-top:16px; padding:14px 16px; background:${T.outer}; border-radius:8px;">
     <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
       <tr><td style="font-size:15px; color:${T.ink}; padding:4px 0;">&#128197; <strong>${escapeHtml(saleDate)}</strong> <span style="color:${T.inkDim};">&middot; ${escapeHtml(saleTime)}</span></td></tr>
-      <tr><td style="font-size:15px; color:${T.ink}; padding:4px 0;">&#128205; ${escapeHtml(saleAddress)}${mapLink}</td></tr>
+      <tr><td style="font-size:15px; color:${T.ink}; padding:4px 0;">&#128205; ${escapeHtml(saleAddress)}${mapLink}</td></tr>${opts.addressNote ? `
+      <tr><td style="font-size:13px; padding:2px 0;"><a href="${escapeHtml(ctaUrl)}" style="color:${T.accent}; text-decoration:none;">${escapeHtml(opts.addressNote)}</a></td></tr>` : ''}
     </table>
   </div>
 </td></tr>`;
@@ -669,7 +680,7 @@ export function buildOrganizerWeeklyDigestEmail(opts: {
 export function buildSmartMatchEmail(opts: {
   matchCategory?: string;
   item: { title: string; price: number; photoUrl?: string; category?: string; rarity?: 'RARE' | 'UNUSUAL' | 'HOT'; itemUrl: string };
-  sale: { title: string; dateRange: string; address: string; photoUrl?: string; saleUrl: string; saleType?: string };
+  sale: { title: string; dateRange: string; address: string; photoUrl?: string; saleUrl: string; saleType?: string; addressNote?: string };
   updateInterestsUrl?: string;
   unsubUrl?: string;
 }): string {
@@ -681,7 +692,7 @@ export function buildSmartMatchEmail(opts: {
     ${buildHero({ eyebrow: matchCategory ? `Smart match · ${escapeHtml(matchCategory)}` : 'Smart match', title: 'Thought you&rsquo;d want to know.', sub: 'A new item just posted matches what you&rsquo;re watching for.' })}
     ${buildItemCardModule({ title: item.title, price: item.price, photoUrl: item.photoUrl, category: item.category, rarity: item.rarity, ctaUrl: item.itemUrl })}
     <tr><td style="padding:4px 28px 4px;"><div style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:${T.inkDim}; font-family:${T.font};">At this sale</div></td></tr>
-    ${buildSaleCardModule({ title: sale.title, dateRange: sale.dateRange, address: sale.address, photoUrl: sale.photoUrl, ctaUrl: sale.saleUrl, saleType: sale.saleType })}
+    ${buildSaleCardModule({ title: sale.title, dateRange: sale.dateRange, address: sale.address, photoUrl: sale.photoUrl, ctaUrl: sale.saleUrl, saleType: sale.saleType, addressNote: sale.addressNote })}
     ${buildCTARow('View this item →', item.itemUrl, secondaryLink)}
   `;
 

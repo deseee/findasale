@@ -517,6 +517,8 @@ describe('getBids: saleless items are private to the owner (hacker pass fix A6)'
     { id: 'b1', amount: 20, createdAt: new Date('2026-01-01'), status: 'OUTBID', user: { id: 'bu1', name: 'Dana Buyer' } },
   ];
   const run = async (item: any, userId?: string) => {
+    // 2026-10-13: the anonymized list now follows GET /items/:id visibility, so a public sale item must be active.
+    if (item && item.sale) item = { ...item, isActive: true };
     mockPrisma.item.findUnique.mockResolvedValue(item);
     mockPrisma.bid.findMany.mockResolvedValue(BIDS);
     const res = makeRes();

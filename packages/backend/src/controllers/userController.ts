@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { resolveOrganizerOrTeamMember } from '../utils/posAuth';
+import { isAdminViewer } from '../utils/saleStaffAccess';
 import { handOffCrewsBeforeUserDeletion } from '../services/crewService'; // crew founder/memberCount handoff before user.delete
 
 // Helper function to convert Decimal values to numbers recursively
@@ -608,11 +610,27 @@ export const activateHuntPassTrial = async (req: AuthRequest, res: Response) => 
 };
 
 // Feature: Shopper Account QR Code — POS Integration
-// Public endpoint: GET /api/users/qr/:userId
-// Returns shopper name + active holds for POS scanning
-export const getUserQRData = async (req: Request, res: Response) => {
+// GET /api/users/qr/:userId (authenticate)
+// Returns shopper name + active holds for POS scanning.
+// 2026-10-13 (security): this used to be fully public and returned ANY user's email plus every active
+// hold to an anonymous caller. Now: the shopper themself (own QR card: CartDrawer, shopper dashboard),
+// an admin, or an organizer / register team member scanning at the POS (resolveOrganizerOrTeamMember).
+// A scanning organizer only sees holds on their OWN sales, and the QR image is generated for the
+// shopper themself only.
+export const getUserQRData = async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.params;
+    const viewer = req.user;
+    if (!viewer?.id) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    const isSelf = viewer.id === userId;
+    let scopeOrganizerId: string | null = null;
+    if (!isSelf && !isAdminViewer(viewer)) {
+      const actor = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
+      if (!actor) return; // 403/404 already sent
+      scopeOrganizerId = actor.id;
+    }
 
     // Fetch user and active holds (PENDING or CONFIRMED status only)
     const user = await prisma.user.findUnique({
@@ -635,6 +653,7 @@ export const getUserQRData = async (req: Request, res: Response) => {
         status: {
           in: ['PENDING', 'CONFIRMED'],
         },
+        ...(scopeOrganizerId ? { item: { sale: { organizerId: scopeOrganizerId } } } : {}),
       },
       include: {
         item: {
@@ -665,16 +684,17 @@ export const getUserQRData = async (req: Request, res: Response) => {
       expiresAt: hold.expiresAt.toISOString(),
     }));
 
-    // Generate QR code data URL for the shopper's profile
-    const qrcode = require('qrcode');
-    const qrPayload = `findasale://user/${userId}`;
+    // Generate QR code data URL for the shopper's own profile card (the POS never renders it)
     let qrCodeDataUrl: string | undefined;
-
-    try {
-      qrCodeDataUrl = await qrcode.toDataURL(qrPayload);
-    } catch (qrErr) {
-      console.warn('[getUserQRData] QR code generation failed:', qrErr);
-      // Graceful degradation — QR is optional
+    if (isSelf) {
+      const qrcode = require('qrcode');
+      const qrPayload = `findasale://user/${userId}`;
+      try {
+        qrCodeDataUrl = await qrcode.toDataURL(qrPayload);
+      } catch (qrErr) {
+        console.warn('[getUserQRData] QR code generation failed:', qrErr);
+        // Graceful degradation — QR is optional
+      }
     }
 
     res.json({

@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
+import { AuthRequest } from '../middleware/auth';
+import { GATE_ORGANIZER_SELECT, gateSalesForViewer } from '../lib/publicSaleGate';
 
 const OSRM_URL = process.env.OSRM_API_URL || 'https://router.project-osrm.org';
 const MAX_SALES = 5;
@@ -16,9 +18,15 @@ interface SaleRow {
   lng: number;
 }
 
+// Address gate (2026-10-13): when the street address is not yet visible to this viewer it is '' and
+// lat/lng are coarse, so the label and the map link fall back to city / state.
+function locationLabel(s: SaleRow): string {
+  return [s.address, s.city, s.state].filter((p) => p && String(p).trim()).join(', ');
+}
+
 function buildGoogleMapsUrl(sales: SaleRow[]): string {
   if (sales.length === 0) return 'https://www.google.com/maps';
-  const encode = (s: SaleRow) => encodeURIComponent(`${s.address}, ${s.city}, ${s.state}`);
+  const encode = (s: SaleRow) => encodeURIComponent(locationLabel(s));
   if (sales.length === 1) return `https://www.google.com/maps/search/?api=1&query=${encode(sales[0])}`;
   const origin = encode(sales[0]);
   const destination = encode(sales[sales.length - 1]);
@@ -47,12 +55,22 @@ export const planRoute = async (req: Request, res: Response): Promise<void> => {
       where: {
         id: { in: saleIds },
         status: 'PUBLISHED',
+        deletedAt: null,
       },
-      select: { id: true, title: true, address: true, city: true, state: true, lat: true, lng: true },
+      select: {
+        id: true, title: true, address: true, city: true, state: true, lat: true, lng: true,
+        startDate: true, organizer: { select: GATE_ORGANIZER_SELECT },
+      },
     });
 
+    // Gate street address / exact pin for this viewer. The gated (coarse) coordinates are also what is
+    // sent to the router, so the returned distance/duration cannot be used to locate a hidden pin.
+    const gated = gateSalesForViewer(sales, (req as AuthRequest).user).map(
+      ({ startDate: _s, organizer: _o, ...s }) => s,
+    );
+
     // Re-order to match user's saleIds order
-    const salesMap = new Map(sales.map((s) => [s.id, s]));
+    const salesMap = new Map(gated.map((s) => [s.id, s]));
     const orderedSales: SaleRow[] = saleIds
       .map((id) => salesMap.get(id))
       .filter((s): s is SaleRow => !!s && typeof s.lat === 'number' && typeof s.lng === 'number');
@@ -103,7 +121,7 @@ export const planRoute = async (req: Request, res: Response): Promise<void> => {
       lat: s.lat,
       lng: s.lng,
       title: s.title,
-      address: `${s.address}, ${s.city}, ${s.state}`,
+      address: locationLabel(s),
     }));
 
     res.json({

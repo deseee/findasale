@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { planRoute, RouteResult, RouteError } from '../lib/routeApi';
 import { useToast } from './ToastContext';
+import { formatPublicLocation } from '@/lib/seo/publicSaleLocation';
 
 interface RouteSale {
   id: string;
@@ -200,7 +201,7 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-warm-900 dark:text-warm-100 truncate">{sale.title}</p>
                     <p className="text-xs text-warm-500 dark:text-warm-400 truncate">
-                      {sale.address}, {sale.city}
+                      {formatPublicLocation({ address: sale.address, city: sale.city })}
                     </p>
                   </div>
                 </label>

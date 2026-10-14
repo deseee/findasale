@@ -22,6 +22,8 @@ import { retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSe
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
 import { pushEvent } from '../services/liveFeedService'; // Feature #70: Live Sale Feed
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
+import { isItemEmbargoedForViewer, saleAddressGateForViewer, redactSaleLocation, notEmbargoedForPublicWhere, SaleAddressGate } from '../lib/saleLocationPrivacy'; // 2026-10-13 public sale privacy gates
+import { isOrganizerStaff, isAdminViewer } from '../utils/saleStaffAccess'; // owner organizer + any active workspace staff (address gate, early-access items)
 import { listPublicItemIds, parseSitemapPaging } from '../services/publicItemIndexService'; // GET /items/sitemap
 import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; // Sprint 1: Listing Health Score
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
@@ -801,6 +803,7 @@ const ITEM_DETAIL_SELECT = {
         isLegendary: true,
         legendaryVisibleAt: true,
         legendaryPublishedAt: true,
+        earlyAccessUntil: true, // embargo gate input (getItemById: isItemEmbargoedForViewer)
         rarity: true,
         priceBeforeMarkdown: true,
         markdownApplied: true,
@@ -825,6 +828,7 @@ const ITEM_DETAIL_SELECT = {
             city: true,
             organizerId: true,
             status: true,
+            deletedAt: true, // soft-deleted sale gate input only; getItemById strips it from the response
             // #402: whether the ORGANIZER absorbs the premium instead of the winner — the bid
             // preview must not quote a premium the buyer will never be charged. The premium
             // RATE itself is the platform constant and is not read from the sale at all.
@@ -833,6 +837,7 @@ const ITEM_DETAIL_SELECT = {
               select: {
                 userId: true,
                 businessName: true,
+                timezone: true, // address gate input only; getItemById strips it from the response
                 // Square migration single-item-checkout fix (2026-09-11, findasale-dev BUG
                 // MODE): CheckoutModal.tsx needs to know if this organizer is Square-only
                 // BEFORE calling checkout, same reasoning as CartDrawer.tsx's own
@@ -971,6 +976,66 @@ export async function buildHoldFieldsForViewer(
   return {};
 }
 
+// ---------------------------------------------------------------------------------------------
+// Public item visibility (2026-10-13), shared by GET /items/:id sub-resources (bids, eBay comps, similar
+// items, QR) and placeBid. Same item rules as GET /items/:id: a sale item, sale not soft-deleted and in an
+// allowed state, item active, not GRACE_LOCKED, not a DRAFT, not a consignor price tag, and not inside an
+// early-access window for this viewer. The owner organizer, its active workspace staff and admin are
+// exempt (placeBid does not use the exemption). Callers answer a hidden item with the same 404 as a missing
+// one, so nothing reveals that it exists. Saleless (inventory) items are never public.
+// ---------------------------------------------------------------------------------------------
+export const ITEM_VISIBILITY_SALE_SELECT = {
+  status: true,
+  deletedAt: true,
+  organizerId: true,
+  organizer: { select: { userId: true } },
+} as const;
+
+type ItemVisibilityInput = {
+  organizerId?: string | null;
+  isActive?: boolean | null;
+  status?: string | null;
+  draftStatus?: string | null;
+  listingType?: string | null;
+  sale?: {
+    status?: string | null;
+    deletedAt?: Date | string | null;
+    organizerId?: string | null;
+    organizer?: { userId?: string | null } | null;
+  } | null;
+};
+
+/** Pure: is this item publicly visible, ignoring the early-access window? */
+export function isItemPubliclyViewable(item: ItemVisibilityInput, saleStatuses: readonly string[]): boolean {
+  const sale = item.sale;
+  if (!sale || sale.deletedAt || !saleStatuses.includes(sale.status ?? '')) return false;
+  return (
+    item.isActive === true &&
+    item.status !== 'GRACE_LOCKED' &&
+    item.draftStatus !== 'DRAFT' &&
+    item.listingType !== 'CONSIGNOR_TAG'
+  );
+}
+
+/** Owner organizer (sale owner, or inventory owner via staff lookup), its active staff, or admin. */
+export async function isItemOwnerSideViewer(item: ItemVisibilityInput, user: any, knownOwner = false): Promise<boolean> {
+  if (!user?.id) return false;
+  if (knownOwner || isAdminViewer(user)) return true;
+  if (item.sale?.organizer?.userId && item.sale.organizer.userId === user.id) return true;
+  return isOrganizerStaff(user.id, item.sale?.organizerId ?? item.organizerId);
+}
+
+/** Public visibility for this viewer (public item and not embargoed for them), else owner side. */
+export async function viewerMaySeeItem(
+  item: ItemVisibilityInput & Record<string, any>,
+  user: any,
+  opts: { saleStatuses?: readonly string[]; knownOwner?: boolean } = {}
+): Promise<boolean> {
+  const saleStatuses = opts.saleStatuses ?? ['PUBLISHED', 'ENDED'];
+  if (isItemPubliclyViewable(item, saleStatuses) && !isItemEmbargoedForViewer(item, user, new Date())) return true;
+  return isItemOwnerSideViewer(item, user, opts.knownOwner);
+}
+
 export const getItemById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1054,12 +1119,45 @@ export const getItemById = async (req: Request, res: Response) => {
     if (!isOwner && !isAdmin && item.sale && item.sale.status !== 'PUBLISHED' && item.sale.status !== 'ENDED') {
       return res.status(404).json({ message: 'Item not found' });
     }
+    // A soft-deleted sale's items are gone for everyone but the owner and admin (same as GET /sales/:id).
+    if (!isOwner && !isAdmin && (item.sale as any)?.deletedAt) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
 
     // For everyone else, enforce public visibility rules: must be active.
     // Allow NULL draftStatus (legacy/seeded items pre-Rapidfire) and PUBLISHED items.
     // Only explicitly DRAFT items are blocked (Rapidfire items being AI-analyzed by organizer).
     if (!isOwner && !isAdmin && (!item.isActive || item.draftStatus === 'DRAFT' || item.listingType === 'CONSIGNOR_TAG')) {
       return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Public sale privacy gates (2026-10-13, lib/saleLocationPrivacy.ts), parity with GET /sales/:id:
+    //  - an item still inside its early-access window is a 404 for viewers without early access;
+    //  - the nested sale's street address is shown only to signed-in viewers from the day before the start.
+    // Owner, admin and the sale organizer's staff (any active workspace member, same as GET /sales/:id) are exempt from both.
+    const now = new Date();
+    const embargoed = isItemEmbargoedForViewer(item, authReq.user, now);
+    let saleGate: SaleAddressGate = item.sale
+      ? saleAddressGateForViewer(item.sale, (item.sale.organizer as any)?.timezone, authReq.user, isOwner || isAdmin, now)
+      : { visible: true };
+    let isStaff = false;
+    if (!isOwner && !isAdmin && authReq.user?.id && (embargoed || !saleGate.visible)) {
+      const ownerOrganizerId = item.sale?.organizerId ?? (item as any).organizerId;
+      isStaff = await isOrganizerStaff(authReq.user.id, ownerOrganizerId);
+      if (isStaff) saleGate = { visible: true };
+    }
+    if (embargoed && !isOwner && !isAdmin && !isStaff) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    let publicSale: any = item.sale;
+    if (item.sale) {
+      const { timezone: _tz, ...saleOrganizer } = (item.sale.organizer ?? {}) as any;
+      const { deletedAt: _deletedAt, ...saleForResponse } = item.sale as any; // gate input only
+      publicSale = {
+        ...redactSaleLocation(saleForResponse, saleGate),
+        ...(item.sale.organizer ? { organizer: saleOrganizer } : {}),
+        addressGate: saleGate,
+      };
     }
 
     // Hold-to-Pay (#221): buyer-identity fields, gated on the SAME isOwner/isAdmin
@@ -1070,7 +1168,7 @@ export const getItemById = async (req: Request, res: Response) => {
       viewerUserId: authReq.user?.id,
     });
 
-    res.json({ ...itemWithCounts, ...holdFields });
+    res.json({ ...itemWithCounts, sale: publicSale, ...holdFields });
   } catch (error) {
     console.error('Error fetching item:', error);
     res.status(500).json({ message: 'Server error while fetching item' });
@@ -1395,16 +1493,30 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
     // the sale owner and admins (same rule as syndicationFormatterService + GET /sales/:id).
     let viewerOwnsSaleOrAdmin = user?.role === 'ADMIN';
 
+    // A public item list is always scoped to one sale. Without saleId the query used to match every
+    // public-filter item on the platform (including items of DRAFT sales), so it returns nothing now.
+    if (!saleId || typeof saleId !== 'string') {
+      return res.json([]);
+    }
+
     // Security: gate items of non-published (DRAFT/ENDED) sales. Owner + admin may
     // still preview their own draft sale's items; everyone else gets an empty list.
     if (saleId && typeof saleId === 'string') {
       const parentSale = await prisma.sale.findUnique({
         where: { id: saleId },
-        select: { status: true, organizer: { select: { userId: true } } }
+        select: { status: true, deletedAt: true, organizerId: true, organizer: { select: { userId: true } } }
       });
       const isSaleOwner = !!user && parentSale?.organizer?.userId === user.id;
       const isSaleAdmin = user?.role === 'ADMIN';
       if (isSaleOwner || isSaleAdmin) viewerOwnsSaleOrAdmin = true;
+      // The sale organizer's staff (any active workspace member) see embargoed items too (same as GET /sales/:id).
+      if (!viewerOwnsSaleOrAdmin && user?.id && parentSale) {
+        if (await isOrganizerStaff(user.id, parentSale.organizerId)) viewerOwnsSaleOrAdmin = true;
+      }
+      // A soft-deleted sale lists nothing for anyone but its owner and admin (same as GET /sales/:id).
+      if (parentSale?.deletedAt && !isSaleOwner && !isSaleAdmin) {
+        return res.json([]);
+      }
       // S1099: ENDED sales allowed through (matches getSale/getItemById) — only DRAFT/CANCELLED
       // (and any future non-public status) are hidden from non-owner/non-admin callers.
       if (parentSale && parentSale.status !== 'PUBLISHED' && parentSale.status !== 'ENDED' && !isSaleOwner && !isSaleAdmin) {
@@ -1554,11 +1666,12 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
       });
     }
 
+    // Owner, admin and the organizer's staff see every item of the sale (the embargo applies to everyone else).
     // Filter based on rarity visibility + Hunt Pass status
-    items = items.filter(item => isItemVisibleToUser(item, hasHuntPass));
+    if (!viewerOwnsSaleOrAdmin) items = items.filter(item => isItemVisibleToUser(item, hasHuntPass));
 
     // Phase 2b: Filter Legendary items based on user rank
-    const isSageOrHigher = ['SAGE', 'GRANDMASTER'].includes(userRank);
+    const isSageOrHigher = viewerOwnsSaleOrAdmin || ['SAGE', 'GRANDMASTER'].includes(userRank);
     items = items.filter(item => {
       if (!item.isLegendary || !item.legendaryVisibleAt) {
         return true; // Non-legendary items always visible
@@ -3876,6 +3989,11 @@ export const getBids = async (req: AuthRequest, res: Response) => {
     if (!item.sale && !isOrganizer) {
       return res.status(404).json({ message: 'Item not found' });
     }
+    // 2026-10-13: the anonymized list follows GET /items/:id visibility. A DRAFT/cancelled or deleted sale, a hidden
+    // item, or an item still inside its early-access window for this viewer is a 404 (owner, staff and admin exempt).
+    if (!(await viewerMaySeeItem(item as any, req.user, { knownOwner: isOrganizer }))) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
 
     // Fetch all bids, ordered by amount DESC (most recent winning first)
     const bids = await prisma.bid.findMany({
@@ -3916,17 +4034,33 @@ export const getItemEbayComps = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // Look up the item to get title + condition for the eBay search
+    // Look up the item to get title + condition for the eBay search, plus the visibility gate inputs
     const item = await prisma.item.findUnique({
       where: { id },
       select: {
         id: true,
         title: true,
         conditionGrade: true,
+        organizerId: true,
+        isActive: true,
+        status: true,
+        draftStatus: true,
+        listingType: true,
+        createdAt: true,
+        rarity: true,
+        earlyAccessUntil: true,
+        isLegendary: true,
+        legendaryVisibleAt: true,
+        sale: { select: ITEM_VISIBILITY_SALE_SELECT },
       },
     });
 
-    if (!item || !item.title) {
+    // 2026-10-13: same visibility as GET /items/:id (owner, staff and admin exempt). The title of a hidden or
+    // early-access item must not be echoed into comps, so it is a 404 like a missing item.
+    if (!item || !(await viewerMaySeeItem(item as any, (req as AuthRequest).user))) {
+      return res.status(404).json({ message: 'Item not found', comps: [] });
+    }
+    if (!item.title) {
       return res.json({ comps: [] });
     }
 
@@ -4004,6 +4138,13 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'This item is not available for bidding.' });
     }
 
+    // 2026-10-13: a bid is only possible on an item the bidder could see on a live sale: PUBLISHED, not
+    // soft-deleted, item publicly visible, and not inside an early-access window for this bidder. Anything else
+    // is the same 404 as a missing item (no owner/staff exemption: nobody bids on a hidden item).
+    if (!isItemPubliclyViewable(item as any, ['PUBLISHED']) || isItemEmbargoedForViewer(item, req.user, new Date())) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
     // S1072 Finding #4: collusion/wash-trade guard — identity-grade device/card fingerprint match
     try {
       await assertCheckoutAllowed({
@@ -4020,9 +4161,9 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       throw guardError;
     }
 
-    // Security: reject bids on items whose parent sale is not published
+    // Security: reject bids on items whose parent sale is not published (already a 404 above; kept as a backstop)
     if (sale.status !== 'PUBLISHED') {
-      return res.status(403).json({ message: 'This sale is not currently available for bidding.' });
+      return res.status(404).json({ message: 'Item not found' });
     }
 
     // Reject bids on auctions that have already closed
@@ -5166,14 +5307,15 @@ export const getInspirationItems = async (req: Request, res: Response): Promise<
 
     const items = await prisma.item.findMany({
       where: {
-        status: 'AVAILABLE',
-        // draftStatus filter disabled — legacy/seeded items have NULL draftStatus
-        // Re-enable when Rapidfire Mode launches: draftStatus: 'PUBLISHED',
-        ...PUBLIC_ITEM_FILTER,
         photoUrls: { isEmpty: false },
         sale: {
           status: 'PUBLISHED',
+          deletedAt: null,
         },
+        // AND, not spread: PUBLIC_ITEM_FILTER's own `status: { notIn }` used to overwrite `status: 'AVAILABLE'`, so SOLD
+        // items reached the gallery (2026-10-13). Public gallery (no auth): anonymous-level, never an item still
+        // inside its early-access window.
+        AND: [PUBLIC_ITEM_FILTER, { status: 'AVAILABLE' }, notEmbargoedForPublicWhere(new Date())],
       },
       select: {
         id: true,
@@ -5217,12 +5359,14 @@ export const getQrCode = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Verify item exists
+    // Verify item exists and is visible to this viewer (2026-10-13, same as GET /items/:id; the owner organizer,
+    // its staff and admin can always print the code, including for unpublished items).
     const item = await prisma.item.findUnique({
       where: { id: itemId },
+      include: { sale: { select: ITEM_VISIBILITY_SALE_SELECT } },
     });
 
-    if (!item) {
+    if (!item || !(await viewerMaySeeItem(item as any, (req as AuthRequest).user))) {
       res.status(404).json({ message: 'Item not found.' });
       return;
     }
@@ -5599,6 +5743,18 @@ export const getRareFindsItems = async (req: AuthRequest, res: Response) => {
     const limit = Math.min(Math.max(1, parseInt(String(rawLimit)) || 20), 100);
     const offset = Math.max(0, parseInt(String(rawOffset)) || 0);
 
+    // 2026-10-13: Sale.status is DRAFT | PUBLISHED | ENDED (schema.prisma); the old filter
+    // status in ['LIVE', 'ACTIVE'] matched no sale at all, so this feed was always empty. Items come
+    // from published, non-deleted sales. A Hunt Pass holder already has the rarity and earlyAccessUntil
+    // early access; a Legendary item's legendaryVisibleAt window still applies below Sage rank
+    // (same rule as isItemEmbargoedForViewer).
+    const rareFindsNow = new Date();
+    const isSageOrHigher = ['SAGE', 'GRANDMASTER'].includes(req.user.explorerRank ?? 'INITIATE');
+    const rareFindsGate = {
+      sale: { status: 'PUBLISHED', deletedAt: null },
+      ...(isSageOrHigher ? {} : { NOT: { isLegendary: true, legendaryVisibleAt: { gt: rareFindsNow } } }),
+    };
+
     // Get rare/legendary items from active sales
     const rareItems = await prisma.item.findMany({
       where: {
@@ -5607,11 +5763,7 @@ export const getRareFindsItems = async (req: AuthRequest, res: Response) => {
         },
         isActive: true,
         ...PUBLIC_ITEM_FILTER,
-        sale: {
-          status: {
-            in: ['LIVE', 'ACTIVE']
-          }
-        }
+        ...rareFindsGate,
       },
       orderBy: {
         createdAt: 'desc'
@@ -5658,11 +5810,7 @@ export const getRareFindsItems = async (req: AuthRequest, res: Response) => {
         },
         isActive: true,
         ...PUBLIC_ITEM_FILTER,
-        sale: {
-          status: {
-            in: ['LIVE', 'ACTIVE']
-          }
-        }
+        ...rareFindsGate,
       }
     });
 
@@ -5923,10 +6071,17 @@ export const getSimilarItems = async (req: Request, res: Response) => {
 
     const currentItem = await prisma.item.findUnique({
       where: { id: itemId },
-      select: { id: true, category: true },
+      select: {
+        id: true, category: true,
+        // visibility gate inputs (2026-10-13, same as GET /items/:id)
+        organizerId: true, isActive: true, status: true, draftStatus: true, listingType: true,
+        createdAt: true, rarity: true, earlyAccessUntil: true, isLegendary: true, legendaryVisibleAt: true,
+        sale: { select: ITEM_VISIBILITY_SALE_SELECT },
+      },
     });
 
-    if (!currentItem) {
+    // A hidden or early-access item is a 404 like a missing one (its category would otherwise leak).
+    if (!currentItem || !(await viewerMaySeeItem(currentItem as any, (req as AuthRequest).user))) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
@@ -5941,7 +6096,9 @@ export const getSimilarItems = async (req: Request, res: Response) => {
         status: { in: ['AVAILABLE', 'PUBLISHED'] },
         id: { not: itemId },
         saleId: { not: null },
-        sale: { status: 'PUBLISHED' },
+        sale: { status: 'PUBLISHED', deletedAt: null },
+        // Public (no auth): anonymous-level, never an item still inside its early-access window.
+        AND: [notEmbargoedForPublicWhere(new Date())],
       },
       select: {
         id: true,

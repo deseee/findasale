@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
 import { conditionFilterValues } from '../utils/conditionFilter';
+import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Feature #595: match same public-item visibility rules as /api/search
 
 export interface SearchFilters {
@@ -201,11 +202,18 @@ export const checkNewMatches = async (req: AuthRequest, res: Response) => {
         saleStatusWhere = { startDate: { gt: now } };
       }
 
+      // 2026-10-13 (security): PUBLIC_ITEM_FILTER carries its own `status` key, so spreading it after
+      // `status: 'AVAILABLE'` silently replaced that condition and SOLD / RESERVED items could be
+      // announced as new matches. Every condition is AND-ed instead so none can overwrite another.
       const itemWhere: any = {
         createdAt: { gt: since },
-        status: 'AVAILABLE',
         sale: { status: 'PUBLISHED', ...saleStatusWhere },
-        ...PUBLIC_ITEM_FILTER,
+        AND: [
+          PUBLIC_ITEM_FILTER,
+          { status: 'AVAILABLE' },
+          // early-access / embargoed items are not announced before their public window
+          notEmbargoedForPublicWhere(now),
+        ],
       };
 
       const q = typeof filters.q === 'string' ? filters.q.trim() : '';

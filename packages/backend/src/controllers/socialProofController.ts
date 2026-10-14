@@ -1,6 +1,8 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { getItemSocialProof, getSaleSocialProof } from '../services/socialProofService';
+import { prisma } from '../lib/prisma';
+import { isItemEmbargoedForViewer } from '../lib/saleLocationPrivacy';
 
 /**
  * GET /api/social-proof/item/:itemId
@@ -22,6 +24,25 @@ export const getItemSocialProofHandler = async (
 
     if (!itemId) {
       res.status(400).json({ message: 'Item ID is required' });
+      return;
+    }
+
+    // Early-access gate (2026-10-13): an item still inside its early-access window answers like a missing
+    // one for viewers without access (its organizer and admins excepted).
+    const gateItem = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        rarity: true, createdAt: true, earlyAccessUntil: true, isLegendary: true, legendaryVisibleAt: true,
+        sale: { select: { organizer: { select: { userId: true } } } },
+      },
+    });
+    if (
+      gateItem &&
+      req.user.role !== 'ADMIN' &&
+      gateItem.sale?.organizer?.userId !== req.user.id &&
+      isItemEmbargoedForViewer(gateItem, req.user)
+    ) {
+      res.status(404).json({ message: 'Item not found' });
       return;
     }
 

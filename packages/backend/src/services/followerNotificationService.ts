@@ -14,6 +14,7 @@ import { buildNewSaleAlertEmail } from './emailTemplateService';
 import { sendPushNotification } from '../utils/webpush';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
+import { messageSaleLocation } from '../lib/messageSaleLocation';
 
 
 interface SaleInfo {
@@ -22,6 +23,7 @@ interface SaleInfo {
   address: string;
   city: string;
   state: string;
+  zip?: string | null;
   startDate: Date;
   organizerId: string;
 }
@@ -32,6 +34,7 @@ export const notifyFollowersOfNewSale = async (sale: SaleInfo): Promise<void> =>
       where: { id: sale.organizerId },
       select: {
         businessName: true,
+        timezone: true,
         followers: {
           select: {
             notifyEmail: true,
@@ -61,6 +64,10 @@ export const notifyFollowersOfNewSale = async (sale: SaleInfo): Promise<void> =>
       hour12:  true,
     });
 
+    // 2026-10-13: followers are account holders, but the street address still waits for the day before the
+    // sale starts (organizer's time zone, evaluated now = send time). Publish usually happens earlier.
+    const location = messageSaleLocation(sale, organizer.timezone, true, new Date());
+
     for (const follow of organizer.followers) {
       const emailSuppressed = follow.user.email ? await suppressionService.isSuppressed(follow.user.email) : false;
       if (emailSuppressed) console.log('[followerNotify] Skipped suppressed recipient:', follow.user.email);
@@ -82,7 +89,8 @@ export const notifyFollowersOfNewSale = async (sale: SaleInfo): Promise<void> =>
               sale: {
                 title:     sale.title,
                 dateRange: formattedDate,
-                address:   `${sale.address}, ${sale.city}, ${sale.state}`,
+                address:   location.line,
+                addressNote: location.note || undefined,
                 saleUrl,
               },
               unsubUrl,

@@ -10,6 +10,7 @@ import { prisma } from '../lib/prisma';
 import { sendPushNotification } from '../utils/webpush';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
+import { messageSaleLocation, addressNoteHtml } from '../lib/messageSaleLocation';
 
 
 interface SaleInfo {
@@ -18,6 +19,7 @@ interface SaleInfo {
   address: string;
   city: string;
   state: string;
+  zip?: string | null;
   startDate: Date;
   organizerId: string;
 }
@@ -179,6 +181,7 @@ export const checkFollowsForNewSale = async (sale: SaleInfo): Promise<void> => {
       where: { id: sale.organizerId },
       select: {
         businessName: true,
+        timezone: true,
         smartFollowers: {
           select: {
             notifyEmail: true,
@@ -221,6 +224,10 @@ export const checkFollowsForNewSale = async (sale: SaleInfo): Promise<void> => {
       hour12: true,
     });
 
+    // 2026-10-13: account holders, but the street waits for the day before the sale (organizer time zone, send time).
+    const location = messageSaleLocation(sale, organizer.timezone, true, new Date());
+    const locationNote = addressNoteHtml(location, saleUrl, 'color: #d97706;');
+
     for (const follow of legacyOnlyFollowers) {
       const emailSuppressed = follow.user.email ? await suppressionService.isSuppressed(follow.user.email) : false;
       if (emailSuppressed) console.log('[smartFollow] Skipped suppressed recipient:', follow.user.email);
@@ -243,7 +250,8 @@ export const checkFollowsForNewSale = async (sale: SaleInfo): Promise<void> => {
                 <h2 style="color: #333;">New sale from ${organizer.businessName}!</h2>
                 <div style="background: #fef3c7; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #d97706;">
                   <h3 style="margin-top: 0; color: #333;">${sale.title}</h3>
-                  <p style="margin: 8px 0; color: #666;">📍 ${sale.address}, ${sale.city}, ${sale.state}</p>
+                  <p style="margin: 8px 0; color: #666;">📍 ${location.line}</p>${locationNote ? `
+                  <p style="margin: 4px 0; font-size: 13px;">${locationNote}</p>` : ''}
                   <p style="margin: 8px 0; color: #666;">🕐 ${formattedDate}</p>
                 </div>
                 <p>

@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { getSaleAddressGate, isItemEmbargoedForViewer, SaleAddressGate, redactSalesForViewer, notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
+import { isOrganizerStaff } from '../utils/saleStaffAccess'; // owner organizer + any active workspace staff see the street address
 import { z } from 'zod';
 import QRCode from 'qrcode';
 import { handleFavoriteBadge } from './userController';
@@ -192,6 +194,32 @@ const PUBLICLY_RENDERED_SALE_FIELDS = [
 ] as const;
 
 
+/**
+ * Address gate for public list/search endpoints (2026-10-13). Gates each sale for the viewer via
+ * redactSalesForViewer (street address only for signed-in viewers from the day before the start,
+ * sale local time; owner and admin always). These list routes carry no auth middleware, so in
+ * practice every caller is anonymous here and gets city-level location; the street address is
+ * revealed on the sale page itself. organizer.userId / organizer.timezone are selected only as gate
+ * inputs and are removed again unless the endpoint already returned them (keepOrganizerKeys).
+ */
+function gateSalesForViewer<T extends Record<string, any>>(sales: T[], viewer: any, keepOrganizerKeys: string[] = []): T[] {
+  return redactSalesForViewer(sales, viewer).map((s: any) => {
+    if (!s.organizer || typeof s.organizer !== 'object') return s;
+    const organizer = { ...s.organizer };
+    for (const k of ['userId', 'timezone']) if (!keepOrganizerKeys.includes(k)) delete organizer[k];
+    return { ...s, organizer };
+  });
+}
+
+/**
+ * Item counts on public sale lists: anonymous-level counts. They exclude non-public items and items still
+ * inside an early-access window (notEmbargoedForPublicWhere), so a count never reveals a hidden item. An
+ * early-access viewer may see a slightly higher real count on the sale page itself; that is acceptable.
+ */
+function publicItemCountWhere(now: Date = new Date()) {
+  return { AND: [PUBLIC_ITEM_FILTER, notEmbargoedForPublicWhere(now)] };
+}
+
 // Helper function to convert Decimal values to numbers recursively
 const convertDecimalsToNumbers = (obj: any) => {
   if (!obj) return obj;
@@ -285,7 +313,8 @@ export const listSales = async (req: Request, res: Response) => {
         orderBy: [{ isPinned: 'desc' }, { startDate: 'asc' }],
         include: {
           organizer: {
-            select: { id: true, businessName: true, reputationTier: true, directoryConfidenceScore: true, user: { select: { customMapPin: true } } }
+            // userId + timezone: address gate inputs only (removed from the response by gateSalesForViewer)
+            select: { id: true, userId: true, timezone: true, businessName: true, reputationTier: true, directoryConfidenceScore: true, user: { select: { customMapPin: true } } }
           },
           _count: { select: { favorites: true } },
           trails: {
@@ -381,7 +410,8 @@ export const listSales = async (req: Request, res: Response) => {
     });
     
     res.json({
-      sales: convertedSales,
+      // Street address / exact pin / entrance gated per viewer (lib/saleLocationPrivacy.ts).
+      sales: dropApproachNotesWhereGated(convertedSales, gateSalesForViewer(convertedSales, authReq.user)),
       pagination: { page, limit, total, pages: Math.ceil(total / limit) }
     });
   } catch (error) {
@@ -504,72 +534,20 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ---------------------------------------------------------------------------------------------
-// Public sale page privacy gates (2026-10-13, Patrick-approved).
-//  1) Embargoed items: early-access / Legendary items stay hidden from viewers without early access,
-//     the same rules as the items list (rarity delay, Legendary legendaryVisibleAt) plus the item-level
-//     earlyAccessUntil embargo that syndicationFormatterService already honours.
-//  2) Street address: shown only to signed-in shoppers, and only from the day before the sale starts
-//     (sale local time). Everyone else gets city / state / postal-level location only. Organizer owner
-//     and admin always see everything.
-// ---------------------------------------------------------------------------------------------
-const DEFAULT_SALE_TIMEZONE = 'America/Detroit';
-
-function localDateKey(d: Date, timeZone: string): string {
-  const fmt = (tz: string) =>
-    new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-  try {
-    return fmt(timeZone);
-  } catch {
-    return fmt(DEFAULT_SALE_TIMEZONE); // invalid IANA zone stored on the organizer
-  }
-}
-
-export type SaleAddressGate =
-  | { visible: true }
-  | { visible: false; reason: 'SIGN_IN' | 'NOT_YET'; revealsOn: string };
+// Public sale privacy gates (address + embargo) live in lib/saleLocationPrivacy.ts, shared by every public surface.
+export { getSaleAddressGate };
 
 /**
- * Decides whether the full street address of a sale may be shown to a viewer.
- * Calendar day of the sale start: date-only starts are stored as 00:00:00Z (the UTC date IS the intended
- * day); timed starts are real instants, so their day is read in the sale's local time zone.
- * Visible when viewer is signed in AND today (sale local time) >= start day - 1.
+ * Sale.notes holds the organizer's Day-of approach notes (parking, entrance, "red door at 123 ..."), so it
+ * follows the street address: when the gate removed a sale's address, its notes go too. `gated` is the
+ * output of gateSalesForViewer(original), same order.
  */
-export function getSaleAddressGate(
-  sale: { startDate: Date | string | null },
-  timeZone: string | null | undefined,
-  signedIn: boolean,
-  now: Date = new Date()
-): SaleAddressGate {
-  const tz = timeZone || DEFAULT_SALE_TIMEZONE;
-  const start = sale.startDate ? new Date(sale.startDate) : null;
-  let revealsOn = '';
-  let reached = true;
-  if (start && !Number.isNaN(start.getTime())) {
-    const dateOnly = start.getUTCHours() === 0 && start.getUTCMinutes() === 0 && start.getUTCSeconds() === 0;
-    const startDay = dateOnly ? start.toISOString().slice(0, 10) : localDateKey(start, tz);
-    const [y, m, d] = startDay.split('-').map(Number);
-    revealsOn = new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
-    reached = localDateKey(now, tz) >= revealsOn;
-  }
-  if (!reached) return { visible: false, reason: 'NOT_YET', revealsOn };
-  if (!signedIn) return { visible: false, reason: 'SIGN_IN', revealsOn };
-  return { visible: true };
+export function dropApproachNotesWhereGated<T extends Record<string, any>>(original: T[], gated: T[]): T[] {
+  return gated.map((g: any, i) =>
+    original[i]?.address && g && g.address === '' && 'notes' in g ? { ...g, notes: null } : g
+  );
 }
-
-/** True when the viewer is NOT entitled to see this item yet (embargo / early-access windows). */
-function isItemEmbargoedForViewer(item: any, viewer: any, now: Date = new Date()): boolean {
-  const hasHuntPass = Boolean(viewer?.huntPassActive && viewer?.huntPassExpiry && new Date(viewer.huntPassExpiry) > now);
-  const isSageOrHigher = ['SAGE', 'GRANDMASTER'].includes(viewer?.explorerRank ?? 'INITIATE');
-  const ageHours = item.createdAt ? (now.getTime() - new Date(item.createdAt).getTime()) / 3600000 : Infinity;
-  if (!hasHuntPass) {
-    if (item.rarity === 'LEGENDARY' && ageHours < 12) return true;
-    if (item.rarity === 'RARE' && ageHours < 6) return true;
-    if (item.earlyAccessUntil && new Date(item.earlyAccessUntil) > now) return true;
-  }
-  if (item.isLegendary && item.legendaryVisibleAt && !isSageOrHigher && new Date(item.legendaryVisibleAt) > now) return true;
-  return false;
-}
+export type { SaleAddressGate };
 
 export const getSale = async (req: Request, res: Response) => {
   try {
@@ -631,9 +609,14 @@ export const getSale = async (req: Request, res: Response) => {
     }
 
     // Street address gate (signed-in shoppers only, from the day before the sale starts, sale local time).
-    const addressGate: SaleAddressGate = (isOrganizer || isAdmin || !sale.address) // online-only sales have no street address to protect
+    let addressGate: SaleAddressGate = (isOrganizer || isAdmin || !sale.address) // online-only sales have no street address to protect
       ? { visible: true }
       : getSaleAddressGate(sale, (sale.organizer as any).timezone, Boolean(authReq.user?.id));
+    // The sale organizer's staff (any active member of its workspace) always see the address too.
+    // Only queried for a signed-in viewer while the gate is closed.
+    if (!addressGate.visible && authReq.user?.id) {
+      if (await isOrganizerStaff(authReq.user.id, sale.organizerId)) addressGate = { visible: true };
+    }
     // Without the street address the exact pin would give it away, so coordinates drop to ~1 km precision.
     const coarse = (n: number | null) => (n == null ? n : Math.round(n * 100) / 100);
 
@@ -714,6 +697,8 @@ export const getSale = async (req: Request, res: Response) => {
         lng: coarse(sale.lng),
         entranceLat: null,
         entranceLng: null,
+        entranceNote: null, // same as redactSaleLocation: an entrance hint can point at the house
+        notes: null, // Day-of approach notes (parking, entrance) can name the street address
       }),
       addressGate,
       locked: false,
@@ -1252,6 +1237,10 @@ export const searchSales = async (req: Request, res: Response) => {
     const sales = await prisma.sale.findMany({
       where: {
         ...scrapedEndedExclusion,
+        // VALID-STATE-ONLY-EXPOSURE (2026-10-13): this public search had no status filter, so DRAFT and
+        // soft-deleted sales matched. Only the publicly viewable states (same as GET /sales/:id) are searchable.
+        status: { in: ['PUBLISHED', 'ENDED'] },
+        deletedAt: null,
         OR: [
           { title: { contains: q, mode: 'insensitive' } },
           { description: { contains: q, mode: 'insensitive' } },
@@ -1259,7 +1248,8 @@ export const searchSales = async (req: Request, res: Response) => {
         ],
         ...(Object.keys(confidenceFilter).length > 0 ? { organizer: confidenceFilter } : {}),
       },
-      include: { organizer: { select: { businessName: true, directoryConfidenceScore: true } } },
+      // userId + timezone: address gate inputs only (removed from the response by gateSalesForViewer)
+      include: { organizer: { select: { businessName: true, directoryConfidenceScore: true, userId: true, timezone: true } } },
       take: 20
     });
 
@@ -1289,7 +1279,8 @@ export const searchSales = async (req: Request, res: Response) => {
       };
     });
 
-    res.json(enrichedSales);
+    // Street address / exact pin / entrance gated per viewer (also backs the public MCP search_sales tool).
+    res.json(dropApproachNotesWhereGated(enrichedSales, gateSalesForViewer(enrichedSales, authReq.user)));
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error while searching sales' });
@@ -1362,6 +1353,26 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
             upgradeUrl: '/pricing'
           });
         }
+      }
+    }
+
+    // Empty-sale publish gate (2026-10-13): publishing a sale with no items needs an explicit
+    // confirmation from the organizer (request body allowEmpty: true). Item count uses the same
+    // filter as the organizer's own item count (getMySales: every item except consignor price tags),
+    // minus soft-deleted items.
+    if (status === 'PUBLISHED') {
+      const itemCount = await prisma.item.count({
+        where: { saleId: id, deletedAt: null, listingType: { not: 'CONSIGNOR_TAG' } },
+      });
+      if (itemCount === 0) {
+        if (req.body?.allowEmpty !== true) {
+          return res.status(409).json({
+            code: 'EMPTY_SALE_PUBLISH',
+            itemCount: 0,
+            message: 'This sale has no items yet. Confirm to publish it without items.',
+          });
+        }
+        console.log(`[sale-publish] empty publish confirmed saleId=${id} organizerId=${existingSale.organizerId}`);
       }
     }
 
@@ -1631,9 +1642,13 @@ export const generateIcal = async (req: Request, res: Response) => {
     // "Shared via FindA.Sale" footer (utils/watermarkPolicy.canRemoveWatermark).
     // Street address gate (same rule as GET /sales/:id): the calendar file would otherwise leak it to anyone.
     const icalViewer = (req as any).user;
-    const icalGate: SaleAddressGate = (icalViewer?.role === 'ADMIN' || icalViewer?.id === sale.organizer?.userId)
+    let icalGate: SaleAddressGate = (icalViewer?.role === 'ADMIN' || icalViewer?.id === sale.organizer?.userId || !sale.address)
       ? { visible: true }
       : getSaleAddressGate(sale, sale.organizer?.timezone, Boolean(icalViewer?.id));
+    // Organizer staff see the address too (same check as GET /sales/:id).
+    if (!icalGate.visible && icalViewer?.id) {
+      if (await isOrganizerStaff(icalViewer.id, sale.organizerId)) icalGate = { visible: true };
+    }
     const ical = buildSaleIcs(
       {
         id,
@@ -1685,8 +1700,10 @@ export const getSalesByNeighborhood = async (req: Request, res: Response) => {
         id: true, title: true, description: true, startDate: true, endDate: true,
         address: true, city: true, state: true, zip: true, lat: true, lng: true,
         neighborhood: true, photoUrls: true, tags: true,
-        organizer: { select: { businessName: true, avgRating: true } },
-        _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } } },
+        // userId + timezone: address gate inputs only (removed from the response by gateSalesForViewer)
+        organizer: { select: { businessName: true, avgRating: true, userId: true, timezone: true } },
+        // Anonymous-level public count (see publicItemCountWhere): never counts hidden or embargoed items.
+        _count: { select: { items: { where: publicItemCountWhere(now) } } },
       },
       orderBy: { startDate: 'asc' },
       take: 50,
@@ -1727,7 +1744,7 @@ export const getSalesByNeighborhood = async (req: Request, res: Response) => {
       };
     });
 
-    res.json({ neighborhood: slug, sales: enrichedSales, total: enrichedSales.length });
+    res.json({ neighborhood: slug, sales: gateSalesForViewer(enrichedSales, (req as any).user), total: enrichedSales.length });
   } catch (error) {
     console.error('Error fetching neighborhood sales:', error);
     res.status(500).json({ message: 'Server error' });
@@ -1761,8 +1778,10 @@ export const getSalesByCity = async (req: Request, res: Response) => {
         id: true, title: true, description: true, startDate: true, endDate: true,
         address: true, city: true, state: true, zip: true, lat: true, lng: true,
         photoUrls: true, tags: true,
-        organizer: { select: { businessName: true, avgRating: true } },
-        _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } } },
+        // userId + timezone: address gate inputs only (removed from the response by gateSalesForViewer)
+        organizer: { select: { businessName: true, avgRating: true, userId: true, timezone: true } },
+        // Anonymous-level public count (see publicItemCountWhere): never counts hidden or embargoed items.
+        _count: { select: { items: { where: publicItemCountWhere(now) } } },
       },
       orderBy: { startDate: 'asc' },
     });
@@ -1811,7 +1830,7 @@ export const getSalesByCity = async (req: Request, res: Response) => {
       };
     });
 
-    res.json({ sales: enrichedSales, total, page: pageNum, totalPages: Math.ceil(total / limitNum) });
+    res.json({ sales: gateSalesForViewer(enrichedSales, (req as any).user), total, page: pageNum, totalPages: Math.ceil(total / limitNum) });
   } catch (error) {
     console.error('Error fetching city sales:', error);
     res.status(500).json({ message: 'Server error while fetching city sales' });
@@ -1898,12 +1917,15 @@ export const getSaleActivity = async (req: Request, res: Response) => {
     // Fetch sale status to filter ENDED sales
     const sale = await prisma.sale.findUnique({
       where: { id },
-      select: { status: true },
+      select: { status: true, deletedAt: true },
     });
 
-    if (!sale) {
+    // Public feed: only for publicly viewable sales (same states as GET /sales/:id for anonymous viewers).
+    if (!sale || sale.deletedAt || (sale.status !== 'PUBLISHED' && sale.status !== 'ENDED')) {
       return res.status(404).json({ message: 'Sale not found' });
     }
+    // Item titles in this feed must never name an item that is still inside its early-access window.
+    const activityItemWhere = { AND: [PUBLIC_ITEM_FILTER, notEmbargoedForPublicWhere(new Date())] };
 
     // Return empty activities for ended sales
     if (sale.status === 'ENDED') {
@@ -1923,6 +1945,7 @@ export const getSaleActivity = async (req: Request, res: Response) => {
         where: {
           item: {
             saleId: id,
+            ...activityItemWhere,
           },
           // Favorite.user is a required relation — `isNot: null` is invalid Prisma syntax here.
           // Orphan-FK runtime errors (rare) are caught by the surrounding try/catch.
@@ -1949,6 +1972,9 @@ export const getSaleActivity = async (req: Request, res: Response) => {
         // the same switch that hides purchase history on their public profile) are excluded too.
         status: 'PAID',
         user: { is: { purchasesVisible: true } },
+        // Purchases of an item still inside its early-access window are not announced to the public yet.
+        // Purchase.item is optional: rows without an item are named "an item" and stay in the feed.
+        OR: [{ itemId: null }, { item: { is: notEmbargoedForPublicWhere(new Date()) } }],
       },
       include: {
         user: { select: { name: true, notificationPrefs: true } },

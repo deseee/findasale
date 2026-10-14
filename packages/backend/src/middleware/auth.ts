@@ -32,6 +32,9 @@ export function urlTokenAllowedFor(req: Request): boolean {
 
 const warnedUrlTokenPaths = new Set<string>();
 
+// Set only by lenientOptionalAuthenticate (below): makes optionalAuthenticate treat an expired token as anonymous.
+const LENIENT_OPTIONAL_AUTH = Symbol('lenientOptionalAuth');
+
 export const optionalAuthenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     // P0 Security Fix: Try cookie first (httpOnly), then Authorization header, then (allowlisted routes only) query param
@@ -112,12 +115,24 @@ export const optionalAuthenticate = async (req: AuthRequest, res: Response, next
     // (no token at all never reaches this catch) or for a malformed/invalid token (falls
     // through to the unchanged silent-anonymous fallback below, unauthenticated but not
     // blocked -- this route must still work with no session).
-    if ((err as any)?.name === 'TokenExpiredError') {
+    if ((err as any)?.name === 'TokenExpiredError' && !(req as any)[LENIENT_OPTIONAL_AUTH]) {
       return res.status(401).json({ message: 'Token expired' });
     }
     // Invalid token (bad signature, malformed, etc.) — proceed as unauthenticated, do not block
   }
   next();
+};
+
+/**
+ * lenientOptionalAuthenticate (2026-10-13): optionalAuthenticate, except an EXPIRED token is treated as
+ * anonymous instead of a 401. For public responses opened outside the app (GET /sales/:id/calendar.ics is
+ * fetched by calendar apps and plain links that cannot refresh a token and retry), where anonymous output is a
+ * correct, safe answer. A bad/malformed token is already anonymous in optionalAuthenticate. Do not use it for
+ * app API routes: those rely on the 401 to refresh the session (see optionalAuthenticate's catch block).
+ */
+export const lenientOptionalAuthenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+  (req as any)[LENIENT_OPTIONAL_AUTH] = true;
+  return optionalAuthenticate(req, res, next);
 };
 
 // Feature #72 / BUG #22: requireOrganizer checks both legacy `role` field and

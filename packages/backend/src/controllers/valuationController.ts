@@ -2,6 +2,20 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { generateValuation, getValuation } from '../services/valuationService';
+import { isItemEmbargoedForViewer } from '../lib/saleLocationPrivacy';
+import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
+
+const VALUATION_OWNER_ORGANIZER_SELECT = { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } as const;
+
+/**
+ * 2026-10-13 early-access embargo: an item still inside its early-access window is hidden from everyone except
+ * its owner and admin, so its valuation is too (same 404 as a missing item, existence is not revealed).
+ */
+async function hiddenByEmbargo(item: any, user: AuthRequest['user']): Promise<boolean> {
+  if (!isItemEmbargoedForViewer(item, user)) return false;
+  if (user?.role === 'ADMIN') return false;
+  return (await resolveItemOwnerOrganizer(item, user?.id)) === null;
+}
 
 /**
  * GET /api/items/:itemId/valuation
@@ -18,10 +32,10 @@ export const getItemValuation = async (req: AuthRequest, res: Response) => {
     // Verify item exists and belongs to an organizer that the user can access
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: { include: { organizer: true } } },
+      include: { sale: { include: { organizer: { select: VALUATION_OWNER_ORGANIZER_SELECT } } } },
     });
 
-    if (!item) {
+    if (!item || (await hiddenByEmbargo(item, req.user))) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
@@ -60,10 +74,10 @@ export const generateItemValuation = async (req: AuthRequest, res: Response) => 
     // Verify item exists
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: true },
+      include: { sale: { include: { organizer: { select: VALUATION_OWNER_ORGANIZER_SELECT } } } },
     });
 
-    if (!item) {
+    if (!item || (await hiddenByEmbargo(item, req.user))) {
       return res.status(404).json({ message: 'Item not found' });
     }
 

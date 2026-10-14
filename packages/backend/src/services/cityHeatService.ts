@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { coarseCoord, notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
 
 export interface CityHeat {
   label: string;
@@ -48,7 +49,8 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
       lat: true,
       lng: true,
       startDate: true,
-      _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } } },
+      // Public count (2026-10-13): early-access / embargoed items are never counted publicly.
+      _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' }, ...notEmbargoedForPublicWhere(now) } } } },
     },
   });
 
@@ -66,7 +68,7 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
       id: true,
       items: {
         select: { price: true },
-        where: { price: { not: null }, listingType: { not: 'CONSIGNOR_TAG' } },
+        where: { price: { not: null }, listingType: { not: 'CONSIGNOR_TAG' }, ...notEmbargoedForPublicWhere(now) },
       },
     },
   });
@@ -141,8 +143,9 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
       itemCount: city.totalItems,
       totalEstimatedValue: city.totalValue,
       trend,
-      lat: avgLat,
-      lng: avgLng,
+      // Coarse (2 decimals): a city with a single sale would otherwise publish that sale's exact pin.
+      lat: coarseCoord(avgLat),
+      lng: coarseCoord(avgLng),
     });
   });
 

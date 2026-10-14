@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
+import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
 /**
  * Curated tag vocabulary — mirrors packages/shared/src/constants/tagVocabulary.ts
  * Duplicated here because backend tsconfig rootDir=./src blocks cross-package source imports.
@@ -41,7 +42,8 @@ export const getPopularTags = async (_req: Request, res: Response) => {
         draftStatus: 'PUBLISHED',
         isActive: true,
         tags: { isEmpty: false },
-        sale: { status: 'PUBLISHED' },
+        sale: { status: 'PUBLISHED', deletedAt: null },
+        AND: [notEmbargoedForPublicWhere(new Date())], // never list/count early-access items publicly (2026-10-13)
       },
       select: {
         tags: true,
@@ -102,7 +104,8 @@ export const getItemsByTag = async (req: Request, res: Response) => {
           tags: { has: normalizedSlug },
           draftStatus: 'PUBLISHED',
           isActive: true,
-          sale: { status: 'PUBLISHED' },
+          sale: { status: 'PUBLISHED', deletedAt: null },
+          AND: [notEmbargoedForPublicWhere(new Date())], // never list/count early-access items publicly (2026-10-13)
         },
         select: {
           id: true,
@@ -133,7 +136,8 @@ export const getItemsByTag = async (req: Request, res: Response) => {
           tags: { has: normalizedSlug },
           draftStatus: 'PUBLISHED',
           isActive: true,
-          sale: { status: 'PUBLISHED' },
+          sale: { status: 'PUBLISHED', deletedAt: null },
+          AND: [notEmbargoedForPublicWhere(new Date())], // never list/count early-access items publicly (2026-10-13)
         },
       }),
     ]);

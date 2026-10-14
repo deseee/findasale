@@ -41,6 +41,12 @@ export const SaleStatusWidget: React.FC<SaleStatusWidgetProps> = ({ saleId }) =>
     );
   }
 
+  // Only the sale's organizer, staff and admin receive the sold / holds / revenue figures. Without them
+  // this organizer card has nothing to show, so it stays hidden.
+  if (status.itemsSoldToday === undefined || status.activeHolds === undefined || status.revenueToday === undefined) {
+    return null;
+  }
+
   // Hide widget if all metrics are zero
   if (
     status.itemsSoldToday === 0 &&

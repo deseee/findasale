@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
 
 const BASE_URL = 'https://finda.sale';
 
@@ -116,6 +117,9 @@ export async function getWidgetInventory(req: Request, res: Response): Promise<v
     isActive: true,
     draftStatus: 'PUBLISHED',
     status: itemStatus,
+    deletedAt: null,
+    // Public embed (2026-10-13): early-access / embargoed items are never listed or counted.
+    AND: [notEmbargoedForPublicWhere(new Date())],
   };
 
   // Build item where clause (with optional category filter)

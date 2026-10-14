@@ -4,6 +4,7 @@ import api from '../lib/api';
 import { useToast } from './ToastContext';
 import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
+import { formatPublicLocation } from '@/lib/seo/publicSaleLocation';
 
 interface PickupBooking {
   id: string;
@@ -97,7 +98,7 @@ const MyPickupAppointments: React.FC = () => {
                   {sale.title}
                 </h3>
                 <p className="text-warm-700 dark:text-warm-300 mb-3">
-                  📍 {sale.address}, {sale.city}, {sale.state} {sale.zip}
+                  📍 {formatPublicLocation(sale)}
                 </p>
                 <div className="flex flex-col gap-2">
                   <p className="font-medium text-warm-900 dark:text-warm-100">

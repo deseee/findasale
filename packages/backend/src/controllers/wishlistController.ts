@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
 import { getRankBenefits } from '../utils/rankUtils';
+import { publicItemWhere } from '../lib/publicSaleGate';
 
 // GET /api/wishlists — get all wishlists for authenticated user
 export const getMyWishlists = async (req: AuthRequest, res: Response) => {
@@ -201,10 +202,13 @@ export const getPublicWishlist = async (req: AuthRequest, res: Response) => {
     const wishlist = await prisma.wishlist.findUnique({
       where: { shareSlug: slug },
       include: {
+        // 2026-10-13: public share link -- owner email is not sent (PII), and early-access /
+        // embargoed or non-public items are not listed until their public window.
         user: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true },
         },
         items: {
+          where: { item: publicItemWhere(new Date()) },
           include: {
             item: {
               include: {

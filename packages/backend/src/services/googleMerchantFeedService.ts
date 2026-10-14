@@ -11,6 +11,7 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
 import { v2 as cloudinary } from 'cloudinary';
 import {
   buildGoogleMerchantTsv,
@@ -59,6 +60,8 @@ async function fetchFeedItems(): Promise<FeedItem[]> {
       listingType: { notIn: ['AUCTION', 'REVERSE_AUCTION'] },
       // ADR-136 Addendum C (#659): a bulk lot's price is per 1,000 cards, never a Google Shopping product price.
       bulkLot: { is: null },
+      // Public, cached feed (2026-10-13): early-access / embargoed items are never listed.
+      AND: [notEmbargoedForPublicWhere(new Date())],
       sale: {
         is: {
           status: 'PUBLISHED',

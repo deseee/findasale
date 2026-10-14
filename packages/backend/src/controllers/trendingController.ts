@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { redis } from '../lib/redis'; // graceful Redis cache (in-memory fallback)
+import { GATE_ORGANIZER_SELECT, gateSalesForViewer } from '../lib/publicSaleGate';
+import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
 
 export const getTrendingItems = async (req: Request, res: Response) => {
   try {
@@ -11,11 +13,14 @@ export const getTrendingItems = async (req: Request, res: Response) => {
     // Get items with most favorites in last 7 days (as proxy for trending/views)
     const items = await prisma.item.findMany({
       where: {
-        status: 'AVAILABLE',
         sale: {
           status: 'PUBLISHED',
+          deletedAt: null,
         },
-        ...PUBLIC_ITEM_FILTER,
+        // AND-ed, not spread: PUBLIC_ITEM_FILTER has its own `status` key that used to overwrite
+        // status: 'AVAILABLE' and let SOLD items trend (2026-10-13).
+        // Early-access / embargoed items are never listed publicly (2026-10-13).
+        AND: [PUBLIC_ITEM_FILTER, { status: 'AVAILABLE' }, notEmbargoedForPublicWhere(new Date())],
       },
       select: {
         id: true,
@@ -105,8 +110,8 @@ export const getTrendingSales = async (req: Request, res: Response) => {
         organizerId: true,
         publishedAt: true,
         createdAt: true,
-        organizer: { select: { user: { select: { name: true } } } },
-        _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } }, rsvps: true } },
+        organizer: { select: { user: { select: { name: true } }, ...GATE_ORGANIZER_SELECT } },
+        _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' }, ...notEmbargoedForPublicWhere(now) } }, rsvps: true } },
         // follower count resolved below via a single grouped query
       },
       orderBy: { rsvps: { _count: 'desc' } },
@@ -128,7 +133,8 @@ export const getTrendingSales = async (req: Request, res: Response) => {
     }
 
     // Transform response to include follower count via relationship (shape unchanged)
-    const salesWithFollowers = sales.map((sale) => ({
+    // Cached and anonymous: always gated as a signed-out viewer (no street address, coarse lat/lng).
+    const salesWithFollowers = gateSalesForViewer(sales, undefined, [], now).map((sale) => ({
       ...sale,
       _count: {
         ...sale._count,

@@ -10,11 +10,12 @@
  *    listing had one, and an empty street address as-is.
  *
  * Rules enforced here:
- *  - location is always a Place with a `name` and a PostalAddress built only from the
- *    address fields the caller already has (and already shows publicly). No field is
- *    ever looked up or added here, so an address the backend withholds stays withheld.
- *    When there is no street address, the address falls back to city/region/postal level.
- *  - If there is no usable location at all (no street, city or postal code), or no
+ *  - location is always a Place with a `name` and a PostalAddress built only from
+ *    city / region / postal code. A street address is NEVER emitted (2026-10-13 location
+ *    privacy policy: JSON-LD is server rendered and cached for anonymous visitors, while
+ *    the street address is only for signed-in shoppers from the day before the sale).
+ *    The `address` input is accepted for call-site compatibility and ignored.
+ *  - If there is no usable location at all (no city or postal code), or no
  *    startDate, the builder returns null so the caller skips that Event instead of
  *    emitting an invalid one.
  *  - organizer is an Organization with the organizer's business name and their public
@@ -55,20 +56,21 @@ export interface EventPlaceInput {
   zip?: string | null;
 }
 
-/** Place + PostalAddress, or null when there is nothing locatable. */
+/**
+ * Place + PostalAddress (locality / region / postal code only), or null when there is
+ * nothing locatable. input.address is deliberately ignored: no streetAddress, no geo.
+ */
 export function buildEventPlace(input: EventPlaceInput): JsonLdNode | null {
-  const street = clean(input.address);
   const city = clean(input.city);
   const state = clean(input.state);
   const zip = clean(input.zip);
 
-  if (!street && !city && !zip) return null;
+  if (!city && !zip) return null;
 
   const locality = [city, state].filter((v): v is string => Boolean(v)).join(', ');
-  const name = clean(input.placeName) || locality || street || zip || '';
+  const name = clean(input.placeName) || locality || zip || '';
 
   const address: JsonLdNode = { '@type': 'PostalAddress' };
-  if (street) address.streetAddress = street;
   if (city) address.addressLocality = city;
   if (state) address.addressRegion = state;
   if (zip) address.postalCode = zip;

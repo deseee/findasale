@@ -10,6 +10,7 @@ import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidf
 import { searchLimiter } from '../middleware/rateLimiter';
 import { captureUnmetDemand } from '../services/unmetDemandService';
 import { conditionFilterValues } from '../utils/conditionFilter';
+import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy'; // 2026-10-13: public lists never show items still in an early-access window
 
 const router = Router();
 
@@ -83,9 +84,9 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
         { title: { contains: q, mode: 'insensitive' } },
         { description: { contains: q, mode: 'insensitive' } },
       ],
-      status: 'AVAILABLE',
       sale: { status: 'PUBLISHED', ...saleStatusWhere },
-      ...PUBLIC_ITEM_FILTER,
+      // AND-ed, not spread: PUBLIC_ITEM_FILTER's own `status` key used to overwrite status: 'AVAILABLE' (2026-10-13)
+      AND: [PUBLIC_ITEM_FILTER, { status: 'AVAILABLE' }, notEmbargoedForPublicWhere(now)],
     };
 
     // Apply price filters
@@ -282,9 +283,9 @@ router.get('/categories/:category', async (req: Request, res: Response) => {
 
     const where = {
       category: { equals: category, mode: 'insensitive' as const },
-      status: 'AVAILABLE',
       sale: { status: 'PUBLISHED' },
-      ...PUBLIC_ITEM_FILTER,
+      // AND-ed, not spread: PUBLIC_ITEM_FILTER's own `status` key used to overwrite status: 'AVAILABLE' (2026-10-13)
+      AND: [PUBLIC_ITEM_FILTER, { status: 'AVAILABLE' }, notEmbargoedForPublicWhere(new Date())],
     };
 
     const [items, total] = await Promise.all([
@@ -383,15 +384,31 @@ router.get('/random', async (req: Request, res: Response) => {
 
     const radiusKm = useLocation ? (radiusMiles as number) * 1.60934 : 0;
 
+    // 2026-10-13 address gate: the radius test runs against the coarse (2 decimal, ~1 km) sale position, the
+    // same precision the public API returns, so probing with different lat/lng/radius values cannot recover
+    // the exact pin that stands in for the withheld street address.
     const locationCondition = useLocation
-      ? Prisma.sql`AND (
+      ? Prisma.sql`AND s.lat IS NOT NULL AND s.lng IS NOT NULL AND (
           6371 * acos(
-            LEAST(1.0, cos(radians(${lat as number})) * cos(radians(s.lat)) *
-            cos(radians(s.lng) - radians(${lng as number})) +
-            sin(radians(${lat as number})) * sin(radians(s.lat)))
+            LEAST(1.0, cos(radians(${lat as number})) * cos(radians(ROUND(s.lat::numeric, 2)::float8)) *
+            cos(radians(ROUND(s.lng::numeric, 2)::float8) - radians(${lng as number})) +
+            sin(radians(${lat as number})) * sin(radians(ROUND(s.lat::numeric, 2)::float8)))
           )
         ) <= ${radiusKm}`
       : Prisma.empty;
+
+    // Same gates as PUBLIC_ITEM_FILTER + notEmbargoedForPublicWhere, in SQL: no hidden, grace-locked, consignor-tag
+    // or soft-deleted items, and nothing still inside an early-access window (Hunt Pass embargo, fresh RARE /
+    // LEGENDARY rarity delay, Legendary before legendaryVisibleAt).
+    const embargoCondition = Prisma.sql`
+        AND i."isActive" = true
+        AND i."listingType" IS DISTINCT FROM 'CONSIGNOR_TAG'
+        AND i."deletedAt" IS NULL
+        AND s."deletedAt" IS NULL
+        AND (i."earlyAccessUntil" IS NULL OR i."earlyAccessUntil" <= NOW())
+        AND NOT (i.rarity = 'LEGENDARY' AND i."createdAt" > NOW() - INTERVAL '12 hours')
+        AND NOT (i.rarity = 'RARE' AND i."createdAt" > NOW() - INTERVAL '6 hours')
+        AND NOT (i."isLegendary" = true AND i."legendaryVisibleAt" IS NOT NULL AND i."legendaryVisibleAt" > NOW())`;
 
     // #105: SQL Injection hardening - already using Prisma.sql template with Prisma.raw conditions
     const rows = await prisma.$queryRaw<RawItem[]>(Prisma.sql`
@@ -416,6 +433,7 @@ router.get('/random', async (req: Request, res: Response) => {
         AND s.status = 'PUBLISHED'
         AND (s."isOngoing" = true OR s."endDate" >= NOW())
         AND i."draftStatus" = 'PUBLISHED'
+        ${embargoCondition}
         ${priceCondition}
         ${categoryCondition}
         ${locationCondition}
@@ -493,9 +511,9 @@ router.post('/visual', searchLimiter, upload.single('photo'), async (req: Reques
           { description: { contains: labels[0], mode: 'insensitive' } },
           ...(labels.length > 1 ? labels.slice(1).map(label => ({ description: { contains: label, mode: 'insensitive' as const } })) : []),
         ],
-        status: 'AVAILABLE',
         sale: { status: 'PUBLISHED' },
-        ...PUBLIC_ITEM_FILTER,
+        // AND-ed, not spread: PUBLIC_ITEM_FILTER's own `status` key used to overwrite status: 'AVAILABLE' (2026-10-13)
+        AND: [PUBLIC_ITEM_FILTER, { status: 'AVAILABLE' }, notEmbargoedForPublicWhere(new Date())],
       },
       select: {
         id: true,

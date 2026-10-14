@@ -13,6 +13,7 @@ import { GetServerSideProps } from 'next';
 import { GRAND_RAPIDS_NEIGHBORHOODS } from './index';
 import { getSaleImageUrl } from '../../lib/imageUtils';
 import { serverFetch } from '@/lib/serverFetch';
+import { toPublicSaleList, formatPublicLocation } from '@/lib/seo/publicSaleLocation';
 
 interface NeighborhoodSale {
   id: string;
@@ -180,7 +181,7 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
                       </p>
 
                       <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5 truncate">
-                        📍 {sale.address}, {sale.city}
+                        📍 {formatPublicLocation({ address: sale.address, city: sale.city })}
                       </p>
 
                       <div className="flex items-center gap-2 mt-2">
@@ -240,7 +241,8 @@ export const getServerSideProps: GetServerSideProps = async ({ params, res }) =>
         slug,
         name: neighborhood.name,
         description: neighborhood.description,
-        sales: data.sales ?? [],
+        // Location privacy: this response is CDN cached for anonymous visitors.
+        sales: toPublicSaleList(data.sales),
         total: data.total ?? 0,
       },
     };

@@ -237,9 +237,9 @@ router.post('/me/do-not-sell', authenticate, async (req: AuthRequest, res: Respo
   }
 });
 
-// Public endpoint: Shopper QR code data for POS scanning
-// Must come before /:id catch-all to avoid route stealing
-router.get('/qr/:userId', getUserQRData);
+// Shopper QR code data: the shopper themself, or an organizer / register staff scanning at the POS
+// (2026-10-13: was public and leaked any user's email + holds). Must come before /:id catch-all.
+router.get('/qr/:userId', authenticate, getUserQRData);
 
 // Public endpoint — must come after /me to avoid route collision
 router.get('/:id/public', getPublicShopperProfile);

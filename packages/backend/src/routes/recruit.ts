@@ -13,6 +13,7 @@
  */
 import express, { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import * as Sentry from '@sentry/node';
 import { confirmSchema, interestSchema } from '../services/recruit/recruitSchemas';
 import { getRecruitConfig } from '../services/recruit/recruitConfig';
 import { getKillSwitchState } from '../services/recruit/recruitGuards';
@@ -74,8 +75,10 @@ router.get('/status', statusLimiter, async (_req: Request, res: Response) => {
     const open = ks.open && checkTransportReady(cfg).ok;
     res.json({ open });
   } catch (err: any) {
-    console.error('[recruit] status error:', err?.message ?? err);
-    res.json({ open: false });
+    // A failure here (usually the database) must not look like a deliberate "closed" answer.
+    console.error('[recruit] status check failed, answering 503:', err?.message ?? err);
+    Sentry.captureException(err, { tags: { route: 'recruit-status' } });
+    res.status(503).json({ open: false, error: true });
   }
 });
 

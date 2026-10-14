@@ -6,6 +6,7 @@ import { regionConfig } from '../config/regionConfig';
 import { buildEmail } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
+import { publicItemWhere } from '../lib/publicSaleGate';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
@@ -209,14 +210,17 @@ export const sendWeeklyEmails = async (): Promise<void> => {
     const twoWeeksFromNow = new Date();
     twoWeeksFromNow.setDate(twoWeeksFromNow.getDate() + 14);
 
+    const runAt = new Date();
     const upcomingSales = await prisma.sale.findMany({
       where: {
         status: 'PUBLISHED',
-        startDate: { gte: new Date(), lte: twoWeeksFromNow },
+        startDate: { gte: runAt, lte: twoWeeksFromNow },
       },
       include: {
         items: {
-          where: { status: 'AVAILABLE' },
+          // 2026-10-13: weekly picks never include an item still in an early-access / rarity / Legendary window
+          // (one shared list for every recipient, so the public / no-early-access rule applies).
+          where: { AND: [{ status: 'AVAILABLE' }, publicItemWhere(runAt)] },
           take: 50,
           select: { id: true, title: true, price: true, category: true, photoUrls: true },
         },

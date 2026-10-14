@@ -15,6 +15,7 @@
  */
 
 import { ImageResponse } from 'next/og';
+import { formatPublicLocation } from '@/lib/seo/publicSaleLocation';
 
 export const config = { runtime: 'edge' };
 
@@ -637,7 +638,10 @@ export default async function handler(req: Request) {
       year: 'numeric',
     });
 
-    const address = `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}`;
+    // Location privacy (2026-10-13): a share card is posted publicly, so it carries the city,
+    // state and zip only, never the street address (signed-in shoppers see that on the sale page
+    // from the day before the sale). formatPublicLocation skips empty parts, so no dangling commas.
+    const address = formatPublicLocation({ city: sale.city, state: sale.state, zip: sale.zip });
     const itemCount = sale.itemCount || 0;
 
     // Fetch and convert photo to data URI if available
@@ -676,7 +680,8 @@ export default async function handler(req: Request) {
     }
 
     // Generate image using ImageResponse (Edge Runtime)
-    return new ImageResponse(jsxContent, { width, height });
+    // Rendered with the caller's own credentials, so it must never land in a shared cache.
+    return new ImageResponse(jsxContent, { width, height, headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Share card generation error:', error);
     return new Response(JSON.stringify({ error: 'Failed to generate share card' }), {

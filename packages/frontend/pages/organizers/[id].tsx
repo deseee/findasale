@@ -15,6 +15,7 @@ import ReputationBadge from '../../components/ReputationBadge'; // Feature #71
 import Skeleton from '../../components/Skeleton';
 import ReviewsSection from '../../components/ReviewsSection';
 import { useAuth } from '../../components/AuthContext';
+import { toPublicOrganizer, toPublicSaleList } from '@/lib/seo/publicSaleLocation';
 
 interface ScrapedMetadata {
   aiEnriched?: {
@@ -974,7 +975,14 @@ export const getStaticProps: GetStaticProps<OrganizerPageProps> = async ({ param
   return {
     props: {
       // isFollowing is per-viewer -- ship a safe static default, corrected client-side.
-      organizer: { ...organizer, isFollowing: false },
+      // Location privacy (2026-10-13): this page is ISR cached for anonymous visitors, so the
+      // organizer's street address and phone number never ship in it, and each sale loses its
+      // street address and exact coordinates.
+      organizer: {
+        ...toPublicOrganizer(organizer),
+        ...(Array.isArray(organizer.sales) ? { sales: toPublicSaleList(organizer.sales) } : {}),
+        isFollowing: false,
+      },
     },
     revalidate: 86400,
   };

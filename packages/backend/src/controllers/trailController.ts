@@ -5,6 +5,30 @@ import { AuthRequest } from '../middleware/auth';
 import { searchNearbyPlaces, haversineDistance, completionBonus } from '../lib/placesService';
 import { spendXp, getSpendableXp, awardXp } from '../services/xpService';
 import { referralTrancheService } from '../services/referralTrancheService'; // Feature: Referral tranche system
+import { GATE_ORGANIZER_SELECT, gateSalesForViewer } from '../lib/publicSaleGate';
+import { redactSaleLocation } from '../lib/saleLocationPrivacy';
+
+// Address gate (2026-10-13): a SALE stop's street address / exact pin follows the sale address rule
+// (signed-in viewers from the day before the sale starts; the sale's owner and admin always).
+// Non-sale stops (cafes, shops, landmarks) are public businesses and are left as entered.
+const TRAIL_GATE_SALE_SELECT = { select: { startDate: true, organizer: { select: GATE_ORGANIZER_SELECT } } } as const;
+
+function gateTrailStops(stops: any[], anchorSale: any, viewer: any): any[] {
+  return (stops || []).map((stop) => {
+    const { sale: stopSale, ...rest } = stop || {};
+    if (rest.stopType !== 'SALE') return rest;
+    const ref = stopSale ?? anchorSale;
+    if (!ref) {
+      // Unknown sale: only admin sees the street-level location.
+      return viewer?.role === 'ADMIN'
+        ? rest
+        : redactSaleLocation(rest, { visible: false, reason: 'SIGN_IN', revealsOn: '' });
+    }
+    const [gated] = gateSalesForViewer([{ ...rest, startDate: ref.startDate, organizer: ref.organizer }], viewer);
+    const { startDate: _s, organizer: _o, ...out } = gated as any;
+    return out;
+  });
+}
 
 /**
  * POST /api/trails
@@ -101,9 +125,10 @@ export const getTrail = async (req: AuthRequest | Request, res: Response) => {
     let trail = await prisma.treasureTrail.findUnique({
       where: { id: trailId },
       include: {
-        organizer: { select: { id: true, businessName: true } },
-        stops: { orderBy: { order: 'asc' } },
-        completions: { where: { userId }, select: { completionBonusXp: true, totalXpEarned: true } },
+        organizer: { select: { id: true, businessName: true, userId: true } },
+        sale: TRAIL_GATE_SALE_SELECT,
+        stops: { orderBy: { order: 'asc' }, include: { sale: TRAIL_GATE_SALE_SELECT } },
+        completions: { where: { userId: userId ?? '__anonymous__' }, select: { completionBonusXp: true, totalXpEarned: true } }, // anonymous: none (undefined would match every user)
       },
     });
 
@@ -112,17 +137,18 @@ export const getTrail = async (req: AuthRequest | Request, res: Response) => {
       trail = await prisma.treasureTrail.findUnique({
         where: { shareToken: trailId },
         include: {
-          organizer: { select: { id: true, businessName: true } },
-          stops: { orderBy: { order: 'asc' } },
-          completions: { where: { userId }, select: { completionBonusXp: true, totalXpEarned: true } },
+          organizer: { select: { id: true, businessName: true, userId: true } },
+          sale: TRAIL_GATE_SALE_SELECT,
+          stops: { orderBy: { order: 'asc' }, include: { sale: TRAIL_GATE_SALE_SELECT } },
+          completions: { where: { userId: userId ?? '__anonymous__' }, select: { completionBonusXp: true, totalXpEarned: true } }, // anonymous: none (undefined would match every user)
         },
       });
     }
 
     if (!trail) return res.status(404).json({ message: 'Trail not found.' });
 
-    // Non-public trails visible to organizer only
-    if (!trail.isPublic && userId !== trail.organizer?.id) {
+    // Non-public trails visible to organizer only (compare the viewer's user id with the trail organizer's user id)
+    if (!trail.isPublic && (!userId || userId !== trail.organizer?.userId)) {
       return res.status(403).json({ message: 'Not authorized.' });
     }
 
@@ -142,7 +168,14 @@ export const getTrail = async (req: AuthRequest | Request, res: Response) => {
       );
     }
 
-    return res.json({ ...trail, userProgress });
+    const { sale: anchorSale, stops, organizer, ...trailRest } = trail as any;
+    const publicOrganizer = organizer ? { id: organizer.id, businessName: organizer.businessName } : organizer;
+    return res.json({
+      ...trailRest,
+      organizer: publicOrganizer,
+      stops: gateTrailStops(stops, anchorSale, (req as AuthRequest).user),
+      userProgress,
+    });
   } catch (error) {
     console.error('getTrail error:', error);
     return res.status(500).json({ message: 'Server error.' });
@@ -316,18 +349,21 @@ export const checkInAtStop = async (req: AuthRequest, res: Response) => {
     });
     if (!stop) return res.status(404).json({ message: 'Stop not found.' });
 
-    const distance = haversineDistance(latitude, longitude, stop.latitude, stop.longitude);
-    const MAX_DISTANCE = 100; // 100 meters
-    if (distance > MAX_DISTANCE) {
-      return res.status(400).json({ message: `Too far away (${Math.round(distance)}m, max ${MAX_DISTANCE}m).` });
-    }
-
-    // Check if already checked in at this stop
+    // Check if already checked in at this stop (before the distance check, so repeated probes after a
+    // check-in learn nothing about where the stop is).
     const existing = await prisma.trailCheckIn.findUnique({
       where: { trailId_stopId_userId: { trailId, stopId, userId } },
     });
     if (existing) {
       return res.status(409).json({ message: 'Already checked in at this stop.' });
+    }
+
+    const distance = haversineDistance(latitude, longitude, stop.latitude, stop.longitude);
+    const MAX_DISTANCE = 100; // 100 meters
+    if (distance > MAX_DISTANCE) {
+      // Location oracle guard (2026-10-13): never echo the exact distance; it would let a caller
+      // trilaterate a SALE stop's exact pin before the address is revealed.
+      return res.status(400).json({ message: `Too far away. Get within ${MAX_DISTANCE}m of this stop to check in.` });
     }
 
     // Create check-in and award XP

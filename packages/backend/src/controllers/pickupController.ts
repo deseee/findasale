@@ -1,6 +1,54 @@
 import { Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { gateSaleForViewer, GATE_ORGANIZER_SELECT } from '../lib/publicSaleGate';
+
+// 2026-10-13 public sale privacy gate. A pickup booking can be created by any signed-in user (bookSlot does not
+// require a purchase), so the sale address on a booking is only treated as buyer-owned pickup info when the user
+// really bought or holds something at that sale. Everyone else goes through the normal public address gate.
+const BOOKING_SALE_SELECT = {
+  id: true,
+  title: true,
+  address: true,
+  city: true,
+  state: true,
+  zip: true,
+  startDate: true,
+  organizer: { select: GATE_ORGANIZER_SELECT },
+} as const;
+
+/** Sale ids (from saleIds) where the user has a purchase or a live hold. */
+async function buyerSaleIds(userId: string, saleIds: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (saleIds.length === 0) return out;
+  const [purchases, holds] = await Promise.all([
+    prisma.purchase.findMany({
+      where: {
+        userId,
+        status: { notIn: ['FAILED'] },
+        OR: [{ saleId: { in: saleIds } }, { item: { saleId: { in: saleIds } } }],
+      },
+      select: { saleId: true, item: { select: { saleId: true } } },
+    }),
+    prisma.itemReservation.findMany({
+      where: { userId, status: { notIn: ['CANCELLED', 'EXPIRED'] }, item: { saleId: { in: saleIds } } },
+      select: { item: { select: { saleId: true } } },
+    }),
+  ]);
+  for (const p of purchases) {
+    if (p.saleId) out.add(p.saleId);
+    if (p.item?.saleId) out.add(p.item.saleId);
+  }
+  for (const h of holds) if (h.item?.saleId) out.add(h.item.saleId);
+  return out;
+}
+
+/** Buyer keeps the full address; anyone else gets the public gate. Gate-only organizer keys never leave. */
+function gateBookingSale<T extends { id: string; organizer?: unknown }>(sale: T, viewer: AuthRequest['user'], buyerSales: Set<string>) {
+  const shown: any = buyerSales.has(sale.id) ? sale : gateSaleForViewer(sale as any, viewer);
+  const { organizer: _gateOnly, ...rest } = shown;
+  return rest as Omit<T, 'organizer'>;
+}
 
 // POST /api/pickup/slots — organizer creates a pickup slot for their sale
 export const createSlot = async (req: AuthRequest, res: Response) => {
@@ -231,13 +279,17 @@ export const bookSlot = async (req: AuthRequest, res: Response) => {
       },
       include: {
         slot: {
-          include: { sale: true },
+          include: { sale: { select: BOOKING_SALE_SELECT } },
         },
         user: { select: { id: true, name: true, email: true } },
       },
     });
 
-    res.status(201).json(booking);
+    const bookingBuyerSales = await buyerSaleIds(req.user.id, [booking.slot.sale.id]);
+    res.status(201).json({
+      ...booking,
+      slot: { ...booking.slot, sale: gateBookingSale(booking.slot.sale, req.user, bookingBuyerSales) },
+    });
   } catch (error: any) {
     if (error.code === 'P2002') {
       return res.status(409).json({ message: 'You have already booked this slot' });
@@ -282,23 +334,23 @@ export const getMyBookings = async (req: AuthRequest, res: Response) => {
       include: {
         slot: {
           include: {
-            sale: {
-              select: {
-                id: true,
-                title: true,
-                address: true,
-                city: true,
-                state: true,
-                zip: true,
-              },
-            },
+            sale: { select: BOOKING_SALE_SELECT },
           },
         },
       },
       orderBy: { slot: { startsAt: 'asc' } },
     });
 
-    res.json(bookings);
+    const myBuyerSales = await buyerSaleIds(
+      req.user.id,
+      Array.from(new Set(bookings.map((b) => b.slot.sale.id)))
+    );
+    res.json(
+      bookings.map((b) => ({
+        ...b,
+        slot: { ...b.slot, sale: gateBookingSale(b.slot.sale, req.user, myBuyerSales) },
+      }))
+    );
   } catch (error) {
     console.error('[pickup] getMyBookings error:', error);
     res.status(500).json({ message: 'Server error' });

@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { GATE_ORGANIZER_SELECT, gateNestedSales } from '../lib/publicSaleGate';
 import { createNotification } from '../services/notificationService';
 import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
 import { awardXp, spendXp, getSpendableXp, XP_AWARDS } from '../services/xpService';
@@ -164,13 +165,14 @@ export const getMyBounties = async (req: AuthRequest, res: Response) => {
     const bounties = await prisma.missingListingBounty.findMany({
       where: { userId: req.user.id },
       include: {
-        sale: { select: { id: true, title: true, address: true } },
+        sale: { select: { id: true, title: true, address: true, startDate: true, organizer: { select: GATE_ORGANIZER_SELECT } } },
         item: { select: { id: true, title: true, price: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
-    return res.json(bounties);
+    // 2026-10-13: street address only from the day before the sale (public sale gate)
+    return res.json(gateNestedSales(bounties, req.user));
   } catch (error) {
     console.error('getMyBounties error:', error);
     return res.status(500).json({ message: 'Server error.' });
@@ -305,7 +307,8 @@ export const getLocalBounties = async (req: AuthRequest, res: Response) => {
       },
       include: {
         user: { select: { id: true, name: true, roles: true } },
-        sale: { select: { id: true, title: true, startDate: true, lat: true, lng: true } },
+        // address + organizer gate keys so the public sale gate can coarsen lat/lng (2026-10-13)
+        sale: { select: { id: true, title: true, startDate: true, lat: true, lng: true, address: true, organizer: { select: GATE_ORGANIZER_SELECT } } },
         submissions: { where: { organizerId: req.user.id } },
       },
       orderBy,
@@ -322,7 +325,7 @@ export const getLocalBounties = async (req: AuthRequest, res: Response) => {
     });
 
     // Format response
-    const formattedBounties = bounties.map((b: any) => ({
+    const formattedBounties = gateNestedSales(bounties as any[], req.user).map((b: any) => ({
       id: b.id,
       description: b.description,
       offerPrice: b.offerPrice,

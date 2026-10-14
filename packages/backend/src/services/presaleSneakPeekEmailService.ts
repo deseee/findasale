@@ -3,6 +3,8 @@ import jwt from 'jsonwebtoken';
 import { buildEmail, buildItemCardModule, buildSpacer, buildCTARow, EMAIL_TOKENS as T } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
+import { messageSaleLocation, addressNoteHtml } from '../lib/messageSaleLocation';
+import { publicItemWhere } from '../lib/publicSaleGate';
 
 const SITE_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
@@ -22,11 +24,14 @@ function buildSneakPeekHtml(opts: {
   saleDay: string;
   saleTime: string;
   saleAddress: string;
+  /** Pre-built HTML link shown when the street is withheld (2026-10-13); '' or omitted otherwise. */
+  addressNoteHtml?: string;
   items: Array<{ title: string; price: number; category?: string }>;
   saleUrl: string;
   unsubUrl: string;
 }): string {
   const { saleName, saleDay, saleTime, saleAddress, items, saleUrl, unsubUrl } = opts;
+  const noteLine = opts.addressNoteHtml ? `<br><span style="font-size:13px;">${opts.addressNoteHtml}</span>` : '';
 
   // Item grid rows (text-only — no image src, avoids spam filters on bulk sends)
   const itemRows = items.slice(0, 6).map(item => {
@@ -53,7 +58,7 @@ function buildSneakPeekHtml(opts: {
       </div>
       <div style="font-size:14px; color:#1A1814; line-height:1.7;">
         &#128197; <strong>${saleDay}</strong> &middot; ${saleTime}<br>
-        &#128205; ${saleAddress}
+        &#128205; ${saleAddress}${noteLine}
       </div>
     </td>
   </tr>
@@ -86,6 +91,7 @@ async function sendSneakPeekEmail(opts: {
   saleDay: string;
   saleTime: string;
   saleAddress: string;
+  addressNoteHtml?: string;
   items: Array<{ title: string; price: number; category?: string }>;
   saleUrl: string;
 }): Promise<void> {
@@ -175,11 +181,12 @@ export async function sendPresaleSneakPeekEmails(): Promise<void> {
           select: { userId: true },
         },
         items: {
+          // 2026-10-13: a teaser never shows an item still in an early-access / rarity / Legendary window
           where: {
-            isActive: true,
-            status: 'AVAILABLE',
-            photoUrls: { isEmpty: false },
-            price: { not: null },
+            AND: [
+              { isActive: true, status: 'AVAILABLE', photoUrls: { isEmpty: false }, price: { not: null } },
+              publicItemWhere(now),
+            ],
           },
           orderBy: { price: 'desc' },
           take: 6,
@@ -202,7 +209,6 @@ export async function sendPresaleSneakPeekEmails(): Promise<void> {
       const saleUrl     = `${SITE_URL}/sales/${sale.id}`;
       const saleDay     = formatSaleDay(sale.startDate);
       const saleTime    = formatSaleTime(sale.startDate);
-      const saleAddress = `${sale.address}, ${sale.city}, ${sale.state}`;
 
       // Collect recipient user IDs from subscribers + RSVPs (deduplicated)
       const recipientUserIds = new Set<string>();
@@ -245,13 +251,17 @@ export async function sendPresaleSneakPeekEmails(): Promise<void> {
         if (sentThisRun.has(dedupKey)) continue;
         sentThisRun.add(dedupKey);
 
+        // 2026-10-13: street only for account holders (userId set) from the day before the sale, at send time.
+        const location = messageSaleLocation(sale, sale.organizer?.timezone, Boolean(recipient.userId), new Date());
+
         await sendSneakPeekEmail({
           to: recipient.email,
           userId: recipient.userId,
           saleName: sale.title,
           saleDay,
           saleTime,
-          saleAddress,
+          saleAddress: location.line,
+          addressNoteHtml: addressNoteHtml(location, saleUrl),
           items: itemPayload,
           saleUrl,
         });

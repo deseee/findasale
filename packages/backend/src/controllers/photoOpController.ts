@@ -7,7 +7,8 @@
 
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest, optionalAuthenticate } from '../middleware/auth';
+import { saleAddressGateForViewer, coarseCoord } from '../lib/saleLocationPrivacy';
 import { prisma } from '../lib/prisma';
 import { awardXp, XP_AWARDS } from '../services/xpService';
 import { haversineDistance } from '../lib/placesService';
@@ -87,6 +88,26 @@ export const listStations = async (req: Request, res: Response) => {
   try {
     const { saleId } = req.params;
 
+    // 2026-10-13: a station pin sits at the sale, so it follows the public sale address gate. The route
+    // mounts no auth middleware; resolve the viewer here (expired token -> 401 so the client refreshes).
+    const authReq = req as AuthRequest;
+    if (!authReq.user) {
+      let proceed = false;
+      await optionalAuthenticate(authReq, res, () => { proceed = true; });
+      if (!proceed) return;
+    }
+    const viewer = authReq.user;
+    const gateSale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { startDate: true, address: true, organizer: { select: { userId: true, timezone: true } } },
+    });
+    const privileged = Boolean(
+      viewer && (viewer.role === 'ADMIN' || viewer.roles?.includes?.('ADMIN') || (gateSale?.organizer?.userId && gateSale.organizer.userId === viewer.id))
+    );
+    const addressVisible = gateSale
+      ? saleAddressGateForViewer(gateSale, gateSale.organizer?.timezone, viewer, privileged).visible
+      : false;
+
     const stations = await prisma.photoOpStation.findMany({
       where: { saleId, isActive: true },
       select: {
@@ -102,7 +123,11 @@ export const listStations = async (req: Request, res: Response) => {
       orderBy: { createdAt: 'asc' },
     });
 
-    res.json(stations);
+    res.json(
+      addressVisible
+        ? stations
+        : stations.map((s) => ({ ...s, lat: coarseCoord(s.lat), lng: coarseCoord(s.lng) }))
+    );
   } catch (error) {
     console.error('[photoOp] listStations error:', error);
     res.status(500).json({ message: 'Server error while listing stations' });

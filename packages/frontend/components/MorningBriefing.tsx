@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import api from '../lib/api';
 import { useAuth } from './AuthContext';
 import { useQuery } from '@tanstack/react-query';
+import { formatPublicLocation } from '@/lib/seo/publicSaleLocation';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -157,7 +158,7 @@ function formatCashFloat(cents: number | null): string {
 }
 
 function formatAddress(sale: BriefingSale): string {
-  return `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}`;
+  return formatPublicLocation(sale);
 }
 
 function mapsUrl(sale: BriefingSale): string {

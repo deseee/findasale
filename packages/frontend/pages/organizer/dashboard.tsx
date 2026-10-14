@@ -53,6 +53,8 @@ import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-typ
 import { OGBuyerCountBadge } from '../../components/OGBuyerBadge'; // Feature #404: OG Buyer
 import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Store, Package } from 'lucide-react';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { useGuardedPublish } from '../../hooks/useGuardedPublish';
+import { isTierLimitPublishError } from '../../lib/publishSale';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
 import SmartSearchViewsCard from '../../components/SmartSearchViewsCard';
 import DemandSignalsCard from '../../components/DemandSignalsCard';
@@ -158,6 +160,74 @@ const OrganizerDashboard = () => {
     message: string;
     onConfirm: () => void;
   }>({ open: false, title: '', message: '', onConfirm: () => {} });
+
+  // Every publish/reopen on the dashboard goes through the guarded helper (2026-10-13): an empty
+  // sale gets the server's 409, which opens "Publish without items?"; only a yes there publishes it.
+  const guardedPublish = useGuardedPublish();
+  const [publishingSaleId, setPublishingSaleId] = useState<string | null>(null);
+
+  const refreshAfterStatusChange = () => {
+    queryClient.invalidateQueries({ queryKey: ['organizer-sales', user?.id] });
+    queryClient.invalidateQueries({ queryKey: ['organizer-stats', user?.id] });
+  };
+
+  const showPublishError = (error: any, fallback: string) => {
+    if (isTierLimitPublishError(error)) {
+      const tierErr = error.response.data;
+      showToast(
+        `You're running ${tierErr.current} active sale${tierErr.current !== 1 ? 's' : ''}. ${tierErr.tier} tier allows ${tierErr.limit}. Upgrade to run more.`,
+        'error'
+      );
+    } else {
+      showToast(error?.response?.data?.message || fallback, 'error');
+    }
+  };
+
+  // Sale-level "Publish" for a DRAFT sale card. SIMPLE organizers pay a per-sale listing fee on
+  // edit-sale before publishing, so they go there (?publish=1 focuses its Publish button).
+  const handlePublishDraft = (sale: { id: string; title?: string }) => {
+    if (isSimple) {
+      router.push(`/organizer/edit-sale/${sale.id}?publish=1`);
+      return;
+    }
+    setConfirmState({
+      open: true,
+      title: 'Publish this sale?',
+      message: `${sale.title ? `"${sale.title}"` : 'This sale'} will be visible to shoppers on the map.`,
+      onConfirm: async () => {
+        setPublishingSaleId(sale.id);
+        try {
+          await guardedPublish.publish(sale.id, {
+            onPublished: () => {
+              showToast('Your sale is live.', 'success');
+              refreshAfterStatusChange();
+            },
+            onError: (error) => showPublishError(error, "We couldn't publish your sale. Please try again."),
+          });
+        } finally {
+          setPublishingSaleId(null);
+        }
+      },
+    });
+  };
+
+  // Reopen an ENDED sale (PUBLISHED again). Same guard: an empty sale asks first.
+  const handleReopenSale = (saleId: string) => {
+    setConfirmState({
+      open: true,
+      title: 'Reopen Sale',
+      message: 'Reopen this sale? It will become visible to shoppers again.',
+      onConfirm: async () => {
+        await guardedPublish.publish(saleId, {
+          onPublished: () => {
+            showToast('Sale reopened', 'success');
+            refreshAfterStatusChange();
+          },
+          onError: (error) => showPublishError(error, 'Failed to reopen sale'),
+        });
+      },
+    });
+  };
 
   useEffect(() => {
     setIsClient(true);
@@ -1299,9 +1369,15 @@ const OrganizerDashboard = () => {
                       </Link>
                     )}
                     {activeSale.status === 'DRAFT' && (
-                      <Link href={`/organizer/edit-sale/${activeSale.id}`} className="text-sm px-3 py-1 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-full hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors" title="Review and publish this sale">
-                        Publish Sale
-                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => handlePublishDraft(activeSale)}
+                        disabled={publishingSaleId === activeSale.id}
+                        className="text-sm px-3 py-1 min-h-[44px] inline-flex items-center bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-full hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors disabled:opacity-60"
+                        title="Publish this sale so shoppers can see it"
+                      >
+                        {publishingSaleId === activeSale.id ? 'Publishing…' : 'Publish Sale'}
+                      </button>
                     )}
                     <Link href={`/organizer/pos?saleId=${activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors flex items-center gap-1" title="Open Point of Sale to process in-person transactions">
                       <ShoppingCart className="w-4 h-4" />
@@ -1487,9 +1563,14 @@ const OrganizerDashboard = () => {
                           <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Ready to go live? Publish your sale.</p>
                           <p className="text-sm text-amber-700 dark:text-amber-300">You have {draft} items ready.</p>
                         </div>
-                        <Link href={`/organizer/edit-sale/${id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
-                          Publish Sale
-                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handlePublishDraft({ id, title: activeSale?.title })}
+                          disabled={publishingSaleId === id}
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 min-h-[44px] rounded-lg transition-colors text-sm flex-shrink-0 ml-4 disabled:opacity-60"
+                        >
+                          {publishingSaleId === id ? 'Publishing…' : 'Publish Sale'}
+                        </button>
                       </div>
                     </div>
                   );
@@ -1836,32 +1917,7 @@ const OrganizerDashboard = () => {
                         </div>
                         <div className="flex flex-wrap items-center gap-2 sm:ml-4">
                           <button
-                            onClick={() => {
-                              setConfirmState({
-                                open: true,
-                                title: 'Reopen Sale',
-                                message: 'Reopen this sale? It will become visible to shoppers again.',
-                                onConfirm: async () => {
-                                  try {
-                                    await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
-                                    showToast('Sale reopened', 'success');
-                                    queryClient.invalidateQueries({ queryKey: ['organizer-sales', user?.id] });
-                                  } catch (error: any) {
-                                    // Feature #249: Handle concurrent sales tier limit (409)
-                                    if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
-                                      const tierErr = error.response.data;
-                                      showToast(
-                                        `You're running ${tierErr.current} active sale${tierErr.current !== 1 ? 's' : ''}. ${tierErr.tier} tier allows ${tierErr.limit}. Upgrade to run more.`,
-                                        'error'
-                                      );
-                                    } else {
-                                      showToast(error.response?.data?.message || 'Failed to reopen', 'error');
-                                    }
-                                  }
-                                  setConfirmState(s => ({ ...s, open: false }));
-                                },
-                              });
-                            }}
+                            onClick={() => handleReopenSale(sale.id)}
                             className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-xs px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
                           >
                             Reopen
@@ -1973,32 +2029,7 @@ const OrganizerDashboard = () => {
                         {sale.status === 'ENDED' && (
                           <>
                             <button
-                              onClick={() => {
-                                setConfirmState({
-                                  open: true,
-                                  title: 'Reopen Sale',
-                                  message: 'Reopen this sale? It will become visible to shoppers again.',
-                                  onConfirm: async () => {
-                                    try {
-                                      await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
-                                      showToast('Sale reopened', 'success');
-                                      queryClient.invalidateQueries({ queryKey: ['organizer-sales', user?.id] });
-                                    } catch (error: any) {
-                                      // Feature #249: Handle concurrent sales tier limit (409)
-                                      if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
-                                        const tierErr = error.response.data;
-                                        showToast(
-                                          `You're running ${tierErr.current} active sale${tierErr.current !== 1 ? 's' : ''}. ${tierErr.tier} tier allows ${tierErr.limit}. Upgrade to run more.`,
-                                          'error'
-                                        );
-                                      } else {
-                                        showToast(error.response?.data?.message || 'Failed to reopen sale', 'error');
-                                      }
-                                    }
-                                    setConfirmState(s => ({ ...s, open: false }));
-                                  },
-                                });
-                              }}
+                              onClick={() => handleReopenSale(sale.id)}
                               className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
                             >
                               Reopen
@@ -2034,6 +2065,9 @@ const OrganizerDashboard = () => {
         }}
         onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
       />
+
+      {/* "Publish without items?" for dashboard publish and reopen (useGuardedPublish). */}
+      {guardedPublish.dialog}
 
     </>
   );

@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../services/notificationService';
 import { ExplorerRank } from '@prisma/client';
+import { isItemEmbargoedForViewer } from '../lib/saleLocationPrivacy';
 
 const flashDealCreateSchema = z.object({
   itemId: z.string().min(1),
@@ -116,6 +117,8 @@ export const getActiveFlashDeals = async (req: Request | AuthRequest, res: Respo
       where: {
         startsAt: { lte: sixHoursFromNow },
         endsAt: { gte: now },
+        // Public list: only deals in live (published, not deleted) sales.
+        sale: { status: 'PUBLISHED', deletedAt: null },
       },
       include: {
         item: {
@@ -125,6 +128,12 @@ export const getActiveFlashDeals = async (req: Request | AuthRequest, res: Respo
             price: true,
             category: true,
             photoUrls: true,
+            // Embargo inputs (2026-10-13), stripped before the response.
+            rarity: true,
+            createdAt: true,
+            earlyAccessUntil: true,
+            isLegendary: true,
+            legendaryVisibleAt: true,
           },
         },
         sale: {
@@ -143,6 +152,7 @@ export const getActiveFlashDeals = async (req: Request | AuthRequest, res: Respo
     // Get user's rank and Hunt Pass status if authenticated
     let userRank: ExplorerRank | null = null;
     let hasHuntPass = false;
+    let viewerAccess: { explorerRank: ExplorerRank; huntPassActive: boolean; huntPassExpiry: Date | null } | null = null;
 
     const authReq = req as AuthRequest;
     if (authReq.user) {
@@ -156,6 +166,7 @@ export const getActiveFlashDeals = async (req: Request | AuthRequest, res: Respo
       });
 
       if (user) {
+        viewerAccess = user;
         userRank = user.explorerRank;
         // Check if Hunt Pass is active and not expired
         hasHuntPass = !!(user.huntPassActive && user.huntPassExpiry && user.huntPassExpiry > now);
@@ -165,6 +176,8 @@ export const getActiveFlashDeals = async (req: Request | AuthRequest, res: Respo
     // Filter deals based on legendary-first access gating
     // Deals starting within 6 hours are only shown to: Sage+ rank OR Hunt Pass holders
     const filtered = flashDeals.filter((deal) => {
+      // Early-access / embargoed items stay hidden until the viewer's window opens (2026-10-13).
+      if (deal.item && isItemEmbargoedForViewer(deal.item, viewerAccess, now)) return false;
       const isStartingSoon = deal.startsAt > now; // Starts in the future
       const isSageOrAbove = userRank === 'SAGE' || userRank === 'GRANDMASTER';
 
@@ -186,7 +199,9 @@ export const getActiveFlashDeals = async (req: Request | AuthRequest, res: Respo
       discountPct: deal.discountPct,
       startsAt: deal.startsAt,
       endsAt: deal.endsAt,
-      item: deal.item,
+      item: deal.item
+        ? { id: deal.item.id, title: deal.item.title, price: deal.item.price, category: deal.item.category, photoUrls: deal.item.photoUrls }
+        : deal.item,
       sale: deal.sale,
       timeRemainingMinutes: Math.max(
         0,

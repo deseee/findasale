@@ -15,6 +15,7 @@ import type { CompliantSmsOutcome } from './compliantSms';
 import { organizerHasTier } from '../utils/tierAccess';
 import { sanitizeHeaderText } from '../utils/htmlEscape';
 import { maskEmail } from '../utils/logMask';
+import { messageSaleLocation } from '../lib/messageSaleLocation';
 
 
 // DEAD (2026-09-29): reminder texts go through services/compliantSms.ts, which owns the Twilio client.
@@ -41,7 +42,10 @@ interface ReminderEmail {
   to: string;
   userId: string;
   saleName: string;
+  /** Already gated (2026-10-13): full street only for account holders from the day before the sale. */
   saleAddress: string;
+  /** Hint shown (linked to the sale page) when the street is withheld; omitted when the full address is included. */
+  addressNote?: string;
   startDate: Date;
   saleUrl: string;
   reminderType: 'one-day' | 'two-hours';
@@ -54,7 +58,11 @@ interface ReminderEmail {
 interface ReminderSMS {
   to: string;
   saleName: string;
+  /** Already gated (2026-10-13): full street only for account holders from the day before the sale. */
   saleAddress: string;
+  /** Hint appended when the street is withheld (with saleUrl when given). */
+  addressNote?: string;
+  saleUrl?: string;
   startDate: Date;
   reminderType: 'one-day' | 'two-hours';
   /**
@@ -119,6 +127,7 @@ const getEmailTemplate = (reminder: ReminderEmail, unsubToken: string, unsubUrlO
     saleDate:     reminder.reminderType === 'one-day' ? dateOnly : formattedDate,
     saleTime:     reminder.reminderType === 'one-day' ? `Opens ${timeOnly}` : `Starting at ${timeOnly}`,
     saleAddress:  reminder.saleAddress,
+    addressNote:  reminder.addressNote || undefined,
     ctaUrl:       reminder.saleUrl,
     reminderType: reminder.reminderType,
     dayWord,
@@ -158,7 +167,10 @@ const withRetry = async <T>(
 export const getSMSTemplate = (reminder: ReminderSMS, compact = false): string => {
   const timeZone = resolveSendTimeZone(reminder.orgTimeZone);
   const name = compact ? reminder.saleName.slice(0, 40) : reminder.saleName.slice(0, 60);
-  const address = compact ? '' : ` Address: ${reminder.saleAddress.slice(0, 80)}`;
+  const note = reminder.addressNote
+    ? ` ${reminder.addressNote}${reminder.saleUrl ? `: ${reminder.saleUrl}` : ''}.`
+    : '';
+  const address = compact ? '' : ` Address: ${reminder.saleAddress.slice(0, 80)}${note ? `.${note}` : ''}`;
 
   if (reminder.reminderType === 'one-day') {
     const dayWord = saleDayWord(reminder.startDate, reminder.now ?? new Date(), timeZone);
@@ -489,7 +501,8 @@ interface ReminderPassConfig {
   reminderType: 'one-day' | 'two-hours';
   smsKind: string;
   pushType: string;
-  push: (sale: { title: string; address: string; city: string }) => { title: string; body: string };
+  /** `location` is the already-gated location line for the recipient (2026-10-13). */
+  push: (sale: { title: string }, location: string) => { title: string; body: string };
 }
 
 const PASS_CONFIG: Record<ReminderKind, ReminderPassConfig> = {
@@ -497,13 +510,13 @@ const PASS_CONFIG: Record<ReminderKind, ReminderPassConfig> = {
     reminderType: 'one-day',
     smsKind: 'DAY_BEFORE_SMS',
     pushType: 'SALE_REMINDER_ONE_DAY',
-    push: (sale) => ({ title: `Tomorrow: ${sale.title}`, body: `${sale.address}, ${sale.city}. Starts tomorrow.` }),
+    push: (sale, location) => ({ title: `Tomorrow: ${sale.title}`, body: `${location ? `${location}. ` : ''}Starts tomorrow.` }),
   },
   TWO_HOURS: {
     reminderType: 'two-hours',
     smsKind: 'TWO_HOURS_SMS',
     pushType: 'SALE_REMINDER_TWO_HOURS',
-    push: (sale) => ({ title: `Starting soon: ${sale.title}`, body: `${sale.address}, ${sale.city}. Starts in about 2 hours.` }),
+    push: (sale, location) => ({ title: `Starting soon: ${sale.title}`, body: `${location ? `${location}. ` : ''}Starts in about 2 hours.` }),
   },
 };
 
@@ -556,8 +569,10 @@ export const processReminderPass = async (
 
   for (const sale of sales) {
     const saleUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/sales/${sale.id}`;
-    const saleAddress = `${sale.address}, ${sale.city}, ${sale.state}`;
     const orgTimeZone = (sale as any).organizer?.timezone ?? null;
+    // 2026-10-13: the street address goes only to account holders (a User row) and only from the day before the
+    // sale starts (organizer time zone, evaluated at send time). Guest subscribers get city / state / zip.
+    const locationFor = (isAccountHolder: boolean) => messageSaleLocation(sale, orgTimeZone, isAccountHolder, clock());
     const orgTier = (sale as any).organizer?.subscriptionTier ?? null;
 
     for (const subscriber of sale.subscribers) {
@@ -592,10 +607,12 @@ export const processReminderPass = async (
             } else if (subscriber.email && !subscriber.userId) {
               // CONFIRMED guest row (double opt-in, 2026-09-30): the address the owner confirmed, with an opt-out link.
               try {
+                const guestLoc = locationFor(false);
                 emailOk = await sendGuestReminderEmail({
                   to: String(subscriber.email).trim().toLowerCase(),
                   saleName: sale.title,
-                  saleAddress,
+                  saleAddress: guestLoc.line,
+                  addressNote: guestLoc.note || undefined,
                   startDate: sale.startDate,
                   saleUrl,
                   reminderType: cfg.reminderType,
@@ -610,13 +627,15 @@ export const processReminderPass = async (
               bump('skipped_email_no_account'); // account has no email on file: nothing to send to
             } else if (subscriber.email) {
               try {
+                const accountLoc = locationFor(Boolean(subscriber.userId));
                 emailOk = await sendReminderEmail({
                   // The account's own address, NOT subscriber.email: that column is only an "email me" flag, so a
                   // stored third-party address (older rows, or any future writer) can never receive a reminder.
                   to: accountEmailOf(subscriber) as string,
                   userId: subscriber.userId ?? '',
                   saleName: sale.title,
-                  saleAddress,
+                  saleAddress: accountLoc.line,
+                  addressNote: accountLoc.note || undefined,
                   startDate: sale.startDate,
                   saleUrl,
                   reminderType: cfg.reminderType,
@@ -643,7 +662,7 @@ export const processReminderPass = async (
                   const pushSubs = await prisma.pushSubscription.findMany({
                     where: { userId: subscriber.userId },
                   });
-                  const payload = cfg.push(sale);
+                  const payload = cfg.push(sale, locationFor(true).line);
                   for (const ps of pushSubs) {
                     await sendPushNotification(ps, {
                       title: payload.title,
@@ -687,10 +706,13 @@ export const processReminderPass = async (
             } else {
               let smsOutcome: ReminderSmsOutcome = 'failed';
               try {
+                const smsLoc = locationFor(Boolean(subscriber.userId));
                 smsOutcome = await sendReminderSMS({
                   to: subscriber.phone,
                   saleName: sale.title,
-                  saleAddress,
+                  saleAddress: smsLoc.line,
+                  addressNote: smsLoc.note || undefined,
+                  saleUrl,
                   startDate: sale.startDate,
                   reminderType: cfg.reminderType,
                   smsConsentAt: subscriber.smsConsentAt,

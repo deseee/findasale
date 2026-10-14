@@ -23,6 +23,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
+import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy'; // 2026-10-13: public lot lists never show early-access items
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth';
 import { EnvLike, isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig';
 import { BULK_LOT_VOCABULARY } from '../services/bulkLot/bulkLotVocabulary';
@@ -121,6 +122,11 @@ export function createBulkLotHandlers(deps: BulkLotControllerDeps) {
     return organizer.id as string;
   }
 
+  /** Public where for lots: the injected public filter AND not inside an early-access window (computed per request). */
+  function publicLotWhere(): Record<string, unknown> {
+    return { AND: [deps.publicFilter, notEmbargoedForPublicWhere(new Date())] };
+  }
+
   async function publicSale(saleId: string): Promise<{ id: string; title: string | null } | null> {
     const sale = await deps.db.sale.findUnique({ where: { id: saleId }, select: { id: true, title: true, status: true } });
     if (!sale) return null;
@@ -149,7 +155,7 @@ export function createBulkLotHandlers(deps: BulkLotControllerDeps) {
         const saleId = idParam(req.params.saleId);
         const sale = saleId ? await publicSale(saleId) : null;
         if (!sale) return fail(res, 404, 'Sale not found.', 'SALE_NOT_FOUND');
-        const lots = await listPublicLots(deps.db, sale.id, deps.publicFilter);
+        const lots = await listPublicLots(deps.db, sale.id, publicLotWhere());
         return ok(res, { saleId: sale.id, saleTitle: sale.title, lots });
       } catch (err) {
         return sendError(res, err, 'publicSaleLots');
@@ -161,7 +167,7 @@ export function createBulkLotHandlers(deps: BulkLotControllerDeps) {
       try {
         const itemId = idParam(req.params.itemId);
         if (!itemId) return fail(res, 404, BULK_LOT_MESSAGES.BULK_NOT_FOUND, 'BULK_NOT_FOUND');
-        const lot = await getPublicLot(deps.db, itemId, deps.publicFilter);
+        const lot = await getPublicLot(deps.db, itemId, publicLotWhere());
         const sale = lot && lot.saleId ? await publicSale(lot.saleId) : null;
         if (!lot || !sale) return fail(res, 404, BULK_LOT_MESSAGES.BULK_NOT_FOUND, 'BULK_NOT_FOUND');
         return ok(res, lot);

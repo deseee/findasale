@@ -10,6 +10,7 @@ import { organizerHasTier } from '../utils/tierAccess';
 import { facebookMarketplaceCondition, facebookCommerceCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary
 import { csvCell } from '../utils/csvSafe'; // formula-injection-safe cell writer (leading = + - @, tab, CR, LF)
 import { filterBulkLotsForExport } from '../services/bulkLot/bulkLotExportFilter'; // ADR-136 Addendum C (#659): bulk lots are left out of every platform export
+import { publicItemWhere } from '../lib/publicSaleGate'; // 2026-10-13: public feed lists only public, non-embargoed items
 import { applyKitIncludes } from '../services/itemKitListing'; // 2026-10-13: kits listed everywhere
 
 /**
@@ -1005,12 +1006,15 @@ export const exportCommerceManagerFeed = async (
   try {
     const { saleId } = req.params;
 
-    // Fetch sale and all its items (no auth filter — public crawlable feed)
+    // Fetch sale and its public items (no auth filter — public crawlable feed). 2026-10-13: only items a
+    // shopper could see (PUBLIC_ITEM_FILTER) and never one still inside an early-access window; sold items
+    // still pass (status SOLD is not filtered) so they keep flowing out as "out of stock".
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
       select: {
         id: true,
         items: {
+          where: publicItemWhere(new Date()),
           select: {
             id: true,
             title: true,
@@ -1150,6 +1154,9 @@ export const exportOrganizerCommerceManagerFeed = async (
         },
         deletedAt: null,
         photoUrls: { isEmpty: false },
+        // 2026-10-13: only items a shopper could see, never one still inside an early-access window
+        // (sold items still pass and go out as "out of stock").
+        ...publicItemWhere(new Date()),
       },
       select: {
         id: true,

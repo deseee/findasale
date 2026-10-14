@@ -3,8 +3,40 @@ import { Server, Socket } from 'socket.io';
 import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-adapter';
 import jwt from 'jsonwebtoken';
+import { prisma } from './prisma';
+import { canAccessOrganizerSales } from '../utils/saleStaffAccess';
 
 let _io: Server | undefined;
+
+/**
+ * 2026-10-13 (security): private sale rooms (morning briefing team data, live organizer status with
+ * revenue) are joined only by the sale's organizer, its workspace staff or an admin. Identity comes from
+ * the handshake JWT (socket.data.userId); roles, suspension and tokenVersion are re-read from the DB so a
+ * stale or revoked token cannot join. Anonymous sockets are always refused.
+ */
+export async function canJoinPrivateSaleRoom(
+  socketData: { userId?: string; tokenVersion?: number },
+  saleId: string
+): Promise<boolean> {
+  try {
+    if (!socketData?.userId) return false;
+    const [user, sale] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: socketData.userId },
+        select: { id: true, role: true, roles: true, tokenVersion: true, suspendedAt: true, deletedAt: true },
+      }),
+      prisma.sale.findUnique({ where: { id: saleId }, select: { organizerId: true } }),
+    ]);
+    if (!user || !sale || user.suspendedAt || user.deletedAt) return false;
+    const staleTokenVersion =
+      socketData.tokenVersion === undefined ? (user.tokenVersion ?? 0) > 0 : socketData.tokenVersion !== user.tokenVersion;
+    if (staleTokenVersion) return false;
+    return await canAccessOrganizerSales({ id: user.id, role: user.role, roles: user.roles }, sale.organizerId);
+  } catch (error) {
+    console.error('[socket] private sale room check failed (denying):', error);
+    return false;
+  }
+}
 
 export const initSocket = (httpServer: any, allowedOrigins: string[]): Server => {
   _io = new Server(httpServer, {
@@ -60,6 +92,7 @@ export const initSocket = (httpServer: any, allowedOrigins: string[]): Server =>
         const decoded = jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as any;
         socket.data.userId = decoded.id;
         socket.data.role = decoded.role;
+        socket.data.tokenVersion = decoded.tokenVersion;
         // Auto-join authenticated users to their personal user room for direct notifications (POS payment requests, etc.)
         socket.join(`user:${decoded.id}`);
       } catch (err) {
@@ -98,10 +131,24 @@ export const initSocket = (httpServer: any, allowedOrigins: string[]): Server =>
       }
     });
 
-    // Morning Briefing — join/leave day-of-sale briefing room
-    socket.on('JOIN_BRIEFING', (saleId: unknown) => {
+    // Live organizer sale status (Feature #14: sold today, holds, revenue) -- private room, see
+    // canJoinPrivateSaleRoom. The public sale:<id> room no longer receives revenue figures.
+    socket.on('JOIN_SALE_STATUS', async (saleId: unknown) => {
       if (typeof saleId === 'string' && saleId.length > 0 && saleId.length < 128) {
-        socket.join(`briefing:${saleId}`);
+        if (await canJoinPrivateSaleRoom(socket.data, saleId)) socket.join(`sale-status:${saleId}`);
+      }
+    });
+
+    socket.on('LEAVE_SALE_STATUS', (saleId: unknown) => {
+      if (typeof saleId === 'string') {
+        socket.leave(`sale-status:${saleId}`);
+      }
+    });
+
+    // Morning Briefing — join/leave day-of-sale briefing room (organizer / workspace staff / admin only)
+    socket.on('JOIN_BRIEFING', async (saleId: unknown) => {
+      if (typeof saleId === 'string' && saleId.length > 0 && saleId.length < 128) {
+        if (await canJoinPrivateSaleRoom(socket.data, saleId)) socket.join(`briefing:${saleId}`);
       }
     });
 

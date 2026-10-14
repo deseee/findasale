@@ -22,6 +22,7 @@ import Tooltip from '../../components/Tooltip';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import SaleNameHint from '../../components/SaleNameHint';
 import PublishWithoutItemsDialog from '../../components/PublishWithoutItemsDialog';
+import { isEmptySalePublishError, publishSaleStatus } from '../../lib/publishSale';
 import LocationSelector from '../../components/LocationSelector';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import Head from 'next/head';
@@ -277,6 +278,39 @@ const DEFAULT_FORM: WizardFormData = {
 };
 
 const DRAFT_KEY = 'findasale_create_sale_draft';
+// When the local draft was last written (ms epoch), so the sidebar can say when a restored draft was saved.
+const DRAFT_SAVED_AT_KEY = 'findasale_create_sale_draft_saved_at';
+// The DRAFT sale already created on the server for this wizard run (2026-10-13). If POST /sales
+// succeeded but the follow-up publish failed (tier limit, network, empty-sale 409), a retry must
+// update this sale instead of POSTing a duplicate. Cleared when the wizard completes or on "Start fresh".
+const DRAFT_SERVER_SALE_KEY = 'findasale_create_sale_draft_server_sale';
+
+interface WizardServerSale {
+  id: string;
+  /** Flags only the POST /sales response carries; kept so a retried publish still shows the right screen. */
+  isFirstSaleFreePro?: boolean;
+  firstSaleUnlocked?: boolean;
+}
+
+function readStoredServerSale(): WizardServerSale | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(DRAFT_SERVER_SALE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed.id === 'string' && parsed.id ? parsed as WizardServerSale : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearStoredWizardDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(DRAFT_SAVED_AT_KEY);
+    localStorage.removeItem(DRAFT_SERVER_SALE_KEY);
+  } catch { /* ignore */ }
+}
 
 // vendor-booth-hub-autofill-adr follow-up (2026-09-25): best-effort parser for a hub's
 // freeform hoursText (e.g. "Tue - Sat 11 am - 6 pm", "Sat-Sun 9am-4pm", "9:00 AM - 5:00 PM")
@@ -413,16 +447,37 @@ interface SidebarProps {
   current: number;
   c: typeof LIGHT;
   lastSaved: Date | null;
+  /** True once a DRAFT sale exists on the server for this wizard (see serverSale in the page). */
+  savedToAccount: boolean;
 }
-function WizardSidebar({ current, c, lastSaved }: SidebarProps) {
+function WizardSidebar({ current, c, lastSaved, savedToAccount }: SidebarProps) {
   const secondsAgo = lastSaved
-    ? Math.floor((Date.now() - lastSaved.getTime()) / 1000)
+    ? Math.max(0, Math.floor((Date.now() - lastSaved.getTime()) / 1000))
     : null;
-  const savedLabel = secondsAgo === null
-    ? 'Not yet saved'
+  const agoLabel = secondsAgo === null
+    ? null
+    : lastSaved!.getTime() === 0
+    ? 'Saved earlier'
     : secondsAgo < 60
-    ? `${secondsAgo}s ago`
-    : `${Math.floor(secondsAgo / 60)}m ago`;
+    ? 'Last saved just now'
+    : secondsAgo < 3600
+    ? `Last saved ${Math.floor(secondsAgo / 60)}m ago`
+    : `Last saved ${lastSaved!.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+  // One truthful status at a time (2026-10-13): the old box said "Auto-saved" and "Not yet saved" together.
+  const saveStatus = savedToAccount
+    ? {
+        heading: '✓ Saved as draft',
+        body: "This sale is saved to your account as a draft. Shoppers can't see it until you publish.",
+      }
+    : lastSaved
+    ? {
+        heading: '✓ Saved on this device',
+        body: `${agoLabel}. Come back on this device and your draft will be here.`,
+      }
+    : {
+        heading: 'Not saved yet',
+        body: 'We save your progress on this device as you move between steps.',
+      };
 
   return (
     <aside style={{
@@ -494,9 +549,9 @@ function WizardSidebar({ current, c, lastSaved }: SidebarProps) {
           display: 'flex', alignItems: 'center', gap: 6,
           color: c.text, fontWeight: 500, fontSize: 12, marginBottom: 4,
         }}>
-          ✓ Auto-saved
+          {saveStatus.heading}
         </div>
-        {savedLabel}. Close this and your draft will be here when you come back.
+        {saveStatus.body}
       </div>
     </aside>
   );
@@ -578,8 +633,10 @@ interface FooterProps {
   backLabel?: string;
   warn?: string;
   nextDisabled?: boolean;
+  /** True while "Save draft & exit" is saving the sale to the account. */
+  saveDraftBusy?: boolean;
 }
-function WizardFooter({ c, onBack, onNext, onSaveDraft, nextLabel = 'Continue', backLabel = 'Back', warn, nextDisabled }: FooterProps) {
+function WizardFooter({ c, onBack, onNext, onSaveDraft, nextLabel = 'Continue', backLabel = 'Back', warn, nextDisabled, saveDraftBusy = false }: FooterProps) {
   return (
     // Sticky via classes (not inline) so it can clear the fixed 56px mobile bottom tab bar (same offsets as the item form action bar).
     <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:bottom-0 z-30" style={{
@@ -592,13 +649,14 @@ function WizardFooter({ c, onBack, onNext, onSaveDraft, nextLabel = 'Continue', 
       <button
         type="button"
         onClick={onSaveDraft}
+        disabled={saveDraftBusy}
         style={{
-          fontSize: 13, color: c.textFaint, cursor: 'pointer',
-          background: 'none', border: 'none', padding: '6px 0',
+          fontSize: 13, color: c.textFaint, cursor: saveDraftBusy ? 'wait' : 'pointer',
+          background: 'none', border: 'none', padding: '6px 0', minHeight: 44,
           fontFamily: 'Inter, sans-serif',
         }}
       >
-        💾 Save draft &amp; exit
+        {saveDraftBusy ? 'Saving…' : <>💾 Save draft &amp; exit</>}
       </button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {warn && (
@@ -2460,6 +2518,16 @@ const CreateSalePage: React.FC = () => {
     }
     return DEFAULT_FORM;
   });
+  // Was the form restored from a local draft on first render? Drives the "Start fresh" notice.
+  const [restoredFromDraft, setRestoredFromDraft] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try { return !!localStorage.getItem(DRAFT_KEY); } catch { return false; }
+  });
+  // The DRAFT sale this wizard already created on the server, if any (see DRAFT_SERVER_SALE_KEY).
+  const [serverSale, setServerSale] = useState<WizardServerSale | null>(() => readStoredServerSale());
+  const [saveDraftBusy, setSaveDraftBusy] = useState(false);
+  // "Start fresh" notice for a restored draft whose dates already passed: dismissed by either button.
+  const [staleDraftDismissed, setStaleDraftDismissed] = useState(false);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -2469,7 +2537,17 @@ const CreateSalePage: React.FC = () => {
   const [retailTierError, setRetailTierError] = useState<null | { message: string; upgradeUrl: string }>(null);
   const [showProModal, setShowProModal] = useState(false);
   const [publishedSaleId, setPublishedSaleId] = useState<string | null>(null);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      if (!localStorage.getItem(DRAFT_KEY)) return null;
+      const ts = Number(localStorage.getItem(DRAFT_SAVED_AT_KEY));
+      // A draft from before this key existed still counts as saved on this device (time unknown: epoch 0).
+      return Number.isFinite(ts) && ts > 0 ? new Date(ts) : new Date(0);
+    } catch {
+      return null;
+    }
+  });
   const [isClient, setIsClient] = useState(false);
   const [published, setPublished] = useState(false);
   // Guided first-sale flow (2026-10-12): a wizard sale always has zero items at publish time,
@@ -2591,10 +2669,46 @@ const CreateSalePage: React.FC = () => {
   const saveDraft = useCallback(() => {
     if (typeof window === 'undefined') return;
     try {
+      const now = new Date();
       localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
-      setLastSaved(new Date());
+      localStorage.setItem(DRAFT_SAVED_AT_KEY, String(now.getTime()));
+      setLastSaved(now);
     } catch { /* ignore */ }
   }, [form]);
+
+  const rememberServerSale = (next: WizardServerSale | null) => {
+    setServerSale(next);
+    try {
+      if (next) localStorage.setItem(DRAFT_SERVER_SALE_KEY, JSON.stringify(next));
+      else localStorage.removeItem(DRAFT_SERVER_SALE_KEY);
+    } catch { /* ignore */ }
+  };
+
+  // Is a restored draft out of date? Any set start or end date before today counts.
+  const restoredDraftIsStale = (() => {
+    if (!restoredFromDraft) return false;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const past = (d: string) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d) && parseLocalDateInput(d) < today;
+    return past(form.startDate) || past(form.endDate);
+  })();
+  const showStaleDraftNotice = restoredDraftIsStale && !staleDraftDismissed;
+
+  const handleStartFresh = () => {
+    clearStoredWizardDraft();
+    setRestoredFromDraft(false);
+    hubAutoFillAppliedForBoothIdRef.current = null;
+    setForm(DEFAULT_FORM);
+    setPhotoUrls([]);
+    setServerSale(null);
+    setLastSaved(null);
+    setValidationErrors({});
+    setTierLimitError(null);
+    setRetailTierError(null);
+    setStaleDraftDismissed(true);
+    setCurrentStep(1);
+    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+    showToast('Started a new sale.', 'success');
+  };
 
   // Auto-save periodically
   useEffect(() => {
@@ -2670,10 +2784,24 @@ const CreateSalePage: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
-  const handleSaveDraft = () => {
+  // "Save draft & exit" (footer, every step). Bug fix 2026-10-13: this used to write localStorage
+  // only and send the organizer to the dashboard, where no sale existed. It now saves the DRAFT
+  // sale to the account on the same path as Step 5's "Save as draft", then opens add-items.
+  // The local copy is always written first, so a failed save loses nothing.
+  const handleSaveDraft = async () => {
     saveDraft();
-    showToast('Draft saved. Come back any time.', 'success');
-    router.push('/organizer/dashboard');
+    if (!form.saleType || !form.title.trim()) {
+      showToast('Saved on this device. Choose a sale type and add a name to save it to your account.', 'error');
+      setCurrentStep(1);
+      window.scrollTo(0, 0);
+      return;
+    }
+    setSaveDraftBusy(true);
+    try {
+      await handleSaveAsDraft();
+    } finally {
+      setSaveDraftBusy(false);
+    }
   };
 
   const buildPayload = (overrideForm?: WizardFormData) => {
@@ -2724,24 +2852,57 @@ const CreateSalePage: React.FC = () => {
   // Shared publish call — used by both the normal Step5 "Publish now" button and the
   // one-click Retail-Mode-tier-gate recovery path below, so both go through identical
   // success/error handling instead of duplicating it.
-  const publishSale = async (payload: ReturnType<typeof buildPayload>, saleTypeForAnalytics: string) => {
+  // Creates the DRAFT sale on the server, or updates the one this wizard already created
+  // (duplicate-draft fix, 2026-10-13). Returns the sale id plus the server's current status.
+  const ensureServerSale = async (
+    payload: ReturnType<typeof buildPayload>
+  ): Promise<{ id: string; status: string | undefined; record: WizardServerSale }> => {
+    const existing = serverSale ?? readStoredServerSale();
+    if (existing?.id) {
+      try {
+        // status is never accepted by the sale schema; leave it out of the update.
+        const { status: _ignored, ...updateBody } = payload;
+        void _ignored;
+        const res = await api.put(`/sales/${existing.id}`, updateBody);
+        return { id: existing.id, status: res.data?.status, record: existing };
+      } catch (error: unknown) {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        // The remembered sale is gone or no longer ours: forget it and create a new one below.
+        if (status !== 404 && status !== 403) throw error;
+        rememberServerSale(null);
+      }
+    }
+    const response = await api.post('/sales', payload);
+    const record: WizardServerSale = {
+      id: response.data.id,
+      isFirstSaleFreePro: !!response.data.isFirstSaleFreePro,
+      firstSaleUnlocked: !!response.data.achievements?.some(
+        (a: { key: string }) => a.key === 'FIRST_SALE_CREATED'
+      ),
+    };
+    rememberServerSale(record);
+    return { id: record.id, status: response.data.status, record };
+  };
+
+  const publishSale = async (
+    payload: ReturnType<typeof buildPayload>,
+    saleTypeForAnalytics: string,
+    opts: { allowEmpty?: boolean } = {}
+  ) => {
     setIsSubmitting(true);
     setTierLimitError(null);
     setRetailTierError(null);
     try {
-      const response = await api.post('/sales', { ...payload, status: 'PUBLISHED' });
-      const saleId = response.data.id;
+      // createSale always makes a DRAFT (the sale schema never accepts a client status), so
+      // publishing is a second call to the tier-gated PATCH /sales/:id/status endpoint
+      // (P0 fix 2026-08-08, S1196). If that second call fails, the sale id is remembered and
+      // the next attempt updates the same sale instead of creating another draft.
+      const { id: saleId, status: currentStatus, record } = await ensureServerSale(payload);
 
-      // P0 fix (2026-08-08, QA session S1196): createSale always creates the sale as
-      // DRAFT -- the backend's saleCreateSchema never accepts a client-supplied status,
-      // so the status:'PUBLISHED' above was silently discarded and every wizard-published
-      // sale stayed invisible to shoppers (public /sales/[id] 404s) while this screen
-      // showed a false "Sale Published -- LIVE NOW" success state. Reuse the existing,
-      // correctly tier-gated PATCH /sales/:id/status endpoint (already used by
-      // dashboard.tsx and edit-sale/[id].tsx) to actually publish it. If this throws
-      // (e.g. tier limit), the catch block below handles it identically to a create
-      // failure and the false-success screen is never shown.
-      await api.patch(`/sales/${saleId}/status`, { status: 'PUBLISHED' });
+      // allowEmpty is only passed in after the organizer confirmed in PublishWithoutItemsDialog.
+      if (currentStatus !== 'PUBLISHED') {
+        await publishSaleStatus(saleId, { allowEmpty: opts.allowEmpty === true });
+      }
 
       setPublishedSaleId(saleId);
 
@@ -2750,21 +2911,25 @@ const CreateSalePage: React.FC = () => {
         window.gtag('event', 'sale_created', { sale_type: saleTypeForAnalytics.toLowerCase() });
       }
 
-      // Clear draft from storage
-      try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+      // Wizard complete: clear the local draft and the remembered server sale.
+      clearStoredWizardDraft();
+      setServerSale(null);
 
-      const firstSaleUnlocked = response.data.achievements?.some(
-        (a: { key: string }) => a.key === 'FIRST_SALE_CREATED'
-      );
-      if (response.data.isFirstSaleFreePro) {
+      if (record.isFirstSaleFreePro) {
         setShowProModal(true);
-      } else if (firstSaleUnlocked) {
+      } else if (record.firstSaleUnlocked) {
         showToast('🚀 Achievement Unlocked: Sale Launcher! +25 XP', 'success');
         setPublished(true);
       } else {
         setPublished(true);
       }
     } catch (error: unknown) {
+      if (isEmptySalePublishError(error)) {
+        // The server wants the organizer's yes before an empty sale goes live. Ask with the same
+        // dialog Step 5 uses; its "Publish, then add items" retries with allowEmpty on the same sale.
+        setShowPublishDialog(true);
+        return;
+      }
       const err = error as { response?: { status: number; data: { code?: string; error?: string; message?: string; current?: number; tier?: string; limit?: number; upgradeUrl?: string } } };
       // ADR vendor-booth-sale-onboarding-gate (2026-09-25): belt-and-suspenders for a stale
       // tab that bypassed Step1's frontend gate (e.g. lost its claimed booth between load and
@@ -2821,7 +2986,8 @@ const CreateSalePage: React.FC = () => {
     trackPublishChoice('publish');
     setPublishDialogBusy('publish');
     try {
-      await publishSale(buildPayload(), form.saleType);
+      // The organizer just said yes to publishing with no items, so the server may skip its empty check.
+      await publishSale(buildPayload(), form.saleType, { allowEmpty: true });
     } finally {
       // Success swaps in the success screen / PRO modal; an error closes the dialog so the
       // page's own error panel (tier limit, storefront, booth) is visible.
@@ -2886,17 +3052,26 @@ const CreateSalePage: React.FC = () => {
     await publishSale(buildPayload(updatedForm), 'YARD');
   };
 
+  // Saves the sale to the account as a DRAFT (creating it, or updating the one this wizard already
+  // created) and opens add-items. Shared by Step 5 "Save as draft", the footer "Save draft & exit"
+  // and the dialog's "Add items first". On failure the local draft is kept and an error is shown.
   const handleSaveAsDraft = async () => {
     setIsSubmitting(true);
     try {
-      const payload = buildPayload();
-      const response = await api.post('/sales', payload);
-      try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
-      showToast('Sale created! Add items next.', 'success');
-      router.push(`/organizer/add-items/${response.data.id}`);
+      const { id } = await ensureServerSale(buildPayload());
+      clearStoredWizardDraft();
+      setServerSale(null);
+      showToast('Draft saved. Add items next.', 'success');
+      router.push(`/organizer/add-items/${id}`);
     } catch (error: unknown) {
+      saveDraft();
       const err = error as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || "We couldn't save your sale. Check your connection and try again.", 'error');
+      showToast(
+        err.response?.data?.message
+          ? `${err.response.data.message.replace(/[.\s]+$/, '')}. Your draft is still saved on this device.`
+          : "We couldn't save your sale. Your draft is still saved on this device. Check your connection and try again.",
+        'error'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -2978,7 +3153,7 @@ const CreateSalePage: React.FC = () => {
         <div style={{ display: 'flex', minHeight: '100vh' }}>
           {/* Desktop sidebar */}
           <div className="hidden md:block">
-            <WizardSidebar current={currentStep} c={c} lastSaved={lastSaved} />
+            <WizardSidebar current={currentStep} c={c} lastSaved={lastSaved} savedToAccount={!!serverSale} />
           </div>
 
           {/* Main content */}
@@ -2987,6 +3162,50 @@ const CreateSalePage: React.FC = () => {
               flex: 1, padding: '36px 28px 24px',
               maxWidth: 900, width: '100%', margin: '0 auto', boxSizing: 'border-box',
             }}>
+              {showStaleDraftNotice && (
+                <div
+                  role="status"
+                  style={{
+                    marginBottom: 24, padding: '16px 18px', borderRadius: 12,
+                    background: c.accentSoft, border: `1px solid ${c.borderStrong}`,
+                    color: c.text, fontFamily: 'Inter, sans-serif',
+                  }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>
+                    This is an older draft
+                  </div>
+                  <p style={{ margin: 0, fontSize: 14, color: c.textDim, lineHeight: 1.5 }}>
+                    {form.title ? `"${form.title}" has` : 'It has'} dates that already passed. Start a new sale, or keep this one and pick new dates.
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
+                    <button
+                      type="button"
+                      onClick={handleStartFresh}
+                      style={{
+                        minHeight: 44, padding: '10px 18px', borderRadius: 8,
+                        background: c.accent, color: c.accentInk, border: 'none',
+                        fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                      }}
+                    >
+                      Start fresh
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStaleDraftDismissed(true);
+                        if (currentStep < 2 && form.saleType && form.title.trim()) setCurrentStep(2);
+                      }}
+                      style={{
+                        minHeight: 44, padding: '10px 18px', borderRadius: 8,
+                        background: 'transparent', color: c.text, border: `1px solid ${c.borderStrong}`,
+                        fontWeight: 500, fontSize: 14, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                      }}
+                    >
+                      Keep this draft
+                    </button>
+                  </div>
+                </div>
+              )}
               {currentStep === 1 && (
                 <Step1
                   c={c} form={form} setForm={setForm}
@@ -3032,6 +3251,7 @@ const CreateSalePage: React.FC = () => {
               onBack={currentStep > 1 ? handleBack : undefined}
               onNext={currentStep < 5 ? handleNext : handlePublish}
               onSaveDraft={handleSaveDraft}
+              saveDraftBusy={saveDraftBusy}
               nextLabel={
                 currentStep === 5
                   ? (isSubmitting ? 'Publishing…' : 'Publish now')

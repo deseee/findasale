@@ -9,6 +9,7 @@ import { SaleCardSkeleton } from '../components/SkeletonCards';
 import EmptyState from '../components/EmptyState';
 import { useAuth } from '../components/AuthContext';
 import { serverFetch } from '@/lib/serverFetch';
+import { toPublicSaleList } from '@/lib/seo/publicSaleLocation';
 
 interface FeedSale {
   id: string;
@@ -185,7 +186,8 @@ export const getStaticProps: GetStaticProps<FeedPageProps> = async () => {
     }
     const data = await response.json() as { sales: FeedSale[]; personalized: boolean };
     return {
-      props: { initialSales: data.sales ?? [] },
+      // Location privacy: ISR HTML is cached for anonymous visitors, so no street address or exact coords.
+      props: { initialSales: toPublicSaleList(data.sales) },
       revalidate: 3600, // 1 hour
     };
   } catch {

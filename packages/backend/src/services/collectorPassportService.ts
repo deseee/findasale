@@ -10,6 +10,9 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { publicItemWhere } from '../lib/publicSaleGate';
+import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
+import { visibleItemsForRecipient } from '../lib/messageSaleLocation';
 import { sendPushNotification } from '../utils/webpush';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
@@ -132,7 +135,9 @@ export const checkPassportMatchForNewSale = async (saleId: string): Promise<void
       where: { id: saleId },
       include: {
         items: {
-          where: { isActive: true },
+          // 2026-10-13: shopper-visible items only; early-access / rarity / Legendary windows are applied per
+          // recipient below, so a match alert never names an item the collector cannot see yet.
+          where: PUBLIC_ITEM_FILTER,
           select: {
             id: true,
             title: true,
@@ -140,6 +145,11 @@ export const checkPassportMatchForNewSale = async (saleId: string): Promise<void
             tags: true,
             price: true,
             photoUrls: true,
+            rarity: true,
+            createdAt: true,
+            earlyAccessUntil: true,
+            isLegendary: true,
+            legendaryVisibleAt: true,
           },
         },
         organizer: {
@@ -157,17 +167,18 @@ export const checkPassportMatchForNewSale = async (saleId: string): Promise<void
       },
       include: {
         user: {
-          select: { id: true, email: true, pushSubscriptions: true },
+          select: { id: true, email: true, pushSubscriptions: true, huntPassActive: true, huntPassExpiry: true, explorerRank: true },
         },
       },
     });
 
     if (passports.length === 0) return;
+    const now = new Date();
 
     // Check each passport against items in the sale
     for (const passport of passports) {
       const matchedItems = findMatchingItems(
-        sale.items,
+        visibleItemsForRecipient(sale.items, passport.user, now),
         passport.specialties,
         passport.categories,
         passport.keywords
@@ -354,7 +365,8 @@ export const getMatchingItems = async (passportId: string): Promise<any[]> => {
         status: 'PUBLISHED',
         createdAt: { gte: thirtyDaysAgo },
       },
-      isActive: true,
+      // 2026-10-13: public item filter + no early-access / embargoed items in shopper-facing matches
+      ...publicItemWhere(new Date()),
     },
     include: {
       sale: {

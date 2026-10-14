@@ -244,7 +244,7 @@ router.get('/:id/comp-summary', authenticate, getCompSummary);
 
 // BUG 4: Similar items recommendation
 // Declared before /:id to prevent param capture
-router.get('/:id/similar', getSimilarItems);
+router.get('/:id/similar', optionalAuthenticate, getSimilarItems); // optional auth (2026-10-13): owner/staff/admin may see a hidden item's similar list
 
 // Phase 1: Batch Operations Toolkit — Status-safe validation + dry-run + tags operation
 // Declared before /:id to prevent 'bulk' being captured as an item ID.
@@ -1295,7 +1295,7 @@ router.post('/mark-retagged/bulk', authenticate, requireRetagAccess('mark'), mar
 router.post('/:id/mark-retagged', authenticate, requireRetagAccess('mark'), markItemRetagged);
 
 router.get('/:id', optionalAuthenticate, getItemById);
-router.get('/', getItemsBySaleId);
+router.get('/', optionalAuthenticate, getItemsBySaleId); // optional auth (2026-10-13): owner/staff/admin see their own embargoed items; everyone else gets the public list
 router.post('/', authenticate, uploadImages.array('images', 5), createItem);
 router.put('/:id', authenticate, updateItem);
 router.post('/:id/mark-sold-off-platform', authenticate, markItemSoldOffPlatform); // BYOR (2026-09-06): mark a plain AVAILABLE item sold using the organizer's own payment method
@@ -1307,7 +1307,7 @@ router.post('/:id/description/append', authenticate, appendDescription);
 router.delete('/:id', authenticate, deleteItem);
 router.get('/:id/bids', optionalAuthenticate, getBids);
 router.post('/:id/bids', authenticate, bidRateLimiter, accountAgeGate, placeBid);
-router.get('/:id/ebay-comps', getItemEbayComps);
+router.get('/:id/ebay-comps', optionalAuthenticate, getItemEbayComps); // optional auth (2026-10-13): hidden/early-access items 404 except for owner/staff/admin
 router.post('/:id/analyze', authenticate, analyzeItemTags);
 // Re-analyze: organizer re-runs the Smart tagging pipeline on the item's stored photos (no re-upload), updates suggested fields in place
 router.post('/:id/reanalyze', authenticate, reanalyzeItemForOrganizer);
@@ -1351,7 +1351,7 @@ router.post('/:itemId/valuation/generate', authenticate, requireTier('PRO'), gen
 
 // Feature #85: Treasure Hunt QR endpoints
 // GET /api/items/:itemId/qr — Generate QR code for item (increments qrScanCount)
-router.get('/:itemId/qr', getQrCode);
+router.get('/:itemId/qr', optionalAuthenticate, getQrCode); // optional auth (2026-10-13): owner/staff/admin print codes for unpublished items
 
 // GET /api/items/:itemId/qr/scan — Record QR scan and award badge + XP (authenticated)
 router.get('/:itemId/qr/scan', authenticate, recordQrScan);

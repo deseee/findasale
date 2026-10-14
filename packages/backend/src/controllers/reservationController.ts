@@ -43,6 +43,7 @@ import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleG
 import { prepareSquareInvoiceForRelease, recordSquarePaidInvoiceFromGate } from '../services/holdInvoiceSquareRelease'; // 2026-09-29 money review P0-2: a Square invoice is paid-checked and its payment link cancelled BEFORE it is released
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // 2026-09-29 money review P0-2: a Square payment link found paid at release time is recorded, never released
 import { SquareOnboardingIncompleteError } from '../services/squarePaymentService'; // thrown by createHoldInvoiceSquareCheckout when the organizer's Square onboarding is incomplete
+import { isItemEmbargoedForViewer } from '../lib/saleLocationPrivacy'; // 2026-10-13 early-access embargo (public hold lookup)
 
 // markSold settlement router (Decision A): settlement modes
 type SettlementMode = 'RECORD' | 'POS_CART' | 'CHECKOUT_LINK';
@@ -695,6 +696,15 @@ export const getItemReservation = async (req: AuthRequest, res: Response) => {
     // nothing else. If a future caller genuinely needs the reservation id, it must get it
     // from an authenticated, ownership-gated route (itemController.getItemById exposes it
     // as `reservationId` to the sale owner/admin only) — do not re-add it here.
+    // 2026-10-13 early-access embargo: a hidden item reveals nothing here, not even that it is on hold.
+    const embargoItem = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: { rarity: true, createdAt: true, earlyAccessUntil: true, isLegendary: true, legendaryVisibleAt: true },
+    });
+    if (embargoItem && isItemEmbargoedForViewer(embargoItem, req.user)) {
+      return res.json(null);
+    }
+
     const reservation = await prisma.itemReservation.findUnique({
       where: { itemId },
       select: { itemId: true, status: true, expiresAt: true },

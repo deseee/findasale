@@ -19,6 +19,7 @@ import EmptyState from '../components/EmptyState';
 import { useToast } from '../components/ToastContext';
 import { useAuth } from '../components/AuthContext';
 import { serverFetch } from '@/lib/serverFetch';
+import { toPublicSaleList } from '@/lib/seo/publicSaleLocation';
 
 interface Sale {
   id: string;
@@ -673,7 +674,9 @@ export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
 
   try {
     const res = await serverFetch(`${BACKEND_URL}/api/feed?limit=12&status=upcoming`);
-    const data = res.ok ? await res.json() : null;
+    const raw = res.ok ? await res.json() : null;
+    // Location privacy: ISR HTML is cached for anonymous visitors, so no street address or exact coords.
+    const data = raw && Array.isArray(raw.sales) ? { ...raw, sales: toPublicSaleList(raw.sales) } : raw;
     return {
       props: { initialSalesData: data },
       revalidate: 3600, // 1 hour ISR

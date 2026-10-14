@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { formatDistanceToNow, parseISO } from 'date-fns';
+import { formatPublicLocation } from '@/lib/seo/publicSaleLocation';
 
 interface Sale {
   id: string;
@@ -14,6 +15,8 @@ interface Sale {
     businessName: string;
   };
   address: string;
+  city?: string;
+  state?: string;
   lat: number;
   lng: number;
   status: string;
@@ -88,9 +91,11 @@ const SalesNearYou: React.FC = () => {
               <p className="text-xs text-warm-500 mb-2">
                 Starts {formatDistanceToNow(parseISO(sale.startDate), { addSuffix: true })}
               </p>
-              <p className="text-xs text-warm-600 truncate">
-                📍 {sale.address}
-              </p>
+              {formatPublicLocation(sale) && (
+                <p className="text-xs text-warm-600 truncate">
+                  📍 {formatPublicLocation(sale)}
+                </p>
+              )}
             </div>
           </Link>
         ))}

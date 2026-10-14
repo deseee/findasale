@@ -11,6 +11,7 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
 
 export interface SaleOfTheDayResult {
   saleId: string;
@@ -61,7 +62,8 @@ export async function selectSaleOfTheDay(): Promise<SaleOfTheDayResult | null> {
         },
       },
       _count: {
-        select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } },
+        // Public count (2026-10-13): early-access / embargoed items are not counted.
+        select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' }, ...notEmbargoedForPublicWhere(now) } } },
       },
     },
     orderBy: {

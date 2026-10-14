@@ -16,6 +16,8 @@ import { prisma } from '../lib/prisma';
 import { sendPushNotification } from '../utils/webpush';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
+import { messageSaleLocation, addressNoteHtml, visibleItemsForRecipient } from '../lib/messageSaleLocation';
+import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
 
 
 export interface WishlistAlertInput {
@@ -158,12 +160,21 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
         address: true,
         city: true,
         state: true,
+        zip: true,
         startDate: true,
+        organizer: { select: { timezone: true } },
         items: {
+          // 2026-10-13: only shopper-visible items; early-access windows are checked per recipient below
+          where: PUBLIC_ITEM_FILTER,
           select: {
             category: true,
             price: true,
             tags: true,
+            rarity: true,
+            createdAt: true,
+            earlyAccessUntil: true,
+            isLegendary: true,
+            legendaryVisibleAt: true,
           },
         },
       },
@@ -180,10 +191,17 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
             id: true,
             email: true,
             pushSubscriptions: true,
+            huntPassActive: true,
+            huntPassExpiry: true,
+            explorerRank: true,
           },
         },
       },
     });
+
+    // 2026-10-13: recipients are account holders; the street waits for the day before the sale (send time).
+    const now = new Date();
+    const location = messageSaleLocation(sale, sale.organizer?.timezone, true, now);
 
     // Filter alerts that match the sale
     for (const alert of alerts) {
@@ -208,7 +226,8 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
       if (!keywordMatch) continue;
 
       // Check category and price match in items
-      const matchingItems = sale.items.filter((item: any) => {
+      // Items still in an early-access window for this recipient never count toward (or reveal) a match.
+      const matchingItems = visibleItemsForRecipient(sale.items, alert.user, now).filter((item: any) => {
         const itemPrice = item.price || 0;
         const priceMatch = itemPrice >= (query.minPrice || 0) && itemPrice <= (query.maxPrice || 999999);
         const categoryMatch = !query.category || item.category === query.category;
@@ -219,6 +238,7 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
 
       // Found a match — notify the user
       const saleUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/sales/${sale.id}`;
+      const locationNote = addressNoteHtml(location, saleUrl, 'color: #5b8a64;');
       const formattedDate = new Date(sale.startDate).toLocaleString('en-US', {
         weekday: 'short',
         month: 'short',
@@ -255,7 +275,8 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
                   <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #8fb897;">
                     <h3 style="margin-top: 0; color: #333;">Alert: ${alert.name}</h3>
                     <p style="margin: 8px 0; color: #666;"><strong>${sale.title}</strong></p>
-                    <p style="margin: 8px 0; color: #666;">📍 ${sale.address}, ${sale.city}, ${sale.state}</p>
+                    <p style="margin: 8px 0; color: #666;">📍 ${location.line}</p>${locationNote ? `
+                    <p style="margin: 4px 0; font-size: 13px;">${locationNote}</p>` : ''}
                     <p style="margin: 8px 0; color: #666;">🕐 ${formattedDate}</p>
                     <p style="margin: 8px 0; color: #666;">✓ ${matchingItems.length} matching item(s) found</p>
                   </div>

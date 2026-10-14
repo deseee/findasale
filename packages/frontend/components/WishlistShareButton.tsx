@@ -19,7 +19,7 @@ const WishlistShareButton: React.FC<WishlistShareButtonProps> = ({
   const [showShare, setShowShare] = useState(false);
 
   const shareUrl = shareSlug
-    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/wishlists/share/${shareSlug}`
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/wishlists/shared/${shareSlug}`
     : null;
 
   // Mutation to generate share link

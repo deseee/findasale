@@ -12,14 +12,14 @@ import {
   updateTrail,
   deleteTrail,
 } from '../controllers/trailController';
-import { authenticate } from '../middleware/auth';
+import { authenticate, optionalAuthenticate } from '../middleware/auth';
 
 const router = Router();
 
 // Trail CRUD
 router.post('/', authenticate, createTrail);                            // POST   /api/trails
 router.get('/mine', authenticate, getMyTrails);                         // GET    /api/trails/mine (authenticated — own trails only)
-router.get('/:trailId', getTrail);                                      // GET    /api/trails/:trailId (public or auth)
+router.get('/:trailId', optionalAuthenticate, getTrail);                // GET    /api/trails/:trailId (public or auth; viewer needed for the address gate)
 router.get('/', listTrails);                                            // GET    /api/trails (public)
 router.patch('/:trailId', authenticate, updateTrail);                   // PATCH  /api/trails/:trailId (organizer)
 router.delete('/:trailId', authenticate, deleteTrail);                  // DELETE /api/trails/:trailId (organizer)

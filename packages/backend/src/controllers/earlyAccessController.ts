@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { spendXp, getSpendableXp } from '../services/xpService';
+import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
+import { isItemEmbargoedForViewer } from '../lib/saleLocationPrivacy';
 
 // Valid categories for Early Access Cache
 const VALID_CATEGORIES = [
@@ -238,8 +240,13 @@ export const getItems = async (req: Request, res: Response) => {
     }
 
     // Query items for each active window
-    const allItems = await prisma.item.findMany({
+    // Shopper-facing list (2026-10-13): only published items in live sales; Legendary / rare / item-level
+    // early-access windows still apply per viewer (a cache window does not bypass them).
+    const rawItems = await prisma.item.findMany({
       where: {
+        ...PUBLIC_ITEM_FILTER,
+        deletedAt: null,
+        sale: { status: 'PUBLISHED', deletedAt: null },
         OR: activeWindows.map((window: any) => ({
           category: window.category,
           createdAt: {
@@ -257,11 +264,20 @@ export const getItems = async (req: Request, res: Response) => {
         saleId: true,
         category: true,
         createdAt: true,
+        rarity: true,
+        earlyAccessUntil: true,
+        isLegendary: true,
+        legendaryVisibleAt: true,
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
+
+    const viewer = (req as any).user;
+    const allItems = rawItems
+      .filter((item) => !isItemEmbargoedForViewer(item, viewer, now))
+      .map(({ rarity: _r, earlyAccessUntil: _e, isLegendary: _l, legendaryVisibleAt: _v, ...item }) => item);
 
     res.json(allItems);
   } catch (error) {

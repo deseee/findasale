@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { planRoute } from '../controllers/routeController';
+import { optionalAuthenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -16,6 +17,7 @@ const routePlanLimiter = rateLimit({
 });
 
 // POST /api/routes/plan — public, no auth required for MVP
-router.post('/plan', routePlanLimiter, planRoute);
+// optionalAuthenticate: the street address is shown only to signed-in viewers (from the day before the sale).
+router.post('/plan', routePlanLimiter, optionalAuthenticate, planRoute);
 
 export default router;

@@ -43,7 +43,7 @@
 import { prisma } from '../lib/prisma';
 
 // jest.hoisted ensures the mock function is available before jest.mock hoisting
-var mockEmailsSend = jest.fn().mockResolvedValue({ id: 'mock-email-id-digest', error: null });
+var mockEmailsSend = jest.fn().mockResolvedValue({ sent: true });
 
 // RAIL CORRECTION (2026-08-17): this suite mocked `resend`, but sendWeeklyDigest has not
 // gone through Resend for some time -- notificationController.ts:418 calls
@@ -54,8 +54,11 @@ var mockEmailsSend = jest.fn().mockResolvedValue({ id: 'mock-email-id-digest', e
 // the first run it ever had. The mock is retargeted at the real rail; every assertion below
 // is unchanged because emailService.emails.send takes the same { from, to, subject, html }
 // payload shape the Resend mock did.
-jest.mock('../lib/emailService', () => ({
-  emailService: {
+// RAIL CORRECTION (2026-10-13): sendWeeklyDigest moved off the Gmail outreach rail (quota-exceeded
+// failures, shared reputation with cold outreach) onto Resend via transactionalEmailService, which
+// resolves the sender (RESEND_FROM_EMAIL) itself and returns { sent, reason? }. The mock follows the code.
+jest.mock('../lib/transactionalEmailService', () => ({
+  transactionalEmailService: {
     emails: { send: mockEmailsSend },
   },
 }));
@@ -70,7 +73,7 @@ describe('Weekly Digest E2E', () => {
   let testSale: any;
 
   beforeAll(async () => {
-    process.env.SMTP_USERNAME = 'test_smtp_user_digest_e2e';
+    process.env.RESEND_API_KEY = 'dummy-resend-key-digest-e2e';
     process.env.SES_FROM_EMAIL = 'digest@finda.sale';
     process.env.FRONTEND_URL = 'http://localhost:3000';
 
@@ -136,7 +139,7 @@ describe('Weekly Digest E2E', () => {
     if (testUser) await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
     if (testOrganizer) await prisma.organizer.delete({ where: { id: testOrganizer.id } }).catch(() => {});
     if (testOrganizerUser) await prisma.user.delete({ where: { id: testOrganizerUser.id } }).catch(() => {});
-    delete process.env.SMTP_USERNAME;
+    delete process.env.RESEND_API_KEY;
     delete process.env.SES_FROM_EMAIL;
     delete process.env.FRONTEND_URL;
     console.log('✓ Weekly digest test data cleaned up');
@@ -159,9 +162,12 @@ describe('Weekly Digest E2E', () => {
       console.log(`✓ Email addressed to ${testUser.email}`);
     });
 
-    it('should send from the configured from address', async () => {
+    it('should leave the from address to the Resend rail and send one-click unsubscribe headers', async () => {
       const call = mockEmailsSend.mock.calls[0][0];
-      expect(call.from).toBe('digest@finda.sale');
+      // No explicit from: transactionalEmailService resolves RESEND_FROM_EMAIL (noreply@finda.sale).
+      expect(call.from).toBeUndefined();
+      expect(call.headers['List-Unsubscribe']).toBeTruthy();
+      expect(call.headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
     });
 
     it('should use a subject that references the sale count and emoji', async () => {
@@ -184,10 +190,13 @@ describe('Weekly Digest E2E', () => {
       console.log(`✓ HTML contains sale title "${testSale.title}"`);
     });
 
-    it('should include the sale address in the HTML body', async () => {
+    // 2026-10-13 (Patrick-approved address gate): the test sale starts in 3 days, so the street address is
+    // withheld until the day before; the digest shows city / state / zip plus a link to the sale page.
+    it('should show the sale city but withhold the street address before the day before the sale', async () => {
       const call = mockEmailsSend.mock.calls.find((c) => c[0].to === testUser.email)!;
-      expect(call[0].html).toContain(testSale.address);
+      expect(call[0].html).not.toContain(testSale.address);
       expect(call[0].html).toContain(testSale.city);
+      expect(call[0].html).toContain('Full address on the sale page the day before it starts');
     });
 
     it('should include the organizer business name in the HTML body', async () => {
@@ -248,7 +257,7 @@ describe('Weekly Digest E2E', () => {
     beforeAll(() => {
       mockEmailsSend
         .mockRejectedValueOnce(new Error('Resend: simulated delivery failure'))
-        .mockResolvedValue({ id: 'mock-email-id-digest', error: null });
+        .mockResolvedValue({ sent: true });
     });
 
     it('should not throw and should complete the run', async () => {

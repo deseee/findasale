@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { useToast } from './ToastContext';
 import api from '../lib/api';
+import { formatPublicLocation } from '@/lib/seo/publicSaleLocation';
 
 interface AddToCalendarButtonProps {
   saleId: string;
@@ -48,7 +49,8 @@ const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
     };
 
     const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://finda.sale';
-    const location = `${address}, ${city}, ${state}`;
+    // Street address can be withheld (location privacy gate): skip empty parts, no dangling commas.
+    const location = formatPublicLocation({ address, city, state });
     const descriptionLines = [
       description,
       `View at ${siteUrl}/sales/${saleId}`,

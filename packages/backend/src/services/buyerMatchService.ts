@@ -6,6 +6,8 @@ import { prisma } from '../lib/prisma';
 import { createNotification } from './notificationService';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
+import { messageSaleLocation, addressNoteHtml } from '../lib/messageSaleLocation';
+import { publicItemWhere } from '../lib/publicSaleGate';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
@@ -219,8 +221,13 @@ const buildMatchNotificationHtml = (
   name: string,
   sale: any,
   topCategories: string[],
-  unsubToken: string
+  unsubToken: string,
+  now: Date = new Date()
 ): string => {
+  // 2026-10-13: recipients are account holders; the street waits for the day before the sale (send time).
+  const location = messageSaleLocation(sale, sale.organizer?.timezone, true, now);
+  const saleUrl = `${FRONTEND_URL}/sales/${sale.id}`;
+  const noteHtml = addressNoteHtml(location, saleUrl, 'color:#92400e; text-decoration:underline;');
   const formatDate = (d: Date) =>
     new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -259,7 +266,8 @@ const buildMatchNotificationHtml = (
               <!-- Sale Card -->
               <div style="border:2px solid #fed7aa; border-radius:10px; padding:18px; background:#fffbf0; margin-bottom:20px;">
                 <div style="font-size:18px; font-weight:700; color:#92400e; margin-bottom:8px;">${sale.title}</div>
-                <div style="font-size:13px; color:#78350f; margin-bottom:12px;">${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}</div>
+                <div style="font-size:13px; color:#78350f; margin-bottom:${noteHtml ? '4px' : '12px'};">${location.line}</div>${noteHtml ? `
+                <div style="font-size:12px; margin-bottom:12px;">${noteHtml}</div>` : ''}
                 <div style="display:inline-block; padding:6px 12px; background:#fcd34d; color:#78350f; border-radius:6px; font-size:12px; font-weight:600; margin-bottom:14px;">
                   ${formatDate(sale.startDate)}
                 </div>
@@ -309,12 +317,15 @@ export async function notifyMatchedBuyers(saleId: string): Promise<void> {
   try {
     console.log(`[buyerMatch] Starting notification job for sale ${saleId}`);
 
+    const now = new Date();
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
       include: {
+        organizer: { select: { timezone: true } },
         items: {
           select: { category: true },
-          where: { status: 'AVAILABLE' },
+          // 2026-10-13: categories shown in the email never come from an item still in an early-access window
+          where: { AND: [{ status: 'AVAILABLE' }, publicItemWhere(now)] },
         },
       },
     });
@@ -377,7 +388,7 @@ export async function notifyMatchedBuyers(saleId: string): Promise<void> {
 
         const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
         const unsubToken = await generateUnsubscribeToken(buyer.userId, 'newSales');
-        const html = buildMatchNotificationHtml(buyer.name || 'Shopper', sale, topCategories, unsubToken);
+        const html = buildMatchNotificationHtml(buyer.name || 'Shopper', sale, topCategories, unsubToken, new Date());
 
         await emailService.emails.send({
           from: FROM_EMAIL,

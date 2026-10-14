@@ -3,6 +3,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { feedLimiter } from '../middleware/rateLimiter';
 import { getPersonalizedFeed } from '../services/discoveryService';
 import { regionConfig } from '../config/regionConfig';
+import { gateSalesForViewer } from '../lib/publicSaleGate';
 
 const router = Router();
 
@@ -31,8 +32,11 @@ router.get('/', feedLimiter, async (req: AuthRequest | Request, res: Response) =
     const { sales, personalized } = await getPersonalizedFeed(userId, lat, lng);
 
     // Return top 20 (vs 30 from old feed for faster response)
+    // Address gate (2026-10-13): street address / exact pin only for signed-in viewers from the day
+    // before the sale starts (owner/admin always); everyone else gets city-level location.
+    const top = sales.slice(0, 20).map(({ score, ...sale }) => sale); // Strip score from response
     res.json({
-      sales: sales.slice(0, 20).map(({ score, ...sale }) => sale), // Strip score from response
+      sales: gateSalesForViewer(top, (req as AuthRequest).user),
       personalized,
       reason: personalized
         ? 'Ranked by your browsing history and followed organizers'

@@ -3,6 +3,8 @@ import { prisma } from '../lib/prisma';
 import { CITY_SLUG_PATTERN } from '../utils/citySlug';
 import { parseCitySlug, rankCityFinds, directoryAddressWhere } from '../utils/cityFinds';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
+import { stripOrganizerPrivateFields } from '../lib/publicSaleGate';
+import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
 import { isSaleLocked } from '../services/rankService';
 
 /**
@@ -81,7 +83,8 @@ export async function getCityFinds(req: Request, res: Response) {
         photoUrls: { isEmpty: false },
         // Auction and reverse-auction prices are not a plain "price", so they are not shown here.
         listingType: { notIn: ['AUCTION', 'REVERSE_AUCTION'] },
-        AND: [{ OR: [{ liveDropAt: null }, { liveDropAt: { lte: now } }] }],
+        // Early-access / embargoed items stay hidden from public lists (2026-10-13).
+        AND: [{ OR: [{ liveDropAt: null }, { liveDropAt: { lte: now } }] }, notEmbargoedForPublicWhere(now)],
         sale: {
           status: 'PUBLISHED',
           deletedAt: null,
@@ -274,8 +277,9 @@ export async function getCityDirectory(req: Request, res: Response) {
     return res.json({
       cityName,
       stateCode: stateCode.toUpperCase(),
+      // Organizer address is never public (2026-10-13): a scraped street address can be a private home.
       organizers: organizers.map(({ claimStatus, ...rest }) => ({
-        ...rest,
+        ...stripOrganizerPrivateFields(rest),
         claimable: claimStatus === 'UNCLAIMED' || claimStatus === 'INVITED',
       })),
       count: organizers.length,
