@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getSaleAddressGate, isItemEmbargoedForViewer, SaleAddressGate, redactSalesForViewer, notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
+import { getSaleAddressGate, isItemEmbargoedForViewer, SaleAddressGate, redactSalesForViewer, notEmbargoedForPublicWhere, hasNoLocationToProtect, publicScrapedMetadata } from '../lib/saleLocationPrivacy';
 import { isOrganizerStaff } from '../utils/saleStaffAccess'; // owner organizer + any active workspace staff see the street address
 import { z } from 'zod';
 import QRCode from 'qrcode';
@@ -609,7 +609,7 @@ export const getSale = async (req: Request, res: Response) => {
     }
 
     // Street address gate (signed-in shoppers only, from the day before the sale starts, sale local time).
-    let addressGate: SaleAddressGate = (isOrganizer || isAdmin || !sale.address) // online-only sales have no street address to protect
+    let addressGate: SaleAddressGate = (isOrganizer || isAdmin || hasNoLocationToProtect(sale)) // online-only: no street and no pin to protect
       ? { visible: true }
       : getSaleAddressGate(sale, (sale.organizer as any).timezone, Boolean(authReq.user?.id));
     // The sale organizer's staff (any active member of its workspace) always see the address too.
@@ -691,6 +691,8 @@ export const getSale = async (req: Request, res: Response) => {
     const responseSale: any = {
       ...sale,
       items: visibleItems,
+      // Raw scraper payload (source street address, exact pin) is for owner/admin only.
+      scrapedMetadata: isPrivilegedViewer ? (sale as any).scrapedMetadata : publicScrapedMetadata((sale as any).scrapedMetadata),
       ...(addressGate.visible ? {} : {
         address: '',
         lat: coarse(sale.lat),
@@ -1642,7 +1644,7 @@ export const generateIcal = async (req: Request, res: Response) => {
     // "Shared via FindA.Sale" footer (utils/watermarkPolicy.canRemoveWatermark).
     // Street address gate (same rule as GET /sales/:id): the calendar file would otherwise leak it to anyone.
     const icalViewer = (req as any).user;
-    let icalGate: SaleAddressGate = (icalViewer?.role === 'ADMIN' || icalViewer?.id === sale.organizer?.userId || !sale.address)
+    let icalGate: SaleAddressGate = (icalViewer?.role === 'ADMIN' || icalViewer?.id === sale.organizer?.userId || hasNoLocationToProtect(sale))
       ? { visible: true }
       : getSaleAddressGate(sale, sale.organizer?.timezone, Boolean(icalViewer?.id));
     // Organizer staff see the address too (same check as GET /sales/:id).

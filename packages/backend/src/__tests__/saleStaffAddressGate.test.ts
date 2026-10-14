@@ -109,7 +109,7 @@ describe('GET /sales/:id: staff address + approach notes', () => {
   });
 
   it('online-only sale (no street address): notes are not touched', async () => {
-    const res = await run(SHOPPER, { address: '' });
+    const res = await run(SHOPPER, { address: '', lat: null, lng: null, entranceLat: null, entranceLng: null });
     expect(res.body.notes).toBe('Park on Maple, enter through the red door at 123');
   });
 

@@ -74,8 +74,18 @@ export function coarseCoord<T extends number | null | undefined>(n: T): T {
  * Gate for a viewer on a sale. Privileged = owning organizer / admin (callers that know about staff
  * pass privileged: true). Online-only sales without a street address have nothing to protect.
  */
+/**
+ * True only for a sale with nothing to protect: its address column is present and empty AND it carries
+ * no coordinates. A scraped sale with no street but an exact pin is NOT online-only (the pin is the house).
+ */
+export function hasNoLocationToProtect(sale: Record<string, any>): boolean {
+  if (!('address' in sale) || sale.address) return false;
+  return sale.lat == null && sale.lng == null && sale.latitude == null && sale.longitude == null
+    && sale.entranceLat == null && sale.entranceLng == null;
+}
+
 export function saleAddressGateForViewer(
-  sale: { startDate: Date | string | null; address?: string | null },
+  sale: { startDate: Date | string | null; address?: string | null; [k: string]: any },
   timeZone: string | null | undefined,
   viewer: { id?: string } | null | undefined,
   privileged: boolean,
@@ -83,8 +93,21 @@ export function saleAddressGateForViewer(
 ): SaleAddressGate {
   // Only a sale whose address column was selected AND is empty is online-only. A select that omits the
   // address (map pins, lat/lng only) is still gated, or its exact coordinates would leak.
-  if (privileged || ('address' in sale && !sale.address)) return { visible: true };
+  if (privileged || hasNoLocationToProtect(sale)) return { visible: true };
   return getSaleAddressGate(sale, timeZone, Boolean(viewer?.id), now);
+}
+
+/**
+ * Scraped sales keep the raw source response in scrapedMetadata (apiResponse, lat/lng), which carries the
+ * source site's street address and exact pin. Public responses only need the display keys the frontend
+ * reads; everything else is dropped on every public path, whatever the address gate says.
+ */
+const PUBLIC_SCRAPED_METADATA_KEYS = ['aiEnriched', 'hours_display', 'dateApproximate'] as const;
+export function publicScrapedMetadata(meta: unknown): Record<string, unknown> | null {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null;
+  const out: Record<string, unknown> = {};
+  for (const k of PUBLIC_SCRAPED_METADATA_KEYS) if ((meta as any)[k] !== undefined) out[k] = (meta as any)[k];
+  return Object.keys(out).length ? out : null;
 }
 
 /**
@@ -93,8 +116,9 @@ export function saleAddressGateForViewer(
  * so `select` shapes stay unchanged). Organizer address, when nested, is blanked too.
  */
 export function redactSaleLocation<T extends Record<string, any>>(sale: T, gate: SaleAddressGate): T {
-  if (gate.visible) return sale;
   const out: any = { ...sale };
+  if ('scrapedMetadata' in out) out.scrapedMetadata = publicScrapedMetadata(out.scrapedMetadata);
+  if (gate.visible) return out;
   if ('address' in out) out.address = '';
   if ('lat' in out) out.lat = coarseCoord(out.lat);
   if ('lng' in out) out.lng = coarseCoord(out.lng);

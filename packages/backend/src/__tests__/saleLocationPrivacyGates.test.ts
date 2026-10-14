@@ -32,6 +32,7 @@ import {
   redactSalesForViewer,
   saleAddressGateForViewer,
   notEmbargoedForPublicWhere,
+  publicScrapedMetadata,
 } from '../lib/saleLocationPrivacy';
 import { updateSaleStatus, getSalesByCity } from '../controllers/saleController';
 import { optionalAuthenticate, lenientOptionalAuthenticate } from '../middleware/auth';
@@ -99,7 +100,7 @@ describe('redactSalesForViewer / saleAddressGateForViewer', () => {
   it('signed-in shopper from the day before the start: full address', () => {
     const viewer = { id: 'shopper', role: 'USER' };
     const [out] = redactSalesForViewer([SALE], viewer, IN_WINDOW);
-    expect(out).toBe(SALE);
+    expect(out).toEqual(SALE);
     expect(saleAddressGateForViewer(SALE, 'America/Detroit', viewer, false, IN_WINDOW)).toEqual({ visible: true });
   });
 
@@ -115,8 +116,25 @@ describe('redactSalesForViewer / saleAddressGateForViewer', () => {
     expect(out.lat).toBe(42.963795);
   });
 
-  it('an online-only sale with no street address has nothing to gate', () => {
-    expect(saleAddressGateForViewer({ ...SALE, address: '' }, 'America/Detroit', null, false, BEFORE_WINDOW)).toEqual({ visible: true });
+  it('an online-only sale (no street address, no pin) has nothing to gate', () => {
+    expect(saleAddressGateForViewer({ ...SALE, address: '', lat: null, lng: null, entranceLat: null, entranceLng: null }, 'America/Detroit', null, false, BEFORE_WINDOW)).toEqual({ visible: true });
+  });
+
+  it('scrapedMetadata keeps display keys only, on every viewer path', () => {
+    const meta = { aiEnriched: { summary: 's' }, hours_display: '9-4', lat: 42.261671, lng: -85.238818, apiResponse: { address: '1 Elm St', latitude: 42.261671 } };
+    expect(publicScrapedMetadata(meta)).toEqual({ aiEnriched: { summary: 's' }, hours_display: '9-4' });
+    expect(publicScrapedMetadata({ apiResponse: { address: 'x' } })).toBeNull();
+    const [anon] = redactSalesForViewer([{ ...SALE, scrapedMetadata: meta }], null, IN_WINDOW);
+    expect(JSON.stringify(anon)).not.toContain('1 Elm St');
+    const [owner] = redactSalesForViewer([{ ...SALE, scrapedMetadata: meta }], { id: 'admin_user', role: 'ADMIN' }, IN_WINDOW);
+    expect(JSON.stringify(owner)).not.toContain('apiResponse');
+  });
+
+  it('a scraped sale with no street address but an exact pin is still gated (coords coarsened)', () => {
+    const scraped = { ...SALE, address: '' };
+    expect(saleAddressGateForViewer(scraped, 'America/Detroit', null, false, IN_WINDOW).visible).toBe(false);
+    const [out] = redactSalesForViewer([scraped], null, IN_WINDOW);
+    expect(out.lat).toBe(42.96);
   });
 
   it('a select without the address key (map pins) is still gated', () => {

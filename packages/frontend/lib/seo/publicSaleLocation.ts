@@ -52,6 +52,13 @@ export function toPublicSaleLocation<T>(sale: T): T {
   if (copy.organizer && typeof copy.organizer === 'object') {
     copy.organizer = toPublicOrganizer(copy.organizer);
   }
+  // Raw scraper payload can hold the source street address and exact pin: keep display keys only.
+  if (copy.scrapedMetadata && typeof copy.scrapedMetadata === 'object') {
+    const meta = copy.scrapedMetadata as Record<string, unknown>;
+    const kept: Record<string, unknown> = {};
+    for (const k of ['aiEnriched', 'hours_display', 'dateApproximate']) if (meta[k] !== undefined) kept[k] = meta[k];
+    copy.scrapedMetadata = Object.keys(kept).length ? kept : null;
+  }
   return copy as T;
 }
 
