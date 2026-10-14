@@ -35,7 +35,7 @@ gh_auth_state() {
   _gh_load_pat
   if [ -z "${GH_PAT:-}" ]; then _GH_STATE=no_pat; echo "$_GH_STATE"; return 0; fi
   local code
-  code="$(curl -s -m 20 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GH_PAT" "$GH_API_BASE/rate_limit" 2>/dev/null)"
+  code="$(curl -s -m 20 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GH_PAT" "$GH_API_BASE/repos/$GH_REPO" 2>/dev/null)"  # NOT /rate_limit: it answers 200 even for a rejected token
   case "$code" in
     200) _GH_STATE=valid ;;
     401) _GH_STATE=dead ;;
@@ -47,25 +47,31 @@ gh_auth_state() {
 # gh_api <path-with-query> [extra curl args]  -> body on stdout, rc 0 on 2xx else 22
 gh_api() {
   local path="$1"; shift
-  local state out code tmp; tmp="$(mktemp)"
+  local state resp code body
   state="$(gh_auth_state)"
+  _gh_load_pat   # gh_auth_state ran in a subshell ($(...)), so GH_PAT it loaded is lost here; load it in this shell too
+  code=""
   if [ "$state" = valid ]; then
-    code="$(curl -s -m 30 -o "$tmp" -w '%{http_code}' -H "Authorization: Bearer $GH_PAT" -H 'Accept: application/vnd.github+json' "$@" "$GH_API_BASE$path")"
+    # Body and status are captured together on stdout (no temp file: mktemp paths are unreliable in some sandboxes).
+    # -L follows the 302 that job-log downloads use; curl drops the Authorization header on a cross-host redirect.
+    resp="$(curl -sL -m 30 -w '\n%{http_code}' -H "Authorization: Bearer $GH_PAT" -H 'Accept: application/vnd.github+json' "$@" "$GH_API_BASE$path")"
+    code="${resp##*$'\n'}"; body="${resp%$'\n'*}"
     if [ "$code" = 401 ]; then _GH_STATE=dead; echo "WARN: GH_PAT rejected (Bad credentials); using unauthenticated read" >&2; code=""; fi
   fi
-  if [ -z "${code:-}" ] || [ "$state" != valid ]; then
-    code="$(curl -s -m 30 -o "$tmp" -w '%{http_code}' -H 'Accept: application/vnd.github+json' "$@" "$GH_API_BASE$path")"
+  if [ -z "$code" ]; then
+    resp="$(curl -sL -m 30 -w '\n%{http_code}' -H 'Accept: application/vnd.github+json' "$@" "$GH_API_BASE$path")"
+    code="${resp##*$'\n'}"; body="${resp%$'\n'*}"
   fi
-  cat "$tmp"; out=$?
+  printf '%s\n' "$body"
   if [ "${code:0:1}" != 2 ]; then
-    if [ "$code" = 403 ] && grep -qi 'rate limit' "$tmp"; then
+    if [ "$code" = 403 ] && printf '%s' "$body" | grep -qi 'rate limit'; then
       echo "ERR: unauthenticated GitHub rate limit (60/h). Use the GitHub MCP connector (mcp__*github__*) for this call." >&2
     else
       echo "ERR: GitHub API $path -> HTTP $code" >&2
     fi
-    rm -f "$tmp"; return 22
+    return 22
   fi
-  rm -f "$tmp"; return 0
+  return 0
 }
 
 gh_check() {
@@ -74,19 +80,20 @@ gh_check() {
   echo "GH_AUTH_STATUS=$st"
   [ "$st" = dead ] && echo "WARN: GH_PAT in .secrets.env is dead (Bad credentials). Non-fatal: all reads fall back to unauthenticated (repo is public). Only a GitHub login can mint a replacement, and nothing read-only needs one."
   [ "$st" = unverified ] && echo "WARN: could not verify GH_PAT (network/5xx); ignoring it and reading unauthenticated."
-  body="$(mktemp)"
-  code="$(curl -s -m 30 -o "$body" -w '%{http_code}' "$GH_API_BASE/repos/$GH_REPO")"
+  local resp
+  resp="$(curl -s -m 30 -w '\n%{http_code}' "$GH_API_BASE/repos/$GH_REPO")"
+  code="${resp##*$'\n'}"; body="${resp%$'\n'*}"
   if [ "${code:0:1}" = 2 ]; then
     echo "GH_UNAUTH_READ=ok"
-    if grep -Eq '"private": *false' "$body"; then echo "GH_REPO_PUBLIC=true"
-    elif grep -Eq '"private": *true' "$body"; then echo "GH_REPO_PUBLIC=false"; echo "WARN: repo is private; unauthenticated reads will stop working and a valid PAT or the GitHub MCP connector becomes REQUIRED."
+    if printf '%s' "$body" | grep -Eq '"private": *false' ; then echo "GH_REPO_PUBLIC=true"
+    elif printf '%s' "$body" | grep -Eq '"private": *true' ; then echo "GH_REPO_PUBLIC=false"; echo "WARN: repo is private; unauthenticated reads will stop working and a valid PAT or the GitHub MCP connector becomes REQUIRED."
     else echo "GH_REPO_PUBLIC=unknown"; fi
   else
     echo "GH_UNAUTH_READ=fail:$code"; echo "GH_REPO_PUBLIC=unknown"
     echo "ERR: unauthenticated read of $GH_REPO failed (HTTP $code). Fall back to the GitHub MCP connector."
     rc=2
   fi
-  rm -f "$body"; return $rc
+  return $rc
 }
 
 # Run as a script (not sourced)
