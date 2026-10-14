@@ -210,7 +210,7 @@ cron.schedule('0 23 * * *', cronGuard({ jobName: 'tierLapseJob' }, async () => {
 
 // Run tier-lapse warning queue daily at 8 AM UTC (12 AM EST)
 cron.schedule('0 8 * * *', cronGuard({ jobName: 'tierLapseJob' }, async () => {
-  if (!bulkEmailEnabled()) { console.log('[tierLapseJob] Skipped — bulk email disabled (OUTREACH_ENABLED!=true)'); return; }
+  if (!bulkEmailEnabled()) { console.log('[tierLapseJob] Skipped — bulk email disabled (BULK_EMAIL_ENABLED!=true)'); return; }
   console.log('[TierLapse] Running tier-lapse warning queue job...');
   await queueTierLapseWarningsJob();
   console.log('[TierLapse] Tier-lapse warning queue job completed successfully');

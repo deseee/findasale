@@ -224,7 +224,7 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
 // ─── Schedule: every Monday at 8 AM ───────────────────────────────────────────────────────────────────────────────────
 
 cron.schedule('0 8 * * 1', cronGuard({ jobName: 'curatorEmailJob' }, async () => {
-  if (!bulkEmailEnabled()) { console.log('[curatorEmailJob] Skipped — bulk email disabled (OUTREACH_ENABLED!=true)'); return; }
+  if (!bulkEmailEnabled()) { console.log('[curatorEmailJob] Skipped — bulk email disabled (BULK_EMAIL_ENABLED!=true)'); return; }
   console.log('📧 Running weekly curator email digest…');
   await sendWeeklyCuratorDigest();
 }));

@@ -6,12 +6,16 @@ import * as Sentry from '@sentry/node';
 /**
  * Transactional email service — uses Resend API (NOT Gmail).
  *
- * This is a dedicated rail for critical transactional emails: password resets,
- * email verification, payout confirmations, purchase receipts, invoices, and
- * subscription notices. A Gmail/Workspace suspension cannot silence these.
+ * Carries critical transactional emails: password resets, email verification,
+ * payout confirmations, purchase receipts, invoices, and subscription notices.
+ * A Gmail/Workspace suspension cannot silence these.
  *
- * Gmail/emailService remains the rail for bulk and marketing emails
- * (sale alerts, newsletters, weekly digests, win-back flows, etc.).
+ * UPDATED 2026-10-13 (outreach-transactional-email-identity-separation-adr):
+ * also now carries opt-in bulk/lifecycle mail that was on the Gmail rail
+ * (weekly digest first; sale alerts, win-back, and others are fast-follow
+ * candidates per the ADR). Gmail/emailService is cold-outreach-only going
+ * forward — do not read this file's old "bulk and marketing" framing as
+ * current; it described emailService.ts's job before this split.
  *
  * FROM domain: finda.sale (Resend-verified root domain).
  * Default sender: RESEND_FROM_EMAIL (defaults to noreply@finda.sale).

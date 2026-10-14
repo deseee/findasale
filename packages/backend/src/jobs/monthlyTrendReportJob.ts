@@ -50,7 +50,7 @@ export interface OrganizerTrendData {
 }
 
 export async function runMonthlyTrendReport(): Promise<void> {
-  if (!bulkEmailEnabled()) { console.log('[monthlyTrendReport] Skipped — bulk email disabled (OUTREACH_ENABLED!=true)'); return; }
+  if (!bulkEmailEnabled()) { console.log('[monthlyTrendReport] Skipped — bulk email disabled (BULK_EMAIL_ENABLED!=true)'); return; }
   const now = new Date();
 
   // Current month window: past 30 days

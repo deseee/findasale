@@ -9,7 +9,7 @@ import { bulkEmailEnabled } from '../utils/bulkEmailGate';
 // Run every Sunday at 6 PM: cron.schedule('minute hour day-of-month month day-of-week', ...)
 // Sunday = 0, Monday = 1, ... Saturday = 6
 cron.schedule('0 18 * * 0', cronGuard({ jobName: 'weeklyEmailJob' }, async () => {
-  if (!bulkEmailEnabled()) { console.log('[weeklyEmailJob] Skipped — bulk email disabled (OUTREACH_ENABLED!=true)'); return; }
+  if (!bulkEmailEnabled()) { console.log('[weeklyEmailJob] Skipped — bulk email disabled (BULK_EMAIL_ENABLED!=true)'); return; }
   console.log('[Cron] Running weekly shopper email job (Sunday 6pm)...');
   try {
     await sendWeeklyEmails();

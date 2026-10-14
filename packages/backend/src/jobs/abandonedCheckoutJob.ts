@@ -141,7 +141,7 @@ export const processAbandonedCheckouts = async (): Promise<void> => {
 
 // Run every hour to check for abandoned checkouts
 cron.schedule('2 * * * *', cronGuard({ jobName: 'abandonedCheckoutJob' }, async () => { // staggered off saleAutoCloseCron's 0 * * * * 2026-08-04 cost-optimization batch
-  if (!bulkEmailEnabled()) { console.log('[abandonedCheckoutJob] Skipped — bulk email disabled (OUTREACH_ENABLED!=true)'); return; }
+  if (!bulkEmailEnabled()) { console.log('[abandonedCheckoutJob] Skipped — bulk email disabled (BULK_EMAIL_ENABLED!=true)'); return; }
   console.log('[AbandonedCheckout] Running abandoned checkout recovery job...');
   await processAbandonedCheckouts();
   console.log('[AbandonedCheckout] Abandoned checkout recovery job completed successfully');

@@ -4,9 +4,20 @@ import * as Sentry from '@sentry/node';
 import { isEmailDomainBlocked, suppressionService } from '../services/suppressionService';
 
 /**
- * Transactional email service — uses Gmail API (same auth as outreach).
- * FROM address: uses GMAIL_FROM_EMAIL env var (falls back to legacy SES_FROM_EMAIL; defaults to find@outreach.finda.sale).
+ * Gmail-rail email service — uses Gmail API (same OAuth-authenticated mailbox as
+ * cold outreach). FROM address: uses GMAIL_FROM_EMAIL env var (falls back to legacy
+ * SES_FROM_EMAIL; defaults to find@outreach.finda.sale).
  * Must match the same DKIM/SPF domain as outreach emails (outreach.finda.sale).
+ *
+ * UPDATED 2026-10-13 (outreach-transactional-email-identity-separation-adr):
+ * this is no longer "bulk and marketing" mail's rail. Gmail's users.messages.send
+ * sets the SMTP envelope sender to this OAuth mailbox regardless of the From
+ * header, so anything sent here shares real sending reputation with cold
+ * outreach — not just DNS. Opt-in bulk/lifecycle mail (weekly digest and more
+ * to follow) is migrating to the Resend rail (transactionalEmailService.ts,
+ * finda.sale root domain) specifically to get out from under that. Treat this
+ * rail as cold-outreach-only going forward; a new opt-in job defaulting here
+ * needs explicit Architect sign-off, not a default choice.
  */
 
 // ---------------------------------------------------------------------------
