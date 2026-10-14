@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "FindA.Sale \u2014 Marketplace Autofill",
   "short_name": "FindA.Sale",
-  "version": "1.0.5",
-  "description": "Fill your Facebook Marketplace listings from your FindA.Sale inventory \u2014 title, price, condition, description, and photos. You review and publish.",
+  "version": "1.0.7",
+  "description": "Fill your Facebook Marketplace listings from your FindA.Sale inventory \u2014 title, price, condition, description, and photos. You review and publish. Price and stock changes made on FindA.Sale are applied to your live listings automatically.",
   "permissions": [
     "storage",
     "tabs",
@@ -72,6 +72,7 @@
         "https://post.craigslist.org/*"
       ],
       "js": [
+        "fas-listing-ref.js",
         "fas-condition.js",
         "fas-quantity.js",
         "fas-craigslist.js"
@@ -93,6 +94,7 @@
         "https://www.gumtree.com.au/*"
       ],
       "js": [
+        "fas-listing-ref.js",
         "fas-gumtree-au.js"
       ],
       "run_at": "document_idle"
@@ -126,6 +128,7 @@
         "https://www.poshmark.com/*"
       ],
       "js": [
+        "fas-listing-ref.js",
         "fas-condition.js",
         "fas-challenge.js",
         "fas-quantity.js",
@@ -138,6 +141,7 @@
         "https://www.mercari.com/*"
       ],
       "js": [
+        "fas-listing-ref.js",
         "fas-condition.js",
         "fas-challenge.js",
         "fas-quantity.js",
@@ -171,6 +175,7 @@
         "https://www.grailed.com/*"
       ],
       "js": [
+        "fas-listing-ref.js",
         "fas-condition.js",
         "fas-challenge.js",
         "fas-quantity.js",

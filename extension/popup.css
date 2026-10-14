@@ -84,3 +84,12 @@ button.primary:disabled { background: #2a3a30; color: #6b7c72; cursor: default; 
 .select { width: 100%; margin-top: 6px; padding: 7px 8px; border-radius: 6px; border: 1px solid #26362d; background: #1a2620; color: #eef3ee; font: inherit; }
 .pauseSetting { margin-top: 4px; padding-bottom: 10px; }
 .pauseList { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; margin-top: 4px; }
+
+/* 2026-10-13: automatic price/stock sync log (popup.js renderEditSync) */
+.editSyncSetting { margin-top: 10px; padding-top: 10px; border-top: 1px solid #26362d; }
+.editSyncBtns { margin-top: 4px; }
+.editLog { margin-top: 6px; max-height: 150px; overflow-y: auto; font-size: 11px; line-height: 1.35; }
+.editLog .row { padding: 3px 0; border-bottom: 1px solid #1d2a23; word-break: break-word; }
+.editLog .row.error { color: #ffb3a7; }
+.editLog .row.warn { color: #ffcf7a; }
+.editLog .row.info { color: #b9d9c4; }

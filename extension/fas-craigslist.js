@@ -23,6 +23,25 @@
   function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
   function bodyText() { return (document.body && document.body.innerText) || ''; }
   function q(sel) { return document.querySelector(sel); }
+  // 2026-10-13 (extension 1.0.7): capture the posted listing's URL/id for markListed so price/qty edits
+  // can go straight to the live listing. Best-effort and NEVER throws or blocks a posting: any failure
+  // (helper not loaded, no id on this page yet) returns nulls and the backend/after-the-fact capture
+  // paths fill the reference in later. waitMs > 0 polls briefly for a post-submit redirect to land.
+  async function fasListingRef(platform, waitMs) {
+    const empty = { remoteListingId: null, remoteListingUrl: null };
+    try {
+      const C = (typeof self !== 'undefined' && self.FAS_LISTING_REF) || null;
+      if (!C || typeof C.capturePageListingRef !== 'function') return empty;
+      const deadline = Date.now() + Math.max(0, waitMs || 0);
+      for (;;) {
+        let r = null;
+        try { r = C.capturePageListingRef(platform, location, document); } catch (e) { r = null; }
+        if (r && (r.remoteListingId || r.remoteListingUrl)) return { remoteListingId: r.remoteListingId || null, remoteListingUrl: r.remoteListingUrl || null };
+        if (Date.now() >= deadline) return empty;
+        await new Promise((res) => setTimeout(res, 300));
+      }
+    } catch (e) { return empty; }
+  }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
   // Craigslist Prohibited Items gate (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- this platform
@@ -1133,7 +1152,7 @@
       // doPreviewStep's automated-success path already makes; remoteListingId stays null here
       // too (Craigslist's posting flow never exposes a listing id/url to read back, same as the
       // automated path).
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'CRAIGSLIST' }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('CRAIGSLIST', 0)), platform: 'CRAIGSLIST' }); } catch (e) {}
       try { await recordCraigslistPost(item); } catch (e) {} // S-EXT-CRAIGSLIST-48H-REPOST-GUARD
       clearAttempts();
       try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) {}
@@ -1258,7 +1277,7 @@
     // ADR-100 §2.2) and so a renewal-due date gets computed. Reuses the EXISTING 'markListed'
     // message type already handled in background.js -- not a new message. Best-effort: a
     // failure here must never undo or block the publish that already happened.
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'CRAIGSLIST' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('CRAIGSLIST', 0)), platform: 'CRAIGSLIST' }); } catch (e) {}
     try { await recordCraigslistPost(item); } catch (e) {} // S-EXT-CRAIGSLIST-48H-REPOST-GUARD
 
     clearAttempts();
@@ -1314,7 +1333,7 @@
     markCraigslistPostedHandled();
     clearAttempts();
 
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'CRAIGSLIST' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('CRAIGSLIST', 2000)), platform: 'CRAIGSLIST' }); } catch (e) {}
     try { await recordCraigslistPost(item); } catch (e) {} // S-EXT-CRAIGSLIST-48H-REPOST-GUARD
 
     const more = (index + 1) < total;

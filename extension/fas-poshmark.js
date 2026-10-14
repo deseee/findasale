@@ -342,6 +342,25 @@
   function bodyText() { return (document.body && document.body.innerText) || ''; }
   function q(sel) { return document.querySelector(sel); }
   function qa(sel) { return Array.from(document.querySelectorAll(sel)); }
+  // 2026-10-13 (extension 1.0.7): capture the posted listing's URL/id for markListed so price/qty edits
+  // can go straight to the live listing. Best-effort and NEVER throws or blocks a posting: any failure
+  // (helper not loaded, no id on this page yet) returns nulls and the backend/after-the-fact capture
+  // paths fill the reference in later. waitMs > 0 polls briefly for a post-submit redirect to land.
+  async function fasListingRef(platform, waitMs) {
+    const empty = { remoteListingId: null, remoteListingUrl: null };
+    try {
+      const C = (typeof self !== 'undefined' && self.FAS_LISTING_REF) || null;
+      if (!C || typeof C.capturePageListingRef !== 'function') return empty;
+      const deadline = Date.now() + Math.max(0, waitMs || 0);
+      for (;;) {
+        let r = null;
+        try { r = C.capturePageListingRef(platform, location, document); } catch (e) { r = null; }
+        if (r && (r.remoteListingId || r.remoteListingUrl)) return { remoteListingId: r.remoteListingId || null, remoteListingUrl: r.remoteListingUrl || null };
+        if (Date.now() >= deadline) return empty;
+        await new Promise((res) => setTimeout(res, 300));
+      }
+    } catch (e) { return empty; }
+  }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
   // ---- Prohibited Items pre-submit safety gate (SAFETY, added S-EXT-POSHMARK-PROHIBITED-GATE-
@@ -1964,7 +1983,7 @@
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     const next = document.getElementById('fas-posh-next');
     if (next) next.onclick = async () => {
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('POSHMARK', 0)), platform: 'POSHMARK' }); } catch (e) {}
       try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
       if (more) { await navigateToPoshmarkCreateListing(); } else { clearPoshNavRetryState(); clearPoshPublishAttemptState(); bar && bar.remove(); }
     };
@@ -2159,7 +2178,7 @@
     // click is done (a later click for a DIFFERENT item id will never match this marker anyway, but
     // clearing here keeps the marker's lifecycle honest -- "live only while genuinely ambiguous").
     clearPoshPublishAttemptState();
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('POSHMARK', 3000)), platform: 'POSHMARK' }); } catch (e) {}
     try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
     // Record a run note (never blocks) for every field this run had to guess, skip, or couldn't
     // set -- see this function's own header comment. fillResult.fieldNotes already covers the
@@ -2558,7 +2577,7 @@
         console.log('[FAS Poshmark] Sell form did not reappear within 5s after reload -- treating the earlier "List this item" click as a successful publish and continuing the queue.');
         clearPoshPublishAttemptState();
         clearPoshNavRetryState();
-        try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
+        try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, ...(await fasListingRef('POSHMARK', 1500)), platform: 'POSHMARK' }); } catch (e) {}
         try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
         const more = (queued.index + 1) < queued.total;
         if (more && queued.autoPublish !== false) {
@@ -2585,7 +2604,7 @@
       if (dupeAck) dupeAck.onclick = async () => {
         clearPoshPublishAttemptState();
         clearPoshNavRetryState();
-        try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
+        try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, ...(await fasListingRef('POSHMARK', 0)), platform: 'POSHMARK' }); } catch (e) {}
         try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
         location.reload();
       };

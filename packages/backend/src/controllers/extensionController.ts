@@ -17,6 +17,7 @@ import { resolveGrailedCategory } from '../services/grailedCategoryResolver';
 import { resolveCraigslistCategory } from '../services/craigslistCategoryResolver';
 import { suggestNativeShippingPrice, ShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // S-VINTED-SHIPPING-FALLBACK-PRICE: same buyer-facing shipping number FindA.Sale itself suggests (ShippingHardBlockError is the same class re-exported from ebayRateEstimateService)
 import { loadListingExtras, listingExtraFields, organizerListableScope, stockRemainingOf } from '../services/itemKitListing'; // 2026-10-13: kits listable everywhere + the one stock number on every queue entry
+import { pickStoredRemoteRef, extractRemoteId, resolveListingRef, listingRefFields } from '../services/marketplaceListingRef'; // 2026-10-18: best remote id + URL on every sync queue entry
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
 
@@ -1040,7 +1041,6 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
   if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
 
-  const remoteListingId = typeof req.body?.remoteListingId === 'string' ? req.body.remoteListingId : null;
   const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : 'FACEBOOK';
   // BUG FIX 2026-08-19 (see MarketplaceListingPlatform comment above): validate against the full
   // VALID_LISTING_PLATFORMS superset, not just the 3 renewal-eligible platforms -- a real
@@ -1048,6 +1048,12 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
   const platform: MarketplaceListingPlatform = (VALID_LISTING_PLATFORMS as string[]).includes(platformRaw)
     ? (platformRaw as MarketplaceListingPlatform)
     : 'FACEBOOK';
+  // 2026-10-18: the extension's edit engine finds a live listing by remote id first. Accept the id and/or the posted URL
+  // (remoteListingUrl / listingUrl / url), parse the platform's own id out of it, and store the best reference.
+  const remoteListingId = pickStoredRemoteRef(platform, {
+    remoteListingId: req.body?.remoteListingId,
+    remoteListingUrl: req.body?.remoteListingUrl ?? req.body?.listingUrl ?? req.body?.url,
+  });
 
   // Facebook Commerce Policy gate (coins/currency) -- this is the AUTHORITATIVE reject, run
   // regardless of whatever the extension's own client-side checks (popup.js/background.js/
@@ -1127,9 +1133,13 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
   const latestForPlatform = await prisma.marketplaceListingJob.findFirst({
     where: { itemId, platform },
     orderBy: { createdAt: 'desc' },
-    select: { action: true, status: true },
+    select: { id: true, action: true, status: true, remoteListingId: true },
   });
   if (latestForPlatform && latestForPlatform.action === 'POST' && latestForPlatform.status === 'POSTED') {
+    // 2026-10-18: a duplicate/replayed report that now carries the listing id fills a still-empty one (set-once, conditional write).
+    if (remoteListingId && latestForPlatform.id && !latestForPlatform.remoteListingId) {
+      try { await prisma.marketplaceListingJob.updateMany({ where: { id: latestForPlatform.id, remoteListingId: null }, data: { remoteListingId } }); } catch { /* best effort */ }
+    }
     res.json({ ok: true, deduped: true });
     return;
   }
@@ -1614,7 +1624,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     for (const p of platforms) {
       const latest = latestByItemPlatform.get(itemId + ':' + p);
       if (latest && latest.action === 'POST' && latest.status === 'POSTED' && latest.remoteListingId) {
-        refs[p] = latest.remoteListingId;
+        refs[p] = resolveListingRef(p, latest.remoteListingId).remoteListingId || latest.remoteListingId;
       }
     }
     return refs;
@@ -1799,7 +1809,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
       const refs: Record<string, string> = {};
       for (const p of retryablePlatforms) {
         const latest = latestAvailableByItemPlatform.get(it.id + ':' + p);
-        if (latest?.remoteListingId) refs[p] = latest.remoteListingId;
+        if (latest?.remoteListingId) refs[p] = resolveListingRef(p, latest.remoteListingId).remoteListingId || latest.remoteListingId;
       }
       complianceItems.push({ id: it.id, title: it.title, platforms: retryablePlatforms, listingRefs: refs, reason: unpublished ? 'UNPUBLISHED' : 'POLICY_INELIGIBLE' });
     }
@@ -1878,7 +1888,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
       id: row.id,
       title: row.itemTitle,
       platforms: [row.platform] as string[],
-      listingRefs: (row.remoteListingId ? { [row.platform]: row.remoteListingId } : {}) as Record<string, string>,
+      listingRefs: (row.remoteListingId ? { [row.platform]: resolveListingRef(row.platform, row.remoteListingId).remoteListingId || row.remoteListingId } : {}) as Record<string, string>,
       reason: 'ITEM_DELETED' as const,
       deleteAllMatches: noOtherLiveItemWithTitle(row.itemTitle, null),
     })),
@@ -1924,7 +1934,12 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
 // array + single shared /^\d{1,20}$/ regex (Vinted-only) to a per-platform format map, so Mercari gets
 // the same after-the-fact capture mechanism -- Mercari's own id is scraped/normalized lowercase
 // (mercRemItemIdFromHref in fas-mercari.js), e.g. 'm12345678', never bare digits like Vinted's.
-const REMOTE_ID_FORMATS: Record<string, RegExp> = { VINTED: /^\d{1,20}$/, MERCARI: /^m\d{1,20}$/ };
+// 2026-10-18: widened to every platform the edit engine targets by id (Facebook, Poshmark, Grailed, Craigslist, Gumtree AU), and the
+// body may carry the posted URL (remoteListingUrl) instead of / alongside the bare id -- the id is parsed out of it.
+const REMOTE_ID_FORMATS: Record<string, RegExp> = {
+  VINTED: /^\d{1,20}$/, MERCARI: /^m\d{1,20}$/,
+  FACEBOOK: /^\d{6,}$/, POSHMARK: /^[0-9a-f]{24}$/, GRAILED: /^\d{1,20}$/, CRAIGSLIST: /^\d{9,12}$/, GUMTREE_AU: /^\d{8,12}$/,
+};
 export const setItemRemoteListingId = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   const itemId = req.params.id;
@@ -1932,7 +1947,12 @@ export const setItemRemoteListingId = async (req: AuthRequest, res: Response): P
   if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
 
   const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : '';
-  const remoteListingId = typeof req.body?.remoteListingId === 'string' ? req.body.remoteListingId.trim() : '';
+  const bodyRemoteId = typeof req.body?.remoteListingId === 'string' ? req.body.remoteListingId.trim() : '';
+  const bodyRemoteUrl = typeof req.body?.remoteListingUrl === 'string' ? req.body.remoteListingUrl.trim() : '';
+  let remoteListingId = bodyRemoteId;
+  if (REMOTE_ID_FORMATS[platformRaw] && !REMOTE_ID_FORMATS[platformRaw].test(remoteListingId)) {
+    remoteListingId = extractRemoteId(platformRaw, bodyRemoteId) || extractRemoteId(platformRaw, bodyRemoteUrl);
+  }
   if (!REMOTE_ID_FORMATS[platformRaw]?.test(remoteListingId)) {
     res.status(400).json({ message: 'Unsupported platform or invalid remoteListingId format', reason: 'unsupported_platform' });
     return;
@@ -1951,7 +1971,7 @@ export const setItemRemoteListingId = async (req: AuthRequest, res: Response): P
     return;
   }
   if (latest.remoteListingId) {
-    if (latest.remoteListingId === remoteListingId) { res.json({ ok: true, unchanged: true }); return; }
+    if (latest.remoteListingId === remoteListingId || extractRemoteId(platformRaw, latest.remoteListingId) === remoteListingId) { res.json({ ok: true, unchanged: true }); return; }
     res.status(409).json({ message: 'A different listing id is already recorded', reason: 'already_set' });
     return;
   }
@@ -1974,9 +1994,11 @@ export const setItemRemoteListingId = async (req: AuthRequest, res: Response): P
     return;
   }
 
+  // Craigslist / Gumtree AU keep the real URL when one was reported (their id-only URL cannot be rebuilt); everyone else stores the id.
+  const toStore = pickStoredRemoteRef(platformRaw, { remoteListingId, remoteListingUrl: bodyRemoteUrl }) || remoteListingId;
   const updated = await prisma.marketplaceListingJob.updateMany({
     where: { id: latest.id, remoteListingId: null },
-    data: { remoteListingId },
+    data: { remoteListingId: toStore },
   });
   if (updated.count !== 1) {
     res.status(409).json({ message: 'Listing id was set concurrently', reason: 'already_set' });
@@ -2131,16 +2153,21 @@ export const getPendingUpdates = async (req: AuthRequest, res: Response): Promis
     .filter((it) => it.price != null && (priceDrifted(it) || quantityDrifted(it)));
   const extras = await loadListingExtras(dueItems.map((i) => i.id));
   const pending = dueItems
-    .map((it) => ({
+    .map((it) => {
+      // 2026-10-18: the stored value may be Facebook's full post URL; the edit engine wants the bare item id (and a URL alongside).
+      const ref = resolveListingRef('FACEBOOK', remoteListingIdByItem.get(it.id));
+      return {
       id: it.id,
       title: it.title,
       newPrice: Math.round(it.price as number),
-      remoteListingId: remoteListingIdByItem.get(it.id) || null,
+      remoteListingId: ref.remoteListingId || null,
+      ...(ref.remoteListingUrl ? { remoteListingUrl: ref.remoteListingUrl } : {}),
       priceDrift: priceDrifted(it),
       quantityDrift: quantityDrifted(it),
       quantity: stockRemainingOf(it),
       ...listingExtraFields(extras.get(it.id)),
-    }))
+      };
+    })
     // Fail-closed: skip any item without a confirmed remoteListingId (legal condition 2).
     .filter((it) => !!it.remoteListingId);
 
@@ -2407,14 +2434,22 @@ export const markItemAlreadyPostedManually = async (req: AuthRequest, res: Respo
     }
   }
 
+  // 2026-10-18: an optional posted URL / id from the organizer's own listing, stored so the edit engine can target it by id.
+  const manualRemoteListingId = pickStoredRemoteRef(platform, {
+    remoteListingId: req.body?.remoteListingId,
+    remoteListingUrl: req.body?.remoteListingUrl ?? req.body?.listingUrl ?? req.body?.url,
+  });
   const latestJob = await prisma.marketplaceListingJob.findFirst({
     where: { itemId, platform },
     orderBy: { createdAt: 'desc' },
-    select: { action: true, status: true },
+    select: { id: true, action: true, status: true, remoteListingId: true },
   });
   if (latestJob && latestJob.action === 'POST' && latestJob.status === 'POSTED') {
     // Already posted (this call, a prior manual mark, or the automated flow) -- idempotent
     // success, never a duplicate row.
+    if (manualRemoteListingId && latestJob.id && !latestJob.remoteListingId) {
+      try { await prisma.marketplaceListingJob.updateMany({ where: { id: latestJob.id, remoteListingId: null }, data: { remoteListingId: manualRemoteListingId } }); } catch { /* best effort */ }
+    }
     res.json({ ok: true, status: 'POSTED' });
     return;
   }
@@ -2423,7 +2458,7 @@ export const markItemAlreadyPostedManually = async (req: AuthRequest, res: Respo
     ? new Date(Date.now() + RENEWAL_LAPSE_WINDOW_DAYS[platform] * 24 * 60 * 60 * 1000)
     : null;
   await prisma.marketplaceListingJob.create({
-    data: { itemId, action: 'POST', status: 'POSTED', platform, renewDueAt },
+    data: { itemId, action: 'POST', status: 'POSTED', platform, renewDueAt, ...(manualRemoteListingId ? { remoteListingId: manualRemoteListingId } : {}) },
   });
   res.json({ ok: true, status: 'POSTED' });
 };
@@ -3030,7 +3065,8 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
       // is id-first-only, no title-based fallback -- an item with no captured remoteListingId is
       // skipped silently here rather than surfaced with nothing for the content script to act on.
       // The other 4 platforms are unaffected -- still Phase-A/notify-only, no id requirement.
-      if (platform === 'MERCARI' && !latest!.remoteListingId) continue;
+      const syncRef = listingRefFields(platform, latest!.remoteListingId);
+      if (platform === 'MERCARI' && !syncRef.remoteListingId) continue;
       queues[platform].push({
         id: it.id,
         title: it.title,
@@ -3039,7 +3075,9 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
         quantityDrift,
         quantity: remaining,
         ...listingExtraFields(priceSyncExtras.get(it.id)),
-        ...(platform === 'MERCARI' ? { remoteListingId: latest!.remoteListingId as string } : {}),
+        // 2026-10-18: best remote id (+ URL) for EVERY platform that has one, so the edit engine targets the exact listing instead of
+        // title-matching (and skipping non-unique titles). Mercari alone still requires it (above); the others fall back to title.
+        ...syncRef,
       });
     }
   }

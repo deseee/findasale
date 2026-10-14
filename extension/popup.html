@@ -63,11 +63,23 @@
         <label class="chk" for="autoRemoveMode">Keep listings in sync</label>
         <select id="autoRemoveMode" class="select">
           <option value="notify">Notify me</option>
-          <option value="silent">Remove automatically</option>
+          <option value="silent">Update &amp; remove automatically</option>
           <option value="off">Off</option>
         </select>
-        <details class="note"><summary>What does this do?</summary>Checked every ~20 min. When an item sells elsewhere, the extension removes its listing on Facebook, Craigslist, Poshmark, Mercari, Vinted, Grailed, and Gumtree Australia &mdash; every channel this extension can post to &mdash; &ldquo;Remove automatically&rdquo; runs in a background tab, &ldquo;Notify me&rdquo; waits for you to click the alert first. The same check also looks the other way for Facebook specifically: if an item sells right there on Facebook, it's marked sold on FindA.Sale automatically (and its eBay listing withdrawn) &mdash; no extra setup, it uses this same setting. That reverse check isn't built yet for the other platforms. When you change an item's price on FindA.Sale, you'll also get a notification to update it on Facebook, Craigslist, Gumtree Australia, Grailed, and Poshmark yourself &mdash; automatic price updates aren't built yet for those, so this always just notifies for now, even in &ldquo;Remove automatically&rdquo; mode. Mercari is the exception: in &ldquo;Remove automatically&rdquo; mode, FindA.Sale opens a background tab and updates the price there for you too (Price field only &mdash; it never touches anything else on the listing). &ldquo;Off&rdquo; turns off all of the above.</details>
+        <details class="note"><summary>What does this do?</summary>Checked every ~20 min. When an item sells elsewhere, the extension removes its listing on Facebook, Craigslist, Poshmark, Mercari, Vinted, Grailed, and Gumtree Australia &mdash; every channel this extension can post to &mdash; &ldquo;Remove automatically&rdquo; runs in a background tab, &ldquo;Notify me&rdquo; waits for you to click the alert first. The same check also looks the other way for Facebook specifically: if an item sells right there on Facebook, it's marked sold on FindA.Sale automatically (and its eBay listing withdrawn) &mdash; no extra setup, it uses this same setting. That reverse check isn't built yet for the other platforms. When you change an item's price (or stock) on FindA.Sale, &ldquo;Remove automatically&rdquo; also updates the live listing for you on Facebook, Craigslist, Gumtree Australia, Poshmark, Mercari and Grailed &mdash; in a background tab, one listing at a time, and it only counts a change as done after it re-reads the new value from the live listing. You are notified only if an update fails (it retries on its own; details are in the sync log below). &ldquo;Notify me&rdquo; just sends a reminder to update them yourself. &ldquo;Off&rdquo; turns off all of the above.</details>
         <p class="note dim" id="removalDiag">Automatic check status loading&hellip;</p>
+        <div class="editSyncSetting">
+          <label class="chk">Price and stock sync</label>
+          <p class="note dim" id="editSyncStatus">Loading&hellip;</p>
+          <div class="editSyncBtns">
+            <button type="button" class="linkbtn" id="editSyncNowBtn">Sync now</button> &middot;
+            <button type="button" class="linkbtn" id="editLogCopyBtn">Copy log</button> &middot;
+            <button type="button" class="linkbtn" id="editDiagCopyBtn">Copy edit diagnostics</button> &middot;
+            <button type="button" class="linkbtn" id="editLogClearBtn">Clear</button>
+          </div>
+          <div class="dim" id="editSyncResult"></div>
+          <div id="editSyncLog" class="editLog"></div>
+        </div>
         <button type="button" class="linkbtn" id="resyncListingsBtn">Resync listings</button>
         <details class="note"><summary>What does this do?</summary>Use this if FindA.Sale and a marketplace disagree, for example an item you already removed there still shows as live here. It re-checks every sold, deleted or no-longer-eligible listing on Poshmark, Mercari, Vinted and the other non-Facebook marketplaces. Anything the marketplace no longer shows is marked as removed on FindA.Sale right away; anything still live is removed as usual.</details>
         <div class="dim" id="resyncListingsResult"></div>

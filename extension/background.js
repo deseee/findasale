@@ -3,7 +3,7 @@
  * Bearer token; (2) fetch item photos cross-origin (Cloudinary + eBay hosts) and
  * hand them to the content script as data URLs; (3) hold the listing queue.
  */
-importScripts('config.js');
+importScripts('config.js', 'fas-edit-core.js', 'fas-listing-ref.js');
 const CFG = self.FAS_CONFIG;
 
 // FEATURE 2026-09-27 (S-EXT-VINTED-DEBUG-BRIDGE) -- see fas-vinted.js's matching postMessage
@@ -296,7 +296,16 @@ const FAS_CRAIGSLIST_POST_URL = 'https://post.craigslist.org/';
 // TTL comfortably covers the realistic window between "content script's fast path fires" and "the
 // onUpdated net independently fires for the same navigation" without entries accumulating forever.
 const FAS_LISTED_REPORT_DEDUP_TTL_MS = 2 * 60 * 1000;
-async function reportItemListedOnce(itemId, platform, remoteListingId) {
+// 2026-10-13 (1.0.7): the report carries the posted listing's URL and/or bare id (remoteListingUrl /
+// remoteListingId). Both are re-validated here against the platform's own host + id format
+// (FAS_LISTING_REF.sanitizeListedRef) so a content script can never push a malformed or foreign reference;
+// anything that fails validation degrades to null, never blocks the report.
+function fasListedBody(platform, remoteListingId, remoteListingUrl) {
+  let ref = { remoteListingId: null, remoteListingUrl: null };
+  try { ref = FAS_LISTING_REF.sanitizeListedRef(platform, remoteListingId, remoteListingUrl); } catch (e) { /* null refs */ }
+  return { remoteListingId: ref.remoteListingId || null, remoteListingUrl: ref.remoteListingUrl || null, platform };
+}
+async function reportItemListedOnce(itemId, platform, remoteListingId, remoteListingUrl) {
   const key = platform + ':' + itemId;
   const now = Date.now();
   const { fasListedReportDedup = {} } = await chrome.storage.local.get(['fasListedReportDedup']);
@@ -327,19 +336,19 @@ async function reportItemListedOnce(itemId, platform, remoteListingId) {
   };
   try {
     const resp = await apiFetch('/extension/items/' + encodeURIComponent(itemId) + '/listed',
-      { method: 'POST', body: { remoteListingId: remoteListingId || null, platform } });
+      { method: 'POST', body: fasListedBody(platform, remoteListingId, remoteListingUrl) });
     if (!resp || (!resp.ok && !resp.deduped)) {
       await releaseKey();
       // 401 (signed out of finda.sale) or a network-level failure: keep the report and re-send it
       // automatically once sign-in is back, instead of leaving the organizer to mark it by hand.
-      if (!resp || resp.status === 401 || resp.status == null || resp.status >= 500) await queuePendingListedReport(itemId, platform, remoteListingId);
+      if (!resp || resp.status === 401 || resp.status == null || resp.status >= 500) await queuePendingListedReport(itemId, platform, remoteListingId, remoteListingUrl);
     } else {
       flushPendingListedReports(); // a call just worked: drain anything queued earlier (fire-and-forget)
     }
     return resp;
   } catch (e) {
     await releaseKey();
-    await queuePendingListedReport(itemId, platform, remoteListingId);
+    await queuePendingListedReport(itemId, platform, remoteListingId, remoteListingUrl);
     return { ok: false, error: (e && e.message) || 'threw' };
   }
 }
@@ -351,11 +360,11 @@ async function reportItemListedOnce(itemId, platform, remoteListingId) {
 // can never create duplicate rows. Entries older than 7 days are dropped.
 const FAS_PENDING_LISTED_KEY = 'fasPendingListedReports';
 const FAS_PENDING_LISTED_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-async function queuePendingListedReport(itemId, platform, remoteListingId) {
+async function queuePendingListedReport(itemId, platform, remoteListingId, remoteListingUrl) {
   try {
     const cur = (await chrome.storage.local.get([FAS_PENDING_LISTED_KEY]))[FAS_PENDING_LISTED_KEY] || [];
     if (!cur.some((r) => r.itemId === itemId && r.platform === platform)) {
-      cur.push({ itemId, platform, remoteListingId: remoteListingId || null, at: Date.now() });
+      cur.push({ itemId, platform, remoteListingId: remoteListingId || null, remoteListingUrl: remoteListingUrl || null, at: Date.now() });
     }
     await chrome.storage.local.set({ [FAS_PENDING_LISTED_KEY]: cur.slice(-200) });
     console.log('[FAS] listed report queued for retry (not recorded yet):', platform, itemId);
@@ -376,7 +385,7 @@ async function flushPendingListedReports() {
       let resp;
       try {
         resp = await apiFetch('/extension/items/' + encodeURIComponent(r.itemId) + '/listed',
-          { method: 'POST', body: { remoteListingId: r.remoteListingId || null, platform: r.platform } });
+          { method: 'POST', body: fasListedBody(r.platform, r.remoteListingId, r.remoteListingUrl) });
       } catch (e) { resp = { ok: false }; }
       if (resp && (resp.ok || resp.deduped)) { console.log('[FAS] queued listed report recorded:', r.platform, r.itemId); continue; }
       if (!resp || resp.status === 401 || resp.status == null || resp.status >= 500) { blocked = true; keep.push(r); continue; }
@@ -434,7 +443,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
       // FIX (S-EXT-AUTOPUBLISH-DEDUP): routed through the shared reportItemListedOnce() guard
       // above instead of calling apiFetch directly, so this net and a content script's own
       // fast-path report can never both actually hit the backend for the same item+platform.
-      const resp = await reportItemListedOnce(item.id, platform, null);
+      // 1.0.7: this tab (the queue's own) just navigated to the platform's listing URL, so that URL is
+      // the posted listing's reference when it carries an id (null otherwise -- never blocks the report).
+      let netRef = null;
+      try { netRef = FAS_LISTING_REF.listingRefFromUrl(platform, changeInfo.url); } catch (e) { netRef = null; }
+      const resp = await reportItemListedOnce(item.id, platform, netRef ? netRef.remoteListingId : null, netRef ? netRef.remoteListingUrl : null);
       if (!resp.ok && !resp.deduped) console.log('[FAS autopublish-reporting-net markListed FAILED]', JSON.stringify({ itemId: item.id, platform, resp }));
       // Re-read the index right before advancing -- if the content script's own fast-path already
       // advanced it between our read above and now, advancing again here would skip an item.
@@ -905,10 +918,15 @@ async function checkPendingUpdates() {
   const resp = await apiFetch('/extension/pending-updates');
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
   const items = (resp.data && resp.data.items) || [];
-  if (!items.length) return 'no_items';
+  if (!items.length) { if (fasAutoRemoveMode === 'silent') await fasEditEnqueue('FACEBOOK', []); return 'no_items'; }
 
-  // Phase A: notify only, matching the removal flow's 'notify' UX for a first-pass rollout --
-  // no silent/auto-edit mode exists yet because there's no edit action built to run silently.
+  // 2026-10-13: 'silent' (the default) now APPLIES the price/quantity change itself (see the "Automatic price + quantity apply"
+  // section below); 'notify' keeps the old "go update it" notification for organizers who opted out of background-tab automation.
+  if (fasAutoRemoveMode === 'silent') {
+    await fasEditEnqueue('FACEBOOK', items);
+    const pumped = await fasEditPumpDetached();
+    return 'queued_apply:' + items.length + ':' + pumped;
+  }
   chrome.notifications.create('fasPendingUpdates', {
     type: 'basic',
     iconUrl: 'icon128.png',
@@ -940,14 +958,14 @@ async function checkPriceSyncQueue() {
   const pausedForSync = await fasGetPausedPlatforms();
   for (const platform of Object.keys(PLATFORM_LABELS)) {
     const items = queues[platform];
-    if (pausedForSync.indexOf(platform) !== -1) { outcomes.push(platform + ':paused'); continue; }
-    if (!Array.isArray(items) || !items.length) { outcomes.push(platform + ':empty'); continue; }
-    // S-EXT-MERCARI-PRICE-PUSH (2026-09-27, Patrick-approved Phase B): silent mode drives the
-    // real background price-push instead of just notifying -- notify mode keeps the exact
-    // Phase-A behavior every other platform still uses (below), same off/notify/silent toggle
-    // that already gates every other silent DOM automation in this extension.
-    if (platform === 'MERCARI' && fasAutoRemoveMode === 'silent') {
-      outcomes.push('MERCARI:' + (await startMercariPricePush(items)));
+    if (pausedForSync.indexOf(platform) !== -1) { if (fasAutoRemoveMode === 'silent') await fasEditEnqueue(platform, []); outcomes.push(platform + ':paused'); continue; }
+    if (!Array.isArray(items) || !items.length) { if (fasAutoRemoveMode === 'silent') await fasEditEnqueue(platform, []); outcomes.push(platform + ':empty'); continue; }
+    // 2026-10-13: silent mode now applies price AND quantity automatically on all five platforms (the Mercari-only
+    // background price-push this replaced -- S-EXT-MERCARI-PRICE-PUSH -- is superseded by the shared engine below; its old
+    // helper functions remain but are no longer called). notify mode keeps the old notification for every platform.
+    if (fasAutoRemoveMode === 'silent') {
+      await fasEditEnqueue(platform, items);
+      outcomes.push(platform + ':queued_apply_' + items.length);
       continue;
     }
     const label = PLATFORM_LABELS[platform];
@@ -962,8 +980,315 @@ async function checkPriceSyncQueue() {
     });
     outcomes.push(platform + ':notified_' + items.length);
   }
+  if (fasAutoRemoveMode === 'silent') outcomes.push('pump:' + (await fasEditPumpDetached()));
   return outcomes.join(',') || 'no_platforms';
 }
+
+// Starts the edit pump without blocking the alarm tick (an apply run can take minutes). Resolves with how it started.
+async function fasEditPumpDetached() {
+  if (fasEditPumping) return 'already_running';
+  fasEditPump().then(
+    (o) => chrome.storage.local.set({ fasLastEditPumpOutcome: o, fasLastEditPumpAt: Date.now() }),
+    (e) => chrome.storage.local.set({ fasLastEditPumpOutcome: 'error:' + String((e && e.message) || e), fasLastEditPumpAt: Date.now() })
+  ).catch(() => {});
+  return 'started';
+}
+
+// ---- Automatic price + quantity apply (2026-10-13, Patrick: "zero manual steps; notify only on failure") ----------------
+// Replaces the notify-only price/quantity behavior for Facebook, Craigslist, Gumtree AU, Poshmark, Mercari and Grailed. Same
+// consent toggle as every other silent automation here: Settings > "Keep listings in sync" (fasAutoRemoveMode): 'silent' (the
+// default) applies the change itself in a dedicated tab, 'notify' keeps the old "go update it" notification, 'off' does nothing.
+// Same per-marketplace pause and Facebook-unavailable gates as removal.
+//
+// Shape: checkPendingUpdates (Facebook) and checkPriceSyncQueue (the other five) only ENQUEUE what the backend reports as drifted
+// (priceDrift / quantityDrift, remote listing id) into fasEditPending; fasEditPump() then works through the platforms one at a
+// time, one dedicated foreground tab per platform run, items strictly serial with jittered 2-9 s gaps, per-run and per-hour caps
+// (fas-edit-core.js LIMITS). Each item is a small state machine driven from here (a navigation destroys page JS, so state lives in
+// this worker): fas-edit-engine.js is injected on demand and does ONE action per call, then reports.
+//
+// An item is confirmed to the backend (POST /extension/items/:id/price-synced for Facebook, /price-synced-for-platform for the
+// rest) ONLY after the engine re-read the new value from the live listing (details.verified). A failed attempt leaves the drift in
+// place and retries on a capped exponential backoff (15 min doubling to 6 h, parked for 24 h after 6 failures -- never a hot loop).
+// Failures go to the popup's "Price and stock sync" log, to a per-platform diagnostics capture (form fields / button texts / last
+// network URLs) the organizer can copy, to the backend runtime log (fasLog), and to ONE notification per new failure.
+const FAS_EDIT_STATE_KEY = 'fasEditState';       // { items: { 'PLATFORM:itemId': backoff state }, hourly: { PLATFORM: [ts] }, idCache: {}, platformBackoff: { PLATFORM: { until, count } } }
+const FAS_EDIT_LOG_KEY = 'fasEditLog';           // ring buffer for the popup
+const FAS_EDIT_DIAG_KEY = 'fasEditDiag';         // { PLATFORM: [records] }
+const FAS_EDIT_PENDING_KEY = 'fasEditPending';   // { PLATFORM: [raw backend entries] }
+const FAS_EDIT_RUN_KEY = 'fasEditRun';           // lock: { platform, tabId, prevTabId, startedAt }
+const FAS_EDIT_RUN_MAX_MS = 25 * 60 * 1000;
+const FAS_EDIT_ITEM_MAX_MS = 150 * 1000;
+const FAS_EDIT_MAX_STEPS = 32;
+const FAS_EDIT_CORE = self.FAS_EDIT_CORE;
+let fasEditPumping = false;
+
+async function fasEditGetState() {
+  const st = await chrome.storage.local.get([FAS_EDIT_STATE_KEY]);
+  const s = st[FAS_EDIT_STATE_KEY] || {};
+  return { items: s.items || {}, hourly: s.hourly || {}, idCache: s.idCache || {}, platformBackoff: s.platformBackoff || {}, reportedIds: s.reportedIds || {} };
+}
+async function fasEditSaveState(s) {
+  // keep the id cache bounded
+  const keys = Object.keys(s.idCache || {});
+  if (keys.length > 500) keys.slice(0, keys.length - 500).forEach((k) => delete s.idCache[k]);
+  await chrome.storage.local.set({ [FAS_EDIT_STATE_KEY]: s });
+}
+async function fasEditLogEntry(level, platform, entry, code, message, extra) {
+  try {
+    const st = await chrome.storage.local.get([FAS_EDIT_LOG_KEY]);
+    const rec = Object.assign({ t: Date.now(), level: level, platform: platform, itemId: entry ? entry.id : undefined, title: entry ? String(entry.title || '').slice(0, 70) : undefined, code: code || '', msg: String(message || '').slice(0, 260) }, extra || {});
+    await chrome.storage.local.set({ [FAS_EDIT_LOG_KEY]: FAS_EDIT_CORE.pushRing(st[FAS_EDIT_LOG_KEY], rec, 120) });
+  } catch (e) { /* logging never breaks the run */ }
+  if (level !== 'info') fasLog(level === 'error' ? 'error' : 'warn', 'autoApply', platform + ': ' + (code || '') + ' ' + String(message || '').slice(0, 300), extra && extra.step ? { step: extra.step, selector: extra.selector || '' } : null, { platform: platform, itemId: entry ? entry.id : undefined });
+}
+async function fasEditAddDiag(platform, record) {
+  try {
+    const st = await chrome.storage.local.get([FAS_EDIT_DIAG_KEY]);
+    await chrome.storage.local.set({ [FAS_EDIT_DIAG_KEY]: FAS_EDIT_CORE.addDiag(st[FAS_EDIT_DIAG_KEY], platform, FAS_EDIT_CORE.redact(record), 4, 90000) });
+  } catch (e) { /* ignore */ }
+}
+
+function fasEditNavigate(tabId, url) {
+  return new Promise((resolve) => chrome.tabs.update(tabId, { url: url }, () => { void chrome.runtime.lastError; resolve(); }));
+}
+async function fasEditWaitComplete(tabId, timeoutMs) {
+  const end = Date.now() + (timeoutMs || 25000);
+  await sleep(450);
+  while (Date.now() < end) {
+    const t = await tabsGet(tabId);
+    if (!t) return false;
+    if (t.status === 'complete') {
+      await sleep(500);
+      const t2 = await tabsGet(tabId);
+      if (t2 && t2.status === 'complete') return true;
+    }
+    await sleep(300);
+  }
+  return false;
+}
+async function fasEditExec(tabId, ctx) {
+  await chrome.scripting.executeScript({ target: { tabId: tabId }, files: ['fas-edit-core.js', 'fas-quantity.js', 'fas-edit-engine.js'] });
+  const out = await chrome.scripting.executeScript({ target: { tabId: tabId }, func: (c) => self.FAS_EDIT_ENGINE.step(c), args: [ctx] });
+  return out && out[0] ? out[0].result : null;
+}
+
+// 1.0.7: report a listing id the edit engine discovered and verified (after-the-fact capture for items
+// posted before the extension captured ids, or whose posting flow exposed none). Validated with the same
+// per-platform patterns the backend uses; reported once per item+platform (idCache-style marker kept in
+// state.reportedIds, bounded); failures are logged and ignored.
+function fasReportDiscoveredRemoteId(platform, itemId, rawId, state) {
+  try {
+    const id = FAS_LISTING_REF.normalizeRemoteId(platform, rawId);
+    if (!id || !itemId) return;
+    state.reportedIds = state.reportedIds || {};
+    const k = platform + ':' + itemId;
+    if (state.reportedIds[k] === id) return;
+    state.reportedIds[k] = id;
+    const keys = Object.keys(state.reportedIds);
+    if (keys.length > 500) keys.slice(0, keys.length - 500).forEach((x) => delete state.reportedIds[x]);
+    apiFetch('/extension/items/' + encodeURIComponent(itemId) + '/remote-listing-id',
+      { method: 'POST', body: { platform, remoteListingId: id } })
+      .then((r) => { if (r && !r.ok) { delete state.reportedIds[k]; console.log('[FAS discovered remoteListingId]', JSON.stringify({ itemId, platform, status: r.status, reason: r.data && r.data.reason })); } })
+      .catch(() => { delete state.reportedIds[k]; });
+  } catch (e) { /* best-effort */ }
+}
+
+// One item: drive the engine until it reports done / fail / blocked. Returns { state, code, reason, step, selector, scratch, diags, details }.
+async function fasEditApplyItem(tabId, platform, entry, state) {
+  let scratch = {};
+  const diags = [];
+  const trail = [];
+  const t0 = Date.now();
+  let errs = 0;
+  await fasEditNavigate(tabId, FAS_EDIT_CORE.startUrl(platform, entry, CFG, state.idCache));
+  for (let i = 0; i < FAS_EDIT_MAX_STEPS; i++) {
+    if (Date.now() - t0 > FAS_EDIT_ITEM_MAX_MS) return { state: 'fail', code: 'item_timeout', reason: 'Item took longer than ' + Math.round(FAS_EDIT_ITEM_MAX_MS / 1000) + 's', step: (scratch.phase || ''), scratch: scratch, diags: diags, trail: trail };
+    await fasEditWaitComplete(tabId, 25000);
+    const tab = await tabsGet(tabId);
+    if (!tab) return { state: 'fail', code: 'tab_closed', reason: 'The edit tab was closed during the run', step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
+    const urlBlock = FAS_EDIT_CORE.classifyBlock('', '', tab.url || '');
+    if (urlBlock) return { state: 'blocked', code: urlBlock.code, reason: 'Tab landed on ' + FAS_EDIT_CORE.safeUrl(tab.url || ''), step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
+    let res = null;
+    try {
+      res = await fasEditExec(tabId, { platform: platform, item: entry, scratch: scratch, cfg: { MERC_EDIT_URL_PREFIX: CFG.MERC_EDIT_URL_PREFIX, MERC_MANAGE_URL: CFG.MERC_MANAGE_URL, GRAILED_MANAGE_URL: CFG.GRAILED_MANAGE_URL }, idCache: state.idCache, stepNo: i });
+    } catch (e) {
+      errs++;
+      if (errs > 3) return { state: 'fail', code: 'inject_failed', reason: String((e && e.message) || e).slice(0, 160) + ' @ ' + FAS_EDIT_CORE.safeUrl(tab.url || ''), step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
+      await sleep(1300);
+      continue;
+    }
+    if (!res) { errs++; if (errs > 3) return { state: 'fail', code: 'no_result', reason: 'Engine returned nothing 4 times', step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail }; await sleep(1300); continue; }
+    errs = 0;
+    if (res.scratch) scratch = Object.assign({}, scratch, res.scratch);
+    if (res.diag) { diags.push(res.diag); if (diags.length > 4) diags.shift(); }
+    trail.push((scratch.phase || '') + ':' + res.state + (res.code ? '(' + res.code + ')' : ''));
+    if (res.state === 'done') return { state: 'done', details: res.details || {}, scratch: scratch, diags: diags, trail: trail };
+    if (res.state === 'fail' || res.state === 'blocked') return { state: res.state, code: res.code, reason: res.reason, step: res.step, selector: res.selector, scratch: scratch, diags: diags, trail: trail, details: res.details };
+    if (res.state === 'goto') { await sleep(500 + Math.random() * 700); await fasEditNavigate(tabId, res.url); continue; }
+    await sleep(Math.max(600, Math.min(res.delayMs || 1000, 8000)));   // 'continue'
+  }
+  return { state: 'fail', code: 'too_many_steps', reason: 'More than ' + FAS_EDIT_MAX_STEPS + ' steps without a verified result', step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
+}
+
+async function fasEditConfirm(platform, entry) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const r = platform === 'FACEBOOK'
+      ? await apiFetch('/extension/items/' + encodeURIComponent(entry.id) + '/price-synced', { method: 'POST', body: {} })
+      : await apiFetch('/extension/items/' + encodeURIComponent(entry.id) + '/price-synced-for-platform', { method: 'POST', body: { platform: platform } });
+    if (r && r.ok) return { ok: true };
+    if (r && r.status === 404) return { ok: false, status: 404, error: r.error || 'not_found' };
+    await sleep(1500);
+  }
+  return { ok: false, error: 'confirm_failed' };
+}
+
+function fasEditNotifyFailures(list) {
+  if (!list.length) return;
+  const first = list[0];
+  const label = FAS_EDIT_CORE.LABELS[first.platform] || first.platform;
+  const msg = list.length === 1
+    ? 'Couldn\'t update "' + String(first.title || 'an item').slice(0, 50) + '" on ' + label + ' (' + first.reason + '). ' + (first.parked ? 'Paused for 24 hours; ' : 'Retrying automatically; ') + 'details are in the extension\'s sync log.'
+    : 'Couldn\'t update ' + list.length + ' listings (first: ' + label + ', ' + first.reason + '). Retrying automatically; details are in the extension\'s sync log.';
+  chrome.notifications.create('fasEditFailure', { type: 'basic', iconUrl: 'icon128.png', title: 'FindA.Sale', message: msg, priority: 1 });
+}
+
+// Enqueue what the backend says has drifted for one platform, then try to run it.
+async function fasEditEnqueue(platform, rawEntries) {
+  const st = await chrome.storage.local.get([FAS_EDIT_PENDING_KEY]);
+  const pending = st[FAS_EDIT_PENDING_KEY] || {};
+  pending[platform] = Array.isArray(rawEntries) ? rawEntries : [];
+  await chrome.storage.local.set({ [FAS_EDIT_PENDING_KEY]: pending });
+}
+
+async function fasEditRunLockFree() {
+  const st = await chrome.storage.local.get([FAS_EDIT_RUN_KEY]);
+  const run = st[FAS_EDIT_RUN_KEY];
+  if (!run) return true;
+  const stale = Date.now() - (run.startedAt || 0) > FAS_EDIT_RUN_MAX_MS;
+  const tab = run.tabId != null ? await tabsGet(run.tabId) : null;
+  if (stale || !tab) {
+    // A worker that died mid-run left this behind: clean up the orphan tab so the next poll can start fresh.
+    if (tab && run.tabId != null) await new Promise((resolve) => chrome.tabs.remove(run.tabId, () => { void chrome.runtime.lastError; resolve(); }));
+    await chrome.storage.local.remove([FAS_EDIT_RUN_KEY]);
+    return true;
+  }
+  return false;
+}
+
+// Works through every enqueued platform, one at a time. Safe to call repeatedly: only one pump runs.
+async function fasEditPump() {
+  if (fasEditPumping) return 'already_pumping';
+  if (!(await fasEditRunLockFree())) return 'run_in_progress';
+  fasEditPumping = true;
+  try {
+    const outcomes = [];
+    for (;;) {
+      const st = await chrome.storage.local.get([FAS_EDIT_PENDING_KEY]);
+      const pending = st[FAS_EDIT_PENDING_KEY] || {};
+      const platform = FAS_EDIT_CORE.PLATFORM_ORDER.filter((p) => Array.isArray(pending[p]) && pending[p].length)[0];
+      if (!platform) break;
+      const entries = pending[platform];
+      delete pending[platform];
+      await chrome.storage.local.set({ [FAS_EDIT_PENDING_KEY]: pending });
+      try { outcomes.push(platform + ':' + (await fasEditRunPlatform(platform, entries))); }
+      catch (e) { outcomes.push(platform + ':error:' + String((e && e.message) || e).slice(0, 80)); await fasEditLogEntry('error', platform, null, 'run_exception', String((e && e.message) || e)); }
+    }
+    return outcomes.join(',') || 'nothing_queued';
+  } finally {
+    fasEditPumping = false;
+  }
+}
+
+async function fasEditRunPlatform(platform, rawEntries) {
+  const Core = FAS_EDIT_CORE;
+  if (await fasIsPlatformPaused(platform)) return 'paused';
+  if (platform === 'FACEBOOK' && (await getPlatformUnavailable('FACEBOOK'))) return 'facebook_account_unavailable';
+  const state = await fasEditGetState();
+  const now = Date.now();
+  const pb = state.platformBackoff[platform];
+  if (pb && pb.until > now) return 'platform_backoff_until_' + new Date(pb.until).toISOString();
+  const all = rawEntries.map((r) => Core.normalizeEntry(r, platform)).filter((e) => Core.hasWork(e) || (e.id && !e.priceDrift));
+  // Quantity-only drift on a one-unit-per-listing marketplace: nothing to write -- confirm so the drift clears, no tab needed.
+  const trivial = all.filter((e) => !e.priceDrift && !Core.wantsQuantity(platform, e));
+  for (const e of trivial.slice(0, 25)) {
+    const c = await fasEditConfirm(platform, e);
+    await fasEditLogEntry(c.ok ? 'info' : 'warn', platform, e, c.ok ? 'quantity_not_applicable' : 'confirm_failed', c.ok ? 'One unit per listing here; stock number acknowledged, nothing to edit' : 'Could not acknowledge stock: ' + (c.error || c.status));
+  }
+  const work = all.filter((e) => Core.hasWork(e) && (e.priceDrift || Core.wantsQuantity(platform, e))).filter((e) => Core.shouldAttempt(state.items[platform + ':' + e.id], now));
+  if (!work.length) return trivial.length ? 'acknowledged_' + trivial.length : 'nothing_due';
+  const stamps = Core.pruneHourly(state.hourly[platform], now);
+  const allow = Core.allowance(platform, stamps, now);
+  if (allow <= 0) return 'hourly_cap_reached';
+  const batch = work.slice(0, allow);
+
+  const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const prevTabId = activeTabs && activeTabs[0] ? activeTabs[0].id : null;
+  const tab = await chrome.tabs.create({ url: 'about:blank', active: true });
+  await chrome.storage.local.set({ [FAS_EDIT_RUN_KEY]: { platform: platform, tabId: tab.id, prevTabId: prevTabId, startedAt: Date.now() } });
+  const failures = [];
+  let applied = 0, failed = 0, stopped = '';
+  try {
+    for (let i = 0; i < batch.length; i++) {
+      const entry = batch[i];
+      const key = platform + ':' + entry.id;
+      // keep the lock fresh for long runs
+      await chrome.storage.local.set({ [FAS_EDIT_RUN_KEY]: { platform: platform, tabId: tab.id, prevTabId: prevTabId, startedAt: Date.now() } });
+      const res = await fasEditApplyItem(tab.id, platform, entry, state);
+      stamps.push(Date.now());
+      state.hourly[platform] = stamps;
+      const diagRecord = { t: Date.now(), platform: platform, itemId: entry.id, title: String(entry.title || '').slice(0, 60), outcome: res.state, code: res.code || '', step: res.step || '', selector: res.selector || '', reason: res.reason || '', trail: res.trail, snapshots: res.diags, details: res.details };
+      if (res.scratch && res.scratch.remoteId && /^[0-9a-z]+$/i.test(String(res.scratch.remoteId))) state.idCache[key] = String(res.scratch.remoteId);
+      // 1.0.7 after-the-fact capture: the engine found (and, on 'done', verified) this item's live listing by
+      // title; record its id on the backend (set-once, idempotent) so later edits go straight to it. Covers
+      // Facebook (itemIdFound), Craigslist (postingId) and the platforms whose engine reports remoteId.
+      // Fire-and-forget; never affects the edit result.
+      if (res.state === 'done' && !entry.remoteListingId) {
+        const sc = res.scratch || {};
+        const found = sc.remoteId || sc.itemIdFound || sc.postingId || '';
+        fasReportDiscoveredRemoteId(platform, entry.id, found, state);
+      }
+
+      if (res.state === 'done') {
+        const c = await fasEditConfirm(platform, entry);
+        applied++;
+        delete state.items[key];
+        const rb = res.details && res.details.readBack ? ' (read back ' + JSON.stringify(res.details.readBack).slice(0, 80) + ')' : '';
+        await fasEditLogEntry(c.ok ? 'info' : 'warn', platform, entry, c.ok ? 'applied' : 'applied_confirm_failed',
+          'Price ' + (entry.priceDrift ? '$' + Core.formatPrice(platform, entry.price) : 'unchanged') + (Core.wantsQuantity(platform, entry) ? ', quantity ' + entry.quantity : '') + ' verified on the live listing' + rb + (c.ok ? '' : '; backend confirm failed (' + (c.error || c.status) + ') and will be re-checked'), { step: 'verify' });
+        if (res.details && res.details.collateral && res.details.collateral.length) await fasEditLogEntry('warn', platform, entry, 'collateral_change', 'Poshmark echoed different values after the save for: ' + res.details.collateral.join(', ') + ' -- check the listing', { step: 'verify' });
+        if (res.details && res.details.quantityControl === false && Core.wantsQuantity(platform, entry)) await fasEditLogEntry('warn', platform, entry, 'no_quantity_control', 'Price applied; the Facebook edit form has no quantity control (single-unit listing), so quantity was left alone', { step: 'form' });
+        await fasEditAddDiag(platform, diagRecord);
+      } else if (res.state === 'blocked') {
+        const cnt = ((state.platformBackoff[platform] && state.platformBackoff[platform].count) || 0) + 1;
+        state.platformBackoff[platform] = { until: Date.now() + Core.backoffMs(cnt, Math.random()), count: cnt };
+        stopped = res.code;
+        await fasEditLogEntry('error', platform, entry, res.code, 'Run stopped: ' + res.reason + '. ' + Core.LABELS[platform] + ' will not be touched again until ' + new Date(state.platformBackoff[platform].until).toLocaleTimeString(), { step: res.step, selector: res.selector });
+        await fasEditAddDiag(platform, diagRecord);
+        failures.push({ platform: platform, title: entry.title, reason: res.code === 'login_required' ? 'signed out, sign in to ' + Core.LABELS[platform] : res.code });
+        break;
+      } else {
+        failed++;
+        const prev = state.items[key];
+        const next = Core.recordFailure(prev, Date.now(), Math.random(), res.code + ':' + (res.reason || ''));
+        state.items[key] = next;
+        await fasEditLogEntry('error', platform, entry, res.code || 'failed', (res.reason || '') + ' -- attempt ' + (next.parked ? Core.MAX_ATTEMPTS : next.attempts) + ', ' + (next.parked ? 'parked 24 h' : 'retry after ' + new Date(next.nextAt).toLocaleTimeString()), { step: res.step, selector: res.selector });
+        await fasEditAddDiag(platform, diagRecord);
+        if (!prev || next.parked) failures.push({ platform: platform, title: entry.title, reason: (res.code || 'failed') + (res.selector ? ' at ' + String(res.selector).slice(0, 40) : ''), parked: !!next.parked });
+      }
+      await fasEditSaveState(state);
+      if (i < batch.length - 1) await sleep(Core.jitterDelay(platform, Math.random()));
+    }
+  } finally {
+    await fasEditSaveState(state);
+    await chrome.storage.local.remove([FAS_EDIT_RUN_KEY]);
+    if (prevTabId != null) await new Promise((resolve) => chrome.tabs.update(prevTabId, { active: true }, () => { void chrome.runtime.lastError; resolve(); }));
+    await new Promise((resolve) => chrome.tabs.remove(tab.id, () => { void chrome.runtime.lastError; resolve(); }));
+    await chrome.storage.local.set({ fasEditLastRun: { at: Date.now(), platform: platform, applied: applied, failed: failed, stopped: stopped } });
+    fasEditNotifyFailures(failures);
+  }
+  return 'applied_' + applied + '_failed_' + failed + (stopped ? '_stopped_' + stopped : '');
+}
+
 
 // ---- Mercari background price-push (S-EXT-MERCARI-PRICE-PUSH, 2026-09-27, Patrick-approved --
 // see claude_docs/decisions-log.md same date). Bounded by getPriceSyncQueue's own MERCARI filter
@@ -2584,7 +2909,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // onUpdated reliability net above already had a one-sided guard for. A content script's
         // own fast-path report and the net's independent report for the SAME item+platform can now
         // only ever actually hit the backend once, no matter which one runs first or whether they race.
-        const markListedResp = await reportItemListedOnce(msg.itemId, msg.platform || 'FACEBOOK', msg.remoteListingId);
+        const markListedResp = await reportItemListedOnce(msg.itemId, msg.platform || 'FACEBOOK', msg.remoteListingId, msg.remoteListingUrl);
         // (2026-08-09) markListed is called fire-and-forget from fas-remove.js/fas-content.js/
         // fas-craigslist.js, none of which check the response -- a failure here (auth, 500,
         // etc.) previously vanished with zero trace anywhere, which is exactly how the
@@ -2607,11 +2932,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const SET_REMOTE_ID_CONFIG = {
           VINTED: { originRe: /^https:\/\/www\.vinted\.com\//, idRe: /^\d{1,20}$/ },
           MERCARI: { originRe: /^https:\/\/www\.mercari\.com\//, idRe: /^m\d{1,20}$/i },
+          // 1.0.7: same shape for the remaining platforms; the id formats mirror the backend's
+          // REMOTE_ID_FORMATS (packages/backend/src/services/marketplaceListingRef.ts) and
+          // FAS_EDIT_CORE.REMOTE_ID_RE. Origins are the hosts each platform's content script runs on.
+          FACEBOOK: { originRe: /^https:\/\/www\.facebook\.com\//, idRe: /^\d{6,20}$/ },
+          POSHMARK: { originRe: /^https:\/\/(?:www\.)?poshmark\.com\//, idRe: /^[0-9a-f]{24}$/i },
+          GRAILED: { originRe: /^https:\/\/www\.grailed\.com\//, idRe: /^\d{1,20}$/ },
+          CRAIGSLIST: { originRe: /^https:\/\/(?:[a-z0-9-]+\.)*craigslist\.org\//, idRe: /^\d{9,12}$/ },
+          GUMTREE_AU: { originRe: /^https:\/\/www\.gumtree\.com\.au\//, idRe: /^\d{8,12}$/ },
         };
         const senderUrl = String((sender && (sender.url || (sender.tab && sender.tab.url))) || '');
         const ridRaw = typeof msg.remoteListingId === 'string' ? msg.remoteListingId : '';
         const setRemoteIdCfg = SET_REMOTE_ID_CONFIG[msg.platform];
-        const rid = setRemoteIdCfg && setRemoteIdCfg.idRe.test(ridRaw) ? ridRaw.toLowerCase() : ridRaw;
+        const rid = setRemoteIdCfg && setRemoteIdCfg.idRe.test(ridRaw) ? ridRaw.toLowerCase() : ridRaw; // ids are digits or lowercase hex, so lowercasing is lossless
         if (!setRemoteIdCfg || !setRemoteIdCfg.originRe.test(senderUrl) ||
             !setRemoteIdCfg.idRe.test(ridRaw) || typeof msg.itemId !== 'string' || !msg.itemId) {
           sendResponse({ ok: false, status: 400, error: 'invalid_request' });
@@ -3459,6 +3792,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           await finishSilentCrossPlatformRemoval(msg.platform);
         }
         sendResponse({ ok: true });
+      } else if (msg.type === 'fasEditRunNow') {
+        // Popup "Sync now": forget the retry backoff for every item and platform, then poll the backend immediately.
+        const cur = await fasEditGetState();
+        cur.items = {}; cur.platformBackoff = {};
+        await fasEditSaveState(cur);
+        const u = await checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e));
+        const p = await checkPriceSyncQueue().catch((e) => 'error:' + String((e && e.message) || e));
+        sendResponse({ ok: true, facebook: u, others: p });
       } else if (msg.type === 'getMercariPricePushQueueItem') {
         // Same tab-identity security check as getRemovalQueueItemFor above -- only the dedicated
         // tab this worker itself opened via openMercariPricePushTab may receive a queued item, so

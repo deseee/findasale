@@ -78,6 +78,25 @@
   function bodyText() { return (document.body && document.body.innerText) || ''; }
   function q(sel) { return document.querySelector(sel); }
   function qa(sel) { return Array.from(document.querySelectorAll(sel)); }
+  // 2026-10-13 (extension 1.0.7): capture the posted listing's URL/id for markListed so price/qty edits
+  // can go straight to the live listing. Best-effort and NEVER throws or blocks a posting: any failure
+  // (helper not loaded, no id on this page yet) returns nulls and the backend/after-the-fact capture
+  // paths fill the reference in later. waitMs > 0 polls briefly for a post-submit redirect to land.
+  async function fasListingRef(platform, waitMs) {
+    const empty = { remoteListingId: null, remoteListingUrl: null };
+    try {
+      const C = (typeof self !== 'undefined' && self.FAS_LISTING_REF) || null;
+      if (!C || typeof C.capturePageListingRef !== 'function') return empty;
+      const deadline = Date.now() + Math.max(0, waitMs || 0);
+      for (;;) {
+        let r = null;
+        try { r = C.capturePageListingRef(platform, location, document); } catch (e) { r = null; }
+        if (r && (r.remoteListingId || r.remoteListingUrl)) return { remoteListingId: r.remoteListingId || null, remoteListingUrl: r.remoteListingUrl || null };
+        if (Date.now() >= deadline) return empty;
+        await new Promise((res) => setTimeout(res, 300));
+      }
+    } catch (e) { return empty; }
+  }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
   // SAFETY GATE 2026-09-03 -- Grailed fashion-only allowlist pre-submit check (mirrors the
@@ -1632,7 +1651,7 @@
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     const next = document.getElementById('fas-gr-next');
     if (next) next.onclick = async () => {
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'GRAILED' }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('GRAILED', 0)), platform: 'GRAILED' }); } catch (e) {}
       try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: item.id }); } catch (e) {}
       if (more) {
       // BUG FIX 2026-08-19 (S-EXT-BATCH, P0): ask background.js for a genuinely fresh tab
@@ -1730,7 +1749,7 @@
       closeBtnHandler();
       return;
     }
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'GRAILED' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('GRAILED', 3000)), platform: 'GRAILED' }); } catch (e) {}
     try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: item.id }); } catch (e) {}
     const more = (index + 1) < total;
     // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET, same root cause as fas-poshmark.js's and

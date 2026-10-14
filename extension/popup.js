@@ -213,6 +213,7 @@ async function loadAutoRemoveMode() {
   };
   await send({ type: 'refreshRemovalAlarm' }); // re-assert the alarm in case the worker never woke since install
   await renderRemovalDiag();
+  await loadEditSync();
   const resyncBtn = $('resyncListingsBtn');
   if (resyncBtn) {
     resyncBtn.onclick = async () => {
@@ -244,6 +245,56 @@ function timeAgo(ts) {
   if (mins < 60) return mins + ' min ago';
   const hrs = Math.round(mins / 60);
   return hrs === 1 ? '1 hour ago' : hrs + ' hours ago';
+}
+
+// 2026-10-13: automatic price/quantity apply -- status line, log, "Sync now", and copyable edit diagnostics (the page's form
+// field names / button texts / recent network URLs captured by fas-edit-engine.js, so selectors can be tightened from real data).
+const FAS_EDIT_LABELS = { FACEBOOK: 'Facebook', CRAIGSLIST: 'Craigslist', GUMTREE_AU: 'Gumtree', POSHMARK: 'Poshmark', MERCARI: 'Mercari', GRAILED: 'Grailed' };
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* fall through */ }
+  try {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch (e) { return false; }
+}
+async function renderEditSync() {
+  const box = $('editSyncLog');
+  if (!box) return;
+  const st = await chrome.storage.local.get(['fasEditLog', 'fasEditLastRun', 'fasEditState', 'fasLastEditPumpOutcome', 'fasLastEditPumpAt', 'fasAutoRemoveMode']);
+  const log = (st.fasEditLog || []).slice(-14).reverse();
+  const state = st.fasEditState || {};
+  const waiting = Object.keys(state.items || {}).length;
+  const backoffs = Object.keys(state.platformBackoff || {}).filter((p) => state.platformBackoff[p].until > Date.now()).map((p) => FAS_EDIT_LABELS[p] || p);
+  const mode = st.fasAutoRemoveMode || 'silent';
+  const last = st.fasEditLastRun;
+  $('editSyncStatus').textContent = (mode === 'silent' ? 'Automatic: on.' : mode === 'notify' ? 'Reminders only (choose "Update & remove automatically" above to apply changes for you).' : 'Off.') +
+    ' Last run: ' + (last ? timeAgo(last.at) + ' (' + (FAS_EDIT_LABELS[last.platform] || last.platform) + ': ' + last.applied + ' updated, ' + last.failed + ' failed' + (last.stopped ? ', stopped: ' + last.stopped : '') + ')' : 'never') +
+    (waiting ? ' \u00b7 ' + waiting + ' retrying' : '') + (backoffs.length ? ' \u00b7 paused after a block: ' + backoffs.join(', ') : '');
+  box.innerHTML = log.length ? log.map((l) => '<div class="row ' + esc(l.level) + '">' + esc(timeAgo(l.t)) + ' \u00b7 ' + esc(FAS_EDIT_LABELS[l.platform] || l.platform) + (l.title ? ' \u00b7 ' + esc(l.title) : '') + ' \u00b7 ' + esc(l.code) + ': ' + esc(l.msg) + (l.step ? ' [' + esc(l.step) + (l.selector ? ' @ ' + esc(l.selector) : '') + ']' : '') + '</div>').join('') : '<div class="dim">No price or stock updates yet.</div>';
+}
+async function loadEditSync() {
+  if (!$('editSyncLog')) return;
+  $('editSyncNowBtn').onclick = async () => {
+    $('editSyncNowBtn').disabled = true; $('editSyncResult').textContent = 'Checking for price and stock changes\u2026';
+    const r = await send({ type: 'fasEditRunNow' });
+    $('editSyncNowBtn').disabled = false;
+    $('editSyncResult').textContent = r && r.ok ? 'Started (' + String(r.facebook) + '; ' + String(r.others) + '). Results appear below.' : 'Could not start.';
+    setTimeout(renderEditSync, 4000);
+    await renderEditSync();
+  };
+  $('editLogCopyBtn').onclick = async () => {
+    const { fasEditLog = [] } = await chrome.storage.local.get(['fasEditLog']);
+    $('editSyncResult').textContent = (await copyText(JSON.stringify(fasEditLog, null, 1))) ? 'Log copied.' : 'Copy failed.';
+  };
+  $('editDiagCopyBtn').onclick = async () => {
+    const { fasEditDiag = {} } = await chrome.storage.local.get(['fasEditDiag']);
+    $('editSyncResult').textContent = (await copyText(JSON.stringify(fasEditDiag, null, 1))) ? 'Edit diagnostics copied (form fields, button texts, network URLs per marketplace).' : 'Copy failed.';
+  };
+  $('editLogClearBtn').onclick = async () => {
+    await chrome.storage.local.remove(['fasEditLog', 'fasEditDiag']);
+    $('editSyncResult').textContent = 'Cleared.'; await renderEditSync();
+  };
+  await renderEditSync();
 }
 
 async function renderRemovalDiag() {
