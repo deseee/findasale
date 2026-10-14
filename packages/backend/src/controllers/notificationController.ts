@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import twilio from 'twilio';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { emailService } from '../lib/emailService';
 import {
   SMS_CONSENT_PENDING_TTL_MS,
   SMS_CONSENT_SOURCE_DOUBLE_OPT_IN,
@@ -721,13 +720,16 @@ const DIGEST_SEND_INTERVAL_MS = 600;
 // Send weekly digest email to all users with upcoming sales this weekend
 export const sendWeeklyDigest = async () => {
   try {
-    if (!process.env.SMTP_USERNAME) {
-      console.warn('Email service not configured (SMTP_USERNAME missing) - skipping weekly digest');
+    // 2026-10-13: the digest now goes out on the Resend rail (transactionalEmailService), NOT the Gmail
+    // outreach rail (find@outreach.finda.sale): ~80 sends/week hit Gmail's per-minute quota and shared
+    // reputation with cold outreach. Sender = RESEND_FROM_EMAIL (noreply@finda.sale, DKIM+SPF aligned).
+    // The OUTREACH_ENABLED gate stays in jobs/notificationJob.ts (bulkEmailEnabled), unchanged.
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('Email service not configured (RESEND_API_KEY missing) - skipping weekly digest');
       return;
     }
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
     // Find PUBLISHED sales starting in the next 7 days
     const now = new Date();
@@ -778,7 +780,11 @@ export const sendWeeklyDigest = async () => {
 
     let sent = 0;
     let failed = 0;
+    let skipped = 0; // rail-level skips (hard bounce / complaint / our own finda.sale zone)
 
+    // Lazy import (same pattern as suppressionService below): keeps Resend + cost tracker out of this
+    // controller's module-load path.
+    const { transactionalEmailService } = await import('../lib/transactionalEmailService');
     const { suppressionService } = await import('../services/suppressionService');
     const { buildUnsubscribeLinks } = await import('./unsubscribeController');
 
@@ -813,22 +819,33 @@ export const sendWeeklyDigest = async () => {
 
         const html = buildDigestHtml(user.name, salesForUser, frontendUrl, unsubUrl, nearYou);
 
-        await emailService.emails.send({
-          from: fromEmail,
+        const digestMessage = {
+          // No explicit from: transactionalEmailService resolves RESEND_FROM_EMAIL (verified finda.sale root domain).
           to: user.email,
           subject: `🏷️ ${salesForUser.length} sale${salesForUser.length > 1 ? 's' : ''}${nearYou ? ' near you' : ''} this weekend`,
           html,
-          jobName: 'notificationController-weeklyDigest',
-          listUnsubscribe: listUnsubscribeHeader,
-          // Gmail caps sends per user per minute (messages.send = 100 units of a 15,000/min budget,
-          // ~150/min, shared with outreach). Back off + retry on a 429 instead of dropping the recipient.
-          retryOnRateLimit: true,
-        });
+          // RFC 8058 one-click unsubscribe (same per-user token as the footer link in buildDigestHtml).
+          headers: {
+            'List-Unsubscribe': listUnsubscribeHeader,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
+        };
 
-        sent++;
+        // Per-recipient failure handling: one retry after a short wait on a Resend rate-limit (429), then
+        // any remaining error is thrown to the catch below, which counts it and moves on to the next user.
+        let result: { sent: boolean; reason?: string };
+        try {
+          result = await transactionalEmailService.emails.send(digestMessage);
+        } catch (sendErr) {
+          if (!/rate.?limit|429|too many requests/i.test(String((sendErr as any)?.message ?? sendErr))) throw sendErr;
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          result = await transactionalEmailService.emails.send(digestMessage);
+        }
 
-        // Rate limit guard — pace sends under the Gmail per-user per-minute quota (~100/min;
-        // was 200ms = 300/min, which exceeded it and caused the FINDASALE-NODEJS-8H 429s).
+        if (result.sent) sent++;
+        else skipped++;
+
+        // Pacing: Resend allows ~2 requests/second by default; 600ms between sends stays under it.
         await new Promise((resolve) => setTimeout(resolve, DIGEST_SEND_INTERVAL_MS));
       } catch (error) {
         console.error(`Weekly digest: failed to send to ${maskEmail(user.email)}:`, error);
@@ -836,7 +853,7 @@ export const sendWeeklyDigest = async () => {
       }
     }
 
-    console.info(`Weekly digest complete: ${sent} sent, ${failed} failed`);
+    console.info(`Weekly digest complete: ${sent} sent, ${skipped} skipped, ${failed} failed`);
   } catch (error) {
     console.error('Weekly digest job error:', error);
   }
