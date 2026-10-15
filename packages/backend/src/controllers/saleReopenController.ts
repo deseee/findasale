@@ -16,6 +16,8 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
 import { classifySoldChannel, reopenAttestedSale } from '../services/saleReopenService';
+import { inStockOf } from '../services/inventoryStockMath';
+import { organizerEditStampAlways } from '../utils/organizerEdit';
 import { reopenEbayCancelledSale, undoItemSoldOffPlatform } from './itemController';
 
 export const reopenItemSale = async (req: AuthRequest, res: Response) => {
@@ -37,6 +39,9 @@ export const reopenItemSale = async (req: AuthRequest, res: Response) => {
         lastSoldVia: true,
         saleId: true,
         organizerId: true,
+        listingType: true,
+        stockTotal: true,
+        stockSold: true,
         sale: { select: { organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } } } },
       },
     });
@@ -49,6 +54,17 @@ export const reopenItemSale = async (req: AuthRequest, res: Response) => {
     }
     if (item.status !== 'SOLD') {
       return res.status(409).json({ message: 'This item is not marked sold, so there is nothing to reopen.', code: 'NOT_SOLD' });
+    }
+
+    // 2026-10-15 (Patrick: Sacagawea inserts stuck SOLD): a multi-unit item can be flagged SOLD by a sale report while the
+    // stock count still shows units left. That is not a cancelled sale to verify, it is a wrong flag: nothing is owed back
+    // and nothing is re-listed by hand, so just put it back on sale. Single-unit items (inStock 0) keep their normal paths.
+    if (typeof item.stockSold === 'number' && item.listingType !== 'KIT' && item.listingType !== 'CONSIGNOR_TAG' && inStockOf(item as any) > 0) {
+      const healed = await prisma.item.updateMany({
+        where: { id, status: 'SOLD' },
+        data: { status: 'AVAILABLE', ...organizerEditStampAlways() },
+      });
+      if (healed?.count === 1) return res.json({ ok: true, itemId: id, marketplace: 'FindA.Sale' });
     }
 
     const channel = classifySoldChannel(item.lastSoldVia);

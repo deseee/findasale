@@ -2857,8 +2857,11 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
             updateData.status = 'SOLD';
             stockStatusFlip = 'SOLD';
             becameSoldByStock = item.status === 'AVAILABLE';
-          } else if (newInStock > 0 && item.status === 'SOLD' && prevInStock === 0) {
-            // Restocked an item that sold out purely from stock exhaustion: it is for sale again (overrides an echoed 'SOLD').
+          } else if (newInStock > 0 && item.status === 'SOLD') {
+            // 2026-10-15 (Patrick: Sacagawea inserts could not be made available again after a sale): the in-stock number is the
+            // truth. A sale report on a multi-unit item can leave the status SOLD while units are still counted (prevInStock > 0),
+            // and the old "prevInStock === 0" test then left it SOLD with no way out. Saying "I have N" (N > 0) puts it back on sale
+            // (overrides an echoed 'SOLD'). A single-unit sold item (prevInStock 0) behaves exactly as before.
             updateData.status = 'AVAILABLE';
             stockStatusFlip = 'AVAILABLE';
           }

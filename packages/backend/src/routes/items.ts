@@ -73,6 +73,7 @@ import { reanalyzeItemForOrganizer } from '../controllers/reanalyzeController'; 
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
 import { normalizeBulkCategoryValue } from '../utils/bulkCategory';
+import { inStockOf } from '../services/inventoryStockMath'; // 2026-10-15: bulk Mark available on a SOLD item that still has units in stock
 import { importedOnlyEditNeedsDirtyMark, importedOnlyIdsNeedingDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: a bulk category/tags/photos edit must survive the next import
 
 // Bulk operations validation schemas
@@ -273,6 +274,8 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         id: true,
         status: true,
         listingType: true, // 2026-10-13: a KIT is never hard-deleted by the bulk delete (kit removal frees its components)
+        stockTotal: true, // 2026-10-15: a SOLD item that still counts units in stock can be made available in bulk
+        stockSold: true,
         draftStatus: true, // 2026-10-08: oldValues for the bulk draftStatus operation
         price: true,
         category: true,
@@ -343,6 +346,12 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         if (operation === 'delete' && item.listingType === 'KIT') {
           // Kits (2026-10-13): hard-deleting a kit would leave its components flagged isKitComponent. Removal goes through /api/kits/:id.
           failed.push({ itemId: item.id, reason: 'This is a kit. Remove it from its own Delete button so the items inside are freed.' });
+        } else if (
+          operation === 'status' && value === 'AVAILABLE' && item.status === 'SOLD' &&
+          item.listingType !== 'CONSIGNOR_TAG' && inStockOf({ stockTotal: item.stockTotal, stockSold: item.stockSold }) > 0
+        ) {
+          // 2026-10-15 (Patrick: Sacagawea inserts could not be made available again): flagged SOLD but units are still in stock.
+          confirmedIds.push(item.id);
         } else if (!safeStatuses.includes(item.status)) {
           // reopen-sale (2026-10-10): the generic SOLD message was a dead end for a cancelled marketplace sale.
           const friendlyMsg =

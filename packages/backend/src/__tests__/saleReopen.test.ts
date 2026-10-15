@@ -314,6 +314,28 @@ describe('reopenItemSale controller', () => {
     expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
   });
 
+  it('SOLD but units still in stock (stockTotal 5, stockSold 2): puts it back on sale without any marketplace check', async () => {
+    mockPrisma.item.findUnique.mockResolvedValue(ownedSale({ listingType: 'SIMPLE', stockTotal: 5, stockSold: 2 }));
+    mockPrisma.item.updateMany.mockResolvedValue({ count: 1 });
+    const res = makeRes();
+    await reopenItemSale(req({ body: {} }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, itemId: 'item1' });
+    const arg = mockPrisma.item.updateMany.mock.calls[0][0];
+    expect(arg.where).toEqual({ id: 'item1', status: 'SOLD' });
+    expect(arg.data.status).toBe('AVAILABLE');
+    expect(mockEbayReopen).not.toHaveBeenCalled();
+  });
+
+  it('SOLD with nothing left (stockTotal 3, stockSold 3) is NOT healed: it still takes the normal reopen path', async () => {
+    mockPrisma.item.findUnique.mockResolvedValue(ownedSale({ lastSoldVia: 'EBAY', listingType: 'SIMPLE', stockTotal: 3, stockSold: 3 }));
+    const res = makeRes();
+    const request = req();
+    await reopenItemSale(request, res);
+    expect(mockEbayReopen).toHaveBeenCalledWith(request, res);
+    expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
+  });
+
   it('OFF_PLATFORM_MANUAL delegates to the existing undo', async () => {
     mockPrisma.item.findUnique.mockResolvedValue(ownedSale({ lastSoldVia: 'OFF_PLATFORM_MANUAL' }));
     const res = makeRes();
