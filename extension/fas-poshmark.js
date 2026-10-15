@@ -2287,6 +2287,41 @@
     }
   }
 
+  // 2026-10-14 (Patrick: Poshmark was defaulting new listings to Free shipping and not setting quantity).
+  // Shipping Discount dropdown (live-DOM verified, read-only): a[data-et-name="shipping_discount_item"] with spans "No Discount" /
+  // "$4.99" / "Free". Choose "No Discount" and check the dropdown no longer reads "Free". Quantity: the form has "Single Item"
+  // (data-et-name=one) / "Multi Item" (data-et-name=multiple) buttons; a Multi Item choice reveals the quantity input.
+  // Both are best-effort and noted in fieldNotes when they do not take -- never block the fill.
+  async function ensurePoshmarkShippingAndQuantity(item, fieldNotes) {
+    try {
+      let none = null;
+      for (let i = 0; i < 8 && !none; i++) {
+        none = Array.from(document.querySelectorAll('a[data-et-name="shipping_discount_item"]')).find((a) => /^\s*no discount\s*$/i.test(a.textContent || ''));
+        if (!none) await sleep(500);
+      }
+      if (none) {
+        const wrap = none.closest('.dropdown') || none.parentElement;
+        const sel = wrap && wrap.querySelector('.dropdown__selector');
+        if (sel) { realClick(sel); await sleep(350); }
+        realClick(none); await sleep(500);
+        const shown = sel ? String(sel.innerText || '').trim() : '';
+        if (/free/i.test(shown)) fieldNotes.push('Shipping Discount still reads "' + shown.slice(0, 20) + '" -- set it to No Discount yourself before publishing.');
+        else console.log('[FAS Poshmark] Shipping Discount set to No Discount.');
+      } else {
+        fieldNotes.push('Could not find the Shipping Discount options -- check that shipping is not set to Free before publishing.');
+      }
+    } catch (e) { console.warn('[FAS Poshmark] shipping step skipped:', e && e.message); }
+    try {
+      const qty = self.FAS_QTY ? self.FAS_QTY.itemQuantity(item) : 1;
+      if (qty > 1) {
+        const multi = document.querySelector('[data-et-name="multiple"]');
+        if (multi) { realClick(multi); await sleep(700); }
+        const r = self.FAS_QTY ? self.FAS_QTY.fillQuantity(item, { force: true }) : { filled: false };
+        if (!r.filled) fieldNotes.push('Quantity ' + qty + ' could not be entered (' + (r.reason || 'unknown') + ') -- set Multi Item and the quantity yourself.');
+      }
+    } catch (e) { console.warn('[FAS Poshmark] quantity step skipped:', e && e.message); }
+  }
+
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - filling the Poshmark listing form...');
     // fieldNotes declared here (moved up from right before the Price block) so the Title
@@ -2408,6 +2443,7 @@
     // before doPoshmarkAutoPublish() clicks the "Next" button (see its own call site and comment).
     // Logic is unchanged from the prior inline version -- this is a pure extraction, not a behavior
     // change, at this call site.
+    await ensurePoshmarkShippingAndQuantity(item, fieldNotes);
     await ensurePoshmarkPriceHolds(item, fieldNotes, 'at end-of-fill (after photos)');
     return { photosOk, categoryCommitted, categoryConfident, fieldNotes };
   }

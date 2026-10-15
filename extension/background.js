@@ -1290,6 +1290,97 @@ async function fasEditRunPlatform(platform, rawEntries) {
 }
 
 
+// ---- Poshmark shipping normalizer (2026-10-14, Patrick: "yes, set all Poshmark shipping to No Discount") -----------------------
+// Finds the signed-in seller's published Poshmark listings whose shipping_discount_type is "free" and sets each to "No Discount"
+// through the real edit form (fas-posh-shipping.js), verified by re-reading shipping_discount_type from the API. Serial, jittered,
+// at most FAS_POSH_SHIP_PER_RUN per run, resumes on the next alarm tick; stops for 6 h on any block. Same consent toggle as the
+// other silent automations (fasAutoRemoveMode === 'silent'). Result lines go to the popup "Price and stock sync" log.
+// Switch off with chrome.storage.local fasPoshShipNoDiscount = false.
+const FAS_POSH_SHIP_STATE_KEY = 'fasPoshShipState';   // { fails: { id: { n, until } }, backoffUntil, lastRun, lastCheck, more }
+const FAS_POSH_SHIP_PER_RUN = 12;
+const FAS_POSH_SHIP_CHECK_EVERY_MS = 6 * 3600 * 1000;
+let fasPoshShipRunning = false;
+
+async function fasPoshShipRun(force) {
+  if (fasPoshShipRunning || fasEditPumping) return 'busy';
+  const cfg = await chrome.storage.local.get([FAS_POSH_SHIP_STATE_KEY, 'fasPoshShipNoDiscount', 'fasAutoRemoveMode']);
+  if (cfg.fasPoshShipNoDiscount === false) return 'disabled';
+  if (cfg.fasAutoRemoveMode === 'off' || cfg.fasAutoRemoveMode === 'notify') return 'mode_' + cfg.fasAutoRemoveMode;
+  if (!(await fasEditRunLockFree())) return 'run_in_progress';
+  if (await fasIsPlatformPaused('POSHMARK')) return 'paused';
+  const st = cfg[FAS_POSH_SHIP_STATE_KEY] || {};
+  st.fails = st.fails || {};
+  const now = Date.now();
+  if (!force && st.backoffUntil && st.backoffUntil > now) return 'backoff';
+  if (!force && st.lastCheck && now - st.lastCheck < FAS_POSH_SHIP_CHECK_EVERY_MS && !st.more) return 'checked_recently';
+  fasPoshShipRunning = true;
+  const prevTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const prevTabId = prevTabs && prevTabs[0] ? prevTabs[0].id : null;
+  const tab = await chrome.tabs.create({ url: 'https://poshmark.com/feed', active: true });
+  const lock = () => chrome.storage.local.set({ [FAS_EDIT_RUN_KEY]: { platform: 'POSHMARK', tabId: tab.id, prevTabId: prevTabId, startedAt: Date.now() } });
+  await lock();
+  let fixed = 0, failed = 0, stopped = '';
+  try {
+    const run = async (func, args) => { const o = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: func, args: args || [] }); return o && o[0] ? o[0].result : null; };
+    await fasEditWaitComplete(tab.id, 25000);
+    const t = await tabsGet(tab.id);
+    if (t && /\/(login|signup)/.test(t.url || '')) { st.backoffUntil = now + 6 * 3600 * 1000; return 'signed_out'; }
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['fas-posh-shipping.js'] });
+    const path = await run(() => self.FAS_POSH_SHIP.closetPath());
+    if (!path) { st.backoffUntil = now + 3600 * 1000; return 'closet_link_not_found'; }
+    await fasEditNavigate(tab.id, 'https://poshmark.com' + path);
+    await fasEditWaitComplete(tab.id, 25000);
+    await sleep(2500);
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['fas-posh-shipping.js'] });
+    const scan = await run(() => self.FAS_POSH_SHIP.collect());
+    if (!scan) return 'scan_failed';
+    if (scan.blocked) { st.backoffUntil = Date.now() + 6 * 3600 * 1000; await fasEditLogEntry('error', 'POSHMARK', null, scan.blocked, 'Shipping check stopped: Poshmark answered ' + scan.blocked + '. Will not touch Poshmark again for 6 hours.'); return 'blocked_' + scan.blocked; }
+    st.lastCheck = Date.now();
+    const free = (scan.rows || []).filter((r) => r.status === 'published' && r.ship === 'free' && !(st.fails[r.id] && st.fails[r.id].until > Date.now()));
+    st.more = free.length > FAS_POSH_SHIP_PER_RUN;
+    await fasEditLogEntry('info', 'POSHMARK', null, 'shipping_scan', 'Closet scan: ' + (scan.rows || []).length + ' listings read, ' + free.length + ' on Free shipping' + (free.length ? ' -- changing to No Discount' : ''));
+    for (const r of free.slice(0, FAS_POSH_SHIP_PER_RUN)) {
+      await lock();
+      let scratch = {}; let res = null; let errs = 0;
+      await fasEditNavigate(tab.id, 'https://poshmark.com/edit-listing/' + r.id);
+      for (let i = 0; i < 12; i++) {
+        await fasEditWaitComplete(tab.id, 25000);
+        const tb = await tabsGet(tab.id);
+        if (!tb) { res = { state: 'fail', code: 'tab_closed', reason: 'tab closed' }; break; }
+        try {
+          await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['fas-posh-shipping.js'] });
+          const o = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: (c) => self.FAS_POSH_SHIP.step(c), args: [{ id: r.id, phase: scratch.phase || '' }] });
+          const x = o && o[0] ? o[0].result : null;
+          if (!x) { if (++errs > 3) { res = { state: 'fail', code: 'no_result', reason: 'engine returned nothing' }; break; } await sleep(1300); continue; }
+          if (x.scratch) scratch = Object.assign({}, scratch, x.scratch);
+          if (x.state === 'done' || x.state === 'fail' || x.state === 'blocked') { res = x; break; }
+          if (x.state === 'goto') { await sleep(600 + Math.random() * 600); await fasEditNavigate(tab.id, x.url); continue; }
+          await sleep(Math.max(800, Math.min(x.delayMs || 1000, 8000)));
+        } catch (e) { if (++errs > 3) { res = { state: 'fail', code: 'inject_failed', reason: String((e && e.message) || e).slice(0, 120) }; break; } await sleep(1300); }
+      }
+      if (!res) res = { state: 'fail', code: 'too_many_steps', reason: 'no verified result' };
+      const entry = { id: r.id, title: r.title };
+      if (res.state === 'done') { fixed++; delete st.fails[r.id]; await fasEditLogEntry('info', 'POSHMARK', entry, 'shipping_fixed', 'Shipping set to No Discount (verified on Poshmark)'); }
+      else if (res.state === 'blocked') { stopped = res.code; st.backoffUntil = Date.now() + 6 * 3600 * 1000; await fasEditLogEntry('error', 'POSHMARK', entry, res.code, 'Shipping fix stopped: ' + res.reason + '. Will not touch Poshmark for 6 hours.'); break; }
+      else { failed++; const f = st.fails[r.id] || { n: 0 }; f.n++; f.until = Date.now() + Math.min(24, 2 * f.n) * 3600 * 1000; st.fails[r.id] = f; await fasEditLogEntry('error', 'POSHMARK', entry, res.code || 'failed', 'Shipping fix failed: ' + (res.reason || '') + ' (attempt ' + f.n + ', retry later)', { step: 'shipping' }); }
+      await chrome.storage.local.set({ [FAS_POSH_SHIP_STATE_KEY]: st });
+      await sleep(4000 + Math.random() * 5000);
+    }
+    return 'fixed_' + fixed + '_failed_' + failed + (stopped ? '_stopped_' + stopped : '');
+  } finally {
+    st.lastRun = Date.now();
+    await chrome.storage.local.set({ [FAS_POSH_SHIP_STATE_KEY]: st });
+    await chrome.storage.local.remove([FAS_EDIT_RUN_KEY]);
+    if (prevTabId != null) await new Promise((resolve) => chrome.tabs.update(prevTabId, { active: true }, () => { void chrome.runtime.lastError; resolve(); }));
+    await new Promise((resolve) => chrome.tabs.remove(tab.id, () => { void chrome.runtime.lastError; resolve(); }));
+    fasPoshShipRunning = false;
+  }
+}
+function fasPoshShipRunDetached(force) {
+  fasPoshShipRun(force).then((o) => chrome.storage.local.set({ fasPoshShipLastOutcome: o, fasPoshShipLastAt: Date.now() }),
+    (e) => chrome.storage.local.set({ fasPoshShipLastOutcome: 'error:' + String((e && e.message) || e), fasPoshShipLastAt: Date.now() })).catch(() => {});
+}
+
 // ---- Mercari background price-push (S-EXT-MERCARI-PRICE-PUSH, 2026-09-27, Patrick-approved --
 // see claude_docs/decisions-log.md same date). Bounded by getPriceSyncQueue's own MERCARI filter
 // (id-first-only, requires a captured remoteListingId) and by markdownCycleCron.ts being the only
@@ -2349,6 +2440,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   const updateOutcome = await checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e));
   const priceSyncOutcome = await checkPriceSyncQueue().catch((e) => 'error:' + String((e && e.message) || e));
   await maybeOpenVintedForBundleOrders(); // 2026-10-12: never throws
+  fasPoshShipRunDetached(false); // 2026-10-14: Poshmark shipping normalizer; never throws, self-throttled
   await chrome.storage.local.set({
     fasLastAlarmFiredAt: Date.now(),
     fasLastAlarmRemovalOutcome: removalOutcome,
@@ -3799,6 +3891,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await fasEditSaveState(cur);
         const u = await checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e));
         const p = await checkPriceSyncQueue().catch((e) => 'error:' + String((e && e.message) || e));
+        fasPoshShipRunDetached(true);
         sendResponse({ ok: true, facebook: u, others: p });
       } else if (msg.type === 'getMercariPricePushQueueItem') {
         // Same tab-identity security check as getRemovalQueueItemFor above -- only the dedicated
