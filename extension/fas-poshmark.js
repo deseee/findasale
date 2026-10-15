@@ -59,6 +59,13 @@
   // all, and always warns the organizer either way so a wrong guess is never silent.
   function findPoshmarkSellNavLink() {
     const candidates = qa('a, button').filter((el) => el.offsetParent !== null);
+    // Signal 0 (2026-10-15, Patrick: "poshmark opens a new tab for every item in the queue"): the header has TWO
+    // matches for "sell" -- "SELL ON POSHMARK" (href /sell, target=_blank, which opens a fresh tab every click) and
+    // a plain "Create Listing" link (href /create-listing, no target) that Poshmark's own SPA router handles in
+    // the same tab. Live DOM-confirmed on the closet page. Prefer the same-tab link; the old signals only ran
+    // into the _blank one first because it comes earlier in document order.
+    const sameTab = candidates.find((el) => el.tagName === 'A' && /^(https?:\/\/(www\.)?poshmark\.com)?\/create-listing\/?(\?|#|$)/i.test(el.getAttribute('href') || '') && el.getAttribute('target') !== '_blank');
+    if (sameTab) { console.log('[FAS Poshmark] Sell nav control found via Signal 0 (same-tab Create Listing link).'); return sameTab; }
     // Signal 1: exact-word "sell" as the ENTIRE visible text or aria-label (cheapest, most precise
     // -- matches a bare "Sell" control if Poshmark ever renders one that way).
     const byExactText = candidates.find((el) => norm(el.textContent) === 'sell' || norm(el.getAttribute('aria-label') || '') === 'sell');
@@ -234,6 +241,8 @@
     writePoshNavRetryState({ ts: Date.now(), attempt: attempt });
     const sellLink = findPoshmarkSellNavLink();
     if (sellLink) {
+      // Never let the click open a new tab: strip target=_blank so the queue keeps running in ONE tab.
+      try { if (sellLink.tagName === 'A' && sellLink.getAttribute('target') === '_blank') sellLink.removeAttribute('target'); } catch (e) { /* non-fatal */ }
       sellLink.click(); // SPA-safe: lets Poshmark's own router handle the route change
       return true;
     }
