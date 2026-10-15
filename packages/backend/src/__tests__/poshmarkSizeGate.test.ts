@@ -73,3 +73,32 @@ describe('Poshmark new-listing gate', () => {
     expect(checkEligibility('MERCARI', { ...base, forNewListing: true, packageWeightOz: 100, packageLengthIn: 33 }).eligible).toBe(true);
   });
 });
+
+describe('Poshmark $3 minimum price (new listings only)', () => {
+  const small = { packageWeightOz: 8, packageLengthIn: 6, packageWidthIn: 4, packageHeightIn: 1 };
+  const gate = (price: number | null) => checkEligibility('POSHMARK', { ...base, ...small, forNewListing: true, price });
+
+  it('blocks $1 and $2 (Poshmark marks them Not For Sale)', () => {
+    expect(gate(1).eligible).toBe(false);
+    expect(gate(2).eligible).toBe(false);
+    expect(gate(1).reason).toMatch(/under \$3/i);
+  });
+  it('allows $3 and up, and a price that rounds to $3 (the extension rounds to whole dollars)', () => {
+    expect(gate(3).eligible).toBe(true);
+    expect(gate(2.6).eligible).toBe(true);
+    expect(gate(2.4).eligible).toBe(false);
+    expect(gate(25).eligible).toBe(true);
+  });
+  it('does not block when the price is unknown', () => {
+    expect(gate(null).eligible).toBe(true);
+  });
+  it('never applies without forNewListing, so an already-live cheap listing is not queued for takedown', () => {
+    expect(checkEligibility('POSHMARK', { ...base, ...small, price: 1 }).eligible).toBe(true);
+  });
+  it('leaves other marketplaces alone', () => {
+    expect(checkEligibility('MERCARI', { ...base, forNewListing: true, price: 1 }).eligible).toBe(true);
+    expect(checkEligibility('VINTED', { ...base, forNewListing: true, price: 1 }).eligible).toBe(
+      checkEligibility('VINTED', { ...base, forNewListing: true }).eligible
+    );
+  });
+});

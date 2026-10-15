@@ -77,6 +77,8 @@ export interface EligibilityCheckItem {
    * of a listing that is already up.
    */
   forNewListing?: boolean;
+  /** Listing price in dollars. Only read by newListingOnly.minPriceUsd (Poshmark's $3 minimum). */
+  price?: number | null;
 
   /**
    * ETSY (ATTRIBUTE_AGE_ALLOWLIST, ADR-135 D4.2, batch E-B2). All optional; no other platform reads
@@ -204,6 +206,9 @@ interface SizeWeightCeilingRule {
     maxLengthPlusGirthIn?: number;
     /** When true, an item with NO usable weight AND NO usable dimension is ineligible (nothing proves it ships). */
     requirePackageData?: boolean;
+    /** Minimum whole-dollar listing price (after rounding) a new listing needs, e.g. Poshmark's $3. */
+    minPriceUsd?: number;
+    reasonLowPrice?: string;
     reasonOversize?: string;
     reasonNoData?: string;
   };
@@ -1149,6 +1154,10 @@ const RULES: EligibilityRule[] = [
       maxLongestSideIn: 30,
       maxLengthPlusGirthIn: 108,
       requirePackageData: true,
+      // 2026-10-15 (Patrick: items under $2 show a "Not For Sale" tag): Poshmark's own announcement sets $0-$2 listings
+      // to Not For Sale (minimum purchasable price $3); confirmed live on the closet (two $1 listings tagged, $3 not).
+      minPriceUsd: 3,
+      reasonLowPrice: 'Poshmark won\'t sell anything under $3 (it marks those Not For Sale), so low-priced items stay off it.',
       reasonOversize: 'Too large for Poshmark\'s flat-rate shipping (over 30" on a side or 108" length plus girth) -- Poshmark ships everything on one prepaid label, so oversize items stay off it.',
       reasonNoData: 'No package weight or size is recorded for this item, so it can\'t be confirmed to fit Poshmark\'s 15lb prepaid-label limits. Add the package weight and size to list it there.',
     },
@@ -1458,6 +1467,9 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
           if (lg != null && lg > nl.maxLengthPlusGirthIn) {
             return { eligible: false, reason: nl.reasonOversize || rule.reason };
           }
+        }
+        if (nl.minPriceUsd != null && item.price != null && isFinite(Number(item.price)) && Math.round(Number(item.price)) < nl.minPriceUsd) {
+          return { eligible: false, reason: nl.reasonLowPrice || rule.reason };
         }
         if (nl.requirePackageData === true && weightOz == null && longestSideIn == null) {
           return { eligible: false, reason: nl.reasonNoData || rule.reason };

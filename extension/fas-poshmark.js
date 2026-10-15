@@ -2333,7 +2333,17 @@
       fieldNotes.push('Title was ' + (item.title || '').length + ' characters -- Poshmark\'s real limit is 80, so it was trimmed to fit. Double-check the trimmed title reads OK.');
     }
     await tryFill('Title', poshTitle, (v) => fillText('Title', v));
-    await tryFill('Description', item.description, (v) => fillText('Description', v));
+    // 2026-10-15 (Patrick: Poshmark stuck on the Camel sign): Poshmark's Description is REQUIRED, and tryFill skips an
+    // empty value, so an item with no description left the field blank, Next was refused, and the run dropped to manual
+    // review and stopped. An item with no description now gets a plain, truthful fallback built from its own title and
+    // condition, and a run note asks the organizer to add real detail.
+    let poshDescription = String(item.description == null ? '' : item.description).trim();
+    if (!poshDescription) {
+      const cond = String(item.conditionRaw || '').trim();
+      poshDescription = poshTitle + '.' + (cond ? ' Condition: ' + cond + '.' : '') + ' Please see the photos for details and message me with any questions.';
+      fieldNotes.push('This item had no description, so a short one was made from its title and condition -- add real detail on FindA.Sale when you can.');
+    }
+    await tryFill('Description', poshDescription, (v) => fillText('Description', v));
     try { if (self.FAS_QTY) self.FAS_QTY.fillQuantity(item); } catch (e) { /* kits: best-effort Quantity field, never blocks */ }
     if (item.price != null && isFinite(Number(item.price))) {
       const priceOk = await tryFill('Price', item.price, (v) => fillPoshmarkPrice(String(Math.max(1, Math.round(Number(v))))));

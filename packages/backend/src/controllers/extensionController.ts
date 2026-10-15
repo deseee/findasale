@@ -748,6 +748,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       GRAILED: checkEligibility('GRAILED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
       POSHMARK: checkEligibility('POSHMARK', {
         forNewListing: true, // 2026-10-14: Poshmark size/no-data gate for new listings
+        price: it.price != null ? Number(it.price) : null, // 2026-10-15: Poshmark $3 minimum
         category: it.ebayCategoryName || it.category,
         ebayCategoryId: it.ebayCategoryId,
         title: it.title,
@@ -2929,6 +2930,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
       // filter now has, not just the manual popup.js path.
       const eligibility = checkEligibility(platform, {
         forNewListing: true, // 2026-10-14: Poshmark size/no-data gate (no effect on other platforms)
+        price: it.price != null ? Number(it.price) : null, // 2026-10-15: Poshmark $3 minimum
         category: eligibilityCategory,
         ebayCategoryId: it.ebayCategoryId,
         title: it.title,

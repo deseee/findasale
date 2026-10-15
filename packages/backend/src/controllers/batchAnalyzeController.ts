@@ -528,25 +528,27 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               }
             }
 
-            // Barcode auto-detection: scan the cluster's first photo buffer.
-            // Non-blocking — any error = silent skip. Barcode eBay category overrides AI.
+            // Barcode auto-detection: scan EVERY photo in the cluster (a dedicated barcode shot is
+            // rarely the first). Non-blocking — any error = silent skip. A UPC/EAN/ISBN hit with a
+            // catalog match wins; otherwise the first decoded code is still stored on the item.
             let batchBarcodeEnrichment: import('../services/ebayCatalogLookup').EbayCatalogResult | null = null;
             let batchDecodedBarcode: { code: string; type?: string } | undefined = undefined;
-            try {
-              const firstBuffer = clusterImages[0]?.buffer;
-              if (firstBuffer) {
-                const detected = await decodeBarcodeFromImage(firstBuffer);
-                if (detected) {
-                  console.log(`[batchAnalyze] Barcode detected for item ${itemId}: ${detected.code} (${detected.codeType})`);
+            for (const img of clusterImages.slice(0, 12)) {
+              try {
+                if (!img?.buffer) continue;
+                const detected = await decodeBarcodeFromImage(img.buffer);
+                if (!detected) continue;
+                console.log(`[batchAnalyze] Barcode detected for item ${itemId}: ${detected.code} (${detected.codeType})`);
+                if (!batchDecodedBarcode) batchDecodedBarcode = { code: detected.code, type: detected.codeType };
+                batchBarcodeEnrichment = await lookupByBarcode(detected.code, detected.codeType);
+                if (batchBarcodeEnrichment) {
+                  console.log(`[batchAnalyze] Barcode enrichment found for item ${itemId}: "${batchBarcodeEnrichment.title}"`);
                   batchDecodedBarcode = { code: detected.code, type: detected.codeType };
-                  batchBarcodeEnrichment = await lookupByBarcode(detected.code, detected.codeType);
-                  if (batchBarcodeEnrichment) {
-                    console.log(`[batchAnalyze] Barcode enrichment found for item ${itemId}: "${batchBarcodeEnrichment.title}"`);
-                  }
+                  break; // First catalog hit wins
                 }
+              } catch {
+                // Non-blocking — never interrupt batch analysis
               }
-            } catch {
-              // Non-blocking — never interrupt batch analysis
             }
 
             // Enrichment cascade (ADR 2026-06-14): unified provider cascade. Stores any
