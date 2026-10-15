@@ -69,6 +69,14 @@ export interface EligibilityCheckItem {
   packageLengthIn?: number | null;
   packageWidthIn?: number | null;
   packageHeightIn?: number | null;
+  /**
+   * 2026-10-14 (Patrick, "gate Poshmark"): true ONLY when the caller is deciding whether to put a NEW
+   * listing on a marketplace (the auto-list queue, the item picker, the unlisted channel dot). Rules
+   * that carry `newListingOnly` limits are evaluated just then. Deliberately NOT set by the
+   * already-live takedown check (getPendingRemovals), so tightening these limits never queues removal
+   * of a listing that is already up.
+   */
+  forNewListing?: boolean;
 
   /**
    * ETSY (ATTRIBUTE_AGE_ALLOWLIST, ADR-135 D4.2, batch E-B2). All optional; no other platform reads
@@ -185,6 +193,20 @@ interface SizeWeightCeilingRule {
   maxWeightOz?: number;
   /** Max single longest side in INCHES (the largest of packageLengthIn/WidthIn/HeightIn). Omit if this platform has no documented dimension ceiling worth gating on. */
   maxLongestSideIn?: number;
+  /**
+   * Limits applied only when the item carries forNewListing === true (see EligibilityCheckItem), so they
+   * gate new listings without ever triggering takedown of listings already live.
+   */
+  newListingOnly?: {
+    /** Max longest single side, inches. */
+    maxLongestSideIn?: number;
+    /** Max length + girth, inches, where girth = 2 x (the two shorter sides). Needs all three dimensions. */
+    maxLengthPlusGirthIn?: number;
+    /** When true, an item with NO usable weight AND NO usable dimension is ineligible (nothing proves it ships). */
+    requirePackageData?: boolean;
+    reasonOversize?: string;
+    reasonNoData?: string;
+  };
   reason: string;
 }
 
@@ -1117,6 +1139,19 @@ const RULES: EligibilityRule[] = [
     type: 'SIZE_WEIGHT_CEILING',
     platform: 'POSHMARK',
     maxWeightOz: 240, // 15lb, raised from 10lb as of Feb 2026 (carrier is now USPS Ground Advantage, not Priority Mail).
+    // 2026-10-14 (Patrick: "gate Poshmark"; research claude/ session 2026-10-14): Poshmark charges the buyer a flat
+    // $6.49 up to 5lb and the seller covers the weight overage up to 15lb, on USPS Ground Advantage. USPS GA hard
+    // limit is 130" length+girth, but third-party Poshmark guides agree on 108" (Poshmark's own support article is
+    // not machine-readable, so 108" is treated as probable, not confirmed) -- and a bass guitar in a case or a
+    // full-size guitar case blows through it. 30" longest side is the point where USPS adds its >30" surcharge.
+    // Applies to NEW listings only (newListingOnly) so nothing already live is taken down.
+    newListingOnly: {
+      maxLongestSideIn: 30,
+      maxLengthPlusGirthIn: 108,
+      requirePackageData: true,
+      reasonOversize: 'Too large for Poshmark\'s flat-rate shipping (over 30" on a side or 108" length plus girth) -- Poshmark ships everything on one prepaid label, so oversize items stay off it.',
+      reasonNoData: 'No package weight or size is recorded for this item, so it can\'t be confirmed to fit Poshmark\'s 15lb prepaid-label limits. Add the package weight and size to list it there.',
+    },
     reason: 'Over Poshmark\'s 15lb shipping limit -- Poshmark\'s Community Guidelines prohibit arranging local pickup/meetups in place of shipping, so this is a dead end there, not just a bad fit.',
   },
   {
@@ -1167,6 +1202,17 @@ function effectiveLongestSideIn(item: EligibilityCheckItem): number | null {
     .map((d) => (d != null && isFinite(Number(d)) && Number(d) > 0 ? Number(d) : null))
     .filter((d): d is number => d != null);
   return dims.length ? Math.max(...dims) : null;
+}
+
+// Length + girth in inches (carrier convention: longest side + 2 x (the other two)). Needs all three
+// dimensions; a partial measurement returns null (the longest-side check still covers it).
+export function lengthPlusGirthIn(item: EligibilityCheckItem): number | null {
+  const dims = [item.packageLengthIn, item.packageWidthIn, item.packageHeightIn].map((d) =>
+    d != null && isFinite(Number(d)) && Number(d) > 0 ? Number(d) : null
+  );
+  if (dims.some((d) => d == null)) return null;
+  const sorted = (dims as number[]).slice().sort((a, b) => b - a);
+  return sorted[0] + 2 * (sorted[1] + sorted[2]);
 }
 
 // BUG FIX 2026-09-05 round 2 (Patrick-reported live, re-tested after the round-1 excludeKeywords
@@ -1400,7 +1446,23 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
         return { eligible: false, reason: rule.reason };
       }
       // No usable weight/dimension data on the item -> nothing to block on this rule, same
-      // permissive missing-data posture as CATEGORY_BLOCKLIST above.
+      // permissive missing-data posture as CATEGORY_BLOCKLIST above -- EXCEPT for the new-listing-only
+      // limits below, which a caller opts into with item.forNewListing === true.
+      const nl = rule.newListingOnly;
+      if (nl && item.forNewListing === true) {
+        if (nl.maxLongestSideIn != null && longestSideIn != null && longestSideIn > nl.maxLongestSideIn) {
+          return { eligible: false, reason: nl.reasonOversize || rule.reason };
+        }
+        if (nl.maxLengthPlusGirthIn != null) {
+          const lg = lengthPlusGirthIn(item);
+          if (lg != null && lg > nl.maxLengthPlusGirthIn) {
+            return { eligible: false, reason: nl.reasonOversize || rule.reason };
+          }
+        }
+        if (nl.requirePackageData === true && weightOz == null && longestSideIn == null) {
+          return { eligible: false, reason: nl.reasonNoData || rule.reason };
+        }
+      }
     }
 
     if (rule.type === 'ATTRIBUTE_AGE_ALLOWLIST') {

@@ -121,7 +121,7 @@ function extensionChannelStatus(
     const liveCheck = checkEligibility(platform, item);
     return liveCheck.eligible ? 'PUBLISHED' : 'PUBLISHED_INELIGIBLE';
   }
-  const result = checkEligibility(platform, item);
+  const result = checkEligibility(platform, { ...item, forNewListing: true });
   return result.eligible ? 'ELIGIBLE' : null;
 }
 

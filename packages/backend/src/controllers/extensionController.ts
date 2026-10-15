@@ -747,6 +747,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       GUMTREE_AU: checkEligibility('GUMTREE_AU', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
       GRAILED: checkEligibility('GRAILED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
       POSHMARK: checkEligibility('POSHMARK', {
+        forNewListing: true, // 2026-10-14: Poshmark size/no-data gate for new listings
         category: it.ebayCategoryName || it.category,
         ebayCategoryId: it.ebayCategoryId,
         title: it.title,
@@ -2927,6 +2928,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
       // allowing me to push those kind of items"), so it needs the same gate getExtensionItems' UI
       // filter now has, not just the manual popup.js path.
       const eligibility = checkEligibility(platform, {
+        forNewListing: true, // 2026-10-14: Poshmark size/no-data gate (no effect on other platforms)
         category: eligibilityCategory,
         ebayCategoryId: it.ebayCategoryId,
         title: it.title,
