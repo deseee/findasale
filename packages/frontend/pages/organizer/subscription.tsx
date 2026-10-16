@@ -269,7 +269,7 @@ export default function SubscriptionPage() {
                   </div>
 
                   <p className="text-sm text-purple-700 dark:text-purple-300 mb-6">
-                    One-time $9.99 charge when you publish the sale. Same platform fee as SIMPLE applies ({describeInclusiveRates('SIMPLE')}, card processing included).
+                    Optional one-time $9.99 upgrade, offered from your second sale. Publishing is always free on SIMPLE. Same platform fee as SIMPLE applies ({describeInclusiveRates('SIMPLE')}, card processing included).
                   </p>
 
                   <Link href="/pricing" className="inline-block bg-purple-600 dark:bg-purple-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-purple-700 dark:hover:bg-purple-600 transition">
@@ -616,7 +616,7 @@ export default function SubscriptionPage() {
                 </div>
 
                 <p className="text-sm text-purple-700 dark:text-purple-300 mb-6">
-                  One-time $9.99 charge when you publish the sale. Same platform fee as SIMPLE applies ({describeInclusiveRates('SIMPLE')}, card processing included).
+                  Optional one-time $9.99 upgrade, offered from your second sale. Publishing is always free on SIMPLE. Same platform fee as SIMPLE applies ({describeInclusiveRates('SIMPLE')}, card processing included).
                 </p>
 
                 <Link href="/pricing" className="inline-block bg-purple-600 dark:bg-purple-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-purple-700 dark:hover:bg-purple-600 transition">

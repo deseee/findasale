@@ -22,6 +22,7 @@ export interface SaleItemSummary {
   saleType?: string | null;
   endDate?: string | null;
   updatedAt?: string | null;
+  createdAt?: string | null;
   stats?: {
     itemCount?: number;
     liveItemCount?: number;
@@ -50,6 +51,31 @@ export function getSaleItemState(sale: SaleItemSummary | null | undefined): Sale
     return total > 0 ? 'DRAFT_READY' : 'DRAFT_EMPTY';
   }
   return 'OK';
+}
+
+/**
+ * True when the organizer has at least one OTHER non-deleted sale created before this one, i.e.
+ * this is their second sale or later. Rule (Patrick, 2026-10-16): "simple is always free. Ala carte
+ * is after the first one." The optional $9.99 per-sale upgrade is only offered when this is true.
+ * Unknown (sale not in the list, list not loaded) returns false, so publishing is never held up.
+ * Source is GET /sales/mine, which already excludes deleted sales and inventory containers.
+ */
+export function isSecondSaleOrLater(
+  saleId: string | null | undefined,
+  sales: Array<{ id: string; createdAt?: string | null }>
+): boolean {
+  if (!saleId) return false;
+  const current = sales.find((s) => s.id === saleId);
+  if (!current) return false;
+  const others = sales.filter((s) => s.id !== saleId);
+  if (others.length === 0) return false;
+  const currentMs = current.createdAt ? Date.parse(current.createdAt) : NaN;
+  if (!Number.isFinite(currentMs)) return true; // several sales and no usable timestamp
+  return others.some((o) => {
+    const ms = o.createdAt ? Date.parse(o.createdAt) : NaN;
+    if (!Number.isFinite(ms)) return false;
+    return ms < currentMs || (ms === currentMs && o.id < saleId);
+  });
 }
 
 /** "1 item" / "3 items". Never renders a literal "(s)". */

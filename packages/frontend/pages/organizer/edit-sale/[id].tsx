@@ -29,7 +29,7 @@ import ConfirmDialog from '../../../components/ConfirmDialog';
 import { useGuardedPublish } from '../../../hooks/useGuardedPublish'; // shows PublishWithoutItemsDialog on the server's empty-sale 409 (2026-10-13)
 import { isTierLimitPublishError } from '../../../lib/publishSale';
 import SaleItemsNudgeBanner from '../../../components/SaleItemsNudgeBanner';
-import { useSaleItemStatus, getSaleItemState } from '../../../hooks/useSaleItemStatus';
+import { useSaleItemStatus, getSaleItemState, isSecondSaleOrLater } from '../../../hooks/useSaleItemStatus';
 import { AUCTION_BUYER_PREMIUM_LABEL } from '../../../lib/platformFees'; // platform-set auction buyer premium — not organizer-configurable
 
 // ADR vendor-booth-sale-onboarding-gate (2026-09-25): shape returned by
@@ -58,7 +58,7 @@ const EditSalePage = () => {
   const [showAlaCarteModal, setShowAlaCarteModal] = useState(false); // #132: À La Carte
   // À la carte fee paid on this page this visit (the sale query may not have refetched yet).
   const [alaCartePaidHere, setAlaCartePaidHere] = useState(false);
-  const { findSale: findMySale, isLoading: mySalesLoading } = useSaleItemStatus();
+  const { sales: mySales, findSale: findMySale, isLoading: mySalesLoading } = useSaleItemStatus();
   const publishBannerButtonRef = useRef<HTMLButtonElement>(null);
   const headerStatusButtonRef = useRef<HTMLButtonElement>(null);
   const publishFocusDone = useRef(false);
@@ -516,11 +516,15 @@ const EditSalePage = () => {
     try {
       const newStatus = sale.status === 'PUBLISHED' ? 'ENDED' : 'PUBLISHED';
 
-      // #132: À La Carte: Show modal if trying to publish and on SIMPLE tier, unless this sale's
-      // listing fee is already paid (Sale.alaCarteFeePaid, or paid on this page a moment ago and the
-      // organizer chose not to publish yet). Never ask an organizer to pay twice for one sale.
+      // #132: À La Carte is an OPTIONAL $9.99 upgrade, never a requirement (Patrick, 2026-10-16:
+      // "simple is always free. Ala carte is after the first one."). SIMPLE organizers always publish
+      // free. The offer modal (with a "Publish free" button) shows only from the organizer's second
+      // sale onward, and never when this sale's fee is already paid (Sale.alaCarteFeePaid, or paid on
+      // this page a moment ago and the organizer chose not to publish yet). First sale, PRO, TEAMS and
+      // an unknown sale list all skip the modal and fall through to the normal publish path.
       const alaCarteAlreadyPaid = !!sale.alaCarteFeePaid || alaCartePaidHere;
-      if (newStatus === 'PUBLISHED' && sale.status === 'DRAFT' && user?.organizerTier === 'SIMPLE' && !alaCarteAlreadyPaid) {
+      const offerAlaCarte = isSecondSaleOrLater(String(id), mySales);
+      if (newStatus === 'PUBLISHED' && sale.status === 'DRAFT' && user?.organizerTier === 'SIMPLE' && offerAlaCarte && !alaCarteAlreadyPaid) {
         setShowAlaCarteModal(true);
         setIsTogglingStatus(false);
         return;
@@ -665,6 +669,19 @@ const EditSalePage = () => {
     });
   };
 
+  // Optional à la carte offer, "Publish free" choice: publish with no fee, same guarded path as any
+  // other publish (an empty sale still gets the server's "Publish without items?" if not yet confirmed).
+  const handleAlaCartePublishFree = async () => {
+    if (!id || !sale) return;
+    setShowAlaCarteModal(false);
+    setIsTogglingStatus(true);
+    try {
+      await publishNow();
+    } finally {
+      setIsTogglingStatus(false);
+    }
+  };
+
   if (authLoading || isLoading || organizerProfilePending) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900 py-8">
@@ -781,6 +798,7 @@ const EditSalePage = () => {
         saleName={sale?.title || ''}
         onClose={() => setShowAlaCarteModal(false)}
         onPublishSuccess={handleAlaCarteSuccess}
+        onPublishFree={handleAlaCartePublishFree}
       />
 
       <div className="min-h-screen bg-white dark:bg-gray-900">

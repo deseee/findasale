@@ -29,7 +29,7 @@ import OrganizerOnboardingModal from '../../components/OrganizerOnboardingModal'
 import TeamsOnboardingWizard from '../../components/TeamsOnboardingWizard';
 import SimpleModePanel from '../../components/SimpleModePanel';
 import FirstSaleNudge from '../../components/FirstSaleNudge'; // guided first-sale flow (2026-10-12)
-import { useSaleItemStatus } from '../../hooks/useSaleItemStatus';
+import { useSaleItemStatus, isSecondSaleOrLater } from '../../hooks/useSaleItemStatus';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
 import SaleProgressWidget from '../../components/SaleProgressWidget';
 import SecondarySaleCard from '../../components/SecondarySaleCard';
@@ -105,7 +105,7 @@ const OrganizerDashboard = () => {
   const { tier: orgTier, isSimple, isTeams, canAccess, isLapsed, inDunning, entitlementEndsAt } = useOrganizerTier();
   const { data: existingWorkspace, isLoading: workspaceLoading } = useMyWorkspace();
   // Which sale (if any) the FirstSaleNudge card is featuring, so the Next Action Zone does not repeat it.
-  const { nudges: firstSaleNudges } = useSaleItemStatus();
+  const { nudges: firstSaleNudges, sales: mySalesForOffer } = useSaleItemStatus();
   const nudgedSaleId: string | undefined = firstSaleNudges[0]?.sale.id;
   const [isClient, setIsClient] = useState(false);
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
@@ -183,10 +183,12 @@ const OrganizerDashboard = () => {
     }
   };
 
-  // Sale-level "Publish" for a DRAFT sale card. SIMPLE organizers pay a per-sale listing fee on
-  // edit-sale before publishing, so they go there (?publish=1 focuses its Publish button).
+  // Sale-level "Publish" for a DRAFT sale card. Publishing is always free on SIMPLE (Patrick,
+  // 2026-10-16: "simple is always free. Ala carte is after the first one."). From a SIMPLE organizer's
+  // second sale onward, edit-sale offers the optional $9.99 upgrade (with a "Publish free" button),
+  // so those go there (?publish=1 focuses its Publish button). A first sale publishes right here.
   const handlePublishDraft = (sale: { id: string; title?: string }) => {
-    if (isSimple) {
+    if (isSimple && isSecondSaleOrLater(sale.id, mySalesForOffer)) {
       router.push(`/organizer/edit-sale/${sale.id}?publish=1`);
       return;
     }
@@ -1220,7 +1222,7 @@ const OrganizerDashboard = () => {
               {/* À la Carte callout for new organizers */}
               <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 text-center">
                 <p className="text-sm text-warm-700 dark:text-warm-300">
-                  <strong className="text-warm-900 dark:text-warm-100">Just testing?</strong> Try our à la carte option: publish a single sale for <strong>$9.99</strong>. No monthly commitment needed.
+                  <strong className="text-warm-900 dark:text-warm-100">Just testing?</strong> Your first sale is free to publish. No monthly commitment needed.
                 </p>
               </div>
 

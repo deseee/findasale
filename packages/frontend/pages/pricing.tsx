@@ -562,7 +562,7 @@ const PricingPage = () => {
               </div>
 
               <p className="text-sm text-warm-600 dark:text-warm-300 mb-6">
-                Same platform fee as Simple ({FEE_SIMPLE}, card processing included). One-time $9.99 payment.
+                Same platform fee as Simple ({FEE_SIMPLE}, card processing included). Optional one-time $9.99 upgrade, offered from your second sale.
               </p>
 
               <Link
@@ -572,7 +572,7 @@ const PricingPage = () => {
                 Create a single sale
               </Link>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
-                Payment of $9.99 is collected when you publish your sale.
+                Simple is always free to publish. The $9.99 upgrade is optional.
               </p>
             </div>
           </div>

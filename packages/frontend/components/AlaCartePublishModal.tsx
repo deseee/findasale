@@ -12,6 +12,8 @@ interface AlaCartePublishModalProps {
   isOpen: boolean;
   onClose: () => void;
   onPublishSuccess: () => void; // Called after modal confirms. Caller handles sale status update
+  // Publish with no fee. Publishing on SIMPLE is always free; the $9.99 upgrade below is optional.
+  onPublishFree: () => void | Promise<void>;
 }
 
 const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
@@ -20,6 +22,7 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
   isOpen,
   onClose,
   onPublishSuccess,
+  onPublishFree,
 }) => {
   const { showToast } = useToast();
   const [selectedOption, setSelectedOption] = useState<'pro' | 'ala-carte' | null>(null);
@@ -38,7 +41,7 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
     setSquareError(null);
     try {
       await api.post(`/sales/${saleId}/ala-carte-checkout`, { sourceId });
-      showToast('Payment successful! Publishing your sale...', 'success');
+      showToast('Upgrade paid! Publishing your sale...', 'success');
       onPublishSuccess();
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to process payment';
@@ -74,12 +77,27 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
             Ready to publish "{saleName}"?
           </h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Choose how you'd like to get your sale live.
+            Publishing is free on the Simple plan. The upgrades below are optional.
           </p>
         </div>
 
         {/* Content */}
         <div className="p-6">
+          {/* Primary action: publish free. Never gated behind a payment. */}
+          <div className="mb-8">
+            <button
+              type="button"
+              onClick={() => { void onPublishFree(); }}
+              disabled={purchasing}
+              className="w-full px-6 py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white font-semibold rounded-lg transition-colors"
+            >
+              Publish free
+            </button>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 text-center">
+              Or upgrade this sale first:
+            </p>
+          </div>
+
           {/* Options */}
           <div className="grid md:grid-cols-2 gap-6 mb-8">
             {/* PRO Subscription */}
@@ -124,20 +142,16 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
                 Pay per sale
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                $9.99 one-time. Publish this sale only
+                $9.99 one-time. Optional upgrade for this sale only
               </p>
               <ul className="text-sm space-y-2 text-gray-700 dark:text-gray-300 mb-6">
                 <li className="flex items-start gap-2">
                   <span className="text-green-600 dark:text-green-400 mt-0.5">✓</span>
-                  <span>Publish this sale</span>
+                  <span>Up to 10 photos per item on this sale (5 on the free plan)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-green-600 dark:text-green-400 mt-0.5">✓</span>
                   <span>No recurring charges</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 dark:text-green-400 mt-0.5">✓</span>
-                  <span>Full sale analytics</span>
                 </li>
               </ul>
               {selectedOption !== 'ala-carte' ? (
@@ -145,7 +159,7 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
                   onClick={handleAlaCarteClick}
                   className="inline-block px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
                 >
-                  Continue to Payment
+                  Upgrade this sale ($9.99)
                 </button>
               ) : (
                 <div className="space-y-3">
