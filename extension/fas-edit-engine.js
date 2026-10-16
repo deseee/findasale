@@ -844,12 +844,19 @@
         deferClick(cont1);
         return cont(3000, { hops: hops, priceSet: true, formSnap: true }, { diag: diag });
       }
+      // 2026-10-16: the edit flow lands on a PREVIEW page (publish / edit post / edit location / edit images / cancel edit). The price
+      // input only exists after "edit post". Without this the generic Publish click below re-published the listing UNCHANGED
+      // (listing "updated", price untouched). Never click publish until the price has been set.
+      if (!S.priceSet) {
+        var editPost = qa('input[type="submit"], button, a').filter(function (b) { return visible(b) && /^edit post$/.test(btnLabel(b)); })[0];
+        if (editPost) { deferClick(editPost); return cont(3000, { hops: hops }); }
+      }
       var editThis = qa('input[type="submit"], button, a').filter(function (b) { return visible(b) && /^edit this posting$/.test(btnLabel(b)); })[0];
       if (editThis && !S.priceSet) { deferClick(editThis); return cont(3000, { hops: hops }, { diag: S.manageSnap ? undefined : snapshot('cl_manage_page') }); }
       var imgDone = q('button.done') || findButton(/^done with images$/);
       if (imgDone) { deferClick(imgDone); return cont(3000, { hops: hops }); }
       var anyCont = q('button.continue') || findButton(/^(continue|publish|done|ok)$/) || qa('input[type="submit"]').filter(function (b) { return /^(continue|publish|done)/i.test(b.value || ''); })[0];
-      if (anyCont && (S.priceSet || hops > 1)) { deferClick(anyCont); return cont(3000, { hops: hops }); }
+      if (anyCont && S.priceSet) { deferClick(anyCont); return cont(3000, { hops: hops }); }
       if (!S.priceSet && hops >= 4) return fail('price_field_not_found', 'No input[name="price"] reached in the Craigslist edit flow (category may have no price field)', 'edit', 'input[name="price"]', { hops: hops });
       return cont(1500, { hops: hops });
     }
