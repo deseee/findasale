@@ -41,6 +41,28 @@
  * listings perform better with measurements added and they should add them manually.
  */
 (function () {
+  // Shared step narration / diagnostics (fas-trace.js). Every call is guarded so logging can never break the flow.
+  const T = {
+    begin(o) { try { if (window.FAS_TRACE) window.FAS_TRACE.begin(o); } catch (e) {} },
+    step(w, y, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.step(w, y, c); } catch (e) {} },
+    ok(m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.ok(m, c); } catch (e) {} },
+    info(k, m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.info(k, m, c); } catch (e) {} },
+    warn(k, m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.warn(k, m, c); } catch (e) {} },
+    error(k, m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.error(k, m, c); } catch (e) {} },
+    problem(o) { try { if (window.FAS_TRACE) window.FAS_TRACE.problem(o); } catch (e) {} },
+    end(m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.end(m, c); } catch (e) {} },
+  };
+  // What each form field is and why it is being filled, in plain language (shown in the FindA.Sale panel).
+  const GR_FIELD_NARR = {
+    'Title': ['Typing the item name', 'Grailed caps names at 60 characters, so long titles are shortened.'],
+    'Description': ['Writing the description', 'Copied from your FindA.Sale item.'],
+    'Color': ['Choosing the colour', 'Grailed has a fixed colour list, so your colour is matched to the closest entry.'],
+    'Size': ['Choosing the size', 'Grailed will not accept the listing without a size that fits the chosen category.'],
+    'Condition': ['Choosing the condition', 'Your FindA.Sale condition is translated to Grailed\'s own condition names.'],
+    'Style': ['Choosing the style', 'Grailed asks for a style tag; it is guessed from the brand and keywords, with "None" when nothing fits.'],
+    'Price': ['Entering the price', 'Copied from your FindA.Sale price, rounded to whole dollars.'],
+  };
+
   const LISTING_URL_HINT = 'https://www.grailed.com/sell'; // UNVERIFIED -- best-effort guess, not live-confirmed
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -522,13 +544,17 @@
   }
 
   async function tryFill(fieldLabel, value, fillFn) {
-    if (value === undefined || value === null || value === '') return false;
+    if (value === undefined || value === null || value === '') { T.info('field_empty', fieldLabel + ' has no value on the FindA.Sale item, left untouched'); return false; }
+    const nar = GR_FIELD_NARR[fieldLabel];
+    if (nar) T.step(nar[0], nar[1], { field: fieldLabel });
     try {
       const ok = await fillFn(value);
-      if (!ok) console.warn('[FAS Grailed] Field "' + fieldLabel + '" -- selector not found, skipped (UNVERIFIED -- confirm against live DOM).');
+      if (!ok) { console.warn('[FAS Grailed] Field "' + fieldLabel + '" -- selector not found, skipped (UNVERIFIED -- confirm against live DOM).'); T.warn('field_not_found', fieldLabel + ' was not found or could not be set on the Grailed form; skipped, please check it', { field: fieldLabel }); }
+      else T.ok(fieldLabel + ' set');
       return ok;
     } catch (e) {
       console.warn('[FAS Grailed] Field "' + fieldLabel + '" -- error while filling, skipped:', e && e.message);
+      T.error('field_error', fieldLabel + ' threw while filling: ' + ((e && e.message) || e), { field: fieldLabel });
       return false;
     }
   }
@@ -1598,6 +1624,7 @@
 
   function showReviewOverlay(item, index, total, photosOk, intlShipping, designerUnconfirmed, countryOriginStatus, publishBlocked, departmentGuessLabel) {
     const more = (index + 1) < total;
+    T.step('Waiting for you to review and click Publish', publishBlocked ? 'Some fields (category, designer or size) could not be set automatically, so auto-publish was skipped. Fix them, click Publish yourself, then press "I posted".' : 'Auto-publish is off for this item. Check every field, click Publish yourself, then press "I posted".', { photosOk: !!photosOk, publishBlocked: !!publishBlocked, designerUnconfirmed: !!designerUnconfirmed });
     scrollToGrailedPublishButton();
     // International shipping status line (BUG FIX 2026-08-19, S-EXT-BATCH, P1) -- see
     // disableInternationalShipping()'s comment. Three cases: regions found and turned off (safe,
@@ -1651,8 +1678,13 @@
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     const next = document.getElementById('fas-gr-next');
     if (next) next.onclick = async () => {
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('GRAILED', 0)), platform: 'GRAILED' }); } catch (e) {}
-      try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: item.id }); } catch (e) {}
+      T.step('Recording this listing as posted in FindA.Sale', 'You confirmed you posted it, so FindA.Sale marks the item as listed on Grailed.');
+      try {
+        const mlRes = await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('GRAILED', 0)), platform: 'GRAILED' });
+        if (mlRes && mlRes.ok === false) T.warn('mark_listed_failed', 'Backend did not accept markListed', { res: mlRes }); else T.ok('Backend markListed accepted', { res: mlRes && { ok: mlRes.ok } });
+      } catch (e) { T.warn('mark_listed_error', 'markListed message failed: ' + ((e && e.message) || e)); }
+      try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: item.id }); } catch (e) { T.warn('queue_advance_failed', 'advanceGrailedQueue failed: ' + ((e && e.message) || e)); }
+      T.end('Posted on Grailed (manual): ' + item.title);
       if (more) {
       // BUG FIX 2026-08-19 (S-EXT-BATCH, P0): ask background.js for a genuinely fresh tab
       // instead of an in-page location.href reassignment -- see background.js's
@@ -1702,9 +1734,11 @@
       // loud, so a future selector drift shows up immediately instead of masquerading as a
       // Designer/autoPublish-gate problem again.
       console.warn('[FAS Grailed] Auto-publish is on but the "Publish"/"List item" button could not be found on this page (UNVERIFIED selector) -- falling back to manual review. If Grailed has changed this button\'s label, that selector needs updating.');
+      T.warn('publish_button_not_found', 'Publish button not found on the page; falling back to manual review');
       showReviewOverlay(item, index, total, photosOk, intlShipping, false, countryOriginStatus);
       return;
     }
+    T.step('Clicking Grailed\'s Publish button', 'Everything required was filled, so the listing is published for you (up to 3 click attempts, each checked for a real effect).');
     overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
     await humanPause(500, 900);
     // BUG FIX 2026-08-25 round 15 (Patrick: "figure out exactly how to click that button... stop
@@ -1729,28 +1763,43 @@
       if (freshBtn) publishBtn = freshBtn;
     }
     if (!publishRegistered) {
+      T.problem({ code: 'grailed_publish_no_effect', title: 'Publish did not seem to work', what: 'Publish was clicked 3 times but the page never changed (no phone prompt, form still showing).', why: 'Grailed may be blocking submission on a missing required field, or the button label/behaviour changed.', next: 'Check this listing on Grailed before assuming it posted. It was NOT marked as listed in FindA.Sale.' });
+      T.end('Stopped: Publish had no visible effect');
       overlayWarn('Clicked <b>Publish</b> 3 times but never saw a change on the page (UNVERIFIED -- no phone-verification prompt, no form change) -- please check this listing on Grailed yourself before assuming it posted, and check the browser console for the exact reason each click attempt failed.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
       return;
     }
     if (looksLikePhoneVerification()) {
+      T.problem({ code: 'grailed_phone_verification', title: 'Grailed needs your phone verified', what: 'Grailed is asking you to verify your phone number before it accepts listings.', why: 'This is a one-time Grailed account requirement; FindA.Sale cannot and should not do it for you.', next: 'Verify your phone on Grailed, then click Publish yourself. It was NOT marked as listed in FindA.Sale.' });
+      T.end('Stopped: Grailed phone verification');
       overlayWarn('Grailed needs you to verify your phone number before it will accept this listing -- this is a one-time Grailed account requirement, not something FindA.Sale can or should do for you. Verify your phone on Grailed, then click <b>Publish</b> yourself for this listing (and future ones should auto-publish normally once this is done).' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
       return;
     }
+    T.step('Confirming Grailed accepted the listing', 'Waiting up to 6 seconds for Grailed to show the published listing.');
     const published = await waitForGrailedPublishConfirmation(6000);
     if (!published) {
       if (looksLikePhoneVerification()) {
+        T.problem({ code: 'grailed_phone_verification', title: 'Grailed needs your phone verified', what: 'Grailed is asking you to verify your phone number before it accepts listings.', why: 'This is a one-time Grailed account requirement; FindA.Sale cannot and should not do it for you.', next: 'Verify your phone on Grailed, then click Publish yourself. It was NOT marked as listed in FindA.Sale.' });
+        T.end('Stopped: Grailed phone verification');
         overlayWarn('Grailed needs you to verify your phone number before it will accept this listing -- this is a one-time Grailed account requirement, not something FindA.Sale can or should do for you. Verify your phone on Grailed, then click <b>Publish</b> yourself for this listing.' + button('fas-gr-close', 'Close', false));
         closeBtnHandler();
         return;
       }
+      T.problem({ code: 'grailed_publish_unconfirmed', title: 'Could not confirm the listing went live', what: 'Publish was clicked but Grailed never showed a confirmation.', why: 'The confirmation signal may have changed, or Grailed rejected the listing silently.', next: 'Check this listing on Grailed yourself. It was NOT marked as listed in FindA.Sale, so re-run it only if it is not live.' });
+      T.end('Stopped: publish not confirmed');
       overlayWarn('Clicked <b>List item</b> but couldn\'t confirm it went through (UNVERIFIED selector/confirmation signal) -- please check this listing on Grailed yourself before assuming it posted.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
       return;
     }
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('GRAILED', 3000)), platform: 'GRAILED' }); } catch (e) {}
-    try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: item.id }); } catch (e) {}
+    T.ok('Grailed confirmed the listing is live');
+    T.step('Recording this listing as posted in FindA.Sale', 'Marks the item as listed on Grailed so it is not posted twice and stays in sync.');
+    try {
+      const mlRes = await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('GRAILED', 3000)), platform: 'GRAILED' });
+      if (mlRes && mlRes.ok === false) T.warn('mark_listed_failed', 'Backend did not accept markListed', { res: mlRes }); else T.ok('Backend markListed accepted', { res: mlRes && { ok: mlRes.ok } });
+    } catch (e) { T.warn('mark_listed_error', 'markListed message failed: ' + ((e && e.message) || e)); }
+    try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: item.id }); } catch (e) { T.warn('queue_advance_failed', 'advanceGrailedQueue failed: ' + ((e && e.message) || e)); }
+    T.end('Published on Grailed: ' + item.title);
     const more = (index + 1) < total;
     // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET, same root cause as fas-poshmark.js's and
     // fas-mercari.js's identical fixes shipped same session): auto-publish must not wait on a
@@ -1772,6 +1821,7 @@
 
   function showDesignerNotFoundOverlay(item, index, total, designerValue) {
     const more = (index + 1) < total;
+    T.problem({ code: 'grailed_designer_not_found', title: 'Designer not on Grailed', what: 'The designer "' + designerValue + '" is not on Grailed\'s curated designer list.', why: 'Grailed only accepts designers from its own list, and FindA.Sale cannot add one.', next: 'This item is skipped and not marked as listed. List it by hand or ask Grailed to add the designer.' });
     overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#ffcf7a">Designer <b>' + escapeHtml(designerValue) +
       '</b> not found on Grailed\'s curated designer list -- list this item manually, or file a request with Grailed to add it. FindA.Sale can\'t add a new designer for you, so this item was skipped.</div>' +
       button('fas-gr-skip', more ? 'Skip — next item &#9654;' : 'Skip — done', true) +
@@ -1936,6 +1986,7 @@
 
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - filling the Grailed listing form...');
+    T.step('Filling in the listing details', 'Name, description, colour, size, condition, style and price go in first.');
     // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): live-confirmed real field label is "Item Name", not
     // "Title" -- fieldByLabel('Title') alone matched nothing on Patrick's real test. Tries both;
     // "Title" first in case a different Grailed page variant still uses it, "Item Name" as the
@@ -1999,13 +2050,20 @@
     // would have been filled after it. Wrapped to match the same skip-and-warn behavior as
     // everything else in this function.
     try {
-      await fillSmartPricingFloor(item);
+      T.step('Setting the Smart Pricing floor price', 'Grailed\'s Smart Pricing lowers prices automatically; the floor stops it going below the minimum you chose.');
+      const floorOk = await fillSmartPricingFloor(item);
+      if (floorOk === false) T.warn('floor_not_set', 'Smart Pricing floor was not set (no price/offer data or field not found); check it before publishing'); else T.ok('Smart Pricing floor handled');
     } catch (e) {
       console.warn('[FAS Grailed] Smart Pricing floor price -- error while filling, skipped:', e && e.message);
+      T.error('floor_error', 'Smart Pricing floor threw: ' + ((e && e.message) || e));
     }
+    T.step('Turning off international shipping', 'Grailed defaults every overseas region to a made-up $50 rate; it is switched off unless you set your own rate.');
     const intlShipping = await disableInternationalShipping();
+    if (intlShipping && intlShipping.anyFound) T.ok('International shipping checked', { disabled: !!intlShipping.anyDisabled }); else T.warn('intl_shipping_not_found', 'International shipping section not found; Grailed may still default to $50 per region');
     await humanPause(400, 800);
+    T.step('Uploading photos', 'Photos are added last on Grailed so the form is already filled when they land.', { photoCount: (item.photoUrls || []).length });
     const photosOk = await injectPhotos(item.photoUrls);
+    if (photosOk) T.ok('Photos handed to the Grailed uploader'); else T.warn('photos_not_attached', 'Photos could not be attached (none on the item, download failed, or no upload box found); add them by hand');
     return { photosOk, intlShipping, countryOriginStatus };
   }
 
@@ -2015,13 +2073,19 @@
     // confirmed SPA-hydration race this pattern is vulnerable to on every one of these 4 files.
     // Merged into a single poll: waits for either signal to become true instead of judging the
     // page's state from a single snapshot taken right as the content script loads.
+    T.step('Waiting for the Grailed listing form to load', 'Grailed builds the page in the browser, so the fields appear a few seconds after the page opens.');
     const formState = await waitForFormReady(8000);
+    if (formState === 'ready') T.ok('Listing form is ready');
     if (formState === 'interstitial') {
+      T.problem({ code: 'grailed_challenge', title: 'Grailed wants you to verify something', what: 'Grailed is showing a verification or security screen instead of the listing form.', why: 'FindA.Sale never tries to solve captchas or identity checks, that is a human step.', next: 'Complete the verification on the page, then reopen the extension to continue this item. Nothing was filled or published.' });
+      T.end('Stopped: Grailed verification screen');
       overlayWarn('Grailed is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
       return;
     }
     if (formState === 'timeout') {
+      T.problem({ code: 'grailed_form_not_found', title: 'Could not find the Grailed listing form', what: 'The listing form did not appear after waiting about 8 seconds.', why: 'Either this is not the new-listing page, the page is still loading, or Grailed changed its layout.', next: 'Nothing was filled. Fill this listing by hand, or reload the Sell page and reopen the extension. Use Copy diagnostics if it keeps happening.' });
+      T.end('Stopped: listing form not found');
       overlayWarn('This doesn\'t look like a fillable Grailed listing form yet (checked repeatedly for several seconds). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -2058,15 +2122,20 @@
       // only one of the four platforms with its own gender-level Department field, and that
       // signal ("men"/"women") only survives in the original breadcrumb, not in the clean leaf
       // name alone (see pickCategory's own comment above for the full explanation).
+      T.step('Choosing the Grailed category', 'Category comes before Designer because Grailed keeps the Designer box disabled until a category is set.', { category: item.category });
       const categoryResult = await pickCategory(item.category, item.categoryBreadcrumb, item);
+      if (categoryResult && categoryResult.ok) T.ok('Category set', { departmentGuess: categoryResult.departmentGuess || '' });
       if (!categoryResult.ok) {
+        T.warn('category_no_match', 'No Grailed category matched "' + item.category + '"; Designer may stay disabled and auto-publish is blocked', { category: item.category });
         publishBlocked = true;
         console.warn('[FAS Grailed] Category "' + item.category + '" -- no match found in the picker; Designer field may remain disabled as a result.');
       } else if (categoryResult.departmentGuess) {
+        T.warn('department_guessed', 'Department was guessed as ' + categoryResult.departmentGuess + ' because the item has no gender word; auto-publish blocked so you can confirm');
         departmentGuessLabel = categoryResult.departmentGuess;
         publishBlocked = true;
       }
     } else {
+      T.warn('no_category', 'This item has no category, so the category picker was skipped and Designer will likely be disabled');
       publishBlocked = true;
       console.warn('[FAS Grailed] No category on this item -- Category picker skipped, which will likely leave the Designer field disabled too.');
     }
@@ -2075,17 +2144,22 @@
     // anything else rather than leaving a half-filled, unsubmittable listing behind.
     let designerUnconfirmed = false;
     if (item.brand) {
+      T.step('Matching the designer "' + item.brand + '" on Grailed', 'Grailed only accepts designers from its own curated list, so the brand is typed and the matching suggestion is clicked.', { brand: item.brand });
       const designerResult = await fillDesigner(item.brand);
+      T.info('designer_result', 'fillDesigner returned ' + String(designerResult), { brand: item.brand });
+      if (designerResult !== 'typed_unconfirmed' && designerResult !== 'field_missing' && designerResult) T.ok('Designer matched');
       // BUG FIX 2026-08-19 (S-EXT-BATCH-7 follow-up): fillDesigner no longer returns 'no_match' --
       // see its own comment. 'typed_unconfirmed' means the text landed in the real field but the
       // suggestion click couldn't be confirmed; this is a soft flag surfaced on the review overlay
       // below, not a hard stop that blocks the rest of the form.
       if (designerResult === 'typed_unconfirmed') {
+        T.warn('designer_unconfirmed', 'Designer "' + item.brand + '" was typed but Grailed\'s suggestion could not be confirmed; click the right suggestion yourself');
         designerUnconfirmed = true;
         publishBlocked = true;
         console.warn('[FAS Grailed] Designer "' + item.brand + '" was typed into the field but the suggestion list could not be confirmed -- click the correct suggestion yourself before publishing.');
       }
       if (designerResult === 'field_missing') {
+        T.warn('designer_field_missing', 'Designer field not found (or still disabled); Grailed will block submission until a Designer is set');
         publishBlocked = true;
         console.warn('[FAS Grailed] Designer field not found (UNVERIFIED selector) -- continuing to fill the rest of the form, but Grailed will likely block submission without a Designer set.');
       }
@@ -2095,11 +2169,14 @@
       // now (previously did not) -- Grailed generally requires a Designer, so auto-clicking
       // Publish on a brand-less item is exactly the same unsafe bet as the Category-miss case
       // above, not a safe default.
+      T.warn('no_brand', 'This item has no brand, and Grailed requires a Designer; you will need to pick one by hand and auto-publish is blocked');
       publishBlocked = true;
       console.warn('[FAS Grailed] No brand/designer data on this item -- Grailed generally requires a Designer to be set; the organizer will need to pick one manually.');
     }
     const fillResult = await fillListing(item);
     if (looksLikeInterstitial()) {
+      T.problem({ code: 'grailed_challenge_midfill', title: 'Grailed asked you to verify mid-listing', what: 'A verification or security screen appeared partway through filling this listing.', why: 'FindA.Sale never solves verifications; it stops and hands control back to you.', next: 'Complete the verification, then finish this listing by hand. Nothing further was auto-filled and nothing was published.' });
+      T.end('Stopped: verification mid-listing');
       overlayWarn('Grailed is showing a verification/security screen partway through filling this listing. Please complete it yourself, then finish this listing manually -- nothing further was auto-filled.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -2110,6 +2187,7 @@
     // this was firing auto-publish on a completely blank Category/Designer/Size form before this
     // fix (Grailed's own required-field validation then blocked the real click's submission with
     // no diagnostic signal to the organizer).
+    T.info('publish_decision', 'autoPublish=' + !!autoPublish + ' publishBlocked=' + publishBlocked, { autoPublish: !!autoPublish, publishBlocked: publishBlocked, designerUnconfirmed: designerUnconfirmed });
     if (autoPublish && !publishBlocked) {
       await doGrailedAutoPublish(item, index, total, fillResult.photosOk, fillResult.intlShipping, fillResult.countryOriginStatus);
       return;
@@ -2122,6 +2200,8 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getGrailedQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+    T.begin({ platform: 'GRAILED', flow: 'post', item: { id: queued.item.id, title: queued.item.title }, itemPos: (queued.index + 1) + ' of ' + queued.total, ctx: { autoPublish: queued.autoPublish !== false } });
+    T.step('Checking the item is a fit for Grailed', 'Grailed only allows fashion and accessories; anything else is skipped to protect your account.');
 
     // SAFETY GATE 2026-09-03 -- fashion-only allowlist check, run as early as possible: right after
     // we know a real queued item exists, before the duplicate-listing-guard check and before any
@@ -2130,8 +2210,10 @@
     const grReason = grailedFashionMismatchReason(queued.item.category, queued.item.title);
     if (grReason) {
       console.warn('[FAS Grailed] skipping listing (fashion-only allowlist):', queued.item.id, queued.item.title, grReason);
+      T.problem({ code: 'grailed_not_fashion', title: 'Skipped: not a Grailed item', what: String(grReason), why: 'Grailed is a fashion-only marketplace and posting other items can get the account flagged.', next: 'Nothing was filled and the item was not marked as listed. Moving on to the next queued item, if any.', ctx: { category: queued.item.category } });
+      T.end('Skipped (not fashion): ' + (queued.item.title || ''));
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(grReason) + '</div>');
-      await humanPause(1200, 1800);
+      await humanPause(3500, 4500); // long enough to read the explanation modal
       // Never marks the item listed -- it genuinely was not posted, so it stays available for
       // other marketplaces. Just advances the local queue, same mechanism used everywhere else in
       // this file for a skip (see showDesignerNotFoundOverlay above).
@@ -2155,7 +2237,10 @@
     // platforms. Best-effort: falls through to the normal flow if the check itself fails.
     try {
       const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'GRAILED' });
+      T.info('dup_check', 'checkItemListedStatus result', { ok: !!(statusRes && statusRes.ok), listed: !!(statusRes && statusRes.listed) });
       if (statusRes && statusRes.ok && statusRes.listed) {
+        T.problem({ code: 'grailed_already_listed', title: 'Skipped: already on Grailed', what: 'FindA.Sale already shows this item as listed on Grailed.', why: 'Filling it again would create a duplicate listing.', next: 'Nothing was filled. Moving on to the next queued item, if any.' });
+        T.end('Skipped (already listed): ' + queued.item.title);
         const more = (queued.index + 1) < queued.total;
         try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: queued.item.id }); } catch (e) {}
         // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET): same fix as doGrailedAutoPublish
@@ -2163,7 +2248,7 @@
         if (more && queued.autoPublish !== false) {
           overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Grailed, so it was not filled or published again (avoiding a duplicate listing).</div>' +
             '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
-          await humanPause(600, 1200);
+          await humanPause(3500, 4500); // long enough to read the explanation modal
           try { await chrome.runtime.sendMessage({ type: 'reopenGrailedTab' }); } catch (e) {}
           return;
         }
@@ -2177,10 +2262,13 @@
         closeBtnHandler();
         return;
       }
-    } catch (e) { /* best-effort -- fall through to normal fill/publish flow */ }
+    } catch (e) { T.warn('dup_check_failed', 'Duplicate check failed, continuing: ' + ((e && e.message) || e)); }
+    T.ok('Item cleared for Grailed');
     try {
       await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
     } catch (e) {
+      T.problem({ code: 'grailed_unexpected_error', title: 'Something went wrong filling this listing', what: (e && e.message) || 'Unknown error', why: 'An unexpected error stopped the fill.', next: 'Nothing was published. Complete this listing yourself, or reopen the extension to try again. Use Copy diagnostics if you report it.' });
+      T.end('Stopped: unexpected error');
       overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
     }

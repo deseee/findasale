@@ -49,6 +49,15 @@
     } catch (e) { return empty; }
   }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  // Shared step narration + diagnostics (fas-trace.js). Guarded: a missing module or any logging error can never break the flow.
+  function FT(method) {
+    try {
+      const t = (typeof window !== 'undefined' && window.FAS_TRACE) || null;
+      if (t && typeof t[method] === 'function') return t[method].apply(t, Array.prototype.slice.call(arguments, 1));
+    } catch (e) { /* logging must never break the flow */ }
+    return undefined;
+  }
+  function ftRespCtx(r) { return { gotResponse: r != null, ok: r && r.ok, status: r && (r.status || r.httpStatus), error: r && r.error ? String(r.error).slice(0, 120) : undefined }; }
 
   // Gumtree Australia Prohibited Items gate (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- mirrors
   // craigslistRestrictionReason() in fas-craigslist.js, part of the same cross-marketplace audit
@@ -239,6 +248,7 @@
 
   async function reportLoginState() {
     const state = isLoggedIntoGumtreeAu();
+    FT('info', 'login_state', 'Gumtree AU sign-in state seen on this page: ' + (state === null ? 'unknown' : state ? 'signed in' : 'signed out'), { loggedIn: state });
     if (state === null) return;
     try { await chrome.runtime.sendMessage({ type: 'gumtreeAuLoginStateObserved', loggedIn: state }); } catch (e) {}
   }
@@ -289,13 +299,27 @@
   // phone/email/CAPTCHA verification. Never types credentials, never clicks a submit on this
   // screen -- just waits and offers a manual override in case the DOM heuristic above is wrong. ----
   function doSignInStep(item, index, total) {
+    FT('step', 'Waiting for you to sign in to Gumtree Australia', 'Gumtree hides its whole posting form until you are signed in, and FindA.Sale never types your login for you.', { index: index, total: total });
+    FT('problem', {
+      code: 'gt_sign_in_required',
+      title: 'Sign in to Gumtree Australia to continue',
+      what: 'Gumtree Australia is showing its sign-in screen, so FindA.Sale cannot see the posting form yet.',
+      why: 'Gumtree only shows the "post an ad" form to signed-in sellers. FindA.Sale never enters your password or verification codes for you.',
+      next: 'Close this, sign in on the page yourself, then press "I\'m signed in" in the FindA.Sale box to see this item\'s details ready to copy. Nothing has been posted or changed.',
+      ctx: { index: index, total: total }
+    });
     overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#cfe3d6">' +
       'Sign in to Gumtree Australia to continue -- FindA.Sale never enters your login for you.' +
       '</div>' +
       button('fas-gt-continue', "I'm signed in — show item details", true) +
       button('fas-gt-close', 'Close', false));
     const cont = document.getElementById('fas-gt-continue');
-    if (cont) cont.onclick = () => doAssistStep(item, index, total);
+    if (cont) cont.onclick = () => {
+      const stillWall = looksLikeSignInWall();
+      FT('info', 'user_confirmed_signed_in', 'You pressed "I\'m signed in"' + (stillWall ? ' but the page still looks like a sign-in screen' : ''), { stillLooksLikeSignInWall: stillWall });
+      if (stillWall) FT('warn', 'sign_in_wall_still_visible', 'The page still looks like a sign-in screen; showing the item details anyway because you confirmed.');
+      doAssistStep(item, index, total);
+    };
     closeBtnHandler();
   }
 
@@ -307,6 +331,7 @@
   // this flow right now). ----
   function doAssistStep(item, index, total) {
     const more = (index + 1) < total;
+    FT('step', 'Showing this item\'s details to copy into Gumtree', 'Gumtree\'s posting form has never been verified for auto-fill, so FindA.Sale will not guess at its fields; you paste the details and press post.', { index: index, total: total, photos: (item.photoUrls || []).length });
     const detailsText = itemDetailsText(item);
     const photoUrls = item.photoUrls || [];
     const photoNote = photoUrls.length
@@ -323,18 +348,30 @@
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
 
     const copyBtn = document.getElementById('fas-gt-copy');
-    if (copyBtn) copyBtn.onclick = () => copyToClipboard(detailsText, 'fas-gt-copy', 'Copied!');
+    if (copyBtn) copyBtn.onclick = async () => {
+      const ok = await copyToClipboard(detailsText, 'fas-gt-copy', 'Copied!');
+      FT(ok ? 'info' : 'warn', ok ? 'copy_details_ok' : 'copy_details_failed', ok ? 'Item details copied to the clipboard' : 'The browser blocked copying; select the text in the box and copy it by hand');
+    };
     const copyPhotosBtn = document.getElementById('fas-gt-copy-photos');
-    if (copyPhotosBtn) copyPhotosBtn.onclick = () => copyToClipboard(photoUrls.join('\n'), 'fas-gt-copy-photos', 'Copied!');
+    if (copyPhotosBtn) copyPhotosBtn.onclick = async () => {
+      const ok = await copyToClipboard(photoUrls.join('\n'), 'fas-gt-copy-photos', 'Copied!');
+      FT(ok ? 'info' : 'warn', ok ? 'copy_photos_ok' : 'copy_photos_failed', ok ? 'Photo links copied to the clipboard' : 'The browser blocked copying the photo links');
+    };
 
     const next = document.getElementById('fas-gt-next');
     if (next) next.onclick = async () => {
       // Same fire-and-forget markListed call fas-craigslist.js makes on its own "I posted"
       // confirm button -- remoteListingId stays null (Gumtree AU never exposes a listing id/url
       // back to this script since nothing here reads its post-submit response).
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('GUMTREE_AU', 0)), platform: 'GUMTREE_AU' }); } catch (e) {}
-      try { await chrome.runtime.sendMessage({ type: 'advanceGumtreeAuQueue' }); } catch (e) {}
-      if (more) { location.href = POST_URL; } else { bar && bar.remove(); }
+      FT('step', 'Recording that you posted this item', 'So FindA.Sale shows it as listed on Gumtree Australia, does not offer it again, and works out a renewal date.');
+      let mlResp = null;
+      try { mlResp = await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('GUMTREE_AU', 0)), platform: 'GUMTREE_AU' }); }
+      catch (e) { FT('warn', 'mark_listed_threw', 'Could not reach the FindA.Sale extension background to record the listing: ' + ((e && e.message) || 'unknown'), {}); }
+      if (mlResp && mlResp.ok === false) FT('warn', 'mark_listed_rejected', 'FindA.Sale could not record this listing (backend said no)', ftRespCtx(mlResp));
+      else FT('info', 'mark_listed_result', 'Recorded as listed on Gumtree Australia', ftRespCtx(mlResp));
+      try { await chrome.runtime.sendMessage({ type: 'advanceGumtreeAuQueue' }); } catch (e) { FT('warn', 'advance_queue_threw', 'Could not advance the Gumtree queue: ' + ((e && e.message) || 'unknown')); }
+      FT('ok', 'Item recorded as posted');
+      if (more) { FT('end', 'Recorded "' + String(item.title || '').slice(0, 40) + '". Opening the next item.'); location.href = POST_URL; } else { FT('end', 'All queued Gumtree Australia items are recorded.'); bar && bar.remove(); }
     };
     closeBtnHandler();
   }
@@ -355,6 +392,7 @@
   // pattern already used above for posting -- not a new risk, not a guess.
   function doRemovalAssistStep(item, index, total) {
     const more = (index + 1) < total;
+    FT('step', 'Asking you to delete the sold item from Gumtree Australia', 'This item sold on another channel. Gumtree\'s My Ads page has never been verified for automatic delete, so you delete it and FindA.Sale records it.', { index: index, total: total });
     overlay('<b>FindA.Sale</b>' +
       '<div style="margin-top:6px;font-size:13px;color:#cfe3d6">This item sold elsewhere -- <b>' + escapeHtml(item.title) + '</b> is still listed on Gumtree Australia. Please delete that listing yourself (My Ads &rarr; find it &rarr; Delete), then confirm below.</div>' +
       (more ? button('fas-gt-removed-next', 'I removed it — next item &#9654;', true) : button('fas-gt-removed-next', 'I removed it — done', true)) +
@@ -363,9 +401,15 @@
 
     const next = document.getElementById('fas-gt-removed-next');
     if (next) next.onclick = async () => {
-      try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'GUMTREE_AU' }); } catch (e) {}
-      try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'GUMTREE_AU' }); } catch (e) {}
-      if (more) { location.reload(); } else { bar && bar.remove(); }
+      FT('step', 'Recording that you removed the Gumtree listing', 'So FindA.Sale stops tracking it as live on Gumtree Australia.');
+      let rmResp = null;
+      try { rmResp = await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'GUMTREE_AU' }); }
+      catch (e) { FT('warn', 'mark_removed_threw', 'Could not reach the extension background to record the removal: ' + ((e && e.message) || 'unknown')); }
+      if (rmResp && rmResp.ok === false) FT('warn', 'mark_removed_rejected', 'FindA.Sale could not record the removal (backend said no)', ftRespCtx(rmResp));
+      else FT('info', 'mark_removed_result', 'Recorded the Gumtree removal', ftRespCtx(rmResp));
+      try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'GUMTREE_AU' }); } catch (e) { FT('warn', 'advance_removal_threw', 'Could not advance the removal queue: ' + ((e && e.message) || 'unknown')); }
+      FT('ok', 'Removal recorded');
+      if (more) { FT('end', 'Removal recorded. Loading the next item.'); location.reload(); } else { FT('end', 'All queued Gumtree removals are recorded.'); bar && bar.remove(); }
     };
     closeBtnHandler();
   }
@@ -374,9 +418,12 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'GUMTREE_AU' }); } catch (e) { return false; }
     if (!queued || !queued.ok || !queued.item) return false;
+    FT('begin', { platform: 'GUMTREE_AU', flow: 'remove', item: { id: queued.item.id, title: queued.item.title }, itemPos: (queued.index + 1) + ' of ' + queued.total });
     try {
       doRemovalAssistStep(queued.item, queued.index, queued.total);
     } catch (e) {
+      FT('error', 'removal_step_failed', 'Could not show the removal step: ' + ((e && e.message) || 'unknown'));
+      FT('problem', { code: 'gt_removal_step_failed', title: 'Could not show the Gumtree removal step', what: 'This item sold elsewhere and should come down from Gumtree Australia, but the extension hit an error showing its removal prompt.', why: (e && e.message) || 'Unknown error.', next: 'Delete the listing yourself (My Ads, find it, Delete). FindA.Sale will offer the removal again on a later run.' });
       overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a">Something went wrong showing the removal step. Please delete the listing yourself.</div>' + button('fas-gt-close', 'Close', false));
       closeBtnHandler();
     }
@@ -387,8 +434,11 @@
     await sleep(500); // let the page settle before reading the DOM
     reportLoginState(); // fire-and-forget, best-effort, mirrors fas-craigslist.js's reportLoginState
     let queued;
-    try { queued = await chrome.runtime.sendMessage({ type: 'getGumtreeAuQueueItem' }); } catch (e) { return; }
+    try { queued = await chrome.runtime.sendMessage({ type: 'getGumtreeAuQueueItem' }); } catch (e) { FT('info', 'queue_fetch_failed', 'Could not ask the extension for the Gumtree queue: ' + ((e && e.message) || 'unknown')); return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+    FT('begin', { platform: 'GUMTREE_AU', flow: 'post', item: { id: queued.item.id, title: queued.item.title }, itemPos: (queued.index + 1) + ' of ' + queued.total });
+    FT('info', 'queue_item', 'Got the next Gumtree Australia item from the queue', { index: queued.index, total: queued.total, hasCategory: !!queued.item.category, photos: (queued.item.photoUrls || []).length });
+    FT('step', 'Checking Gumtree\'s prohibited-items rules for this item', 'Weapons, alcohol, counterfeit goods and other restricted items are not allowed, and FindA.Sale stops those before showing them for posting.');
 
     // Gumtree Australia Prohibited Items gate (S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- checked
     // BEFORE run()/doAssistStep() ever displays the item's details for copy-paste, and before
@@ -403,13 +453,15 @@
     const gtReason = gumtreeAuRestrictionReason(queued.item.category, queued.item.title);
     if (gtReason) {
       console.warn('[FAS Gumtree AU] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, gtReason);
+      FT('problem', { code: 'gt_prohibited_item_skipped', title: 'Skipped: Gumtree does not allow this item', what: 'This item matches one of Gumtree Australia\'s restricted categories, so FindA.Sale skipped it.', why: gtReason, next: 'It was not shown for posting and was not marked as listed, so you can still send it to other channels. Moving on to the next queued item, if there is one.', ctx: { category: queued.item.category || '' } });
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(gtReason) + '</div>');
       await sleep(1500);
       try { await chrome.runtime.sendMessage({ type: 'advanceGumtreeAuQueue' }); } catch (e) {}
       const next = await (async () => { try { return await chrome.runtime.sendMessage({ type: 'getGumtreeAuQueueItem' }); } catch (e) { return null; } })();
-      if (next && next.ok && next.item) { location.href = POST_URL; } else { overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
+      if (next && next.ok && next.item) { location.href = POST_URL; } else { FT('end', 'Skipped the last queued item (prohibited on Gumtree). Queue finished.'); overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
       return;
     }
+    FT('ok', 'Item passed the prohibited-items check');
 
     run(queued.item, queued.index, queued.total);
   }

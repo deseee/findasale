@@ -16,6 +16,11 @@
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+  // Step narration + diagnostics (fas-trace.js). Guarded so a missing/broken trace module never affects the flow.
+  function T(fn) {
+    try { const t = window.FAS_TRACE; if (t && typeof t[fn] === 'function') return t[fn].apply(t, Array.prototype.slice.call(arguments, 1)); } catch (e) { /* tracing must never break the flow */ }
+  }
+
   function waitFor(getter, timeout = 12000) {
     return new Promise((resolve, reject) => {
       const first = getter();
@@ -93,7 +98,11 @@
   async function humanPause(minMs, maxMs) { await sleep(minMs + Math.random() * (maxMs - minMs)); }
 
   async function mark(item) {
-    try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id }); } catch (e) {}
+    try {
+      const r = await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id });
+      if (r && r.ok === false) T('warn', 'fb_remove_report_rejected', 'FindA.Sale did not accept the "removed" update.', { itemId: item.id, response: r });
+      else T('info', 'fb_remove_reported', 'Told FindA.Sale the Facebook listing is removed.', { itemId: item.id });
+    } catch (e) { T('error', 'fb_remove_report_failed', 'Could not tell FindA.Sale the listing was removed: ' + ((e && e.message) || e), { itemId: item.id }); }
   }
 
   // (2026-07-26 fix) Record a genuine skip (zero/ambiguous match, NOT already-sold) so the
@@ -103,7 +112,10 @@
   // getPendingRemovals to know this item has already failed N times. Fire-and-forget, same as
   // mark() -- a failed report here must never block the removal queue from advancing.
   async function markSkipped(item, reason) {
-    try { await chrome.runtime.sendMessage({ type: 'markItemRemovalSkipped', itemId: item.id, reason: reason || null }); } catch (e) {}
+    try {
+      const r = await chrome.runtime.sendMessage({ type: 'markItemRemovalSkipped', itemId: item.id, reason: reason || null });
+      T('info', 'fb_remove_skip_reported', 'Told FindA.Sale this removal was skipped (it will be retried later, and stops being retried after repeated failures).', { itemId: item.id, reason: reason || null, response: r && typeof r === 'object' ? { ok: r.ok, error: r.error } : null });
+    } catch (e) { T('error', 'fb_remove_skip_report_failed', 'Could not tell FindA.Sale the removal was skipped: ' + ((e && e.message) || e), { itemId: item.id }); }
   }
 
   // Removes one item's Facebook listing: finds the matching "Your listings" card by title
@@ -117,6 +129,7 @@
   // in time" is a skip, never a false "removed" mark. Card matching stays single-confident-title
   // only (listingCardByTitle returns null on zero/ambiguous) -- the wrong listing is never guessed.
   async function removeOne(item) {
+    T('step', 'Finding this listing on your selling page', 'Looking for exactly one active card titled "' + item.title + '". If there is not exactly one, nothing is touched, so the wrong listing is never marked sold.');
     const match = SEL.listingCardByTitle(item.title);
     if (!match) {
       // (2026-07-26 fix) Before treating "no active card with a 'Mark as sold' control" as a
@@ -128,10 +141,14 @@
       // already-done item got re-served and re-"failed" on every ~20-min poll forever.
       const alreadySold = SEL.alreadySoldCardByTitle(item.title);
       if (alreadySold) {
+        T('ok', 'Already marked sold on Facebook.');
         return { ok: true, alreadyDone: true };
       }
+      T('warn', 'fb_remove_card_not_found', 'No single active card for this title (and no matching Sold card) on the page.', { title: item.title });
       return { ok: false, reason: 'No confident match for this listing on the page (zero or more than one "' + item.title + '" found) -- skipped, not guessed.' };
     }
+    T('ok', 'Found the listing.');
+    T('step', 'Clicking "Mark as sold"', 'This item sold on FindA.Sale, so the Facebook listing has to be closed to avoid selling it twice.');
     await realClick(match.button);
 
     // Facebook's "Mark as sold" opens a multi-step SURVEY modal (DOM-verified live 2026-07-16),
@@ -147,12 +164,15 @@
       return null;
     }, 12000).catch(() => null);
 
+    if (!surveyDialog) T('warn', 'fb_remove_survey_missing', 'The "Did you sell this item?" window did not appear; looking for a plain confirm button instead.');
     if (surveyDialog) {
+      T('step', 'Answering Facebook\'s "Did you sell this item?"', 'Choosing "Yes, sold elsewhere" because it sold on FindA.Sale, so Facebook\'s own sold-on-Facebook numbers are not inflated.');
       // Pick "Yes, sold elsewhere" -- it sold on FindA.Sale, not on Facebook, so we must NOT
       // inflate FB's "sold on Facebook" metric. Fall back to "Yes, sold on Facebook" ONLY if the
       // accurate option is missing (FB copy change) -- never to "No"/"I'd rather not answer",
       // which would not remove the listing.
       let option = SEL.radioOptionByText('Yes, sold elsewhere') || SEL.radioOptionByText('Yes, sold on Facebook');
+      if (!option) T('warn', 'fb_remove_option_missing', 'Neither "Yes, sold elsewhere" nor "Yes, sold on Facebook" was found in the survey; Facebook\'s wording may have changed.');
       if (option) {
         await humanPause(300, 600);
         await realClick(option);
@@ -163,6 +183,7 @@
           const btn = SEL.elementByText('Next');
           return (btn && dialog.contains(btn)) ? btn : null;
         }, 6000).catch(() => null);
+        if (!nextBtn) T('warn', 'fb_remove_next_missing', 'The survey Next button never became available after choosing an answer.');
         if (nextBtn) {
           await humanPause(300, 600);
           await realClick(nextBtn);
@@ -184,9 +205,11 @@
       return null;
     }, 4000).catch(() => null);
     if (dialogConfirm) {
+      T('step', 'Confirming in Facebook\'s dialog', 'Clicking the final confirm button so the change is saved.');
       await humanPause(300, 600);
       await realClick(dialogConfirm);
     }
+    T('step', 'Checking that it really flipped to Sold', 'Waiting for the listing to leave the active list and stay gone for about a second, so a page refresh flicker is not mistaken for success.');
 
     // Success signal (2026-07-16 fix): FB re-renders the "Your listings" row after "Mark as sold",
     // DETACHING the original match.cardEl -- reading its stale textContent kept seeing the old
@@ -203,8 +226,10 @@
       { settleMs: 900, timeout: 12000 }
     );
     if (!confirmed) {
+      T('warn', 'fb_remove_unconfirmed', 'Clicked through the Mark as sold flow but the listing still shows as active after 12 seconds.');
       return { ok: false, reason: 'Clicked "Mark as sold" but couldn\'t confirm the listing flipped to Sold -- check it manually.' };
     }
+    T('ok', 'Facebook now shows the listing as sold.');
     return { ok: true };
   }
 
@@ -272,6 +297,7 @@
       await runRemovalQueue(item, index, total);
       return;
     }
+    T('info', 'fb_remove_navigate', 'Opening the selling page filtered to this title so the card is guaranteed to be in the list.', { index: index, total: total });
     window.location.href = buildTitleSearchUrl(item.title);
     // Real navigation is about to tear down this script's execution context -- nothing more to
     // do here; do not await/continue past this point.
@@ -279,9 +305,14 @@
 
   async function runRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> — removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>…');
-    const result = await removeOne(item);
+    T('begin', { platform: 'FACEBOOK', flow: 'remove', item: { id: item.id, title: item.title }, itemPos: (index + 1) + ' of ' + total });
+    let result;
+    try { result = await removeOne(item); }
+    catch (e) { result = { ok: false, reason: 'Unexpected error while removing: ' + ((e && e.message) || e) }; T('error', 'fb_remove_exception', result.reason); }
     if (result.ok) {
+      T('step', 'Telling FindA.Sale it is done', 'Recording the removal so this item is not queued for removal again.');
       await mark(item);
+      T('end', result.alreadyDone ? 'Already sold on Facebook; FindA.Sale synced.' : 'Removed from Facebook.');
       const doneLabel = result.alreadyDone
         ? 'Already marked sold on Facebook -- synced with FindA.Sale, nothing left to do.'
         : 'Removed <b>' + escapeHtml(item.title) + '</b> from Facebook.';
@@ -292,6 +323,16 @@
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(item.title) +
         '</b>: ' + escapeHtml(result.reason) + '</div>' +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (index + 1) + ' of ' + total + '</div>');
+      T('problem', {
+        code: 'fb_remove_skipped',
+        title: 'Facebook listing not removed',
+        what: result.reason,
+        why: 'The extension only acts when it can match exactly one listing, or confirm Facebook flipped it to Sold. Otherwise it stops rather than risk closing the wrong listing.',
+        next: 'This item was skipped and reported to FindA.Sale. It will be retried on a later check, and after repeated failures it stops being retried; you can also mark it sold on Facebook by hand.',
+        ctx: { itemId: item.id, position: (index + 1) + '/' + total }
+      });
+      T('end', 'Skipped: ' + result.reason);
+      await sleep(2500); // keep the explanation readable before the next navigation
     }
     await humanPause(1000, 1800);
     let next = null;
@@ -305,6 +346,7 @@
       // ensureFilteredThenRun above.
       await ensureFilteredThenRun(next.item, next.index, next.total);
     } else {
+      T('info', 'fb_remove_queue_done', 'Removal queue finished.');
       overlay('<b>FindA.Sale</b> — done removing sold items.');
       setTimeout(() => bar && bar.remove(), 4000);
       // Tell the background the queue is finished so silent ("Remove automatically") mode can
@@ -352,7 +394,11 @@
     // API outcome) reuses the SAME shared bar element and instantly overwrote it -- the error
     // was real but never visible. Moved the actual diagnostic (console.log + chrome.storage) to
     // background.js's markListed handler instead, which persists after this tab closes itself.
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'FACEBOOK' }); } catch (e) {}
+    try {
+      const r = await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'FACEBOOK' });
+      if (r && r.ok === false) T('warn', 'fb_renew_report_rejected', 'FindA.Sale did not accept the "renewed" update.', { itemId: item.id, response: r });
+      else T('info', 'fb_renew_reported', 'Told FindA.Sale the listing was renewed.', { itemId: item.id });
+    } catch (e) { T('error', 'fb_renew_report_failed', 'Could not tell FindA.Sale the listing was renewed: ' + ((e && e.message) || e), { itemId: item.id }); }
   }
 
   // (Scope note, 2026-08-09) Unlike markSkipped() for removal, this deliberately does NOT round-
@@ -387,6 +433,7 @@
     return null;
   }
   async function renewOne(item) {
+    T('step', 'Finding this listing on your selling page', 'Looking for exactly one card titled "' + item.title + '" that offers Facebook\'s own "Renew listing" button.');
     const match = SEL.renewButtonByTitle(item.title);
     if (!match) {
       // Distinguish "card not found at all" from "card found but no Renew button" (the 5-
@@ -399,24 +446,43 @@
         : 'No confident match for this listing on the page (zero or more than one "' + item.title + '" found) -- skipped, not guessed.';
       return { ok: false, reason };
     }
+    T('ok', 'Found the Renew listing button.');
+    T('step', 'Clicking "Renew listing"', 'Facebook\'s own free renew keeps the listing fresh without reposting it.');
     await humanPause(300, 600);
     await realClick(match.button);
     const toast = await waitFor(findRenewedToast, 6000).catch(() => null);
     if (!toast) {
+      T('warn', 'fb_renew_unconfirmed', 'Clicked Renew listing but the "Your listing has been renewed" message never appeared.');
       return { ok: false, reason: 'Clicked "Renew listing" but never saw the "Your listing has been renewed" confirmation -- check it manually.' };
     }
+    T('ok', 'Facebook confirmed the renewal.');
     return { ok: true };
   }
 
   async function runRenewalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> — renewing listing ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>…');
-    const result = await renewOne(item);
+    T('begin', { platform: 'FACEBOOK', flow: 'renew', item: { id: item.id, title: item.title }, itemPos: (index + 1) + ' of ' + total });
+    let result;
+    try { result = await renewOne(item); }
+    catch (e) { result = { ok: false, reason: 'Unexpected error while renewing: ' + ((e && e.message) || e) }; T('error', 'fb_renew_exception', result.reason); }
     if (result.ok) {
+      T('step', 'Telling FindA.Sale it was renewed', 'Pushing the next renewal date forward.');
       await markRenewed(item);
+      T('end', 'Renewed on Facebook.');
       overlay('<b>FindA.Sale</b><div style="margin-top:6px">Renewed <b>' + escapeHtml(item.title) + '</b> on Facebook.</div>' +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (index + 1) + ' of ' + total + '</div>');
     } else {
       await markRenewalSkipped(item, result.reason);
+      T('problem', {
+        code: 'fb_renew_skipped',
+        title: 'Facebook listing not renewed',
+        what: result.reason,
+        why: 'The extension only renews when it can match exactly one listing and see Facebook confirm it. If the listing hit Facebook\'s renewal cap, it needs Delete & relist, which is not automated.',
+        next: 'Nothing was changed. The renewal is tried again on the next check.',
+        ctx: { itemId: item.id, position: (index + 1) + '/' + total }
+      });
+      T('end', 'Renewal skipped: ' + result.reason);
+      await sleep(2500);
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(item.title) +
         '</b>: ' + escapeHtml(result.reason) + '</div>' +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (index + 1) + ' of ' + total + '</div>');
@@ -427,6 +493,7 @@
     if (next && next.ok && next.item) {
       await ensureFilteredThenRunRenewal(next.item, next.index, next.total);
     } else {
+      T('info', 'fb_renew_queue_done', 'Renewal queue finished.');
       overlay('<b>FindA.Sale</b> — done renewing listings.');
       setTimeout(() => bar && bar.remove(), 4000);
       // Shared tab-close signal with removal (see start()'s comment) -- not a separate message
@@ -442,6 +509,7 @@
       await runRenewalQueue(item, index, total);
       return;
     }
+    T('info', 'fb_renew_navigate', 'Opening the selling page filtered to this title before renewing.', { index: index, total: total });
     window.location.href = buildTitleSearchUrl(item.title);
   }
 
@@ -472,22 +540,33 @@
     if (!candidates.length) return; // nothing to check this cycle -- stay silent
 
     const soldCards = SEL.allSoldListingCards();
+    T('info', 'fb_sold_scan', 'Checked Facebook\'s sold listings against items still available on FindA.Sale.', { candidates: candidates.length, soldCards: soldCards.length });
     if (!soldCards.length) return; // nothing currently Sold on this page at all
 
     const matchedTitles = [];
+    let soldRunBegun = false;
     for (const candidate of candidates) {
       const match = matchSoldCardForTitle(candidate.title, soldCards);
       if (!match) continue; // zero/ambiguous match -- skip silently, re-checked next ~20-min cycle
+      if (!matchedTitles.length && !soldRunBegun) {
+        soldRunBegun = true;
+        T('begin', { platform: 'FACEBOOK', flow: 'sold-check', item: { id: candidate.id, title: candidate.title } });
+      }
       try {
-        await chrome.runtime.sendMessage({ type: 'markItemSoldFromFacebook', itemId: candidate.id });
+        T('step', 'Syncing a Facebook sale to FindA.Sale', 'This item shows as Sold on Facebook but is still available on FindA.Sale, so it is marked sold here to avoid selling it twice.', { itemId: candidate.id });
+        const r = await chrome.runtime.sendMessage({ type: 'markItemSoldFromFacebook', itemId: candidate.id });
+        if (r && r.ok === false) T('warn', 'fb_sold_sync_rejected', 'FindA.Sale did not accept the sold update.', { itemId: candidate.id, response: r });
+        else T('ok', 'FindA.Sale updated.', { itemId: candidate.id });
         matchedTitles.push(candidate.title);
       } catch (e) {
+        T('error', 'fb_sold_sync_failed', 'Could not report the Facebook sale to FindA.Sale: ' + ((e && e.message) || e), { itemId: candidate.id });
         // Fire-and-forget, same as mark()/markSkipped() above -- a context-invalidated throw
         // here (extension reloaded mid-scan) must not break the rest of the loop, and a failed
         // report just means this candidate gets re-checked on the next poll cycle.
       }
     }
 
+    if (soldRunBegun) T('end', matchedTitles.length ? 'Synced ' + matchedTitles.length + ' Facebook sale(s) to FindA.Sale.' : 'No sales could be synced.', { synced: matchedTitles.length });
     if (matchedTitles.length) {
       // Captured as a value (not re-read from the shared `bar` element later) so the cleanup
       // timer below can tell whether the removal-queue flow that runs right after this scan has
@@ -581,6 +660,16 @@
     // tab in silent mode; the popup shows the same message.
     const account = await waitForFacebookAccountState(5000);
     if (account.bad) {
+      T('begin', { platform: 'FACEBOOK', flow: 'remove' });
+      T('problem', {
+        code: /login/.test(account.bad) ? 'fb_account_login_wall' : /checkpoint/.test(account.bad) ? 'fb_account_checkpoint' : 'fb_account_unavailable',
+        title: 'Facebook account is not available',
+        what: 'Facebook showed a login, checkpoint or "Marketplace not available" page instead of your selling page (' + account.bad + ').',
+        why: 'You may be logged out, or Facebook has restricted or checked the account. The extension never tries to get past these.',
+        next: 'Facebook removals and renewals are paused so nothing keeps failing. Remove sold Facebook listings by hand, or log in / restore access and the extension resumes.',
+        ctx: { reason: account.bad }
+      });
+      T('end', 'Paused: Facebook account unavailable.');
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px">Facebook account unavailable, Facebook removals paused. ' +
         'Remove sold Facebook listings manually or restore access.</div>');
       try { await chrome.runtime.sendMessage({ type: 'facebookAccountUnavailable', reason: account.bad }); } catch (e) {}
@@ -588,6 +677,8 @@
     }
     if (account.ok) {
       try { await chrome.runtime.sendMessage({ type: 'facebookAccountHealthy' }); } catch (e) {}
+    } else {
+      T('info', 'fb_account_state_unknown', 'Selling page showed no card markers within 5 seconds (an empty list looks like this); continuing as normal.');
     }
     // (2026-08-09 restructure, ADR-100 -13) Sold-detection now runs against Facebook's own
     // OUT_OF_STOCK status-filter view (SOLD_STATUS_FILTER_URL above) instead of the full

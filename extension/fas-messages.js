@@ -59,6 +59,11 @@
     return;
   }
 
+  // Diagnostics (fas-trace.js). Guarded; log-only here, this script runs passively on many pages.
+  function T(fn) {
+    try { const t = window.FAS_TRACE; if (t && typeof t[fn] === 'function') return t[fn].apply(t, Array.prototype.slice.call(arguments, 1)); } catch (e) { /* never break the page script */ }
+  }
+
   function norm(s) {
     return (s || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
   }
@@ -143,20 +148,22 @@
   // confidence-gate reasoning and the documented residual-risk tradeoff). ----
   async function attemptRealSend(replyText) {
     const box = getComposeBox();
-    if (!box) return false;
+    if (!box) { T('warn', 'fb_msg_compose_missing', 'Facebook\'s message box was not found, so the reply could not be sent automatically.'); return false; }
     box.focus();
     const inserted = document.execCommand('insertText', false, replyText);
-    if (!inserted) return false;
+    if (!inserted) { T('warn', 'fb_msg_insert_failed', 'Could not type the reply into Facebook\'s message box; showing it as a suggestion instead.'); return false; }
     await new Promise((resolve) => setTimeout(resolve, 350));
     // Confidence gate: Facebook only renders this EXACT control once real text has
     // landed in the editor (confirmed live). Never click a different button, never
     // click blind -- if this isn't found, do not send.
     const sendBtn = document.querySelector('[aria-label="Press enter to send"]');
     if (!sendBtn) {
+      T('warn', 'fb_msg_send_control_missing', 'Typed the reply but Facebook\'s Send control did not appear, so nothing was sent. The reply is left in the box and shown as a suggestion.');
       console.warn('[FindA.Sale][fas-messages] send control not found after insert -- aborting autosend, leaving suggestion as advisory only.');
       return false;
     }
     sendBtn.click();
+    T('info', 'fb_msg_sent', 'Clicked Facebook\'s Send control for the automatic reply.');
     return true;
   }
 
@@ -260,27 +267,40 @@
     // FALLBACK: fuzzy body-text scan, only if the primary parse fails for any reason.
     let item = matchItemByExactTitle(payload.items || [], threadItemTitleFromComposeBox());
     if (!item) item = matchItemByTitle(payload.items || [], findThreadContextText(thread));
-    if (!item) return; // can't confidently match one item -- never guess.
+    if (!item) { T('info', 'fb_msg_no_item_match', 'New buyer message seen but it could not be matched to exactly one FindA.Sale item, so no reply was suggested.'); return; } // can't confidently match one item -- never guess.
 
     processing = true;
     lastHandledText = messageText;
+    // A real action starts here (we are about to ask the backend for a reply), so narrate it.
+    T('begin', { platform: 'FACEBOOK', flow: 'messages', item: { id: item.id, title: item.title } });
+    T('step', 'Preparing a reply to a buyer message', 'A buyer wrote about this item; asking FindA.Sale for a price/availability reply based on your thresholds.');
     try {
       const res = await send({ type: 'getMessageAutosendDecision', itemId: item.id, messageText });
       if (res && res.ok && res.data && res.data.replyText) {
+        T('info', 'fb_msg_decision', 'Backend returned a reply.', { autosend: res.data.autosend === true });
         if (res.data.autosend === true) {
+          T('step', 'Sending the automatic reply', 'Your thresholds say this reply is safe to send, so it is typed into the message box and sent.');
           const sent = await attemptRealSend(res.data.replyText);
           if (sent) {
+            T('end', 'Reply sent automatically.');
             renderSentConfirmation(res.data.replyText);
           } else {
+            T('end', 'Reply not sent; shown as a suggestion.');
             // Send control confidence gate failed (rare -- see file header) -- fall back
             // to advisory overlay so the organizer still sees and can send it themselves.
             renderSuggestion(res.data.replyText, true);
           }
         } else {
+          T('end', 'Suggested a reply for you to review (not sent).');
           renderSuggestion(res.data.replyText, false);
         }
+      } else {
+        T('info', 'fb_msg_no_reply', 'Backend gave no reply for this message (not a simple price/availability question, or request failed).', { ok: !!(res && res.ok), error: res && res.error });
+        T('end', 'No reply suggested.');
       }
     } catch (e) {
+      T('error', 'fb_msg_decision_failed', 'Reply request failed: ' + ((e && e.message) || e));
+      T('end', 'Reply request failed.');
       console.warn('[FindA.Sale][fas-messages] decision request failed:', e && e.message);
     } finally {
       processing = false;

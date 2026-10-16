@@ -291,8 +291,21 @@ async function loadEditSync() {
     $('editSyncResult').textContent = (await copyText(JSON.stringify(fasEditDiag, null, 1))) ? 'Edit diagnostics copied (form fields, button texts, network URLs per marketplace).' : 'Copy failed.';
   };
   $('editLogClearBtn').onclick = async () => {
-    await chrome.storage.local.remove(['fasEditLog', 'fasEditDiag']);
+    await chrome.storage.local.remove(['fasEditLog', 'fasEditDiag', 'fasTrace']);
     $('editSyncResult').textContent = 'Cleared.'; await renderEditSync();
+  };
+  const traceRecs = async () => { const { fasTrace = [] } = await chrome.storage.local.get(['fasTrace']); return fasTrace; };
+  $('traceViewBtn').onclick = async () => {
+    const box = $('traceLog');
+    if (!box.hidden) { box.hidden = true; return; }
+    const recs = (await traceRecs()).slice(-80).reverse();
+    box.innerHTML = recs.length ? recs.map((r) => '<div class="row ' + esc(r.lvl === 'error' ? 'error' : r.lvl === 'warn' ? 'warn' : '') + '">' + esc(timeAgo(r.t)) + ' \u00b7 ' + esc(r.plat || '') + (r.item ? ' \u00b7 ' + esc(r.item) : '') + ' \u00b7 ' + esc(r.code || r.lvl) + ': ' + esc(r.msg) + (r.step ? ' [' + esc(r.step) + ']' : '') + '</div>').join('') : '<div class="dim">No activity recorded yet.</div>';
+    box.hidden = false;
+  };
+  $('traceCopyBtn').onclick = async () => {
+    const recs = (await traceRecs()).slice(-250);
+    const ver = chrome.runtime.getManifest().version;
+    $('editSyncResult').textContent = (await copyText(JSON.stringify({ version: ver, when: new Date().toISOString(), records: recs }, null, 1))) ? 'Activity log copied (last ' + recs.length + ' steps).' : 'Copy failed.';
   };
   await renderEditSync();
 }

@@ -372,6 +372,40 @@
   }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+  // ---- FAS_TRACE wiring (extension 1.0.13): plain-language step narration + diagnostics. Every call is guarded so a missing or
+  // broken fas-trace.js can never break posting. Overlay bar (overlay()) is unchanged; the FAS_TRACE panel is additive.
+  function T() { try { return (typeof window !== 'undefined' && window.FAS_TRACE) || null; } catch (e) { return null; } }
+  function tBegin(queued) {
+    try { const t = T(); if (t) t.begin({ platform: 'POSHMARK', flow: 'post', item: { id: queued.item.id, title: queued.item.title }, itemPos: (queued.index + 1) + ' of ' + queued.total }); } catch (e) { /* never break posting */ }
+  }
+  function tStep(what, why, ctx) { try { const t = T(); if (t) t.step(what, why, ctx); } catch (e) { /* ignore */ } }
+  function tOk(msg, ctx) { try { const t = T(); if (t) t.ok(msg, ctx); } catch (e) { /* ignore */ } }
+  function tInfo(code, msg, ctx) { try { const t = T(); if (t) t.info(code, msg, ctx); } catch (e) { /* ignore */ } }
+  function tWarn(code, msg, ctx) { try { const t = T(); if (t) t.warn(code, msg, ctx); } catch (e) { /* ignore */ } }
+  function tError(code, msg, ctx) { try { const t = T(); if (t) t.error(code, msg, ctx); } catch (e) { /* ignore */ } }
+  function tProblem(o) { try { const t = T(); if (t) t.problem(o); } catch (e) { /* ignore */ } }
+  function tEnd(summary, ctx) { try { const t = T(); if (t) t.end(summary, ctx); } catch (e) { /* ignore */ } }
+
+  // markListed / advance wrappers: same messages as before, but the backend result is now always logged (ok flag, deduped, error).
+  async function fasPoshMarkListed(itemId, ref) {
+    ref = ref || {};
+    let res = null, err = null;
+    try {
+      res = await chrome.runtime.sendMessage({ type: 'markListed', itemId: itemId, remoteListingId: ref.remoteListingId || null, remoteListingUrl: ref.remoteListingUrl || null, platform: 'POSHMARK' });
+    } catch (e) { err = (e && e.message) || String(e); }
+    const ctx = { ok: !!(res && res.ok), deduped: !!(res && res.deduped), status: res && (res.status || res.httpStatus) || null, error: (res && res.error) || err || null, hasRemoteId: !!ref.remoteListingId, hasRemoteUrl: !!ref.remoteListingUrl };
+    if (res && (res.ok || res.deduped)) tInfo('mark_listed_ok', 'Told FindA.Sale this item is listed on Poshmark' + (res.deduped ? ' (already reported)' : ''), ctx);
+    else tWarn('mark_listed_failed', 'Could not tell FindA.Sale this item is listed on Poshmark (the item may be offered again later)', ctx);
+    return res;
+  }
+  async function fasPoshAdvance(itemId) {
+    let res = null, err = null;
+    try { res = await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: itemId }); } catch (e) { err = (e && e.message) || String(e); }
+    if (res && res.ok) tInfo('queue_advanced', 'Moved the queue to the next item', { alreadyAdvanced: !!res.alreadyAdvanced, index: res.index, total: res.total, hasNext: !!res.item });
+    else tWarn('queue_advance_failed', 'Could not advance the Poshmark queue', { error: (res && res.error) || err || 'no_response' });
+    return res;
+  }
+
   // ---- Prohibited Items pre-submit safety gate (SAFETY, added S-EXT-POSHMARK-PROHIBITED-GATE-
   // 2026-09-03 -- parity with fas-craigslist.js's craigslistRestrictionReason/CL_PROHIBITED_NAME_
   // KEYWORDS). Background: a dagger was auto-submitted to Facebook Marketplace because that
@@ -913,10 +947,11 @@
     if (value === undefined || value === null || value === '') return false;
     try {
       const ok = await fillFn(value);
-      if (!ok) console.warn('[FAS Poshmark] Field "' + fieldLabel + '" -- selector not found, skipped (UNVERIFIED -- confirm against live DOM).');
+      if (!ok) { console.warn('[FAS Poshmark] Field "' + fieldLabel + '" -- selector not found, skipped (UNVERIFIED -- confirm against live DOM).'); tWarn('field_not_set', fieldLabel + ' could not be set on the Poshmark form (field not found or value not accepted)', { field: fieldLabel }); }
       return ok;
     } catch (e) {
       console.warn('[FAS Poshmark] Field "' + fieldLabel + '" -- error while filling, skipped:', e && e.message);
+      tError('field_error', fieldLabel + ' hit an error while filling and was skipped', { field: fieldLabel, error: String((e && e.message) || e).slice(0, 160) });
       return false;
     }
   }
@@ -1858,12 +1893,13 @@
   // it to whatever file input the dropzone exposes. First photo in the array = cover shot,
   // matching the order the array already comes in (never reordered here).
   async function injectPhotos(urls) {
-    if (!urls || !urls.length) return false;
+    if (!urls || !urls.length) { tWarn('no_photos', 'This item has no photos to upload', {}); return false; }
     let resp;
-    try { resp = await chrome.runtime.sendMessage({ type: 'fetchPhotos', urls: urls.slice(0, 16) }); } catch (e) { return false; }
-    if (!resp || !resp.ok || !resp.dataUrls || !resp.dataUrls.length) return false;
+    try { resp = await chrome.runtime.sendMessage({ type: 'fetchPhotos', urls: urls.slice(0, 16) }); } catch (e) { tError('photo_fetch_failed', 'Could not download the item photos', { error: String((e && e.message) || e).slice(0, 120) }); return false; }
+    if (!resp || !resp.ok || !resp.dataUrls || !resp.dataUrls.length) { tWarn('photo_fetch_empty', 'The photo download returned nothing usable', { ok: !!(resp && resp.ok), count: resp && resp.dataUrls ? resp.dataUrls.length : 0, requested: Math.min(urls.length, 16) }); return false; }
     const input = photoInput();
-    if (!input) return false;
+    if (!input) { tWarn('photo_input_missing', 'Could not find Poshmark\'s photo upload box', { downloaded: resp.dataUrls.length }); return false; }
+    tInfo('photos_attaching', 'Attaching ' + resp.dataUrls.length + ' photo(s) to the listing', { requested: Math.min(urls.length, 16), downloaded: resp.dataUrls.length });
     const dt = new DataTransfer();
     resp.dataUrls.forEach((durl, i) => {
       const parts = durl.split(',');
@@ -1992,8 +2028,8 @@
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     const next = document.getElementById('fas-posh-next');
     if (next) next.onclick = async () => {
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('POSHMARK', 0)), platform: 'POSHMARK' }); } catch (e) {}
-      try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
+      await fasPoshMarkListed(item.id, await fasListingRef('POSHMARK', 0));
+      await fasPoshAdvance(item.id);
       if (more) { await navigateToPoshmarkCreateListing(); } else { clearPoshNavRetryState(); clearPoshPublishAttemptState(); bar && bar.remove(); }
     };
     closeBtnHandler();
@@ -2130,6 +2166,7 @@
     if (!publishBtn) {
       const nextBtn = findPoshmarkNextButton();
       if (nextBtn) {
+        tStep('Moving to the review step', 'Poshmark shows the final List button only after Next, so clicking Next');
         overlay('<b>FindA.Sale</b> - advancing to the review step...');
         await humanPause(400, 800);
         // BUG FIX 2026-09-01 (S-EXT-POSHMARK-PRICE-EMPTY-ROUND-3) -- one last re-check-and-refill
@@ -2143,6 +2180,7 @@
         // A real security/verification screen can appear after advancing, same as everywhere else
         // in this file -- never attempt to click through one.
         if (looksLikeInterstitial()) {
+          tProblem({ code: 'interstitial_after_next', title: 'Poshmark is asking for a security check', what: 'A verification screen appeared after clicking Next.', why: 'FindA.Sale never tries to solve these checks; only you can.', next: 'The listing was not published. Finish the check and complete this listing by hand.' });
           overlayWarn('Poshmark is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then finish this listing manually.' + button('fas-posh-close', 'Close', false));
           closeBtnHandler();
           return;
@@ -2155,9 +2193,18 @@
       // file header) -- never guess past this; fall back to the exact same manual-review path as
       // autoPublish=false. Whatever step Next already advanced to (if any) is left exactly as-is
       // for the organizer to finish.
+      tProblem({ code: 'publish_button_not_found', title: 'Could not find the final List button', what: 'The form was filled but Poshmark\'s final List this item button could not be found, so auto-publish stopped.', why: 'A required field may still be empty (Poshmark blocks Next until it is filled), or Poshmark changed its page.', next: 'Nothing was published. Review the form, fix anything highlighted and click List this item yourself.', ctx: { notes: (fillResult.fieldNotes || []).length, photosOk: !!photosOk } });
+      tEnd('Stopped: final List button not found; left for you to finish', {});
       showReviewOverlay(item, index, total, photosOk, fillResult.fieldNotes);
       return;
     }
+    // CLOSET-TITLE DUPLICATE GUARD, second pass (2026-10-16): right before the real click, re-check the live closet by exact title.
+    tStep('Last duplicate check', 'Looking at your live Poshmark closet one more time so this item is not published twice');
+    const preClick = await fasPoshClosetDupCheck(item);
+    if (preClick.state === 'dup') { await poshSkipAsDuplicate(item, index, total, true, preClick, 'before publish click'); return; }
+    if (preClick.state === 'failed') tWarn('closet_check_failed', 'Could not check your closet for duplicates before publishing (' + preClick.reason + '); continuing without it', { stage: 'before publish click', reason: preClick.reason });
+    else tOk('No live copy found in your closet');
+    tStep('Publishing', 'Clicking Poshmark\'s List this item button');
     overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
     await humanPause(500, 900);
     // BUG FIX 2026-08-29 (S-EXT-POSHMARK-DUPLICATE-PUBLISH-CLICK) -- write the local duplicate-click
@@ -2179,6 +2226,7 @@
       // Deliberately NOT clearing the publish-attempt marker here -- this is exactly the ambiguous
       // case the marker exists to protect against: we don't actually know whether the click went
       // through, so a future page load (e.g. this same tab bouncing afterward) must still see it.
+      tProblem({ code: 'publish_unconfirmed', title: 'Could not confirm the listing went live', what: 'List this item was clicked, but the form never went away, so FindA.Sale cannot tell whether Poshmark accepted it.', why: 'Poshmark may be showing an error or an extra confirmation the extension did not recognise.', next: 'The queue was NOT advanced and the item was NOT marked listed. Check your Poshmark closet; if it is there, it will be recognised as already listed next time.', ctx: { waitedMs: 15000 } });
       overlayWarn('Clicked <b>List this item</b> but couldn\'t confirm it went through (UNVERIFIED selector/confirmation signal) -- please check this listing on Poshmark yourself before assuming it posted.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -2187,8 +2235,12 @@
     // click is done (a later click for a DIFFERENT item id will never match this marker anyway, but
     // clearing here keeps the marker's lifecycle honest -- "live only while genuinely ambiguous").
     clearPoshPublishAttemptState();
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('POSHMARK', 3000)), platform: 'POSHMARK' }); } catch (e) {}
-    try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
+    tOk('Poshmark accepted the listing');
+    tStep('Telling FindA.Sale', 'Recording that this item is now listed on Poshmark so it is not posted again');
+    const postedRef = await fasListingRef('POSHMARK', 3000);
+    tInfo('listing_ref', postedRef.remoteListingId ? 'Captured the new Poshmark listing id' : 'Could not read the new listing id from the page (backend will fill it in later)', { hasId: !!postedRef.remoteListingId, hasUrl: !!postedRef.remoteListingUrl });
+    await fasPoshMarkListed(item.id, postedRef);
+    await fasPoshAdvance(item.id);
     // Record a run note (never blocks) for every field this run had to guess, skip, or couldn't
     // set -- see this function's own header comment. fillResult.fieldNotes already covers the
     // "Category never committed at all" and Size/Color cases (fillListing above); a confidently-
@@ -2201,6 +2253,7 @@
     for (const note of runNotes) {
       try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: note }); } catch (e) {}
     }
+    tEnd('Published to Poshmark' + (runNotes.length ? ' with ' + runNotes.length + ' note(s) to double-check' : ''), { notes: runNotes.length });
     const more = (index + 1) < total;
     // BUG FIX 2026-08-28 (S-EXT-POSHMARK-AUTOPUBLISH-STALL, Patrick live report: "poshmark
     // extension is only pushing one item at a time not multiples"): this function only runs when
@@ -2288,7 +2341,9 @@
     const priceNowEmpty = !priceEl || priceEl.value == null || priceEl.value === '';
     if (!priceNowEmpty) return;
     console.warn('[FAS Poshmark] Price was found empty ' + whenLabel + ' (cause still unconfirmed) -- re-filling once more.');
+    tWarn('price_cleared', 'Price was found empty ' + whenLabel + '; filling it again', { when: whenLabel, price: item.price });
     const recovered = await fillPoshmarkPrice(String(Math.max(1, Math.round(Number(item.price)))));
+    tInfo('price_refill', recovered ? 'Price re-filled' : 'Price re-fill failed', { recovered: !!recovered });
     if (recovered) {
       fieldNotes.push('Price was cleared by something else (' + whenLabel + ') -- caught and re-set to $' + item.price + ' automatically. Double-check it before publishing.');
     } else {
@@ -2302,6 +2357,7 @@
   // (data-et-name=one) / "Multi Item" (data-et-name=multiple) buttons; a Multi Item choice reveals the quantity input.
   // Both are best-effort and noted in fieldNotes when they do not take -- never block the fill.
   async function ensurePoshmarkShippingAndQuantity(item, fieldNotes) {
+    tStep('Shipping discount', 'Setting Shipping Discount to "No Discount" so the buyer pays shipping and the listing does not default to Free shipping');
     try {
       let none = null;
       for (let i = 0; i < 8 && !none; i++) {
@@ -2314,25 +2370,29 @@
         if (sel) { realClick(sel); await sleep(350); }
         realClick(none); await sleep(500);
         const shown = sel ? String(sel.innerText || '').trim() : '';
-        if (/free/i.test(shown)) fieldNotes.push('Shipping Discount still reads "' + shown.slice(0, 20) + '" -- set it to No Discount yourself before publishing.');
-        else console.log('[FAS Poshmark] Shipping Discount set to No Discount.');
+        if (/free/i.test(shown)) { fieldNotes.push('Shipping Discount still reads "' + shown.slice(0, 20) + '" -- set it to No Discount yourself before publishing.'); tWarn('shipping_discount_not_set', 'Shipping Discount still reads "' + shown.slice(0, 20) + '" after choosing No Discount', { shown: shown.slice(0, 20) }); }
+        else { console.log('[FAS Poshmark] Shipping Discount set to No Discount.'); tOk('Shipping Discount set to No Discount', { shown: shown.slice(0, 20) }); }
       } else {
         fieldNotes.push('Could not find the Shipping Discount options -- check that shipping is not set to Free before publishing.');
+        tWarn('shipping_discount_options_missing', 'Could not find the Shipping Discount options on the form', {});
       }
-    } catch (e) { console.warn('[FAS Poshmark] shipping step skipped:', e && e.message); }
+    } catch (e) { console.warn('[FAS Poshmark] shipping step skipped:', e && e.message); tError('shipping_step_error', 'Shipping Discount step hit an error and was skipped', { error: String((e && e.message) || e).slice(0, 160) }); }
     try {
       const qty = self.FAS_QTY ? self.FAS_QTY.itemQuantity(item) : 1;
       if (qty > 1) {
+        tStep('Quantity', 'This item has ' + qty + ' in stock, so switching Poshmark to Multi Item and entering the quantity', { qty: qty });
         const multi = document.querySelector('[data-et-name="multiple"]');
         if (multi) { realClick(multi); await sleep(700); }
         const r = self.FAS_QTY ? self.FAS_QTY.fillQuantity(item, { force: true }) : { filled: false };
-        if (!r.filled) fieldNotes.push('Quantity ' + qty + ' could not be entered (' + (r.reason || 'unknown') + ') -- set Multi Item and the quantity yourself.');
-      }
-    } catch (e) { console.warn('[FAS Poshmark] quantity step skipped:', e && e.message); }
+        if (!r.filled) { fieldNotes.push('Quantity ' + qty + ' could not be entered (' + (r.reason || 'unknown') + ') -- set Multi Item and the quantity yourself.'); tWarn('quantity_not_set', 'Quantity ' + qty + ' could not be entered', { qty: qty, reason: r.reason || 'unknown' }); }
+        else tOk('Quantity set to ' + qty);
+      } else { tInfo('quantity_single', 'Single item, quantity left at 1', { qty: qty }); }
+    } catch (e) { console.warn('[FAS Poshmark] quantity step skipped:', e && e.message); tError('quantity_step_error', 'Quantity step hit an error and was skipped', { error: String((e && e.message) || e).slice(0, 160) }); }
   }
 
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - filling the Poshmark listing form...');
+    tStep('Filling the form', 'Going through each section of the Poshmark listing: title, description, price, category, brand, size, color, condition, photos, shipping');
     // fieldNotes declared here (moved up from right before the Price block) so the Title
     // truncation note below can push to it too -- the rest of this function's own fieldNotes-
     // collection block (Category/Size/Color) appears further down.
@@ -2340,8 +2400,10 @@
     const poshTitle = truncatePoshmarkTitle(item.title);
     if (poshTitle !== (item.title || '')) {
       fieldNotes.push('Title was ' + (item.title || '').length + ' characters -- Poshmark\'s real limit is 80, so it was trimmed to fit. Double-check the trimmed title reads OK.');
+      tWarn('title_trimmed', 'Title was ' + (item.title || '').length + ' characters; trimmed to fit Poshmark\'s 80-character limit', { originalLen: (item.title || '').length, newLen: poshTitle.length });
     }
-    await tryFill('Title', poshTitle, (v) => fillText('Title', v));
+    tStep('Title', 'Typing the item title into the form (Poshmark allows up to 80 characters)', { len: poshTitle.length });
+    if (await tryFill('Title', poshTitle, (v) => fillText('Title', v))) tOk('Title set');
     // 2026-10-15 (Patrick: Poshmark stuck on the Camel sign): Poshmark's Description is REQUIRED, and tryFill skips an
     // empty value, so an item with no description left the field blank, Next was refused, and the run dropped to manual
     // review and stopped. An item with no description now gets a plain, truthful fallback built from its own title and
@@ -2351,10 +2413,13 @@
       const cond = String(item.conditionRaw || '').trim();
       poshDescription = poshTitle + '.' + (cond ? ' Condition: ' + cond + '.' : '') + ' Please see the photos for details and message me with any questions.';
       fieldNotes.push('This item had no description, so a short one was made from its title and condition -- add real detail on FindA.Sale when you can.');
+      tWarn('description_fallback', 'Item has no description; used a short one built from its title and condition because Poshmark requires one', {});
     }
-    await tryFill('Description', poshDescription, (v) => fillText('Description', v));
+    tStep('Description', 'Poshmark requires a description, so entering it now', { len: poshDescription.length });
+    if (await tryFill('Description', poshDescription, (v) => fillText('Description', v))) tOk('Description set');
     try { if (self.FAS_QTY) self.FAS_QTY.fillQuantity(item); } catch (e) { /* kits: best-effort Quantity field, never blocks */ }
     if (item.price != null && isFinite(Number(item.price))) {
+      tStep('Price', 'Entering the listing price (Poshmark takes whole dollars, minimum $1)', { price: item.price });
       const priceOk = await tryFill('Price', item.price, (v) => fillPoshmarkPrice(String(Math.max(1, Math.round(Number(v))))));
       // BUG FIX 2026-08-22 (S-EXT-POSHMARK-PRICE-ILLEGAL-INVOCATION, Patrick live-console-report):
       // Price is a REQUIRED Poshmark field with a known-correct value already on hand (no guessing
@@ -2364,6 +2429,9 @@
       // with no clear reason shown. Now surfaced explicitly in the run summary so it's never a
       // silent stall again.
       if (!priceOk) fieldNotes.push('Price could not be set (technical glitch, not a guess -- value $' + item.price + ' is correct) -- set it yourself and publish.');
+      else tOk('Price set to $' + Math.max(1, Math.round(Number(item.price))));
+    } else {
+      tWarn('price_missing', 'This item has no price, so the Price field was left empty', { price: item.price == null ? null : String(item.price) });
     }
     // Original/MSRP price deliberately skipped -- FindA.Sale carries no such data (never invent).
     // BUG FIX 2026-08-22 (P0, Patrick-directed -- screenshot showed "Please select the category
@@ -2380,13 +2448,18 @@
     // instead of a bare boolean -- see its own comment. categoryConfident is threaded out of this
     // function so run() can refuse to auto-publish a listing whose department was guessed.
     let categoryConfident = false;
+    tStep('Category', 'Choosing the closest Poshmark category; Size and Color unlock only after a category is picked', { category: item.category || '' });
     try {
       const genderHintText = [item.title, item.description].filter(Boolean).join(' ');
       const categoryResult = await pickCategory(item.category || '', item.categoryBreadcrumb, genderHintText, item);
       categoryCommitted = !!(categoryResult && categoryResult.committed);
       categoryConfident = !!(categoryResult && categoryResult.committed && categoryResult.confident);
+      if (categoryCommitted && categoryConfident) tOk('Category chosen');
+      else if (categoryCommitted) tWarn('category_guessed', 'No clear Poshmark category match; used the closest default and flagged it for you to double-check', { category: item.category || '' });
+      else tWarn('category_not_committed', 'Could not set a category; Size and Color will be skipped', { category: item.category || '' });
     } catch (e) {
       console.warn('[FAS Poshmark] Field "Category" -- error while filling, skipped:', e && e.message);
+      tError('category_error', 'Category step hit an error and was skipped', { error: String((e && e.message) || e).slice(0, 160) });
     }
     // FEATURE 2026-08-22 (S-EXT-POSHMARK-RUN-SUMMARY, Patrick-directed, extends the same
     // report-don't-block philosophy from Category to Size/Color): collects a plain-language note
@@ -2405,10 +2478,14 @@
     // items where the organizer hasn't set a value. Brand is a plain autocomplete field, not gated
     // by category on Poshmark's form (UNVERIFIED against a live account, but not the field named in
     // Patrick's report) -- kept unconditional.
-    await tryFill('Brand', item.brand, (v) => fillAutocomplete('Brand', v));
+    if (item.brand) { tStep('Brand', 'Typing the brand and picking it from Poshmark\'s suggestions', { brand: String(item.brand).slice(0, 40) }); if (await tryFill('Brand', item.brand, (v) => fillAutocomplete('Brand', v))) tOk('Brand set'); }
+    else tInfo('brand_skipped', 'No brand on this item; Brand left blank', {});
     if (categoryCommitted) {
+      if (item.size) tStep('Size', 'Picking the size from the list Poshmark shows for this category', { size: String(item.size).slice(0, 30) });
+      else tInfo('size_skipped', 'No size on this item; Size left blank (never guessed)', {});
       const sizeOk = await tryFill('Size', item.size, (v) => fillPoshmarkSize(v));
       if (item.size && !sizeOk) fieldNotes.push('Size "' + item.size + '" could not be set (UNVERIFIED selector) -- set it yourself.');
+      else if (item.size) tOk('Size set');
       // BUG FIX 2026-08-22 (S-EXT-POSHMARK-COLOR-DOUBLE-LOG, Patrick-flagged): fillPoshmarkColor
       // already logs its own specific reason ("no matching swatch found") when a value like "Neon"
       // has no real Poshmark option -- routing it through tryFill's generic wrapper ALSO logged a
@@ -2416,6 +2493,7 @@
       // found; the VALUE just didn't match anything). Called directly instead, skipping tryFill's
       // own undefined/null/'' guard is replicated inline since it's no longer wrapped.
       if (item.color) {
+        tStep('Color', 'Picking the matching color swatch', { color: String(item.color).slice(0, 30) });
         let colorOk = false;
         try { colorOk = await fillPoshmarkColor(item.color); } catch (e) { console.warn('[FAS Poshmark] Field "Color" -- error while filling, skipped:', e && e.message); }
         // FEATURE 2026-08-22 (S-EXT-POSHMARK-COLOR-FALLBACK, Patrick-directed: "guess and report"):
@@ -2430,17 +2508,21 @@
             try { colorOk = await fillPoshmarkColor(colorFallback); } catch (e) { console.warn('[FAS Poshmark] Field "Color" fallback -- error while filling, skipped:', e && e.message); }
           }
         }
-        if (!colorOk) fieldNotes.push('Color "' + item.color + '" has no matching Poshmark swatch and the fallback also failed -- set it yourself.');
-        else if (colorFallback) fieldNotes.push('Color "' + item.color + '" had no exact match -- used closest swatch "' + colorFallback + '" instead. Double-check it.');
+        if (!colorOk) { fieldNotes.push('Color "' + item.color + '" has no matching Poshmark swatch and the fallback also failed -- set it yourself.'); tWarn('color_not_set', 'Color "' + item.color + '" has no matching swatch and the fallback failed', { color: String(item.color).slice(0, 30), fallback: colorFallback }); }
+        else if (colorFallback) { fieldNotes.push('Color "' + item.color + '" had no exact match -- used closest swatch "' + colorFallback + '" instead. Double-check it.'); tWarn('color_fallback', 'Color "' + item.color + '" had no exact match; used "' + colorFallback + '"', { color: String(item.color).slice(0, 30), fallback: colorFallback }); }
+        else tOk('Color set');
       }
     }
     const conditionLabel = (window.__FAS_COND__ && window.__FAS_COND__.platformValue('poshmark', item)) || mapPoshmarkCondition(item.condition);
     // Condition is not the field Patrick's report named as blocked, and this file has no prior
     // finding that it's category-gated -- kept unconditional. If it also turns out to be locked
     // behind Category on a live account, gate it the same way as Size/Color above.
-    await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v));
+    tStep('Condition', 'Choosing the condition that matches this item', { condition: conditionLabel || null });
+    if (await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v))) tOk('Condition set');
     await humanPause(400, 800);
+    tStep('Photos', 'Uploading the item photos (Poshmark needs at least one before it will publish)', { count: (item.photoUrls || []).length });
     const photosOk = await injectPhotos(item.photoUrls);
+    if (photosOk) tOk('Photos attached'); else tWarn('photos_not_attached', 'Photos may not have attached; check the form', { count: (item.photoUrls || []).length });
     // BUG FIX 2026-08-31 (Patrick live report, 3rd distinct Price-empty item after the polling fix
     // above in fillPoshmarkPrice() -- Saturn telescope tab, extension confirmed freshly reloaded so
     // NOT stale code): the polling fix made fillPoshmarkPrice() find the field and set it
@@ -2463,12 +2545,15 @@
     // Logic is unchanged from the prior inline version -- this is a pure extraction, not a behavior
     // change, at this call site.
     await ensurePoshmarkShippingAndQuantity(item, fieldNotes);
+    tStep('Final price check', 'Making sure the price is still filled in after the photos finished processing');
     await ensurePoshmarkPriceHolds(item, fieldNotes, 'at end-of-fill (after photos)');
+    tOk('Form filled', { notes: fieldNotes.length });
     return { photosOk, categoryCommitted, categoryConfident, fieldNotes };
   }
 
   async function run(item, index, total, autoPublish) {
     if (looksLikeInterstitial()) {
+      tProblem({ code: 'interstitial_start', title: 'Poshmark is asking for a security check', what: 'Poshmark showed a verification or security screen before the listing form.', why: 'FindA.Sale never tries to solve these checks; only you can.', next: 'Nothing was filled or published. Finish the check yourself, then reopen the extension to continue.' });
       overlayWarn('Poshmark is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -2485,8 +2570,11 @@
     // BUG FIX 2026-08-19 (S-EXT-BATCH-5, P0): was a single immediate looksLikeSellForm() check --
     // see waitForFormReady()'s comment (fas-mercari.js) for the live-confirmed SPA-hydration race
     // this same pattern is vulnerable to on every one of these 4 files.
+    tStep('Opening the listing form', 'Waiting for Poshmark\'s create-listing page to finish loading so the fields can be filled');
     const formState = await waitForFormReady(8000);
+    tInfo('form_state', 'Listing form wait finished: ' + formState, { formState: formState });
     if (formState === 'interstitial') {
+      tProblem({ code: 'interstitial_form', title: 'Poshmark is asking for a security check', what: 'Poshmark showed a verification or security screen instead of the listing form.', why: 'FindA.Sale never tries to solve these checks; only you can.', next: 'Nothing was filled or published. Finish the check yourself, then reopen the extension to continue.' });
       overlayWarn('Poshmark is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -2504,6 +2592,7 @@
         const nextAttempt = retryState.attempt + 1;
         const waitMs = POSH_NAV_RETRY_BACKOFF_MS[retryState.attempt] || POSH_NAV_RETRY_BACKOFF_MS[POSH_NAV_RETRY_BACKOFF_MS.length - 1];
         console.log('[FAS Poshmark] Bounced off create-listing back to "' + location.pathname + '" -- retry ' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES + ' in ' + (waitMs / 1000) + 's...');
+        tWarn('create_listing_bounce', 'Poshmark bounced back to another page; retrying ' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES, { attempt: nextAttempt, max: POSH_NAV_MAX_RETRIES, waitMs: waitMs, path: location.pathname });
         overlayWarn('Poshmark bounced back to a different page mid-attempt -- retrying (' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES + ') in ' + (waitMs / 1000) + 's...');
         await sleep(waitMs);
         console.log('[FAS Poshmark] Retry ' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES + ' firing now -- navigating back to create-listing.');
@@ -2519,6 +2608,7 @@
       }
       clearPoshNavRetryState();
       clearPoshPublishAttemptState();
+      tProblem({ code: 'form_not_found', title: 'The Poshmark listing form did not load', what: 'The create-listing form never appeared after several seconds, so nothing was filled in.', why: 'Poshmark may have sent the tab to another page, may need a recent login in its mobile app, or changed its page layout.', next: 'Nothing was published. Open Poshmark\'s Sell page yourself and reopen the extension. Use Copy diagnostics to send this to support.', ctx: { path: location.pathname, bounceRetries: retryState ? retryState.attempt : 0 } });
       if (maybeShowAppLoginHint()) return;
       overlayWarn('This doesn\'t look like a fillable Poshmark listing form yet (checked repeatedly for several seconds). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
@@ -2529,11 +2619,13 @@
     // fillListing below, after this exact point, so the marker needs to stay live through the fill,
     // not just through the initial page-ready check.
     console.log('[FAS Poshmark] Form confirmed loaded -- proceeding to fill (bounce-retry marker kept live for the duration of this fill).');
+    tOk('Listing form is ready');
     const fillResult = await fillListing(item);
     const photosOk = fillResult.photosOk;
     // Re-check for an interstitial that may have appeared mid-fill (e.g. triggered by the photo
     // upload) before showing the "you're ready to review" state.
     if (looksLikeInterstitial()) {
+      tProblem({ code: 'interstitial_midfill', title: 'Poshmark is asking for a security check', what: 'A verification or security screen appeared partway through filling the listing.', why: 'FindA.Sale never tries to solve these checks; only you can.', next: 'The listing was not published. Finish the check yourself and complete this listing by hand.' });
       overlayWarn('Poshmark is showing a verification/security screen partway through filling this listing. Please complete it yourself, then finish this listing manually -- nothing further was auto-filled.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -2545,6 +2637,7 @@
     // not be a reason to stop the extension continuing forward." doPoshmarkAutoPublish now records
     // a run note instead of refusing to publish; see its own header comment.
     if (autoPublish) { await doPoshmarkAutoPublish(item, index, total, fillResult); return; }
+    tEnd('Form filled; waiting for you to review and click List this item (auto-publish is off)', { notes: (fillResult.fieldNotes || []).length });
     showReviewOverlay(item, index, total, photosOk, fillResult.fieldNotes);
   }
 
@@ -2553,6 +2646,8 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getPoshmarkQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) { clearPoshNavRetryState(); clearPoshPublishAttemptState(); return; } // nothing queued -- stay silent, also clean up any stale bounce-retry/publish-attempt markers
+    tBegin(queued);
+    tStep('Starting this item', 'Checking the Poshmark rules and your records before touching the form', { autoPublish: queued.autoPublish !== false, hasPhotos: !!(queued.item.photoUrls && queued.item.photoUrls.length), hasPrice: queued.item.price != null });
 
     // SAFETY 2026-09-03 (S-EXT-POSHMARK-PROHIBITED-GATE, parity with fas-craigslist.js's call site
     // for craigslistRestrictionReason): checked as early as possible -- right after we know an item
@@ -2565,14 +2660,17 @@
     const poshRestrictionReason = poshmarkRestrictionReason(queued.item.category, queued.item.title);
     if (poshRestrictionReason) {
       console.warn('[FAS Poshmark] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, poshRestrictionReason);
+      tWarn('prohibited_item_skip', 'Skipped: ' + poshRestrictionReason, { category: queued.item.category || '', reason: poshRestrictionReason });
+      tProblem({ code: 'prohibited_item_skip', title: 'Skipped: Poshmark does not allow this item', what: 'This item matches a Poshmark prohibited-items rule, so it was not filled in or published.', why: poshRestrictionReason, next: (queued.index + 1) < queued.total && queued.autoPublish !== false ? 'The item stays available for your other marketplaces. Moving on to the next item in a few seconds.' : 'The item stays available for your other marketplaces.', ctx: { category: queued.item.category || '' } });
+      tEnd('Skipped: prohibited on Poshmark', {});
       const more = (queued.index + 1) < queued.total;
-      try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
+      await fasPoshAdvance(queued.item.id);
       clearPoshNavRetryState();
       clearPoshPublishAttemptState();
       if (more && queued.autoPublish !== false) {
         overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(poshRestrictionReason) + '</div>' +
           '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
-        await humanPause(600, 1200);
+        await humanPause(4000, 5000);
         await navigateToPoshmarkCreateListing();
         return;
       }
@@ -2617,8 +2715,12 @@
       //                    success). Treated as published; the run continues.
       //   'interstitial' -- a real CAPTCHA/verification screen -- same hard-stop posture as
       //                    everywhere else in this file, never guessed past.
+      tWarn('publish_attempt_marker', 'This tab already clicked List this item for this item moments ago; checking what happened before doing anything', { ageSec: Math.round((Date.now() - publishAttempt.ts) / 1000) });
+      tStep('Checking the earlier publish click', 'The page reloaded right after List this item was clicked; checking whether it went through before touching anything');
       const outcomeState = await waitForFormReady(5000);
+      tInfo('publish_attempt_outcome', 'Earlier-click check: ' + outcomeState, { outcomeState: outcomeState });
       if (outcomeState === 'interstitial') {
+        tProblem({ code: 'interstitial_after_reload', title: 'Poshmark is asking for a security check', what: 'A verification screen is showing after the page reloaded.', why: 'FindA.Sale never tries to solve these checks; only you can.', next: 'Finish the check yourself, then reopen the extension to continue.' });
         overlayWarn('Poshmark is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-posh-close', 'Close', false));
         closeBtnHandler();
         return;
@@ -2630,10 +2732,12 @@
         // see advancePoshmarkQueue's own compare-and-swap), then continue the run forward instead of
         // stalling on manual review.
         console.log('[FAS Poshmark] Sell form did not reappear within 5s after reload -- treating the earlier "List this item" click as a successful publish and continuing the queue.');
+        tOk('The sell form did not come back, so the earlier click is treated as published');
         clearPoshPublishAttemptState();
         clearPoshNavRetryState();
-        try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, ...(await fasListingRef('POSHMARK', 1500)), platform: 'POSHMARK' }); } catch (e) {}
-        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
+        await fasPoshMarkListed(queued.item.id, await fasListingRef('POSHMARK', 1500));
+        await fasPoshAdvance(queued.item.id);
+        tEnd('Published (confirmed after a page reload)', {});
         const more = (queued.index + 1) < queued.total;
         if (more && queued.autoPublish !== false) {
           overlay('<b>FindA.Sale</b><div style="margin-top:6px">Confirmed <b>' + escapeHtml(queued.item.title) + '</b> published (this tab reloaded right after clicking List this item, and the sell form did not come back -- treating as a success).</div>' +
@@ -2652,6 +2756,7 @@
       // outcomeState === 'ready': the sell form is showing again -- genuinely ambiguous, can't
       // confirm the earlier click went through. Stays on the safe, conservative manual-review path
       // (unchanged behavior from before this fix).
+      tProblem({ code: 'publish_click_ambiguous', title: 'Not sure the earlier publish went through', what: 'List this item was clicked moments ago, but the page reloaded and a fresh empty form is showing, so FindA.Sale cannot tell whether it was published.', why: 'Posting again could create a duplicate listing.', next: 'Nothing was filled or published. Check your Poshmark closet, then use the button on the corner panel to continue the queue.' });
       overlayWarn('FindA.Sale already clicked <b>List this item</b> for <b>' + escapeHtml(queued.item.title) + '</b> moments ago on this tab, but this page reloaded before that could be confirmed, and a fresh listing form is showing again -- so it\'s not clear whether that click actually went through. To avoid creating a duplicate listing, please check your Poshmark closet for this item first -- if it\'s already there, click below to continue the queue; if not, list it manually then click below.' +
         button('fas-posh-dupe-ack', 'Got it -- continue queue', true) +
         button('fas-posh-close', 'Close', false));
@@ -2659,8 +2764,8 @@
       if (dupeAck) dupeAck.onclick = async () => {
         clearPoshPublishAttemptState();
         clearPoshNavRetryState();
-        try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, ...(await fasListingRef('POSHMARK', 0)), platform: 'POSHMARK' }); } catch (e) {}
-        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
+        await fasPoshMarkListed(queued.item.id, await fasListingRef('POSHMARK', 0));
+        await fasPoshAdvance(queued.item.id);
         location.reload();
       };
       closeBtnHandler();
@@ -2677,10 +2782,15 @@
     // backend hiccup), fall through to the normal flow rather than blocking the whole run on a
     // check that reduces, but was never the sole guarantee against, this risk.
     try {
+      tStep('Checking FindA.Sale records', 'Making sure this item is not already marked as listed on Poshmark');
       const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'POSHMARK' });
+      tInfo('listed_status_check', 'FindA.Sale record check finished', { ok: !!(statusRes && statusRes.ok), found: !!(statusRes && statusRes.found), listed: !!(statusRes && statusRes.listed), error: (statusRes && statusRes.error) || null });
+      if (!(statusRes && statusRes.ok)) tWarn('listed_check_failed', 'Could not read FindA.Sale\'s record of this item; continuing (the closet check below is the safety net)', { error: (statusRes && statusRes.error) || 'no_response' });
       if (statusRes && statusRes.ok && statusRes.listed) {
+        tProblem({ code: 'already_listed_record', title: 'Already listed on Poshmark', what: 'FindA.Sale\'s records say this item is already listed on Poshmark, so it was not filled in or published again.', why: 'This avoids creating a duplicate listing.', next: (queued.index + 1) < queued.total && queued.autoPublish !== false ? 'Nothing was published. Moving on to the next item in a few seconds.' : 'Nothing was published.' });
+        tEnd('Skipped: already listed per FindA.Sale records', {});
         const more = (queued.index + 1) < queued.total;
-        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
+        await fasPoshAdvance(queued.item.id);
         // BUG FIX 2026-08-28 (S-EXT-POSHMARK-AUTOPUBLISH-STALL, same root cause as
         // doPoshmarkAutoPublish's fix below): auto-publish must never wait on a manual click to
         // continue past a skipped (already-listed) item either -- auto-navigate straight to the
@@ -2688,8 +2798,8 @@
         if (more && queued.autoPublish !== false) {
           overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Poshmark, so it was not filled or published again (avoiding a duplicate listing).</div>' +
             '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
-          await humanPause(600, 1200);
-          location.href = POST_URL_HINT;
+          await humanPause(4000, 5000);
+          await navigateToPoshmarkCreateListing();
           return;
         }
         overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Poshmark, so it was not filled or published again (avoiding a duplicate listing).</div>' +
@@ -2700,10 +2810,17 @@
         closeBtnHandler();
         return;
       }
-    } catch (e) { /* best-effort -- fall through to normal fill/publish flow */ }
+    } catch (e) { tWarn('listed_check_failed', 'FindA.Sale record check errored; continuing (the closet check below is the safety net)', { error: String((e && e.message) || e).slice(0, 120) }); /* best-effort -- fall through to normal fill/publish flow */ }
+    // CLOSET-TITLE DUPLICATE GUARD, first pass (2026-10-16): ask Poshmark itself before filling anything.
+    tStep('Checking your Poshmark closet', 'Looking for a live listing with this exact title so the same item is never posted twice');
+    const dupFirst = await fasPoshClosetDupCheck(queued.item);
+    if (dupFirst.state === 'dup') { await poshSkipAsDuplicate(queued.item, queued.index, queued.total, queued.autoPublish !== false, dupFirst, 'before filling the form'); return; }
+    if (dupFirst.state === 'failed') tWarn('closet_check_failed', 'Could not check your closet for duplicates (' + dupFirst.reason + '); continuing without it. A second check runs right before publishing.', { stage: 'before filling the form', reason: dupFirst.reason });
+    else tOk('No live copy of this title in your closet');
     try {
       await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
     } catch (e) {
+      tProblem({ code: 'run_exception', title: 'Something went wrong filling this listing', what: 'An unexpected error stopped the listing partway.', why: String((e && e.message) || 'unknown error').slice(0, 160), next: 'Nothing was published by the extension. Complete this listing yourself, or reopen the extension to try again. Use Copy diagnostics to send details.', ctx: { error: String((e && e.stack || e && e.message) || e).slice(0, 300) } });
       overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
     }
@@ -2910,6 +3027,145 @@
       n++;
     }
     return q || String(title || '').slice(0, 40).trim();
+  }
+
+  // ---- CLOSET-TITLE DUPLICATE GUARD (2026-10-16) -------------------------------------------------------------------------------
+  // Root cause being closed: the only duplicate guard depended on a backend record (checkItemListedStatus) and failed OPEN, so a
+  // missing mark-listed or a REMOVE/REMOVED job row let the same item be published again (14 extra live duplicates were found in
+  // closet artifactm). This guard asks Poshmark itself: fetch the seller's live closet (same-origin, using the closet URL the
+  // script already resolves from the "My Closet" header link, cached in chrome.storage), and look for a live listing whose
+  // normalized title exactly equals the item's title (or the 80-char trimmed title that was actually posted; the same
+  // poshRemTitleMatches rules the removal flow uses). Evidence-based only: no invented endpoints. It reuses (a) the closet page and
+  // its `?query=<words>` search that the removal flow already relies on, parsed from the fetched HTML with the same card selectors,
+  // and (b) GET /vm-rest/posts/<id> (the endpoint fas-posh-shipping.js already uses) to confirm a matched card is still available.
+  // Returns {state:'dup', id, url, title} | {state:'clear', ...} | {state:'failed', reason}. Never throws. Fails OPEN on 'failed'.
+  const POSH_APP_VER = '2.55';
+  async function poshFetchText(url, deadline) {
+    const left = deadline - Date.now();
+    if (left < 1500) return { ok: false, status: 0, error: 'time_budget_exhausted' };
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => { try { ctl.abort(); } catch (e) {} }, Math.min(9000, left)) : null;
+    try {
+      const res = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/html,application/json' }, signal: ctl ? ctl.signal : undefined });
+      const text = await res.text();
+      return { ok: res.ok, status: res.status, text: text };
+    } catch (e) {
+      return { ok: false, status: 0, error: String((e && e.message) || e).slice(0, 100) };
+    } finally { if (timer) clearTimeout(timer); }
+  }
+  // Cards from a fetched HTML string, grouped by 24-hex listing id (same sources as poshRemCollectClosetCards, DOMParser edition).
+  function poshCardsFromHtml(html) {
+    const byId = new Map();
+    let doc = null;
+    try { doc = new DOMParser().parseFromString(html, 'text/html'); } catch (e) { return byId; }
+    const soldEl = /^\s*(sold|not for sale|nfs)\s*$/i;
+    doc.querySelectorAll('a[href*="/listing/"]').forEach((a) => {
+      const href = a.getAttribute('href') || '';
+      const id = extractPoshmarkListingId(href);
+      if (!id) return;
+      let abs = href; try { abs = new URL(href, location.origin).href; } catch (e) {}
+      if (!byId.has(id)) byId.set(id, { id: id, href: abs, texts: [], sold: false });
+      const entry = byId.get(id);
+      const push = (raw) => { const t = String(raw == null ? '' : raw); if (t.trim()) entry.texts.push(t); };
+      a.querySelectorAll('.tile-grid-redesign__title').forEach((el) => push(el.textContent));
+      a.querySelectorAll('img[alt]').forEach((img) => push(img.getAttribute('alt')));
+      if (!/covershot/i.test(a.className)) push(a.textContent);
+      // Sold / not-for-sale badge: only an element whose OWN text is exactly the badge text (never a title that contains "sold").
+      let node = a;
+      for (let up = 0; up < 4 && node; up++, node = node.parentElement) {
+        const ids = new Set(Array.from(node.querySelectorAll('a[href*="/listing/"]')).map((x) => extractPoshmarkListingId(x.getAttribute('href') || '')).filter(Boolean));
+        if (ids.size > 1) break;
+        node.querySelectorAll('[class*="sold" i],[class*="inventory-tag" i],[class*="not-for-sale" i],[class*="nfs" i]').forEach((b) => { if (soldEl.test(b.textContent || '')) entry.sold = true; });
+      }
+    });
+    return byId;
+  }
+  async function poshPostStatus(id, deadline) {
+    const r = await poshFetchText('/vm-rest/posts/' + id + '?app_version=' + POSH_APP_VER + '&_=' + Date.now(), deadline);
+    if (!r.ok) return { known: false, httpStatus: r.status, error: r.error || null };
+    try {
+      const j = JSON.parse(r.text);
+      const post = (j && (j.data || j.post)) || j;
+      const st = post && (post.status || (post.inventory && post.inventory.status));
+      return { known: typeof st === 'string', status: typeof st === 'string' ? st : null, httpStatus: r.status };
+    } catch (e) { return { known: false, httpStatus: r.status, error: 'bad_json' }; }
+  }
+  async function fasPoshClosetDupCheck(item) {
+    const t0 = Date.now();
+    const deadline = t0 + 20000;
+    const fail = (reason, ctx) => { const out = { state: 'failed', reason: reason, ms: Date.now() - t0 }; tInfo('closet_check_result', 'Closet check could not complete: ' + reason, Object.assign({ state: 'failed' }, ctx || {}, { reason: reason })); return out; };
+    try {
+      if (!poshRemNorm(item && item.title)) return fail('item_has_no_title');
+      const closetUrl = await resolvePoshmarkClosetUrl();
+      let path = '';
+      try { path = new URL(closetUrl, location.origin).pathname.replace(/\/+$/, ''); } catch (e) {}
+      if (!/^\/closet\/[^/]+$/.test(path)) return fail('no_closet_url', { closetUrl: closetUrl ? String(closetUrl).slice(0, 80) : null });
+      const base = new URL(path, location.origin).href;
+      const bare = await poshFetchText(base, deadline);
+      if (!bare.ok) return fail('closet_page_http_' + (bare.status || 'error'), { status: bare.status, error: bare.error || null });
+      const all = poshCardsFromHtml(bare.text);
+      if (!all.size) return fail('closet_html_has_no_listing_cards', { htmlBytes: (bare.text || '').length });
+      const queries = [];
+      [poshRemSearchQuery(item.title, 5), poshRemSearchQuery(item.title, 3)].forEach((q) => { if (q && queries.indexOf(q) === -1) queries.push(q); });
+      let queryOk = 0, queryFail = 0;
+      for (const qy of queries) {
+        const r = await poshFetchText(base + '?query=' + encodeURIComponent(qy), deadline);
+        if (!r.ok) { queryFail++; continue; }
+        queryOk++;
+        poshCardsFromHtml(r.text).forEach((e, id) => {
+          if (!all.has(id)) all.set(id, e);
+          else { const cur = all.get(id); cur.texts = cur.texts.concat(e.texts); cur.sold = cur.sold || e.sold; }
+        });
+      }
+      const matches = [];
+      all.forEach((e) => { if (e.texts.some((t) => poshRemTitleMatches(t, item.title))) matches.push(e); });
+      if (!matches.length && queryOk === 0) return fail('closet_search_pages_failed', { queries: queries.length, queryFail: queryFail });
+      let liveMatch = null;
+      const checked = [];
+      for (const m of matches.slice(0, 5)) {
+        const ps = await poshPostStatus(m.id, deadline);
+        let live;
+        if (ps.known) live = !/sold|not.?for.?sale|deleted|removed|draft|expired/i.test(ps.status);
+        else live = !m.sold;
+        checked.push({ id: m.id, cardSold: !!m.sold, apiStatus: ps.status || null, apiHttp: ps.httpStatus || null, live: live });
+        if (live && !liveMatch) liveMatch = m;
+      }
+      const ctx = { scanned: all.size, queries: queries.length, queryOk: queryOk, queryFail: queryFail, matches: matches.length, checked: checked, ms: Date.now() - t0 };
+      if (liveMatch) {
+        tInfo('closet_check_result', 'Found a live listing in your closet with the same title', Object.assign({ state: 'dup' }, ctx));
+        return { state: 'dup', id: liveMatch.id, url: liveMatch.href, ms: Date.now() - t0, ctx: ctx };
+      }
+      tInfo('closet_check_result', matches.length ? 'Same title found only on sold or inactive listings; safe to post' : 'No listing with this title in your closet; safe to post', Object.assign({ state: 'clear' }, ctx));
+      return { state: 'clear', ms: Date.now() - t0, ctx: ctx };
+    } catch (e) {
+      return fail('exception', { error: String((e && e.message) || e).slice(0, 140) });
+    }
+  }
+
+  // Skip an item that is already live in the closet: report the EXISTING listing to the backend (so it stops re-queueing), advance
+  // the queue like any other skip, and explain it. Nothing is published and nothing is deleted.
+  async function poshSkipAsDuplicate(item, index, total, autoPublish, dup, stage) {
+    const ctx = { stage: stage, existingListingId: dup.id, existingUrl: dup.url ? String(dup.url).slice(0, 120) : null, checks: dup.ctx || null };
+    tWarn('dup_closet_title', 'Already listed on Poshmark with the same title; skipped to avoid a duplicate', ctx);
+    clearPoshNavRetryState();
+    clearPoshPublishAttemptState();
+    tStep('Recording the existing listing', 'Telling FindA.Sale this item is already on Poshmark so it stops being queued');
+    await fasPoshMarkListed(item.id, { remoteListingId: dup.id, remoteListingUrl: dup.url });
+    await fasPoshAdvance(item.id);
+    tProblem({ code: 'dup_closet_title', title: 'Already listed on Poshmark', what: 'Your live Poshmark closet already has a listing with this exact title, so this item was skipped to avoid a duplicate.', why: 'Poshmark itself shows the item is live, even though FindA.Sale did not have a record of it. The existing listing was recorded in FindA.Sale.', next: (total && (index + 1) < total && autoPublish) ? 'Nothing was published or deleted. Moving on to the next item in a few seconds.' : 'Nothing was published or deleted.', ctx: ctx });
+    tEnd('Skipped: already live in your closet', { existingListingId: dup.id });
+    const more = (index + 1) < total;
+    const msg = '<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(item.title || 'this item') + '</b> -- it is already live in your Poshmark closet, so it was not published again.</div>';
+    if (more && autoPublish) {
+      overlay(msg + '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
+      await humanPause(4000, 5000);
+      await navigateToPoshmarkCreateListing();
+      return;
+    }
+    overlay(msg + (more ? button('fas-posh-next', 'Next item &#9654;', true) : '') + button('fas-posh-close', 'Close', false));
+    const next = document.getElementById('fas-posh-next');
+    if (next) next.onclick = async () => { await navigateToPoshmarkCreateListing(); };
+    closeBtnHandler();
   }
 
   // BUG FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-WRONG-PAGE, Patrick-directed live investigation --

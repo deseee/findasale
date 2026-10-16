@@ -3,7 +3,7 @@
  * Bearer token; (2) fetch item photos cross-origin (Cloudinary + eBay hosts) and
  * hand them to the content script as data URLs; (3) hold the listing queue.
  */
-importScripts('config.js', 'fas-edit-core.js', 'fas-listing-ref.js');
+importScripts('config.js', 'fas-trace.js', 'fas-edit-core.js', 'fas-listing-ref.js');
 const CFG = self.FAS_CONFIG;
 
 // FEATURE 2026-09-27 (S-EXT-VINTED-DEBUG-BRIDGE) -- see fas-vinted.js's matching postMessage
@@ -134,6 +134,29 @@ function fasLog(level, source, message, context, extra) {
   } catch (e) {
     // swallow -- logging must never break the calling flow
   }
+}
+
+// Worker-side trace record (fas-trace.js ring buffer shown in the popup's Activity log). o: { platform, flow, itemId, title, ctx }.
+// warn/error are also shipped to the backend runtime log, exactly like records sent from pages. Never throws; no-op without FAS_TRACE.
+function fasT(level, code, msg, o) {
+  try {
+    const T = self.FAS_TRACE;
+    if (!T || typeof T.ingest !== 'function') return;
+    o = o || {};
+    const rec = { t: Date.now(), lvl: level, plat: o.platform || '', flow: o.flow || '', run: '', item: String(o.title || '').slice(0, 70), itemId: o.itemId ? String(o.itemId) : '', step: '', code: code, msg: String(msg || ''), page: 'service-worker', ctx: o.ctx };
+    const worth = T.ingest(rec);
+    if (worth) fasLog(level === 'error' ? 'error' : 'warn', 'fasTrace', code + ': ' + String(msg || '').slice(0, 400), o.ctx || null, { platform: o.platform, itemId: o.itemId });
+  } catch (e) { /* tracing must never break the worker */ }
+}
+// Same, but at most once per `ms` per key (for skip decisions that would otherwise repeat on every poll tick).
+const fasTOnceAt = {};
+function fasTOnce(key, ms, level, code, msg, o) {
+  try {
+    const now = Date.now();
+    if (fasTOnceAt[key] && now - fasTOnceAt[key] < ms) return;
+    fasTOnceAt[key] = now;
+  } catch (e) { return; }
+  fasT(level, code, msg, o);
 }
 
 // Fetch one image and return a data URL (base64). Runs in the worker so cross-origin
@@ -1066,8 +1089,9 @@ async function fasEditWaitComplete(tabId, timeoutMs) {
   }
   return false;
 }
+// fas-trace.js is injected first so FAS_TRACE (step narration panel + diagnostics) exists before the engine runs; the engine works without it.
 async function fasEditExec(tabId, ctx) {
-  await chrome.scripting.executeScript({ target: { tabId: tabId }, files: ['fas-edit-core.js', 'fas-quantity.js', 'fas-edit-engine.js'] });
+  await chrome.scripting.executeScript({ target: { tabId: tabId }, files: ['fas-trace.js', 'fas-edit-core.js', 'fas-quantity.js', 'fas-edit-engine.js'] });
   const out = await chrome.scripting.executeScript({ target: { tabId: tabId }, func: (c) => self.FAS_EDIT_ENGINE.step(c), args: [ctx] });
   return out && out[0] ? out[0].result : null;
 }
@@ -1094,7 +1118,7 @@ function fasReportDiscoveredRemoteId(platform, itemId, rawId, state) {
 }
 
 // One item: drive the engine until it reports done / fail / blocked. Returns { state, code, reason, step, selector, scratch, diags, details }.
-async function fasEditApplyItem(tabId, platform, entry, state) {
+async function fasEditApplyItem(tabId, platform, entry, state, itemPos) {
   let scratch = {};
   const diags = [];
   const trail = [];
@@ -1110,7 +1134,7 @@ async function fasEditApplyItem(tabId, platform, entry, state) {
     if (urlBlock) return { state: 'blocked', code: urlBlock.code, reason: 'Tab landed on ' + FAS_EDIT_CORE.safeUrl(tab.url || ''), step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
     let res = null;
     try {
-      res = await fasEditExec(tabId, { platform: platform, item: entry, scratch: scratch, cfg: { MERC_EDIT_URL_PREFIX: CFG.MERC_EDIT_URL_PREFIX, MERC_MANAGE_URL: CFG.MERC_MANAGE_URL, GRAILED_MANAGE_URL: CFG.GRAILED_MANAGE_URL }, idCache: state.idCache, stepNo: i });
+      res = await fasEditExec(tabId, { platform: platform, item: entry, scratch: scratch, cfg: { MERC_EDIT_URL_PREFIX: CFG.MERC_EDIT_URL_PREFIX, MERC_MANAGE_URL: CFG.MERC_MANAGE_URL, GRAILED_MANAGE_URL: CFG.GRAILED_MANAGE_URL }, idCache: state.idCache, stepNo: i, itemPos: itemPos || '' });
     } catch (e) {
       errs++;
       if (errs > 3) return { state: 'fail', code: 'inject_failed', reason: String((e && e.message) || e).slice(0, 160) + ' @ ' + FAS_EDIT_CORE.safeUrl(tab.url || ''), step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
@@ -1135,7 +1159,9 @@ async function fasEditConfirm(platform, entry) {
     const r = platform === 'FACEBOOK'
       ? await apiFetch('/extension/items/' + encodeURIComponent(entry.id) + '/price-synced', { method: 'POST', body: {} })
       : await apiFetch('/extension/items/' + encodeURIComponent(entry.id) + '/price-synced-for-platform', { method: 'POST', body: { platform: platform } });
-    if (r && r.ok) return { ok: true };
+    const ep = platform === 'FACEBOOK' ? 'price-synced' : 'price-synced-for-platform';
+    if (r && r.ok) { fasT('info', 'confirm_ok', 'Told FindA.Sale the new value is verified on ' + platform + ' (/' + ep + ' HTTP ' + (r.status || 200) + ')', { platform: platform, flow: 'edit', itemId: entry.id, title: entry.title, ctx: { status: r.status || 200, attempt: attempt + 1 } }); return { ok: true }; }
+    fasT('warn', 'confirm_failed', 'FindA.Sale did not accept the verified-price report for ' + platform + ' (/' + ep + ' HTTP ' + (r && r.status) + ' ' + String((r && r.error) || '').slice(0, 80) + ')', { platform: platform, flow: 'edit', itemId: entry.id, title: entry.title, ctx: { status: r && r.status, error: r && r.error, attempt: attempt + 1 } });
     if (r && r.status === 404) return { ok: false, status: 404, error: r.error || 'not_found' };
     await sleep(1500);
   }
@@ -1158,7 +1184,17 @@ async function fasEditEnqueue(platform, rawEntries) {
   const pending = st[FAS_EDIT_PENDING_KEY] || {};
   pending[platform] = Array.isArray(rawEntries) ? rawEntries : [];
   await chrome.storage.local.set({ [FAS_EDIT_PENDING_KEY]: pending });
+  try {
+    // Logged only when the queued set changes, not on every poll tick.
+    const list = pending[platform];
+    const sig = list.map((r) => (r && r.id) + '@' + (r && (r.newPrice != null ? r.newPrice : r.price))).join(',');
+    if (list.length && fasTQueuedSig[platform] !== sig) {
+      fasT('info', 'items_queued', list.length + ' item(s) queued for a price/stock edit on ' + platform, { platform: platform, flow: 'edit', ctx: { count: list.length, items: list.slice(0, 10).map((r) => ({ id: r && r.id, price: r && (r.newPrice != null ? r.newPrice : r.price), qty: r && r.quantity, hasRemoteId: !!(r && (r.remoteListingId || r.remoteListingUrl)) })) } });
+    }
+    fasTQueuedSig[platform] = sig;
+  } catch (e) { /* ignore */ }
 }
+const fasTQueuedSig = {};
 
 async function fasEditRunLockFree() {
   const st = await chrome.storage.local.get([FAS_EDIT_RUN_KEY]);
@@ -1180,8 +1216,15 @@ async function fasEditPump() {
   if (fasEditPumping) return 'already_pumping';
   if (!(await fasEditRunLockFree())) return 'run_in_progress';
   fasEditPumping = true;
+  const pumpT0 = Date.now();
   try {
     const outcomes = [];
+    try {
+      const pst = await chrome.storage.local.get([FAS_EDIT_PENDING_KEY]);
+      const pcounts = {};
+      Object.keys(pst[FAS_EDIT_PENDING_KEY] || {}).forEach((k) => { const a = pst[FAS_EDIT_PENDING_KEY][k]; if (Array.isArray(a) && a.length) pcounts[k] = a.length; });
+      fasT('info', 'pump_start', 'Price/stock edit pump started', { flow: 'edit', ctx: { queued: pcounts } });
+    } catch (e) { /* ignore */ }
     for (;;) {
       const st = await chrome.storage.local.get([FAS_EDIT_PENDING_KEY]);
       const pending = st[FAS_EDIT_PENDING_KEY] || {};
@@ -1191,8 +1234,9 @@ async function fasEditPump() {
       delete pending[platform];
       await chrome.storage.local.set({ [FAS_EDIT_PENDING_KEY]: pending });
       try { outcomes.push(platform + ':' + (await fasEditRunPlatform(platform, entries))); }
-      catch (e) { outcomes.push(platform + ':error:' + String((e && e.message) || e).slice(0, 80)); await fasEditLogEntry('error', platform, null, 'run_exception', String((e && e.message) || e)); }
+      catch (e) { outcomes.push(platform + ':error:' + String((e && e.message) || e).slice(0, 80)); fasT('error', 'run_exception', 'The ' + platform + ' edit run crashed: ' + String((e && e.message) || e).slice(0, 200), { platform: platform, flow: 'edit' }); await fasEditLogEntry('error', platform, null, 'run_exception', String((e && e.message) || e)); }
     }
+    fasT('info', 'pump_end', 'Price/stock edit pump finished: ' + (outcomes.join(', ') || 'nothing queued'), { flow: 'edit', ctx: { outcomes: outcomes, ms: Date.now() - pumpT0 } });
     return outcomes.join(',') || 'nothing_queued';
   } finally {
     fasEditPumping = false;
@@ -1201,12 +1245,12 @@ async function fasEditPump() {
 
 async function fasEditRunPlatform(platform, rawEntries) {
   const Core = FAS_EDIT_CORE;
-  if (await fasIsPlatformPaused(platform)) return 'paused';
-  if (platform === 'FACEBOOK' && (await getPlatformUnavailable('FACEBOOK'))) return 'facebook_account_unavailable';
+  if (await fasIsPlatformPaused(platform)) { fasTOnce('skip_paused_' + platform, 30 * 60 * 1000, 'info', 'run_skipped', platform + ' edits skipped: this marketplace is paused in the extension', { platform: platform, flow: 'edit', ctx: { reason: 'paused', queued: rawEntries.length } }); return 'paused'; }
+  if (platform === 'FACEBOOK' && (await getPlatformUnavailable('FACEBOOK'))) { fasTOnce('skip_fbunavail', 30 * 60 * 1000, 'warn', 'run_skipped', 'Facebook edits skipped: the Facebook account is flagged unavailable', { platform: platform, flow: 'edit', ctx: { reason: 'account_unavailable', queued: rawEntries.length } }); return 'facebook_account_unavailable'; }
   const state = await fasEditGetState();
   const now = Date.now();
   const pb = state.platformBackoff[platform];
-  if (pb && pb.until > now) return 'platform_backoff_until_' + new Date(pb.until).toISOString();
+  if (pb && pb.until > now) { fasTOnce('skip_backoff_' + platform, 30 * 60 * 1000, 'info', 'platform_backoff', platform + ' edits are waiting out a backoff after an earlier block (until ' + new Date(pb.until).toISOString() + ')', { platform: platform, flow: 'edit', ctx: { until: pb.until, blocks: pb.count, queued: rawEntries.length } }); return 'platform_backoff_until_' + new Date(pb.until).toISOString(); }
   const all = rawEntries.map((r) => Core.normalizeEntry(r, platform)).filter((e) => Core.hasWork(e) || (e.id && !e.priceDrift));
   // Quantity-only drift on a one-unit-per-listing marketplace: nothing to write -- confirm so the drift clears, no tab needed.
   const trivial = all.filter((e) => !e.priceDrift && !Core.wantsQuantity(platform, e));
@@ -1215,11 +1259,16 @@ async function fasEditRunPlatform(platform, rawEntries) {
     await fasEditLogEntry(c.ok ? 'info' : 'warn', platform, e, c.ok ? 'quantity_not_applicable' : 'confirm_failed', c.ok ? 'One unit per listing here; stock number acknowledged, nothing to edit' : 'Could not acknowledge stock: ' + (c.error || c.status));
   }
   const work = all.filter((e) => Core.hasWork(e) && (e.priceDrift || Core.wantsQuantity(platform, e))).filter((e) => Core.shouldAttempt(state.items[platform + ':' + e.id], now));
-  if (!work.length) return trivial.length ? 'acknowledged_' + trivial.length : 'nothing_due';
+  if (!work.length) {
+    if (trivial.length) fasT('info', 'stock_acknowledged', trivial.length + ' stock-only change(s) acknowledged on ' + platform + ' (one unit per listing, nothing to edit)', { platform: platform, flow: 'edit', ctx: { count: trivial.length } });
+    else if (all.length) fasTOnce('skip_notdue_' + platform, 30 * 60 * 1000, 'info', 'run_skipped', platform + ': ' + all.length + ' item(s) queued but none are due yet (retry backoff)', { platform: platform, flow: 'edit', ctx: { queued: all.length } });
+    return trivial.length ? 'acknowledged_' + trivial.length : 'nothing_due';
+  }
   const stamps = Core.pruneHourly(state.hourly[platform], now);
   const allow = Core.allowance(platform, stamps, now);
-  if (allow <= 0) return 'hourly_cap_reached';
+  if (allow <= 0) { fasTOnce('skip_cap_' + platform, 30 * 60 * 1000, 'info', 'hourly_cap', platform + ' edits skipped: hourly safety cap reached (' + stamps.length + ' edits in the last hour)', { platform: platform, flow: 'edit', ctx: { editsLastHour: stamps.length, queued: work.length } }); return 'hourly_cap_reached'; }
   const batch = work.slice(0, allow);
+  fasT('info', 'platform_run_start', 'Starting ' + platform + ' edits: ' + batch.length + ' item(s)' + (work.length > batch.length ? ' (' + (work.length - batch.length) + ' more wait for the hourly cap)' : ''), { platform: platform, flow: 'edit', ctx: { items: batch.slice(0, 10).map((e) => ({ id: e.id, price: e.priceDrift ? e.price : null, qty: e.quantityDrift ? e.quantity : null, hasRemoteId: !!e.remoteListingId })) } });
 
   const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const prevTabId = activeTabs && activeTabs[0] ? activeTabs[0].id : null;
@@ -1233,10 +1282,12 @@ async function fasEditRunPlatform(platform, rawEntries) {
       const key = platform + ':' + entry.id;
       // keep the lock fresh for long runs
       await chrome.storage.local.set({ [FAS_EDIT_RUN_KEY]: { platform: platform, tabId: tab.id, prevTabId: prevTabId, startedAt: Date.now() } });
-      const res = await fasEditApplyItem(tab.id, platform, entry, state);
+      const itemT0 = Date.now();
+      const res = await fasEditApplyItem(tab.id, platform, entry, state, (i + 1) + ' of ' + batch.length);
       stamps.push(Date.now());
       state.hourly[platform] = stamps;
       const diagRecord = { t: Date.now(), platform: platform, itemId: entry.id, title: String(entry.title || '').slice(0, 60), outcome: res.state, code: res.code || '', step: res.step || '', selector: res.selector || '', reason: res.reason || '', trail: res.trail, snapshots: res.diags, details: res.details };
+      fasT(res.state === 'done' ? 'info' : 'warn', 'item_' + res.state, (res.state === 'done' ? 'Verified ' : 'Did not finish ') + 'edit of "' + String(entry.title || '').slice(0, 50) + '" on ' + platform + (entry.priceDrift ? ' (target $' + Core.formatPrice(platform, entry.price) + (res.scratch && res.scratch.oldPrice != null ? ', was $' + res.scratch.oldPrice : '') + ')' : '') + (res.code ? ': ' + res.code : ''), { platform: platform, flow: 'edit', itemId: entry.id, title: entry.title, ctx: { outcome: res.state, code: res.code, reason: res.reason, step: res.step, selector: res.selector, trail: res.trail, ms: Date.now() - itemT0, remoteId: res.scratch && res.scratch.remoteId, candidates: res.details && res.details.candidates } });
       if (res.scratch && res.scratch.remoteId && /^[0-9a-z]+$/i.test(String(res.scratch.remoteId))) state.idCache[key] = String(res.scratch.remoteId);
       // 1.0.7 after-the-fact capture: the engine found (and, on 'done', verified) this item's live listing by
       // title; record its id on the backend (set-once, idempotent) so later edits go straight to it. Covers
@@ -1262,6 +1313,7 @@ async function fasEditRunPlatform(platform, rawEntries) {
         const cnt = ((state.platformBackoff[platform] && state.platformBackoff[platform].count) || 0) + 1;
         state.platformBackoff[platform] = { until: Date.now() + Core.backoffMs(cnt, Math.random()), count: cnt };
         stopped = res.code;
+        fasT('warn', 'platform_backoff_set', platform + ' edits stopped for this run and backed off until ' + new Date(state.platformBackoff[platform].until).toISOString() + ' (' + res.code + ')', { platform: platform, flow: 'edit', ctx: { code: res.code, until: state.platformBackoff[platform].until, blocks: cnt, remaining: batch.length - i - 1 } });
         await fasEditLogEntry('error', platform, entry, res.code, 'Run stopped: ' + res.reason + '. ' + Core.LABELS[platform] + ' will not be touched again until ' + new Date(state.platformBackoff[platform].until).toLocaleTimeString(), { step: res.step, selector: res.selector });
         await fasEditAddDiag(platform, diagRecord);
         failures.push({ platform: platform, title: entry.title, reason: res.code === 'login_required' ? 'signed out, sign in to ' + Core.LABELS[platform] : res.code });
@@ -1285,6 +1337,7 @@ async function fasEditRunPlatform(platform, rawEntries) {
     await new Promise((resolve) => chrome.tabs.remove(tab.id, () => { void chrome.runtime.lastError; resolve(); }));
     await chrome.storage.local.set({ fasEditLastRun: { at: Date.now(), platform: platform, applied: applied, failed: failed, stopped: stopped } });
     fasEditNotifyFailures(failures);
+    fasT(failed || stopped ? 'warn' : 'info', 'platform_run_end', 'Finished ' + platform + ' edits: ' + applied + ' verified, ' + failed + ' failed' + (stopped ? ', stopped by ' + stopped : ''), { platform: platform, flow: 'edit', ctx: { applied: applied, failed: failed, stopped: stopped, items: batch.length } });
   }
   return 'applied_' + applied + '_failed_' + failed + (stopped ? '_stopped_' + stopped : '');
 }
@@ -1645,6 +1698,7 @@ async function checkCrossPlatformRemovals(pendingItems, opts) {
     // so the in-progress guard applies in both modes -- otherwise a poll mid-run would reset this
     // platform's queue index to 0 underneath a removal the organizer already approved.
     if (await silentCrossPlatformRemovalInProgress(platform)) {
+      fasTOnce('rm_inprog_' + platform, 30 * 60 * 1000, 'info', 'removal_skipped', platform + ' removals skipped: a removal run is already in progress', { platform: platform, flow: 'remove', ctx: { pending: itemsForPlatform.length } });
       outcomes.push(platform + ':skipped_in_progress');
       continue;
     }
@@ -1652,6 +1706,7 @@ async function checkCrossPlatformRemovals(pendingItems, opts) {
     // platform only; the loop still continues with every other platform.
     const backoffUntil = await removalRunBackoffUntil(platform);
     if (backoffUntil) {
+      fasTOnce('rm_backoff_' + platform, 30 * 60 * 1000, 'warn', 'removal_backoff', platform + ' removals are backing off after earlier runs never reported back', { platform: platform, flow: 'remove', ctx: { until: backoffUntil, pending: itemsForPlatform.length } });
       outcomes.push(platform + ':stalled_backoff');
       continue;
     }
@@ -1671,6 +1726,7 @@ async function checkCrossPlatformRemovals(pendingItems, opts) {
       // back with zero pacing is a real risk on its own (marketplace bot-detection).
       if (outcomes.length) await sleep(3000 + Math.random() * 2000);
       await openSilentCrossPlatformRemovalTab(platform);
+      fasT('info', 'removal_started', 'Removing ' + itemsForPlatform.length + ' sold/ended item(s) from ' + platform, { platform: platform, flow: 'remove', ctx: { count: itemsForPlatform.length, items: itemsForPlatform.slice(0, 10).map((i) => ({ id: i.id, reason: i.reason })) } });
       outcomes.push(platform + ':silent_removal_started:' + itemsForPlatform.length);
     } else {
       // S-COMPLIANCE-STALE-PUBLISHED-DOT (2026-09-28) + item-delete-cross-marketplace-removal
@@ -1864,6 +1920,7 @@ async function checkPendingRemovals(opts) {
 
   if (fasAutoRemoveMode === 'silent' || forceFacebook) {
     await openSilentRemovalTab();
+    fasT('info', 'removal_started', (forceFacebook ? 'Facebook retry: ' : 'Removing ') + facebookItems.length + ' item(s) from Facebook Marketplace, ' + soldCheckCount + ' sold check(s)', { platform: 'FACEBOOK', flow: 'remove', ctx: { count: facebookItems.length, soldChecks: soldCheckCount, forced: forceFacebook } });
     return (forceFacebook ? 'facebook_retry_started:' : 'silent_removal_started:') + facebookItems.length + '_soldchecks:' + soldCheckCount;
   }
 
@@ -2261,11 +2318,12 @@ async function autoRenewDueItems(dueItems) {
     }
   }
 
+  fasT('info', 'renew_plan', 'Renewal plan: ' + dueItems.length + ' due -- Facebook repost (price changed) ' + fbQueue.length + ', Facebook native renew ' + fbRenewQueue.length + ', Craigslist Renew All ' + (craigslistDueCount ? 'yes' : 'no') + ', Gumtree repost ' + gtQueue.length, { flow: 'renew', ctx: { due: dueItems.length, fbRepost: fbQueue.length, fbRenew: fbRenewQueue.length, craigslist: craigslistDueCount, gumtree: gtQueue.length, priceStale: staleIds.size } });
   let started = 0;
   // S-EXT-FB-ACCOUNT-UNAVAILABLE: no Facebook repost or native renew while the account is
   // flagged unavailable -- the removal flow owns the (24h) re-probe.
   const facebookUnavailable = !!(await getPlatformUnavailable('FACEBOOK'));
-  if (facebookUnavailable) { fbQueue.length = 0; fbRenewQueue.length = 0; }
+  if (facebookUnavailable) { if (fbQueue.length || fbRenewQueue.length) fasT('warn', 'renew_skipped', 'Facebook renewals skipped: the Facebook account is flagged unavailable', { platform: 'FACEBOOK', flow: 'renew', ctx: { skipped: fbQueue.length + fbRenewQueue.length } }); fbQueue.length = 0; fbRenewQueue.length = 0; }
   if (fbQueue.length && !(await hasActiveQueue('FACEBOOK'))) {
     await chrome.storage.local.set({ fasQueue: fbQueue, fasIndex: 0, fasAutoPublish: true, fasQueueSetAt: Date.now() });
     chrome.tabs.create({ url: CFG.FB_CREATE_URL, active: false });
@@ -2289,6 +2347,7 @@ async function autoRenewDueItems(dueItems) {
       craigslistRenewAllCooling = true;
       console.log('[FAS Craigslist Renew All] cooldown skip, last attempt ' + Math.round((Date.now() - lastAt) / 60000) + ' min ago');
       fasLog('info', 'autoRenewDueItems', 'Craigslist Renew All skipped: cooldown', { minutesSinceLastAttempt: Math.round((Date.now() - lastAt) / 60000) });
+      fasT('info', 'renew_skipped', 'Craigslist Renew All skipped: the 6 hour cooldown is still running (last attempt ' + Math.round((Date.now() - lastAt) / 60000) + ' min ago)', { platform: 'CRAIGSLIST', flow: 'renew', ctx: { minutesSinceLastAttempt: Math.round((Date.now() - lastAt) / 60000) } });
     }
   }
   if (craigslistDueCount > 0 && !craigslistRenewAllCooling && !(await silentCrossPlatformRemovalInProgress('CRAIGSLIST'))) {
@@ -2312,6 +2371,7 @@ async function autoRenewDueItems(dueItems) {
     await openSilentRemovalTab();
     started += fbRenewQueue.length;
   }
+  fasT(started ? 'info' : 'info', 'renew_result', started ? 'Auto-renew started for ' + started + ' item(s)' : 'Auto-renew started nothing (a queue is already active or everything was skipped)', { flow: 'renew', ctx: { started: started } });
   return started ? 'auto_renew_started:' + started : 'skipped_active_queue';
 }
 
@@ -2345,7 +2405,7 @@ async function checkRenewals() {
 
   // 2026-08-09 (Patrick): default flipped true -- "renews should be automated not nudged".
   const { fasAutoRenew = true } = await chrome.storage.local.get(['fasAutoRenew']);
-  if (!fasAutoRenew) return await notifyDueRenewals(dueItems);
+  if (!fasAutoRenew) { fasT('info', 'renew_notify_only', dueItems.length + ' listing(s) due for renewal; auto-renew is off so only a notification was sent', { flow: 'renew', ctx: { due: dueItems.length } }); return await notifyDueRenewals(dueItems); }
 
   // (2026-08-08 login gate) Craigslist auto-renew re-drives the guest-postable posting flow
   // with no human present -- fine when actually logged into a Craigslist account (verification
@@ -2369,6 +2429,7 @@ async function checkRenewals() {
     const loggedOutPlatforms = [];
     if (fasCraigslistLoginState === false) loggedOutPlatforms.push('CRAIGSLIST');
     if (fasGumtreeAuLoginState === false) loggedOutPlatforms.push('GUMTREE_AU');
+    fasT('warn', 'renew_logged_out', 'Not auto-renewing on ' + loggedOutPlatforms.join(' + ') + ': last seen signed out (notification only)', { flow: 'renew', ctx: { platforms: loggedOutPlatforms } });
     const notifyDue = dueItems.filter((d) => loggedOutPlatforms.includes(d.platform));
     const otherDue = dueItems.filter((d) => !loggedOutPlatforms.includes(d.platform));
     const notifyOutcome = notifyDue.length ? await notifyDueRenewals(notifyDue) : 'no_items';
@@ -2925,6 +2986,23 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // Shared step narration/diagnostic trail (fas-trace.js): store the record, forward warn/error to the backend runtime log.
+  if (msg && msg.type === 'fasTrace') {
+    try {
+      const worth = self.FAS_TRACE && self.FAS_TRACE.ingest(msg.rec);
+      if (worth && msg.rec) {
+        const r = msg.rec;
+        fasLog(r.lvl === 'error' ? 'error' : 'warn', 'trace:' + String(r.plat || 'ext'), '[' + String(r.code || '') + '] ' + String(r.msg || '').slice(0, 300),
+          { flow: r.flow, step: r.step, item: r.item, itemId: r.itemId, page: r.page, run: r.run, ctx: r.ctx });
+      }
+    } catch (e) { /* never break the page */ }
+    try { sendResponse({ ok: true }); } catch (e) { /* ignore */ }
+    return false;
+  }
+  if (msg && msg.type === 'fasTraceRecent') {
+    try { self.FAS_TRACE.recent(msg.n || 200, (recs) => sendResponse({ ok: true, recs })); } catch (e) { sendResponse({ ok: false, recs: [] }); }
+    return true;
+  }
   (async () => {
     try {
       // Per-marketplace pause (2026-09-30): popup read/save of the paused list.

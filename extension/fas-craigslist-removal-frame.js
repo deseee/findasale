@@ -74,6 +74,43 @@
   }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
+  // Shared step narration + diagnostics (fas-trace.js). Guarded so a missing module or a logging error never breaks a run.
+  // This script runs in every frame matching the account dashboard path (all_frames), but only the frame that is actually
+  // handed work (a removal item, or the one-shot Renew All grant from background.js) ever begins a trace, so narration is not
+  // duplicated across frames; every record carries which frame it came from.
+  const FT_FRAME = (function () { try { return window === window.top ? 'top' : 'iframe'; } catch (e) { return 'iframe'; } })();
+  function FT(method) {
+    try {
+      const t = (typeof window !== 'undefined' && window.FAS_TRACE) || null;
+      if (t && typeof t[method] === 'function') return t[method].apply(t, Array.prototype.slice.call(arguments, 1));
+    } catch (e) { /* logging must never break the flow */ }
+    return undefined;
+  }
+  let ftActive = false; // true only in the frame that began a trace
+  function FTA(method) { if (!ftActive) return undefined; return FT.apply(null, arguments); }
+  // Plain-language explanation for every removal / renewal outcome code this file can report.
+  function crReasonText(reason) {
+    const r = String(reason || '');
+    const map = {
+      dashboard_table_missing: ['Could not find your Craigslist postings list', 'This page did not show the postings table the extension needs (you may be signed out, or Craigslist changed the page).', 'Nothing was deleted. FindA.Sale will try again later; sign in to Craigslist if you are signed out.'],
+      title_too_short_for_safe_match: ['Title too short to match safely', 'The item title is too short to be sure which Craigslist posting is the right one, so the extension will not guess.', 'Nothing was deleted. Please delete this posting yourself on Craigslist.'],
+      ambiguous_duplicate_title: ['More than one Craigslist posting has this title', 'Several active postings share this exact title, and the extension will not delete one without being certain it is the right one.', 'Nothing was deleted. Please delete the right posting yourself.'],
+      listing_not_found: ['No active Craigslist posting with this title', 'Every page of your postings was read and none is an active posting with this exact title, so it is probably already gone.', 'Nothing was deleted. FindA.Sale records this item as not found on Craigslist.'],
+      delete_control_not_found: ['Found the posting but not its delete button', 'The posting row is there, but its delete control did not look the way the extension expects, so it did not click anything.', 'Nothing was deleted. Please delete it yourself.'],
+      row_revalidation_failed: ['The posting changed before it could be deleted', 'Right before deleting, the row no longer matched (title or status changed), so the extension stopped.', 'Nothing was deleted. FindA.Sale will try again later.'],
+      row_not_on_page: ['The posting was not on the expected page', 'After moving to the page that held the posting, the row was no longer there.', 'Nothing was deleted. FindA.Sale will try again later.']
+    };
+    if (map[r]) return { title: map[r][0], why: map[r][1], next: map[r][2] };
+    if (r.indexOf('delete_unverified:') === 0) return { title: 'Could not confirm the Craigslist posting was deleted', why: 'The delete was sent, but a fresh read of your postings did not show it as deleted (' + r.slice(18) + ').', next: 'FindA.Sale will check again on a later run. If the posting is still live, delete it yourself.' };
+    if (r.indexOf('page_read_failed') === 0 || r === 'too_many_pages') return { title: 'Could not read all of your Craigslist postings', why: 'Every page of postings must be read to be sure only one matches (' + r + '), and that did not complete.', next: 'Nothing was deleted. FindA.Sale will try again later.' };
+    if (r.indexOf('exception:') === 0) return { title: 'Something went wrong removing the posting', why: 'An unexpected error stopped the removal (' + r.slice(10) + ').', next: 'Nothing further was done. FindA.Sale will try again later.' };
+    if (r === 'renew_all_control_not_found') return { title: 'Could not find "renew all postings"', why: 'The Renew All button did not appear on the dashboard (signed out, nothing eligible, or the page changed).', next: 'Nothing was renewed. FindA.Sale will try again later; check Craigslist yourself if this keeps happening.' };
+    if (r === 'renew_all_form_disappeared_unverified') return { title: 'Renew All clicked, result not verified', why: 'After clicking, the page changed and the Renew All area did not come back, so success could not be confirmed.', next: 'FindA.Sale does not count this as renewed. Check your Craigslist postings manually.' };
+    if (r === 'renew_all_timed_out_unverified') return { title: 'Renew All clicked, but it never finished', why: 'The button still said "renewing, please wait" after 45 seconds.', next: 'FindA.Sale does not count this as renewed. Check your Craigslist postings manually.' };
+    if (r === 'reloaded_after_click_unverified') return { title: 'Craigslist reloaded after Renew All', why: 'The page reloaded after the click, so the result could not be seen. The extension will not click a second time.', next: 'FindA.Sale does not count this as renewed. Check your Craigslist postings manually.' };
+    return { title: 'Craigslist step did not complete', why: 'Reason code: ' + r, next: 'FindA.Sale will try again later.' };
+  }
+
   // ---- overlay UI ----
   let bar;
   function ensureBar() {
@@ -180,7 +217,20 @@
   async function report(type, item, reason) {
     const msg = { type, itemId: item.id, platform: 'CRAIGSLIST' };
     if (reason) msg.reason = reason;
-    try { await chrome.runtime.sendMessage(msg); } catch (e) {}
+    if (type === 'crossPlatformRemovalDeleted') {
+      FTA('ok', 'Craigslist posting deleted and confirmed');
+    } else if (type === 'crossPlatformRemovalSkipped') {
+      const t = crReasonText(reason);
+      FTA('problem', { code: 'cl_removal_skipped_' + reason, title: 'Skipped: ' + t.title, what: 'The Craigslist posting for "' + String(item.title || '').slice(0, 60) + '" was not deleted automatically.', why: t.why, next: t.next, ctx: { reason: reason, frame: FT_FRAME } });
+    } else {
+      const t = crReasonText(reason);
+      FTA('problem', { code: 'cl_removal_failed_' + String(reason || '').split(':')[0], title: t.title, what: 'The Craigslist posting for "' + String(item.title || '').slice(0, 60) + '" could not be removed on this attempt.', why: t.why, next: t.next, ctx: { reason: reason, frame: FT_FRAME } });
+    }
+    let resp = null;
+    try { resp = await chrome.runtime.sendMessage(msg); }
+    catch (e) { FTA('warn', 'report_send_failed', 'Could not tell the extension background about the outcome (' + type + '): ' + ((e && e.message) || 'unknown'), { type: type }); return; }
+    FTA('info', 'report_sent', 'Reported ' + type + ' to FindA.Sale', { type: type, reason: reason || '', gotResponse: resp != null, ok: resp && resp.ok, status: resp && (resp.status || resp.httpStatus) });
+    if (type === 'crossPlatformRemovalDeleted') FTA('end', 'Removed "' + String(item.title || '').slice(0, 40) + '" from Craigslist (confirmed deleted).', { frame: FT_FRAME });
   }
   async function getPending() {
     let p = null;
@@ -240,12 +290,14 @@
 
   async function runCraigslistRemovalQueue(item) {
     const wanted = fasFoldTitle(item.title);
+    FTA('step', 'Opening your Craigslist postings list', 'This item sold on another channel, so its Craigslist posting should come down. The extension needs your logged-in postings table first.', { frame: FT_FRAME });
     overlayInfo('This item sold elsewhere. Looking for the matching Craigslist posting for <b>' + escapeHtml(item.title) + '</b>...');
 
     // Positive signal: only ever act on the real, logged-in postings dashboard. Wait for it.
     const tableDeadline = Date.now() + 8000;
     while (!document.querySelector('table.accthp_postings') && Date.now() < tableDeadline) await sleep(250);
     if (!document.querySelector('table.accthp_postings')) {
+      FTA('warn', 'dashboard_table_missing', 'The postings table never appeared within 8 seconds', { frame: FT_FRAME, snapshot: FT('snapshot') });
       overlayWarn('Could not find your Craigslist postings list on this page. Will try again later.');
       await report('crossPlatformRemovalAttemptFailed', item, 'dashboard_table_missing');
       return;
@@ -254,6 +306,7 @@
     // Resume: a delete for this item was already submitted (e.g. the frame reloaded) -- verify only.
     const pending = await getPending();
     if (pending && pending.itemId === item.id && pending.postingId && pending.submittedAt) {
+      FTA('step', 'Checking that the delete already sent went through', 'The page reloaded after the delete was submitted, so the extension re-reads your postings instead of deleting again.', { postingId: pending.postingId });
       overlayInfo('Checking that the Craigslist posting for <b>' + escapeHtml(item.title) + '</b> was deleted...');
       const v = await crRemVerifyDeleted(pending.postingId, pending.page);
       await setPending(null);
@@ -269,6 +322,7 @@
     }
 
     if (wanted.length < CR_MIN_SAFE_TITLE_LEN) {
+      FTA('warn', 'title_too_short', 'Title is shorter than the safe-match minimum', { len: wanted.length, min: CR_MIN_SAFE_TITLE_LEN });
       overlayWarn('Title too short to match safely. Please delete this Craigslist posting yourself.');
       await report('crossPlatformRemovalSkipped', item, 'title_too_short_for_safe_match');
       return;
@@ -279,7 +333,9 @@
     if (pending && pending.itemId === item.id && pending.postingId && !pending.submittedAt && pending.page === crRemCurrentPage()) {
       target = { postingId: pending.postingId, page: pending.page };
     } else {
+      FTA('step', 'Reading every page of your Craigslist postings', 'To delete safely the extension must prove exactly one active posting has this exact title, which means reading all pages (50 postings each).');
       const all = await crRemAllRows();
+      FTA('info', 'postings_read', all.ok ? 'Read ' + all.rows.length + ' postings' : 'Reading postings failed: ' + all.reason, { ok: all.ok, rows: all.ok ? all.rows.length : undefined, reason: all.ok ? undefined : all.reason });
       if (!all.ok) {
         overlayWarn('Could not read all of your Craigslist postings (' + escapeHtml(all.reason) + '). Will try again.');
         await report('crossPlatformRemovalAttemptFailed', item, all.reason);
@@ -287,6 +343,7 @@
       }
       const matches = all.rows.filter((r) => r.active && (r.title === wanted || r.rawTitle === wanted));
       const ids = Array.from(new Set(matches.map((r) => r.postingId)));
+      FTA('info', 'match_result', 'Found ' + ids.length + ' active posting(s) with this exact title', { matches: ids.length, deleteAllMatches: item.deleteAllMatches === true });
       if (ids.length !== 1 && !(ids.length > 1 && item.deleteAllMatches === true)) {
         // 2026-09-30 (S-EXT-RESYNC): crRemAllRows() read EVERY page of the postings dashboard (all.ok),
         // so zero active matches is a real "already gone" -- report it as listing_not_found like
@@ -299,6 +356,7 @@
       }
       target = { postingId: ids[0], page: matches[0].page };
       if (target.page !== crRemCurrentPage()) {
+        FTA('step', 'Going to the page that holds the posting', 'The matching posting is on page ' + target.page + ' of your list; the delete button must be used from that page.', { page: target.page });
         await setPending({ itemId: item.id, postingId: target.postingId, page: target.page });
         location.href = crRemPageUrl(target.page);
         return;
@@ -306,6 +364,7 @@
     }
 
     // Re-validate the row in the live DOM right before acting.
+    FTA('step', 'Double-checking the posting before deleting', 'Title and active status are re-checked on the live page right before the delete button is used.', { page: target.page });
     const rows = crRemParseRows(document) || [];
     const row = rows.find((r) => r.postingId === target.postingId);
     if (!row || !row.active || !(row.title === wanted || row.rawTitle === wanted)) {
@@ -325,9 +384,11 @@
     }
 
     await setPending({ itemId: item.id, postingId: target.postingId, page: target.page, submittedAt: Date.now() });
+    FTA('step', 'Deleting the Craigslist posting', 'Pressing that one posting\'s own delete button; Craigslist then sends the delete in the background.', { page: target.page });
     overlayInfo('Deleting the Craigslist posting for <b>' + escapeHtml(item.title) + '</b>...');
     submit[0].click(); // Craigslist intercepts this and sends one XHR delete (live-confirmed 2026-09-23)
 
+    FTA('step', 'Confirming the delete with a fresh read', 'Craigslist\'s page shows "deleted" before the server confirms, so the extension re-reads your postings (up to about 20 seconds) and only trusts that.');
     const v = await crRemVerifyDeleted(target.postingId, target.page);
     await setPending(null);
     if (v.ok && await crRemMoreDuplicates(item, wanted)) { return runCraigslistRemovalQueue(item); }
@@ -342,11 +403,14 @@
 
   async function maybeRunCraigslistRemoval() {
     let queued;
-    try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'CRAIGSLIST' }); } catch (e) { return false; }
+    try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'CRAIGSLIST' }); } catch (e) { FT('info', 'removal_queue_fetch_failed', 'Could not ask the extension for the removal queue: ' + ((e && e.message) || 'unknown'), { frame: FT_FRAME }); return false; }
     if (!queued || !queued.ok || !queued.item) return false;
+    ftActive = true;
+    FT('begin', { platform: 'CRAIGSLIST', flow: 'remove', item: { id: queued.item.id, title: queued.item.title }, ctx: { frame: FT_FRAME } });
     try {
       await runCraigslistRemovalQueue(queued.item);
     } catch (e) {
+      FTA('error', 'removal_exception', 'Unexpected error during removal: ' + ((e && e.message) || 'unknown'), { frame: FT_FRAME });
       overlayWarn('Something went wrong removing this Craigslist posting (' + escapeHtml((e && e.message) || 'unknown error') + '). Will try again.');
       await report('crossPlatformRemovalAttemptFailed', queued.item, 'exception:' + ((e && e.message) || 'unknown'));
     }
@@ -411,6 +475,7 @@
     const deadline = Date.now() + 8000;
     while (!crRenewAllFormPresent() && Date.now() < deadline) await sleep(250);
     console.log('[FAS Craigslist Renew All] resumed after reload; NOT clicking again. dashboard present=' + crRenewAllFormPresent());
+    FTA('warn', 'renew_all_resumed', 'Page reloaded after Renew All was clicked; not clicking again', { dashboardPresent: crRenewAllFormPresent(), frame: FT_FRAME });
     overlayWarn('Craigslist reloaded after "renew all postings" was clicked, so the result could not be verified. Check your postings manually.');
     return { ok: false, reason: 'reloaded_after_click_unverified' };
   }
@@ -418,6 +483,7 @@
   async function runCraigslistRenewAll() {
     // Positive signal, same discipline as runCraigslistRemovalQueue above: wait for the real,
     // logged-in postings dashboard rather than acting on whatever's on screen at load time.
+    FTA('step', 'Looking for the "renew all postings" button', 'Craigslist renews every eligible posting with one bulk button on your account dashboard.', { frame: FT_FRAME });
     const deadline = Date.now() + 8000;
     let control = crRenewAllControl();
     while (!control && Date.now() < deadline) { await sleep(250); control = crRenewAllControl(); }
@@ -428,6 +494,7 @@
       // simply hasn't finished loading (already handled by the wait above).
       return { ok: false, reason: 'renew_all_control_not_found' };
     }
+    FTA('step', 'Clicking "renew all postings"', 'Renewing keeps your Craigslist postings from expiring. Craigslist does this for all eligible postings at once, not per item.');
     overlayInfo('Renewing all eligible Craigslist postings...');
     // The background already consumed the one-shot request when it granted this run, so even if
     // this click reloads the page, the next load is told "resumed" and will not click again.
@@ -437,6 +504,7 @@
     const completionDeadline = Date.now() + CR_RENEWALL_COMPLETION_TIMEOUT_MS;
     const FORM_GONE_GRACE_MS = 10000;
     let formGoneSince = 0;
+    FTA('step', 'Waiting for Craigslist to finish renewing', 'The button says "renewing, please wait" while it works; the extension waits up to 45 seconds for it to return to normal.');
     await sleep(1500); // let the "please wait" state actually appear before polling for its exit
     while (Date.now() < completionDeadline) {
       if (!crRenewAllFormPresent()) {
@@ -466,16 +534,28 @@
 
   async function maybeRunCraigslistRenewAll() {
     let requested;
-    try { requested = await chrome.runtime.sendMessage({ type: 'getCraigslistRenewAllRequested' }); } catch (e) { return false; }
+    try { requested = await chrome.runtime.sendMessage({ type: 'getCraigslistRenewAllRequested' }); } catch (e) { FT('info', 'renew_request_check_failed', 'Could not ask the extension whether a renewal was requested: ' + ((e && e.message) || 'unknown'), { frame: FT_FRAME }); return false; }
     if (!requested || !requested.ok) return false;
     if (!requested.requested && !requested.resumed) return false;
+    ftActive = true;
+    FT('begin', { platform: 'CRAIGSLIST', flow: 'renew', item: { id: 'all', title: 'All eligible Craigslist postings' }, ctx: { frame: FT_FRAME, resumed: !!requested.resumed } });
     let result;
     try {
       result = requested.resumed ? await runCraigslistRenewAllResumed() : await runCraigslistRenewAll();
     } catch (e) {
       result = { ok: false, reason: 'exception:' + ((e && e.message) || 'unknown') };
     }
-    try { await chrome.runtime.sendMessage(Object.assign({ type: 'craigslistRenewAllFinished' }, result)); } catch (e) {}
+    if (result.ok) {
+      FT('ok', 'Craigslist renewed your eligible postings');
+    } else {
+      const t = crReasonText(result.reason);
+      FT('problem', { code: 'cl_renew_all_' + String(result.reason || '').split(':')[0], title: t.title, what: 'FindA.Sale tried to renew your Craigslist postings with the "renew all postings" button.', why: t.why, next: t.next, ctx: { reason: result.reason, frame: FT_FRAME } });
+    }
+    let finResp = null;
+    try { finResp = await chrome.runtime.sendMessage(Object.assign({ type: 'craigslistRenewAllFinished' }, result)); }
+    catch (e) { FT('warn', 'renew_finish_report_failed', 'Could not tell the extension background how Renew All ended: ' + ((e && e.message) || 'unknown')); }
+    FT('info', 'renew_finish_reported', 'Reported the Renew All result to FindA.Sale', { ok: result.ok, reason: result.reason || '', gotResponse: finResp != null, respOk: finResp && finResp.ok, status: finResp && (finResp.status || finResp.httpStatus) });
+    if (result.ok) FT('end', 'Craigslist Renew All finished.'); 
     return true;
   }
 

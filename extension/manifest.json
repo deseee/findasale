@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "FindA.Sale \u2014 Marketplace Autofill",
   "short_name": "FindA.Sale",
-  "version": "1.0.10",
+  "version": "1.0.13",
   "description": "Fill your Facebook Marketplace listings from your FindA.Sale inventory \u2014 title, price, condition, description, and photos. You review and publish. Price and stock changes made on FindA.Sale are applied to your live listings automatically.",
   "permissions": [
     "storage",
@@ -51,6 +51,7 @@
         "https://www.facebook.com/marketplace/create/*"
       ],
       "js": [
+        "fas-trace.js",
         "fas-selectors.js",
         "fas-quantity.js",
         "fas-content.js"
@@ -62,6 +63,7 @@
         "https://www.facebook.com/marketplace/you/selling*"
       ],
       "js": [
+        "fas-trace.js",
         "fas-selectors.js",
         "fas-remove.js"
       ],
@@ -72,6 +74,7 @@
         "https://post.craigslist.org/*"
       ],
       "js": [
+        "fas-trace.js",
         "fas-listing-ref.js",
         "fas-condition.js",
         "fas-quantity.js",
@@ -84,6 +87,7 @@
         "https://accounts.craigslist.org/login/home*"
       ],
       "js": [
+        "fas-trace.js",
         "fas-craigslist-removal-frame.js"
       ],
       "all_frames": true,
@@ -94,6 +98,7 @@
         "https://www.gumtree.com.au/*"
       ],
       "js": [
+        "fas-trace.js",
         "fas-listing-ref.js",
         "fas-gumtree-au.js"
       ],
@@ -105,6 +110,7 @@
         "https://www.facebook.com/marketplace/inbox/*"
       ],
       "js": [
+        "fas-trace.js",
         "fas-selectors.js",
         "fas-tracking.js",
         "fas-messages.js"
@@ -128,6 +134,7 @@
         "https://www.poshmark.com/*"
       ],
       "js": [
+        "fas-trace.js",
         "fas-listing-ref.js",
         "fas-condition.js",
         "fas-challenge.js",
@@ -141,6 +148,7 @@
         "https://www.mercari.com/*"
       ],
       "js": [
+        "fas-trace.js",
         "fas-listing-ref.js",
         "fas-condition.js",
         "fas-challenge.js",
@@ -164,6 +172,7 @@
         "https://www.vinted.com/*"
       ],
       "js": [
+        "fas-trace.js",
         "fas-condition.js",
         "fas-challenge.js",
         "fas-vinted.js"
@@ -175,6 +184,7 @@
         "https://www.grailed.com/*"
       ],
       "js": [
+        "fas-trace.js",
         "fas-listing-ref.js",
         "fas-condition.js",
         "fas-challenge.js",

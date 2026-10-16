@@ -13,6 +13,17 @@
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+  // Step narration + diagnostics (fas-trace.js). Guarded so a missing/broken trace module never affects the flow.
+  function T(fn) {
+    try { const t = window.FAS_TRACE; if (t && typeof t[fn] === 'function') return t[fn].apply(t, Array.prototype.slice.call(arguments, 1)); } catch (e) { /* tracing must never break the flow */ }
+  }
+  function onLoginWall() {
+    try {
+      return /^\/(login|checkpoint|disabled)(\/|$)/i.test(location.pathname || '') ||
+        !!document.querySelector('input[name="pass"][type="password"], form[action*="/login"] input[type="password"]');
+    } catch (e) { return false; }
+  }
+
   // Facebook Commerce Policy: coins/currency AND weapons/ammunition/explosives cannot be listed
   // on Facebook Marketplace. Mirrors isFacebookRestrictedItem()/facebookRestrictionReason() in
   // extensionController.ts (kept in sync manually; same "trivial pure map -- not worth a shared
@@ -517,11 +528,11 @@
   }
 
   async function injectPhotos(urls) {
-    if (!urls || !urls.length) return false;
+    if (!urls || !urls.length) { T('warn', 'fb_photos_none', 'This item has no photo URLs, so no photos were attached.'); return false; }
     const resp = await chrome.runtime.sendMessage({ type: 'fetchPhotos', urls });
-    if (!resp || !resp.ok || !resp.dataUrls.length) return false;
+    if (!resp || !resp.ok || !resp.dataUrls.length) { T('warn', 'fb_photos_fetch_failed', 'Could not download the item photos from FindA.Sale.', { requested: urls.length, ok: !!(resp && resp.ok), got: resp && resp.dataUrls ? resp.dataUrls.length : 0 }); return false; }
     const input = SEL.photoInput();
-    if (!input) return false;
+    if (!input) { T('warn', 'fb_photo_input_missing', 'Photos downloaded, but Facebook\'s photo upload control was not found on the page.', { photos: resp.dataUrls.length }); return false; }
     const dt = new DataTransfer();
     resp.dataUrls.forEach((durl, i) => {
       const [meta, b64] = durl.split(',');
@@ -533,6 +544,7 @@
     });
     input.files = dt.files;
     input.dispatchEvent(new Event('change', { bubbles: true }));
+    T('info', 'fb_photos_attached', 'Handed ' + resp.dataUrls.length + ' of ' + urls.length + ' photo(s) to Facebook\'s upload control.', { requested: urls.length, attached: resp.dataUrls.length });
     return true;
   }
 
@@ -683,6 +695,7 @@
     // is ever wrong or stale.
     const noConfirmedWeight = item.packageWeightOz === undefined || item.packageWeightOz === null || isNaN(item.packageWeightOz);
     if (item.shippingOverride === 'LOCAL_PICKUP_ONLY' || noConfirmedWeight) {
+      T('info', 'fb_delivery_decision', 'Choosing local pickup instead of shipping.', { shippingOverride: item.shippingOverride || null, noConfirmedWeight: noConfirmedWeight });
       // 2026-07-16 fix (DOM-verified live): open FB's "Delivery method" dropdown, then UNCHECK the
       // "Shipping" item (leaving "Local pickup" checked). FB renders these as role="menuitemcheckbox"
       // items inside the opened combo -- NOT role="option" (old optionByText('pickup') never matched)
@@ -700,6 +713,7 @@
       // Close the menu so the step's Next control is reachable again.
       document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await humanPause(300, 600);
+      T('info', 'fb_delivery_pickup', 'Delivery set to local pickup only.', { reason: item.shippingOverride === 'LOCAL_PICKUP_ONLY' ? 'organizer chose pickup only' : 'no confirmed package weight' });
       return { mode: 'pickup' };
     }
 
@@ -726,6 +740,7 @@
       const comboText = deliveryCombo ? (deliveryCombo.getAttribute('aria-label') || deliveryCombo.textContent || '').toLowerCase() : '';
       const looksPickupOnly = comboText.indexOf('pickup') !== -1 && comboText.indexOf('shipping') === -1;
       if (looksPickupOnly) {
+        T('warn', 'fb_delivery_fb_pickup_only', 'Facebook already set this item to local pickup only (no shipping-label control appeared). Accepting it; the item may be price or category restricted from Facebook shipping.');
         console.warn('[FAS] Delivery: Facebook defaulted this item to Local-pickup-only on its own (no shipping-label control ever appeared) -- accepting as pickup mode, not treating as a failure. Item may be price- or category-restricted from FB shipping; not FindA.Sale-side.');
         return { mode: 'pickup', fbRestrictedShipping: true };
       }
@@ -806,6 +821,7 @@
       }
     }
     await humanPause(300, 600); // small settle once the modal has closed
+    T('info', 'fb_delivery_shipping', 'Shipping set with an exact package weight of ' + weight.label + '.', { oz: item.packageWeightOz });
     return { mode: 'shipping', bucket: weight.label };
   }
 
@@ -860,6 +876,7 @@
       }
     }
 
+    T('info', 'fb_offer_decision', minValue == null ? 'Turning offers off for this listing.' : 'Offers on, minimum offer will be $' + minValue + '.', { wantOffers: wantOffers, price: priceNum, bestOfferMinimumAmt: item.bestOfferMinimumAmt == null ? null : item.bestOfferMinimumAmt });
     if (minValue == null) {
       // Turn Allow-offers OFF (covers allowBestOffer=false AND the too-low-price case).
       if (SEL.isSwitchOn(sw)) { await realClick(sw); await sleep(250); }
@@ -872,7 +889,7 @@
     // The minimum input only renders while offers are on -- wait for it, then set it like any other
     // React-controlled text field (setNativeValue) so FB registers the change and clears its error.
     try { minInput = await waitFor(() => SEL.fieldByLabel(LABELS.offerMinimum), 4000); }
-    catch (e) { console.warn('[FAS offer] minimum input never appeared -- leaving FB default.'); return; }
+    catch (e) { T('warn', 'fb_offer_min_missing', 'Offers are on but the minimum-offer box never appeared, so Facebook\'s default minimum was left in place.'); console.warn('[FAS offer] minimum input never appeared -- leaving FB default.'); return; }
     // BUG FIX 2026-09-01 round 2 (Patrick live report: minimum still showed the LISTING price
     // itself, red, after the whole-dollar price fix above -- e.g. price=$2, min stayed $2 instead
     // of the computed $1). Diagnostics + a verify-and-reset pass, mirroring the same class of "FB
@@ -890,7 +907,8 @@
       const held = String(minInput.value || '').trim();
       console.log('[FAS offer] attempt ' + attempt + ' -- field now reads "' + held + '" (wanted "' + minStr + '")');
       if (held.replace(/[^0-9.]/g, '') === minStr || held.replace(/[^0-9.]/g, '') === String(minValue)) break;
-      if (attempt === 0) console.warn('[FAS offer] minimum did not hold -- retrying once.');
+      if (attempt === 0) { T('warn', 'fb_offer_min_retry', 'Facebook did not keep the minimum offer value; retrying once.', { wanted: minStr, field: held }); console.warn('[FAS offer] minimum did not hold -- retrying once.'); }
+      else T('warn', 'fb_offer_min_unconfirmed', 'Minimum offer still does not read as expected after a retry.', { wanted: minStr, field: held });
     }
   }
 
@@ -902,6 +920,7 @@
   // instead of blocking.
   async function fillItem(item, index, total, autoPublish) {
     overlay('<b>FindA.Sale</b> — filling listing ' + (index + 1) + ' of ' + total + '…');
+    T('step', 'Filling in the listing details', 'Typing the title, price and description into Facebook\'s form the way a person would.', { price: item.price, hasDescription: !!(item.descriptionWithBacklink || item.description), photos: (item.photoUrls || []).length });
     // BUG FIX 2026-09-01 (Patrick live report: $2.49 item listed on Facebook as $2, and its
     // Allow-offers minimum then showed red/invalid): Facebook's Price field is the same kind of
     // currency-masked input already fixed on Vinted/Mercari/Grailed/Craigslist/Poshmark -- setting
@@ -911,16 +930,28 @@
     const filledPriceValue = item.price != null && isFinite(Number(item.price))
       ? Math.max(1, Math.round(Number(item.price)))
       : null;
-    const results = { title: await fillText(LABELS.title, item.title),
-                      price: await fillText(LABELS.price, filledPriceValue != null ? String(filledPriceValue) : item.price),
-                      description: await fillText(LABELS.description, item.descriptionWithBacklink || item.description) };
+    if (filledPriceValue != null && Number(item.price) !== filledPriceValue) T('info', 'fb_price_rounded', 'Facebook\'s price box only takes whole dollars, so $' + item.price + ' is entered as $' + filledPriceValue + '.', { itemPrice: item.price, typed: filledPriceValue });
+    const results = {};
+    results.title = await fillText(LABELS.title, item.title);
+    if (results.title) T('ok', 'Title typed.'); else T('error', 'fb_title_field_missing', 'Facebook\'s Title field was not found.');
+    results.price = await fillText(LABELS.price, filledPriceValue != null ? String(filledPriceValue) : item.price);
+    if (results.price) T('ok', 'Price typed.'); else T('error', 'fb_price_field_missing', 'Facebook\'s Price field was not found.');
+    results.description = await fillText(LABELS.description, item.descriptionWithBacklink || item.description);
+    if (!results.description) T('warn', 'fb_description_field_missing', 'Facebook\'s Description field was not found, so no description was typed (not required to continue).');
     if (!results.title) throw hardError('Item details', 'Couldn\'t find the Title field.');
     if (!results.price) throw hardError('Item details', 'Couldn\'t find the Price field.');
-    try { if (self.FAS_QTY) self.FAS_QTY.fillQuantity(item); } catch (e) { /* kits: best-effort Quantity field, never blocks */ }
+    try { if (self.FAS_QTY) self.FAS_QTY.fillQuantity(item); } catch (e) { T('warn', 'fb_quantity_failed', 'Could not fill the optional Quantity field: ' + ((e && e.message) || e)); /* kits: best-effort Quantity field, never blocks */ }
 
+    T('step', 'Setting the condition', 'Facebook requires a condition ("' + (mapCondition(item.condition) || 'none set') + '") before it lets the listing move on.', { raw: item.condition });
     await selectConditionRequired(item.condition); // REQUIRED field: retries + verifies, hard-errors if unset (2026-07-16 flaky-stall fix)
+    T('ok', 'Condition set.');
+    T('step', 'Choosing the category', 'Facebook requires a category; picking the closest of its own suggestions to "' + (item.category || 'this item') + '".', { category: item.category || null });
     const catResult = await selectCategory(item.category); // auto-resolves to FB's top suggestion when ambiguous
+    if (catResult.ok) T('ok', 'Category chosen.');
+    else T('warn', 'fb_category_guess', 'No confident category match; used Facebook\'s own top suggestion. Worth a glance.', { wanted: item.category || null, suggestions: catResult.suggestions || [] });
+    T('step', 'Uploading photos', 'Downloading the item photos from FindA.Sale and handing them to Facebook\'s upload control.', { count: (item.photoUrls || []).length });
     const photosOk = await injectPhotos(item.photoUrls);
+    if (photosOk) T('ok', 'Photos handed to Facebook.'); else T('warn', 'fb_photos_not_attached', 'Photos may not have attached; check this listing.');
 
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b>' +
       (!photosOk ? ' — photos may not have attached' : '') +
@@ -947,6 +978,7 @@
     // unverified assumption. NEEDS LIVE CONFIRMATION on a working (non-restricted) Facebook
     // account before this can be trusted -- flagged in this dispatch's handoff.
     let hideFromFriendsOk = true;
+    T('step', 'Hiding the listing from your friends', 'Your saved preference keeps new listings out of your friends\' feeds.');
     try {
       const { fasHideFromFriends = true } = await chrome.storage.local.get(['fasHideFromFriends']);
       if (fasHideFromFriends) {
@@ -955,18 +987,23 @@
           if (!SEL.isSwitchOn(friendsSwitch)) { await realClick(friendsSwitch); await sleep(250); }
           if (!SEL.isSwitchOn(friendsSwitch)) {
             hideFromFriendsOk = false;
+            T('warn', 'fb_hide_friends_unconfirmed', 'Clicked the Hide from friends switch but it did not register as on.');
             console.warn('[FAS] Hide-from-friends: clicked the switch but it did not register as on -- Facebook may have reverted it.');
           }
         } else {
           hideFromFriendsOk = false;
+          T('warn', 'fb_hide_friends_missing', 'No Hide from friends switch found on this form; the listing continues without it.');
           console.warn('[FAS] Hide-from-friends: no matching role="switch" control found on the Item details step -- Facebook\'s layout may differ from what was described, or this listing type may not offer it. Listing will proceed WITHOUT this privacy toggle set.');
         }
       }
     } catch (e) {
       hideFromFriendsOk = false;
+      T('warn', 'fb_hide_friends_error', 'Hide from friends could not be set: ' + ((e && e.message) || e));
       console.warn('[FAS] Hide-from-friends: unexpected error while setting the toggle -- ' + (e && e.message || e));
     }
 
+    if (hideFromFriendsOk) T('ok', 'Privacy setting handled.');
+    T('step', 'Moving on to Delivery', 'Clicking Next; Facebook only advances if the required fields (title, price, condition, category) are all set.');
     await clickButton('Next', 'Item details'); // -> Delivery
 
     // Verify the click actually advanced Facebook's own step (its URL carries ?step=... --
@@ -977,8 +1014,12 @@
     // never actually loaded.
     await waitForStep('delivery', 10000)
       .catch(() => { throw hardError('Item details', 'Facebook didn\'t move to the Delivery step -- a required field (often Category) may still be unset.'); });
+    T('ok', 'Reached the Delivery step.');
     overlay('<b>FindA.Sale</b> — setting shipping for <b>' + escapeHtml(item.title) + '</b>…');
+    T('step', 'Setting delivery', 'Choosing shipping with the real package weight, or local pickup when the weight is unknown or pickup-only was chosen.', { weightOz: item.packageWeightOz == null ? null : item.packageWeightOz, shippingOverride: item.shippingOverride || null });
     const deliveryMode = await fillDeliveryStep(item);
+    T('ok', 'Delivery set (' + deliveryMode.mode + ').');
+    T('step', 'Moving past Delivery', 'Clicking Next to reach the offer or audience step.');
     await clickButton('Next', 'Delivery'); // -> Offer
 
     // After Delivery's Next, Facebook lands on EITHER the Offer step OR jumps straight to the
@@ -1019,13 +1060,17 @@
       throw hardError('Delivery', 'Facebook didn\'t move past the Delivery step.');
     }
 
+    T('ok', 'Facebook moved to the ' + landedStep + ' step.');
     if (landedStep === 'offer') {
+      T('step', 'Setting offer rules', 'Facebook rejects a minimum offer below 50% of the price or at/above the price, so the minimum is set to a valid whole-dollar value.');
       console.info('[FAS offer] Offer step present -- configuring offer settings.');
       overlay('<b>FindA.Sale</b> — reviewing offer settings…');
       await humanPause(400, 800);
       await configureOfferStep(item, filledPriceValue); // set a VALID Allow-offers state so FB's Next isn't blocked (2026-07-16)
       await clickButton('Next', 'Offer'); // -> Audience (groups left unchecked by design, see ADR-084 amendment)
+      T('ok', 'Offer rules set.');
     } else {
+      T('info', 'fb_offer_step_skipped', 'Facebook skipped the Offer step for this listing, so no offer rules were set.');
       console.info('[FAS offer] Offer step skipped by Facebook (went straight to Audience/Publish) -- skipping offer config.');
     }
 
@@ -1034,7 +1079,10 @@
     await waitFor(() => SEL.elementByText('Publish'), 10000)
       .catch(() => { throw hardError('Audience', 'Groups/Publish step loaded but no Publish button was found.'); });
 
+    T('ok', 'Reached the final review step.');
     if (!autoPublish) {
+      T('step', 'Paused for your review', 'Automatic publishing is off, so the form is filled and waiting. Click Facebook\'s Publish yourself, then use the FindA.Sale button to continue.');
+      T('info', 'fb_paused_for_review', 'Stopped before Publish by choice (autoPublish off).', { photosOk: photosOk, categoryConfident: !!catResult.ok, hideFromFriendsOk: hideFromFriendsOk });
       // Organizer unchecked "Publish automatically" in the popup -- everything up through
       // Groups is still auto-filled (that's just navigation/admin, not the sensitive part),
       // but the actual Publish click is the one irreversible action, so it waits for a human.
@@ -1047,14 +1095,16 @@
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Listing ' + (index + 1) + ' of ' + total + '</div>');
       const nextBtn = document.getElementById('fas-next');
       const skipBtn = document.getElementById('fas-skip');
-      if (nextBtn) nextBtn.onclick = async () => { await mark(item); await advanceAuto(); };
-      if (skipBtn) skipBtn.onclick = async () => { await advanceAuto(); };
+      if (nextBtn) nextBtn.onclick = async () => { T('info', 'fb_manual_publish_confirmed', 'Organizer confirmed they published this listing by hand.'); await mark(item); T('end', 'Listing confirmed by you; moving to the next item.'); await advanceAuto(); };
+      if (skipBtn) skipBtn.onclick = async () => { T('warn', 'fb_manual_skip', 'Organizer skipped this listing without publishing it.'); T('end', 'Skipped by you.'); await advanceAuto(); };
       return { catResult, photosOk, autoPublished: false, hideFromFriendsOk };
     }
 
     overlay('<b>FindA.Sale</b> — publishing <b>' + escapeHtml(item.title) + '</b>…');
+    T('step', 'Publishing the listing', 'Clicking Facebook\'s Publish button; this is the one step that makes the listing live.');
     await humanPause(600, 1200);
     await clickButton('Publish', 'Audience');
+    T('step', 'Confirming Facebook accepted it', 'Waiting up to 20 seconds for Facebook to leave the create form, which is the signal that the publish worked.');
 
     // Confirm it actually went through rather than assuming success: the create-flow URL
     // should disappear within a few seconds of a real publish.
@@ -1079,6 +1129,7 @@
     // matches ADR-086's own design: an item without a captured remoteListingId is simply not
     // eligible for price-sync later).
     const remoteListingId = location.href;
+    T('ok', 'Facebook accepted the listing.', { landedOn: location.pathname });
 
     return { catResult, photosOk, autoPublished: true, remoteListingId, hideFromFriendsOk };
   }
@@ -1089,7 +1140,10 @@
       if (!result.autoPublished) return; // fillItem already rendered the manual review UI + wired its own buttons
 
       const { catResult, photosOk, remoteListingId, hideFromFriendsOk } = result;
+      T('step', 'Telling FindA.Sale this item is listed', 'Recording the live Facebook listing so the item is not offered for posting again.');
       await mark(item, remoteListingId);
+      T('ok', 'FindA.Sale updated.');
+      T('end', 'Published "' + (item.title || 'item') + '" on Facebook (' + (index + 1) + ' of ' + total + ')', { photosOk: photosOk, categoryConfident: !!catResult.ok, hideFromFriendsOk: hideFromFriendsOk });
       let note = '';
       if (!catResult.ok) note += '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Category: picked Facebook\'s best guess automatically -- worth a glance.</div>';
       if (!photosOk) note += '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- check this listing.</div>';
@@ -1100,6 +1154,19 @@
       await advanceAuto();
     } catch (e) {
       const step = (e && e.fasStep) || 'unknown';
+      T('problem', {
+        code: 'fb_post_stopped_' + String(step).toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+        title: step === 'Publish' ? 'Could not confirm the Facebook listing published' : 'Facebook listing stopped at the ' + step + ' step',
+        what: (e && e.message) || 'A part of Facebook\'s form did not look the way the extension expected.',
+        why: step === 'Publish'
+          ? 'Publish was clicked, but Facebook did not leave the create form in time, so the result is unknown.'
+          : 'Facebook\'s form may have changed, a required field may be missing, or Facebook blocked the step. The extension stops instead of guessing so it never posts a wrong listing.',
+        next: step === 'Publish'
+          ? 'Nothing more will be posted automatically. Check your Facebook selling page; if the listing is live, use the "It published" button in the panel so FindA.Sale stops offering it.'
+          : 'Nothing further was published for this item. Check the Facebook tab, fix or finish the listing by hand if you like, then reopen the extension to continue the queue.',
+        ctx: { step: step, itemId: item && item.id, position: (index + 1) + '/' + total }
+      });
+      T('end', 'Stopped at the ' + step + ' step.', { error: (e && e.message) || String(e) });
       // 2026-08-15 fix (Patrick live report -- magazine crosslist stalled on Publish-step
       // confirm, Patrick manually confirmed the listing WAS live on Facebook, but the item kept
       // showing "available to push" after reopening the extension). Root cause: mark() /
@@ -1133,20 +1200,24 @@
         // resolved) -- pass null, same fail-closed convention the manual-publish path (see
         // autoPublish===false above) already uses for "we know it published but not the exact
         // remote URL".
-        if (c) c.onclick = async () => { await mark(item, null); await advanceAuto(); };
+        if (c) c.onclick = async () => { T('info', 'fb_publish_confirmed_by_user', 'Organizer confirmed the listing is live on Facebook.'); await mark(item, null); T('end', 'Marked done by you.'); await advanceAuto(); };
       }
     }
   }
 
   async function mark(item, remoteListingId) {
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: remoteListingId || null }); } catch (e) {}
+    try {
+      const r = await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: remoteListingId || null });
+      if (r && r.ok === false) T('warn', 'fb_mark_listed_rejected', 'FindA.Sale did not accept the "listed" update for this item.', { response: r });
+      else T('info', 'fb_mark_listed_sent', 'Sent the "listed" update to FindA.Sale.', { itemId: item.id, hasRemoteId: !!remoteListingId, response: r && typeof r === 'object' ? { ok: r.ok, error: r.error } : null });
+    } catch (e) { T('error', 'fb_mark_listed_failed', 'Could not tell FindA.Sale this item was listed: ' + ((e && e.message) || e), { itemId: item.id }); }
   }
 
   async function advanceAuto() {
     overlay('<b>FindA.Sale</b> — loading the next listing…');
     const r = await chrome.runtime.sendMessage({ type: 'advanceQueue' });
-    if (r && r.ok && r.item) { location.href = 'https://www.facebook.com/marketplace/create/item'; }
-    else { overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
+    if (r && r.ok && r.item) { T('info', 'fb_queue_advance', 'Moving to the next queued item.', { index: r.index, total: r.total }); location.href = 'https://www.facebook.com/marketplace/create/item'; }
+    else { T('info', 'fb_queue_done', 'Queue finished; no more items for Facebook.'); overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
   }
 
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -1155,6 +1226,8 @@
     let q;
     try { q = await chrome.runtime.sendMessage({ type: 'getQueueItem' }); } catch (e) { return; }
     if (!q || !q.ok || !q.item) return; // nothing queued -- stay silent
+    T('begin', { platform: 'FACEBOOK', flow: 'post', item: { id: q.item.id, title: q.item.title }, itemPos: (q.index + 1) + ' of ' + q.total });
+    T('step', 'Checking Facebook\'s selling rules', 'Making sure this item is allowed on Facebook Marketplace before touching the form.', { category: q.item.category || null });
     // Facebook Commerce Policy gate (coins/currency AND weapons/ammunition/explosives as of
     // S-FB-WEAPON-COIN-FIX-2026-09-03) -- see facebookRestrictionReason above. Defense-in-depth:
     // skip straight to the next queued item rather than filling out Facebook's form for it. This
@@ -1163,16 +1236,38 @@
     const fbReason = facebookRestrictionReason(q.item.category, q.item.title);
     if (fbReason) {
       console.warn('[FAS] skipping Facebook listing (Commerce Policy):', q.item.id, q.item.title, fbReason);
+      T('problem', {
+        code: 'fb_post_policy_skip',
+        title: 'Item skipped: not allowed on Facebook',
+        what: 'This item was skipped and nothing was entered on Facebook.',
+        why: fbReason,
+        next: 'It stays available for other channels. The extension continues with the next queued item.',
+        ctx: { itemId: q.item.id }
+      });
+      T('end', 'Skipped (Facebook policy).');
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(q.item.title || 'this item') + '</b> -- ' + escapeHtml(fbReason) + '</div>');
       await humanPause(1200, 1800);
+      await sleep(2500); // keep the explanation readable before moving on
       await advanceAuto();
       return;
     }
+    T('ok', 'Item is allowed on Facebook.');
     try {
+      T('step', 'Opening Facebook\'s listing form', 'Waiting for the "Item for sale" form to load so the fields can be filled.');
       await waitFor(() => SEL.fieldByLabel(LABELS.title), 15000);
+      T('ok', 'Listing form is ready.');
       await sleep(400);
       await runQueue(q.item, q.index, q.total, q.autoPublish !== false);
     } catch (e) {
+      const wall = onLoginWall();
+      T('problem', {
+        code: wall ? 'fb_post_login_wall' : 'fb_post_form_missing',
+        title: wall ? 'Facebook needs you to log in or verify your account' : 'Facebook\'s listing form did not load',
+        what: wall ? 'Facebook showed a login or security check page instead of the listing form.' : 'The Title box on Facebook\'s "Item for sale" form was not found after 15 seconds.',
+        why: wall ? 'You may be logged out, or Facebook is asking for a checkpoint. The extension never tries to get past those.' : 'You may not be on the "Item for sale" create screen, the page loaded slowly, or Facebook changed its layout.',
+        next: 'Nothing was posted. ' + (wall ? 'Log in or finish the check in this tab, then reopen the extension to continue.' : 'Open Marketplace > Create new listing > Item for sale, then reopen the extension.')
+      });
+      T('end', wall ? 'Stopped: Facebook login/checkpoint.' : 'Stopped: listing form not found.');
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Couldn\'t find Facebook\'s listing form. Make sure you\'re on the "Item for sale" create screen, then reopen the extension.</div>' + btn('fas-skip', 'Close', false));
       const s = document.getElementById('fas-skip'); if (s) s.onclick = () => bar.remove();
     }

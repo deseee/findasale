@@ -31,6 +31,13 @@
   // ===================================================================================================================
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function norm(s) { return C.foldTitle(s); }
+  // ---- narration + diagnostics (fas-trace.js). Every call is guarded: a missing/broken FAS_TRACE must never change an edit result. ----
+  var oldSeen = null;      // the price this run read from the live listing BEFORE changing it (carried between page loads in scratch.oldPrice)
+  var traceKey = '', lastWhat = '';
+  function T() { try { return self.FAS_TRACE || null; } catch (e) { return null; } }
+  function tStep(what, why, ctx) { try { var t = T(); if (t && what !== lastWhat) { lastWhat = what; t.step(what, why, ctx); } } catch (e) { /* never break the edit */ } }
+  function tLog(level, code, msg, ctx) { try { var t = T(); if (!t) return; if (level === 'warn') t.warn(code, msg, ctx); else if (level === 'error') t.error(code, msg, ctx); else t.info(code, msg, ctx); } catch (e) { /* ignore */ } }
+  function money(platform, v) { try { return v == null ? '?' : '$' + C.formatPrice(platform, v); } catch (e) { return String(v); } }
   function q(sel, root) { try { return (root || document).querySelector(sel); } catch (e) { return null; } }
   function qa(sel, root) { try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; } }
   function visible(el) {
@@ -85,13 +92,24 @@
   }
   // A react-controlled input sometimes ignores the first write; select-all + native setter + re-check.
   async function writeField(el, value) {
+    var before = '', kind = 'field';
+    try {
+      before = String(el.value == null ? '' : el.value);
+      var hh = hintsOf(el);
+      kind = /quantity|qty|stock/i.test(hh) ? 'quantity' : (/price/i.test(hh) && !/floor|minimum|original|shipping/i.test(hh) ? 'price' : 'field');
+      if (kind === 'price' && oldSeen == null) { var po = C.parsePriceText(before); if (po != null) oldSeen = po; }
+    } catch (e) { /* ignore */ }
     setNative(el, String(value));
     await sleep(150);
-    if (String(el.value).trim() === String(value)) return true;
-    try { el.select && el.select(); } catch (e) { /* ignore */ }
-    setNative(el, String(value));
-    await sleep(250);
-    return C.parsePriceText(el.value) === C.parsePriceText(value);
+    var okNow = String(el.value).trim() === String(value);
+    if (!okNow) {
+      try { el.select && el.select(); } catch (e) { /* ignore */ }
+      setNative(el, String(value));
+      await sleep(250);
+      okNow = C.parsePriceText(el.value) === C.parsePriceText(value);
+    }
+    tLog(okNow ? 'info' : 'warn', okNow ? 'field_written' : 'field_not_sticking', (okNow ? 'Changed the ' + kind + ' field from "' + before + '" to "' + value + '"' : 'The ' + kind + ' field would not keep "' + value + '" (it shows "' + el.value + '")'), { kind: kind, from: before, to: String(value), hints: (function () { try { return hintsOf(el).slice(0, 120); } catch (e) { return ''; } })() });
+    return okNow;
   }
   function labelText(el) {
     var out = [];
@@ -417,10 +435,30 @@
     });
     return Object.keys(byId).map(function (k) { return byId[k]; });
   }
+  // Several of the seller's listings share this exact title and no saved listing id exists: refuse to guess. Reports every candidate.
+  function poshCandidatePrice(id) {
+    try {
+      var a = qa('a[href*="' + id + '"]')[0], node = a;
+      for (var i = 0; i < 6 && node; i++, node = node.parentElement) {
+        var m = /\$\s?([\d,]+(?:\.\d{1,2})?)/.exec((node.innerText || '').slice(0, 400));
+        if (m) return m[1];
+      }
+    } catch (e) { /* ignore */ }
+    return '';
+  }
+  function poshAmbiguous(it) {
+    var cands = [];
+    try {
+      poshClosetCards().forEach(function (c) { if ((c.texts || []).some(function (t) { return C.titleEquals(t, it.title); })) cands.push({ id: c.key, price: poshCandidatePrice(c.key) }); });
+    } catch (e) { /* ignore */ }
+    tLog('warn', 'ambiguous_title', cands.length + ' Poshmark listings have the exact title "' + String(it.title || '').slice(0, 60) + '" and this item has no saved Poshmark listing id; nothing was edited', { candidates: cands.slice(0, 10) });
+    return fail('ambiguous_title', cands.length + ' closet listings share this exact title (' + cands.slice(0, 5).map(function (c) { return c.id.slice(-6) + (c.price ? '@$' + c.price : ''); }).join(', ') + '); not editing any of them', 'locate', '.tile-grid-redesign__title', {}, { details: { candidates: cands.slice(0, 10) } });
+  }
   async function poshStep(ctx) {
     var S = ctx.scratch || {}, W = wants(ctx), it = ctx.item;
     var id = S.remoteId || it.remoteListingId || (ctx.idCache && ctx.idCache['POSHMARK:' + it.id]) || '';
     var path = location.pathname;
+    if (it.remoteListingId && !/^[0-9a-f]{24}$/i.test(String(it.remoteListingId)) && !S.remoteId) tLog('warn', 'remote_id_invalid', 'The saved Poshmark listing id "' + String(it.remoteListingId).slice(0, 30) + '" is not a valid 24-character id; falling back to finding the listing by exact title', {});
     if (!/^[0-9a-f]{24}$/i.test(id)) {
       // ---- discovery: find the listing id in the seller's own closet by exact title (live-confirmed closet DOM). ----
       if (!/^\/closet\//.test(path)) {
@@ -434,8 +472,25 @@
       var found = null;
       for (var sc = 0; sc < 7 && !found; sc++) {
         var pick = C.pickUnique(poshClosetCards(), it.title, 'equals');
-        if (pick.match) { found = pick.match.key; break; }
-        if (pick.reason === 'ambiguous') return fail('ambiguous_title', pick.count + ' closet listings share this title', 'locate', '.tile-grid-redesign__title', {});
+        if (pick.match) {
+          found = pick.match.key;
+          // Safety (2026-10-16): the closet lazy-loads, so a lone match here may have an identical-title twin further down that has not
+          // rendered yet. No saved listing id to anchor on, so keep scrolling until the card count stops growing (bounded) and refuse
+          // to edit if a second exact-title listing shows up.
+          var prevN = -1;
+          for (var ex = 0; ex < 6; ex++) {
+            var nowN = poshClosetCards().length;
+            if (nowN === prevN) break;
+            prevN = nowN;
+            window.scrollTo(0, document.body.scrollHeight);
+            await sleep(1100);
+            var again = C.pickUnique(poshClosetCards(), it.title, 'equals');
+            if (again.reason === 'ambiguous') return poshAmbiguous(it);
+          }
+          tLog('info', 'posh_title_match', 'Exactly one Poshmark listing has this title; using its id', { id: found });
+          break;
+        }
+        if (pick.reason === 'ambiguous') return poshAmbiguous(it);
         window.scrollTo(0, document.body.scrollHeight);
         await sleep(1100);
       }
@@ -464,6 +519,7 @@
       var curQty = C.poshmarkQuantity(before);
       var needPrice = W.price != null && !C.pricesMatch('POSHMARK', C.poshmarkPriceVal(before), W.price);
       var needQty = W.qty != null && curQty != null && curQty !== W.qty;
+      try { var pv = C.poshmarkPriceVal(before); if (pv != null && oldSeen == null) oldSeen = pv; tLog('info', 'posh_compare', 'Poshmark currently shows ' + money('POSHMARK', pv) + '; FindA.Sale wants ' + (W.price != null ? money('POSHMARK', W.price) : 'no price change'), { current: pv, wanted: W.price, qtyNow: curQty, qtyWanted: W.qty }); } catch (e) { /* ignore */ }
       var diagKeys = { diagKeys: Object.keys(before || {}).slice(0, 80), invKeys: before && before.inventory ? Object.keys(before.inventory) : [], sizeRows: (before && before.inventory && before.inventory.size_quantities || []).length };
       if (!needPrice && !needQty) {
         return Object.assign(done({ readBack: { price: C.poshmarkPriceVal(before), quantity: curQty }, via: 'api_get_already_correct' }, { apiTried: true, remoteId: id }), { diag: { note: 'posh_already_correct', keys: diagKeys } });
@@ -471,10 +527,12 @@
       var built = C.buildPoshmarkUpdate(before, needPrice ? W.price : null, needQty ? W.qty : null);
       if (built.error) return fail('payload_build_failed', built.error, 'api', 'post payload', { apiTried: true, remoteId: id });
       await sleep(200 + Math.floor(Math.random() * 400));
+      tStep('Saving the new price ' + (W.price != null ? money('POSHMARK', W.price) : '') + (oldSeen != null ? ' (was ' + money('POSHMARK', oldSeen) + ')' : '') + ' to Poshmark', 'sending it through Poshmark\'s own edit service, then I re-read the listing to check');
       var res = await fetch('/vm-rest/posts/' + id, { method: 'POST', credentials: 'same-origin', headers: poshHeaders(csrf, true), body: JSON.stringify(built.body), referrer: location.origin + '/edit-listing/' + id });
       var rt = await res.text(); var rj = null; try { rj = JSON.parse(rt); } catch (e) { /* maybe empty */ }
       var errP = rj && C.isPoshmarkErrorPayload(rj);
       if (res.status === 403 || res.status === 429) return blocked('http_' + res.status, 'POST post returned ' + res.status, 'api');
+      tLog(res.ok && !errP ? 'info' : 'warn', 'posh_post_result', 'Poshmark answered the price save with HTTP ' + res.status + (errP ? ' (' + String(errP).slice(0, 80) + ')' : ''), { status: res.status });
       if (!res.ok || errP) {
         // API refused: drive the form instead (documented fallback), then verify through an API re-GET.
         if (S.formFallback) return fail('api_post_failed', 'POST post: HTTP ' + res.status + ' ' + (errP || rt.slice(0, 100)), 'api', 'POST /vm-rest/posts/<id>', { apiTried: true, remoteId: id }, { diag: { note: 'posh_post_failed', keys: diagKeys, resp: C.redact(rj || rt.slice(0, 200)) } });
@@ -811,7 +869,11 @@
       if (it.remoteListingId) chosen = cands.filter(function (r) { return r.postingId === it.remoteListingId; })[0] || null;
       if (!chosen) {
         var pick = C.pickUnique(cands.map(function (r) { return { key: r.postingId, texts: [r.titleRaw], row: r }; }), it.title, 'equals');
-        if (pick.reason === 'ambiguous') return fail('ambiguous_title', pick.count + ' active postings share this title', 'locate', 'td.title a', {});
+        if (pick.reason === 'ambiguous') {
+          var clC = cands.filter(function (r) { return C.titleEquals(r.titleRaw, it.title); }).slice(0, 10).map(function (r) { return { id: r.postingId, price: clRowPrice(r.titleRaw) }; });
+          tLog('warn', 'ambiguous_title', pick.count + ' active Craigslist postings share this title and the item has no saved posting id; nothing was edited', { candidates: clC });
+          return fail('ambiguous_title', pick.count + ' active postings share this title', 'locate', 'td.title a', {}, { details: { candidates: clC } });
+        }
         if (pick.match) chosen = pick.match.row;
       }
       if (!chosen) {
@@ -841,6 +903,7 @@
         }
         var cont1 = q('button.continue') || findButton(/^continue$/) || qa('input[type="submit"]').filter(function (b) { return /continue/i.test(b.value || ''); })[0];
         if (!cont1) return fail('continue_button_not_found', 'No Continue button after setting the price', 'edit', 'button.continue | input[type=submit][value=Continue]', { hops: hops });
+        tStep('Pressing Continue to keep the new price ' + (W.price != null ? money('CRAIGSLIST', W.price) : ''), 'Craigslist saves the change when the edit steps are continued and published');
         deferClick(cont1);
         return cont(3000, { hops: hops, priceSet: true, formSnap: true }, { diag: diag });
       }
@@ -849,14 +912,14 @@
       // (listing "updated", price untouched). Never click publish until the price has been set.
       if (!S.priceSet) {
         var editPost = qa('input[type="submit"], button, a').filter(function (b) { return visible(b) && /^edit post$/.test(btnLabel(b)); })[0];
-        if (editPost) { deferClick(editPost); return cont(3000, { hops: hops }); }
+        if (editPost) { tStep('Clicking "edit post"', 'Craigslist opened the preview page; the price box only appears after "edit post"'); deferClick(editPost); return cont(3000, { hops: hops }); }
       }
       var editThis = qa('input[type="submit"], button, a').filter(function (b) { return visible(b) && /^edit this posting$/.test(btnLabel(b)); })[0];
-      if (editThis && !S.priceSet) { deferClick(editThis); return cont(3000, { hops: hops }, { diag: S.manageSnap ? undefined : snapshot('cl_manage_page') }); }
+      if (editThis && !S.priceSet) { tStep('Clicking "edit this posting"', 'Craigslist is showing the manage page for this post'); deferClick(editThis); return cont(3000, { hops: hops }, { diag: S.manageSnap ? undefined : snapshot('cl_manage_page') }); }
       var imgDone = q('button.done') || findButton(/^done with images$/);
       if (imgDone) { deferClick(imgDone); return cont(3000, { hops: hops }); }
       var anyCont = q('button.continue') || findButton(/^(continue|publish|done|ok)$/) || qa('input[type="submit"]').filter(function (b) { return /^(continue|publish|done)/i.test(b.value || ''); })[0];
-      if (anyCont && S.priceSet) { deferClick(anyCont); return cont(3000, { hops: hops }); }
+      if (anyCont && S.priceSet) { tStep('Pressing "' + (btnLabel(anyCont) || 'continue') + '" to finish the Craigslist edit', 'the price is already changed; this publishes it'); deferClick(anyCont); return cont(3000, { hops: hops }); }
       if (!S.priceSet && hops >= 4) return fail('price_field_not_found', 'No input[name="price"] reached in the Craigslist edit flow (category may have no price field)', 'edit', 'input[name="price"]', { hops: hops });
       return cont(1500, { hops: hops });
     }
@@ -949,20 +1012,115 @@
   // ===================================================================================================================
   // dispatcher
   // ===================================================================================================================
+  function describePhase(ctx) {
+    var p = ctx.platform, L = (C.LABELS && C.LABELS[p]) || p, S = ctx.scratch || {}, it = ctx.item || {}, W = wants(ctx);
+    var ph = S.phase || 'locate', t = String(it.title || 'the listing').slice(0, 50);
+    var np = W.price != null ? money(p, W.price) : '';
+    var goal = np ? 'change its price to ' + np + (S.oldPrice != null ? ' (was ' + money(p, S.oldPrice) + ')' : '') : 'update its stock number';
+    if (/verify|^saved$/.test(ph) && ph !== 'saved') return { what: 'Re-reading the live ' + (np ? 'price' : 'stock') + ' on ' + L + ' to confirm it saved', why: 'FindA.Sale only marks this item synced after ' + L + ' itself shows ' + (np || 'the new stock') };
+    if (ph === 'saved') return { what: 'Checking that ' + L + ' accepted the save', why: 'looking for a confirmation or an error message before I re-read the listing' };
+    if (ph === 'api') return { what: 'Opening ' + L + '\'s edit page for this listing', why: 'I have its listing id, so I can edit it directly and need to ' + goal };
+    if (ph === 'form' || ph === 'edit' || ph === 'itempage') return { what: np ? 'Setting price to ' + np + ' on ' + L : 'Setting stock on ' + L, why: 'the price on FindA.Sale changed' + (S.oldPrice != null ? ' from ' + money(p, S.oldPrice) : '') + ' and the marketplace listing must match' };
+    // locate
+    if (p === 'CRAIGSLIST') {
+      var onDash = /accounts\.craigslist\.org$/.test(location.hostname) && /\/login\/home/.test(location.pathname);
+      return onDash ? { what: 'Looking for "' + t + '" among your active Craigslist posts', why: it.remoteListingId ? 'matching the saved posting id first, then the exact title' : 'matching by exact title; I will not edit if two posts share it' }
+                    : { what: 'Opening your Craigslist dashboard to find the listing', why: 'Craigslist lists your active posts there, and I need to ' + goal };
+    }
+    if (p === 'POSHMARK') {
+      var hasId = !!(S.remoteId || it.remoteListingId || (ctx.idCache && ctx.idCache['POSHMARK:' + it.id]));
+      return hasId ? { what: 'Opening the Poshmark listing directly', why: 'I already know its listing id, so no title search is needed' }
+                   : { what: 'Searching your Poshmark closet for "' + t + '"', why: 'no saved listing id yet; I will only edit if exactly one listing has this exact title' };
+    }
+    return { what: 'Finding "' + t + '" in your ' + L + ' listings', why: 'so I can ' + goal };
+  }
+  function humanize(code, reason, L, item) {
+    var r = String(reason || code || '');
+    var m = {
+      ambiguous_title: ['More than one of your ' + L + ' listings has this exact title, and FindA.Sale has no saved listing id for this item.', 'Editing one at random could change the wrong listing, so nothing was edited.', 'It will keep skipping this item until the listing id is known (open the right listing once, or give the listings different titles). Candidate ids and prices are in the activity log.'],
+      login_required: ['You appear to be signed out of ' + L + '.', 'The marketplace showed a sign-in page instead of your listings.', 'Sign in to ' + L + ' in this browser. FindA.Sale pauses ' + L + ' edits for a while and resumes automatically.'],
+      captcha_or_verification: [L + ' asked for a security check.', 'Automatic editing stops at captchas and verification screens so your account is not put at risk.', 'Complete the check in ' + L + ' yourself; FindA.Sale pauses ' + L + ' edits and tries again later.'],
+      price_field_not_found: ['The edit form opened but no price box was found.', 'The marketplace page layout may have changed, or this listing type has no price field.', 'Nothing was changed. FindA.Sale will retry later; the page snapshot below shows what was on screen.'],
+      price_value_did_not_stick: ['The price box would not keep the new value.', 'The page rewrote the field after FindA.Sale typed in it.', 'Nothing was saved. FindA.Sale will retry later.'],
+      verify_mismatch: ['FindA.Sale saved the new price but the live listing still shows something different.', 'The marketplace may not have accepted the change yet, or it changed another value.', 'The item is not marked synced, so FindA.Sale re-checks it on the next retry. Look at the listing yourself if this repeats.'],
+      save_control_not_found: ['The price was entered but no Save/Update button could be found.', 'The marketplace page layout may have changed.', 'Nothing was saved. FindA.Sale will retry later.'],
+      listing_not_found_on_dashboard: ['The listing was not found on your ' + L + ' dashboard.', 'It may have expired, sold, been removed, or have a different title there.', 'FindA.Sale will retry later; if the listing is gone the sync will be cleared by the next removal check.'],
+      listing_not_found_in_closet: ['The listing was not found in your ' + L + ' closet.', 'It may be sold, removed, or titled differently than on FindA.Sale.', 'FindA.Sale will retry later.'],
+      edit_control_not_found: ['No Edit control was found for this listing.', 'The marketplace page layout may have changed, or the listing is not editable right now.', 'Nothing was changed. FindA.Sale will retry later.'],
+      engine_exception: ['FindA.Sale hit an unexpected error while editing.', r, 'Nothing was confirmed as changed. FindA.Sale will retry later.']
+    };
+    var h = m[code];
+    if (!h && /^http_(403|429)$/.test(code)) h = [L + ' refused the request (HTTP ' + code.slice(5) + ').', 'The marketplace is rate-limiting or blocking automatic edits.', 'FindA.Sale stops editing ' + L + ' for a while, then tries again.'];
+    if (!h) h = ['Could not finish updating this listing on ' + L + ' (' + (code || 'unknown') + ').', r.slice(0, 200), 'Nothing was confirmed as changed. FindA.Sale will retry later with longer waits (15 minutes, doubling, paused for 24 hours after repeated failures).'];
+    return { what: h[0], why: h[1], next: h[2] };
+  }
+  function compactDiag(d) {
+    try {
+      if (!d || typeof d !== 'object') return undefined;
+      return { note: d.note, url: d.url, title: d.title, dialogs: d.dialogs, textSample: d.textSample,
+        buttons: (d.buttons || []).slice(0, 15).map(function (b) { return b.text || b.aria; }),
+        inputs: (d.inputs || []).slice(0, 12).map(function (i) { return [i.name || i.id || i.aria || i.ph, i.type, i.vis ? 'vis' : 'hid'].join(':'); }),
+        editish: (d.editish || []).slice(0, 8).map(function (e) { return e.text || e.aria; }), requests: (d.requests || []).slice(-6).map(function (r) { return r.url; }) };
+    } catch (e) { return undefined; }
+  }
+  function traceStart(ctx) {
+    try {
+      var t = T(); if (!t) return;
+      var it = ctx.item || {}, S = ctx.scratch || {};
+      oldSeen = S.oldPrice != null ? S.oldPrice : null;
+      var key = ctx.platform + ':' + it.id, W = wants(ctx), L = (C.LABELS && C.LABELS[ctx.platform]) || ctx.platform;
+      if (traceKey !== key || ctx.stepNo === 0) {
+        traceKey = key; lastWhat = '';
+        t.begin({ platform: L, flow: 'edit', item: { id: it.id, title: it.title }, itemPos: ctx.itemPos || '', ctx: { platformCode: ctx.platform, stepNo: ctx.stepNo, phase: S.phase || 'locate', newPrice: W.price, newQty: W.qty, oldPrice: oldSeen, hasRemoteId: !!it.remoteListingId } });
+      }
+      var d = describePhase(ctx);
+      tStep(d.what, d.why, { phase: S.phase || 'locate', stepNo: ctx.stepNo });
+    } catch (e) { /* ignore */ }
+  }
+  function traceResult(ctx, res) {
+    try {
+      var t = T(); if (!t || !res) return res;
+      var p = ctx.platform, L = (C.LABELS && C.LABELS[p]) || p, S = ctx.scratch || {}, it = ctx.item || {}, W = wants(ctx);
+      var np = W.price != null ? W.price : null;
+      if (oldSeen != null && res.state !== 'fail' && res.state !== 'blocked') res.scratch = Object.assign({}, res.scratch, { oldPrice: oldSeen });
+      var old = oldSeen != null ? oldSeen : (S.oldPrice != null ? S.oldPrice : null);
+      var tctx = { platformCode: p, phase: S.phase || 'locate', step: res.step || '', selector: res.selector || '', oldPrice: old, newPrice: np, url: C.safeUrl(location.href) };
+      if (res.state === 'done') {
+        var rb = res.details && res.details.readBack;
+        t.ok('The live listing now shows ' + (rb && rb.price != null ? money(p, C.parsePriceText(rb.price)) : (np != null ? money(p, np) : 'the new value')), { readBack: rb, via: res.details && res.details.via });
+        t.end((np != null ? 'Price on ' + L + ' ' + (old != null && old !== np ? 'changed ' + money(p, old) + ' to ' + money(p, np) : 'is ' + money(p, np)) : 'Stock updated on ' + L) + ' (confirmed on the live listing)', Object.assign({}, tctx, { readBack: rb }));
+      } else if (res.state === 'goto') {
+        t.info('navigate', 'Moving on to ' + C.safeUrl(res.url), { phase: S.phase || 'locate', next: res.scratch && res.scratch.phase });
+      } else if (res.state === 'fail' || res.state === 'blocked') {
+        var h = humanize(res.code, res.reason, L, it);
+        var blk = res.state === 'blocked';
+        t.error(res.code || res.state, String(res.reason || '').slice(0, 300), tctx);
+        t.problem({
+          code: res.code || res.state,
+          title: blk ? 'FindA.Sale paused ' + L + ' edits' : (np != null ? 'Could not change the price on ' + L : 'Could not update ' + L),
+          what: (np != null ? 'Tried to change the price' + (old != null ? ' from ' + money(p, old) : '') + ' to ' + money(p, np) + '. ' : '') + h.what,
+          why: h.why, next: h.next,
+          ctx: Object.assign({}, tctx, { reason: String(res.reason || '').slice(0, 300), tried: 'phase ' + (S.phase || 'locate') + (res.step ? ', step ' + res.step : '') + (res.selector ? ', looking for ' + res.selector : ''), details: res.details, engineDiag: compactDiag(res.diag) })
+        });
+      }
+    } catch (e) { /* narration must never change the result */ }
+    return res;
+  }
   var HANDLERS = { FACEBOOK: fbStep, POSHMARK: poshStep, MERCARI: mercStep, GRAILED: grStep, CRAIGSLIST: clStep, GUMTREE_AU: gtStep };
   async function step(ctx) {
     try {
       var h = HANDLERS[ctx.platform];
       if (!h) return { state: 'fail', code: 'unsupported_platform', reason: String(ctx.platform) };
-      if (passwordSurface() && !(ctx.platform === 'CRAIGSLIST' && /\/login\/home/.test(location.pathname))) return blocked('login_required', 'A password field is showing: the marketplace session is signed out', 'guard');
+      traceStart(ctx);
+      if (passwordSurface() && !(ctx.platform === 'CRAIGSLIST' && /\/login\/home/.test(location.pathname))) return traceResult(ctx, blocked('login_required', 'A password field is showing: the marketplace session is signed out', 'guard'));
       var bl = pageBlock();
-      if (bl && bl.code !== 'login_required') return blocked(bl.code, 'Marketplace page state: ' + bl.code, 'guard');
-      if (bl && bl.code === 'login_required') return blocked('login_required', 'Redirected to a sign-in page', 'guard');
+      if (bl && bl.code !== 'login_required') return traceResult(ctx, blocked(bl.code, 'Marketplace page state: ' + bl.code, 'guard'));
+      if (bl && bl.code === 'login_required') return traceResult(ctx, blocked('login_required', 'Redirected to a sign-in page', 'guard'));
       var res = await h(ctx);
-      return res;
+      return traceResult(ctx, res);
     } catch (e) {
-      return { state: 'fail', code: 'engine_exception', reason: ((e && e.message) || String(e)).slice(0, 200), step: (ctx.scratch && ctx.scratch.phase) || '', diag: (function () { try { return snapshot('exception'); } catch (e2) { return null; } })() };
+      return traceResult(ctx, { state: 'fail', code: 'engine_exception', reason: ((e && e.message) || String(e)).slice(0, 200), step: (ctx.scratch && ctx.scratch.phase) || '', diag: (function () { try { return snapshot('exception'); } catch (e2) { return null; } })() });
     }
   }
-  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.6' };
+  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7' };
 })();

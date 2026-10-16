@@ -44,6 +44,31 @@
   }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+  // Shared step narration + diagnostics (fas-trace.js). Guarded so a missing module or a logging error can never break a posting.
+  function FT(method) {
+    try {
+      const t = (typeof window !== 'undefined' && window.FAS_TRACE) || null;
+      if (t && typeof t[method] === 'function') return t[method].apply(t, Array.prototype.slice.call(arguments, 1));
+    } catch (e) { /* logging must never break the flow */ }
+    return undefined;
+  }
+  function ftRespCtx(r) { return { gotResponse: r != null, ok: r && r.ok, status: r && (r.status || r.httpStatus), error: r && r.error ? String(r.error).slice(0, 120) : undefined }; }
+  // Tells the backend this item is listed on Craigslist, and records the outcome (ok flag / http status) in the trail.
+  // Same message and same best-effort behaviour as the three call sites that used to inline it; never throws.
+  async function markListedTraced(item, waitMs, via) {
+    FT('step', 'Telling FindA.Sale this item is now listed on Craigslist', 'So it shows as listed, is not offered for posting again, and gets a renewal date.', { via: via });
+    let resp = null;
+    try {
+      resp = await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('CRAIGSLIST', waitMs)), platform: 'CRAIGSLIST' });
+    } catch (e) {
+      FT('warn', 'mark_listed_threw', 'Could not record the listing with FindA.Sale: ' + ((e && e.message) || 'unknown') + '. The Craigslist post itself is not affected.', { via: via });
+      return null;
+    }
+    if (resp && resp.ok === false) FT('warn', 'mark_listed_rejected', 'FindA.Sale did not accept the listed-on-Craigslist record', Object.assign({ via: via }, ftRespCtx(resp)));
+    else FT('ok', 'Recorded as listed on Craigslist', Object.assign({ via: via }, ftRespCtx(resp)));
+    return resp;
+  }
+
   // Craigslist Prohibited Items gate (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- this platform
   // auto-publishes BY DEFAULT (see file header above), the exact same risk profile as the Facebook
   // incident that triggered this cross-marketplace audit (a dagger was auto-submitted to Facebook
@@ -272,6 +297,7 @@
   // against a wall it can't get through, and surfaced informationally in the popup.
   async function reportLoginState() {
     const state = isLoggedIntoCraigslist();
+    FT('info', 'login_state', 'Craigslist account state seen on this page: ' + (state === null ? 'unknown' : state ? 'logged in' : 'logged out (guest posting is still allowed)'), { loggedIn: state });
     if (state === null) return;
     try { await chrome.runtime.sendMessage({ type: 'craigslistLoginStateObserved', loggedIn: state }); } catch (e) {}
   }
@@ -317,6 +343,30 @@
     }
   });
   function overlayError(step, msg) {
+    try {
+      const rl = /posting too rapidly|posting too fast/i.test(bodyText());
+      const whyMap = {
+        Images: 'Craigslist\'s photo upload either has not finished or did not accept the "done with images" click.',
+        Publish: rl ? 'Craigslist\'s own posting limit page is showing ("posting too rapidly").' : 'After clicking publish the page stayed on the draft preview; Craigslist often does this when it wants phone or email verification.',
+        Details: 'The posting form did not have a field the extension expected, or needs a value the item does not have.',
+        Type: 'The "for sale by owner" choice was not on this screen.',
+        Category: 'No matching for-sale category radio button was found on this screen.',
+        Location: 'The "continue" button was not found on the location screen.',
+        CopyFromPrevious: 'Craigslist\'s "copy from previous posting" screen did not respond to the skip button.',
+        ChooseArea: 'The "continue" button was not found on the choose-area screen.'
+      };
+      FT('error', 'cl_stopped_' + step, 'Stopped on the ' + step + ' step: ' + (msg || 'something did not match.'), { step: step });
+      FT('problem', {
+        code: 'cl_stopped_' + String(step).toLowerCase(),
+        title: 'Craigslist posting stopped on the ' + step + ' step',
+        what: msg || 'Something on this Craigslist screen did not match what FindA.Sale expected.',
+        why: whyMap[step] || 'The Craigslist page did not look the way the extension expects at this point.',
+        next: step === 'Publish'
+          ? 'FindA.Sale will not assume it posted. Check this listing on Craigslist yourself before posting it again.'
+          : 'Nothing was published. Finish this posting yourself on this page, or reopen the extension to retry. The rest of the queue is untouched.',
+        ctx: { step: step, rateLimited: rl }
+      });
+    } catch (e) { /* diagnostics must never block the existing overlay */ }
     overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Stopped on the <b>' + escapeHtml(step) +
       '</b> step: ' + escapeHtml(msg || 'something did not match.') +
       ' Nothing was published -- complete this posting yourself, or reopen the extension to try again.</div>' +
@@ -344,6 +394,7 @@
         if (isRateLimited) {
           if (!rateLimitReported) {
             rateLimitReported = true;
+            FT('warn', 'rate_limited_on_publish', 'Craigslist showed its "posting too rapidly" limit after publish');
             // Fire-and-forget, not awaited -- must not slow down or change this poll's timing.
             try { chrome.runtime.sendMessage({ type: 'craigslistRateLimitHit', bodyTextSnippet: bodyText().slice(0, 300) }).catch(() => {}); } catch (e) {}
           }
@@ -456,6 +507,14 @@
   // Craigslist advancing -- hand it to the human instead of looping.
   function guardStop(step) {
     if (attemptCount(step) >= 2) {
+      FT('problem', {
+        code: 'cl_step_not_advancing_' + step,
+        title: 'Craigslist did not move past the "' + step + '" step',
+        what: 'FindA.Sale filled in this screen twice, but Craigslist kept showing it again.',
+        why: 'Craigslist is probably rejecting something on this screen (a missing or invalid value). Trying a third time would just loop.',
+        next: 'FindA.Sale stopped here and nothing was published. Look for a red error message on the page, fix it, and continue yourself.',
+        ctx: { step: step }
+      });
       overlayInfo('FindA.Sale filled this step but Craigslist did not move on. Please review and complete it yourself, then continue.');
       return true;
     }
@@ -932,15 +991,18 @@
 
   // ---- per-step handlers ----
   async function doTypeStep() {
+    FT('step', 'Choosing the posting type: for sale by owner', 'Craigslist first asks what kind of posting this is; items from FindA.Sale are for-sale-by-owner posts.');
     overlay('<b>FindA.Sale</b> - choosing "for sale by owner"...');
     const radio = radioByLabelText('for sale by owner');
     if (!radio) throw hardError('Type', 'Couldn\'t find the "for sale by owner" option on this Craigslist screen.');
     selectRadio(radio);
     await humanPause(500, 900);
+    FT('ok', 'Selected "for sale by owner"');
     clickContinueOrThrow('Type');
   }
 
   async function doCatStep(item) {
+    FT('step', 'Choosing the Craigslist category', 'Craigslist files each post under a for-sale category; FindA.Sale uses the category matched for this item and falls back to a keyword match, then "general for sale".', { itemCategory: item.category || '' });
     overlay('<b>FindA.Sale</b> - choosing a category...');
     const target = mapCraigslistCategory(item.category);
     // DIAGNOSTIC (2026-08-29, S-EXT-CRAIGSLIST-ROUND-11, Patrick-directed): DB-confirmed correct
@@ -997,14 +1059,18 @@
         radioLabelsOnPage: Array.from(document.querySelectorAll('input[type="radio"]')).slice(0, 80).map((r) => radioLabelTextFor(r))
       });
     } catch (e) { /* diagnostic only */ }
+    FT(usedGeneralFallback ? 'warn' : 'info', usedGeneralFallback ? 'category_general_fallback' : 'category_chosen', 'Category radio chosen: "' + radioLabelTextFor(radio) + '" (' + (usedBackend ? 'matched by FindA.Sale' : usedGeneralFallback ? 'no specific match, used general for sale' : 'keyword fallback') + ')', { used: usedBackend ? 'backend' : (usedGeneralFallback ? 'general' : 'fallback'), itemCategory: item.category || '' });
     console.log('[FAS Craigslist DIAG] doCatStep: radio found=' + !!radio + ' usedGeneralFallback=' + usedGeneralFallback + ' radioLabelText="' + radioLabelTextFor(radio) + '"');
     selectRadio(radio);
     await humanPause(500, 900);
     console.log('[FAS Craigslist DIAG] doCatStep: checked state after select=' + radio.checked + ' label="' + radioLabelTextFor(radio) + '"');
+    if (!radio.checked) FT('warn', 'category_not_checked', 'The category radio did not stay selected after clicking it');
+    else FT('ok', 'Category selected');
     clickContinueOrThrow('Category');
   }
 
   async function doGeoverifyStep(item) {
+    FT('step', 'Confirming the sale location', 'Craigslist asks for the street, city and ZIP of the item so buyers nearby can find it.', { hasStreet: !!(item.saleAddress || item.address), hasCity: !!(item.saleCity || item.city || item.geographicArea), hasZip: !!(item.saleZip || item.zip || item.postal || item.postalCode) });
     overlay('<b>FindA.Sale</b> - confirming the sale location...');
     const street = q('#xstreet0');
     if (street && (item.saleAddress || item.address)) setInputValue(street, item.saleAddress || item.address);
@@ -1015,6 +1081,7 @@
     const postalVal = item.saleZip || item.zip || item.postal || item.postalCode;
     if (postal && postalVal) setInputValue(postal, String(postalVal));
     await humanPause(500, 900);
+    FT('ok', 'Location filled in');
     clickContinueOrThrow('Location');
   }
 
@@ -1038,6 +1105,7 @@
 
   async function doEditStep(item) {
     overlay('<b>FindA.Sale</b> - filling the posting form...');
+    FT('step', 'Entering the title', 'The title is the first thing buyers see on Craigslist.', { titleLen: String(item.title || '').length });
     const title = q('#PostingTitle') || q('input[name="PostingTitle"]');
     if (!title) throw hardError('Details', 'Couldn\'t find the posting Title field.');
     setInputValue(title, item.title);
@@ -1051,6 +1119,7 @@
     // or location under the current item's title/description. Still never INVENTS a value for an
     // item that has none (same intent as the original comment) -- it now actively clears the field to
     // '' in that case instead of leaving whatever was already there.
+    FT('step', 'Entering the price and location', 'Buyers filter by price and area. A value is only filled when the item has one; a missing value clears the field so a previous item\'s price or place cannot carry over.', { hasPrice: item.price != null && isFinite(Number(item.price)) });
     const price = q('input[name="price"]') || q('#price');
     if (price) {
       const hasPrice = item.price != null && isFinite(Number(item.price));
@@ -1075,7 +1144,9 @@
     // the safer failure mode, not a staleness risk worth clearing.
     const email = q('input[name="FromEMail"]');
     if (email && item.email) setInputValue(email, item.email);
+    if (email && !item.email) FT('warn', 'no_reply_email', 'The item carried no contact email, so Craigslist\'s remembered default (if any) was left in place');
 
+    FT('step', 'Entering the description', 'The description tells buyers condition, size and pickup details.', { descLen: String(item.description || '').length });
     const body = q('#PostingBody') || q('textarea[name="PostingBody"]');
     if (!body) throw hardError('Details', 'Couldn\'t find the posting Description field.');
     setInputValue(body, item.description || '');
@@ -1106,9 +1177,12 @@
     const conditionSelect = q('select[name="condition"]');
     if (conditionSelect) {
       const mapped = (window.__FAS_COND__ && window.__FAS_COND__.platformValue('craigslist', item)) || (item.condition ? CL_CONDITION_MAP[String(item.condition).toLowerCase().trim()] : null);
+      FT('step', 'Choosing the condition', 'This Craigslist category requires a condition before it will let the post continue.', { itemCondition: item.condition || '' });
       if (mapped) {
         setInputValue(conditionSelect, mapped);
+        FT('info', 'condition_set', 'Condition set to Craigslist option ' + mapped, { itemCondition: item.condition || '' });
       } else {
+        FT('warn', 'condition_unmatched', 'Could not match the item\'s condition "' + (item.condition || 'not set') + '" to a Craigslist option');
         throw hardError('Details', 'This item needs a condition to post to this Craigslist category, but its condition ("' + (item.condition || 'not set') + '") could not be matched. Set the item\'s condition in FindA.Sale, then try again.');
       }
     }
@@ -1121,16 +1195,30 @@
       if (!mediaVal) {
         throw hardError('Details', 'This Craigslist category needs a media type but none could be matched. Set it on the Craigslist form, then continue.');
       }
+      FT('info', 'media_type_set', 'This category needs a media type; chose Craigslist option ' + mediaVal);
       setInputValue(mediaSelect, mediaVal);
       try { console.log('[FAS Craigslist] media_type -> ' + mediaVal); } catch (e) { /* diagnostic only */ }
     }
 
     await humanPause(700, 1200);
+    FT('ok', 'Posting details filled in');
+    FT('step', 'Continuing to the photos screen', 'Craigslist saves the details, then asks for photos.');
     clickContinueOrThrow('Details');
   }
 
-  function showReviewOverlay(item, index, total, photosOk) {
+  function showReviewOverlay(item, index, total, photosOk, reason) {
     const more = (index + 1) < total;
+    try {
+      if (reason === 'auto_off') {
+        FT('step', 'Waiting for you to review and publish', '"Publish automatically" is switched off, so you check the draft and press Craigslist\'s publish button yourself.');
+      } else if (reason === 'no_publish_button') {
+        FT('problem', { code: 'cl_no_publish_button', title: 'Craigslist did not show a publish button', what: 'The draft preview is open but there is no "publish" button for FindA.Sale to press.', why: 'Craigslist is most likely asking for phone or email verification first, which only you can complete.', next: 'Finish any verification on this page and press publish yourself, then press "I posted" in the FindA.Sale box so it is recorded. Nothing was published yet.' });
+      } else if (reason === 'no_done_button') {
+        FT('problem', { code: 'cl_no_done_with_images', title: 'Craigslist\'s "done with images" button was not found', what: 'FindA.Sale added the photos but could not find the button that moves to the review screen.', why: 'Craigslist may have changed this screen, or the photo step needs your attention.', next: 'Check the photos on this page, continue to the review screen yourself, publish, then press "I posted" in the FindA.Sale box.' });
+      } else if (reason === 'guard') {
+        FT('step', 'Waiting for you to review and publish', 'The publish step already ran twice without Craigslist moving on, so it is handed to you.');
+      }
+    } catch (e) { /* diagnostics only */ }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> and added its photos.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review the posting, complete any phone/email verification, then click Craigslist\'s <b>publish</b> yourself.</div>' +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
@@ -1152,11 +1240,14 @@
       // doPreviewStep's automated-success path already makes; remoteListingId stays null here
       // too (Craigslist's posting flow never exposes a listing id/url to read back, same as the
       // automated path).
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('CRAIGSLIST', 0)), platform: 'CRAIGSLIST' }); } catch (e) {}
+      FT('info', 'user_confirmed_posted', 'You pressed "I posted" for this item');
+      await markListedTraced(item, 0, 'manual_confirm');
       try { await recordCraigslistPost(item); } catch (e) {} // S-EXT-CRAIGSLIST-48H-REPOST-GUARD
       clearAttempts();
-      try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) {}
-      if (more) { location.href = POST_URL; } else { bar && bar.remove(); }
+      let advResp = null;
+      try { advResp = await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) { FT('warn', 'advance_queue_threw', 'Could not advance the Craigslist queue: ' + ((e && e.message) || 'unknown')); }
+      FT('info', 'advance_queue_result', 'Moved the Craigslist queue forward', ftRespCtx(advResp));
+      if (more) { FT('end', 'Recorded "' + String(item.title || '').slice(0, 40) + '" as posted. Opening the next item.'); location.href = POST_URL; } else { FT('end', 'Recorded the last queued item as posted.'); bar && bar.remove(); }
     };
     const close = document.getElementById('fas-cl-close');
     if (close) close.onclick = () => bar && bar.remove();
@@ -1185,14 +1276,18 @@
     // doPostedStep()'s own use of it.
     sessionStorage.removeItem('fasCLPostedHandled');
     overlay('<b>FindA.Sale</b> - adding photos...');
+    FT('step', 'Adding the photos', 'Listings with photos sell better; FindA.Sale fetches each photo and attaches it to Craigslist\'s upload box.', { photos: (item.photoUrls || []).length });
     const photosOk = await injectPhotos(item.photoUrls);
+    if ((item.photoUrls || []).length && !photosOk) FT('warn', 'photos_not_attached', 'The photos could not be attached automatically (fetch failed or no upload box)', { photos: item.photoUrls.length });
+    else if (!(item.photoUrls || []).length) FT('info', 'no_photos', 'This item has no photos to attach');
+    else FT('ok', 'Photos handed to Craigslist\'s uploader');
     sessionStorage.setItem('fasCLPhotosOk', photosOk ? '1' : '0');
     await humanPause(700, 1200);
     let doneBtn = document.getElementById('doneWithImages');
     if (!doneBtn) {
       // Couldn't find Craigslist's own advance button -- fall back to showing the review overlay
       // right here instead of stranding the human with no guidance.
-      showReviewOverlay(item, index, total, photosOk);
+      showReviewOverlay(item, index, total, photosOk, 'no_done_button');
       return;
     }
     // BUG FIX 2026-09-08 (S-EXT-CRAIGSLIST-IMAGES-LAG, P0): don't click "done with images" based
@@ -1204,6 +1299,7 @@
     // "still processing" diagnostic this file already uses elsewhere rather than fabricate
     // progress.
     overlay('<b>FindA.Sale</b> - waiting for photos to finish uploading...');
+    FT('step', 'Waiting for the photos to finish uploading', 'Pressing "done with images" too early makes Craigslist silently ignore the click, so the extension waits until every upload bar is full.');
     // BUG FIX 2026-09-16 (S-EXT-CRAIGSLIST-IMAGES-LAG-10PLUS, P0, same dispatch as the
     // waitForImagesUploadComplete fix above): the flat 20000ms bound didn't scale with photo
     // count, but this file's own prior comment already noted the completion lag grows with photo
@@ -1214,6 +1310,8 @@
     const imagesPhotoCount = (item && item.photoUrls && item.photoUrls.length) || 0;
     const imagesUploadTimeoutMs = Math.min(45000, 20000 + Math.max(0, imagesPhotoCount - 5) * 2500);
     const uploadDone = await waitForImagesUploadComplete(imagesUploadTimeoutMs);
+    if (uploadDone) FT('ok', 'Photo uploads finished', { photos: imagesPhotoCount });
+    else FT('warn', 'upload_wait_timeout', 'Photo uploads still not finished after ' + Math.round(imagesUploadTimeoutMs / 1000) + 's', { photos: imagesPhotoCount, timeoutMs: imagesUploadTimeoutMs });
     if (!uploadDone) {
       overlayError('Images', 'Photos are still uploading after waiting -- Craigslist\'s own upload progress hasn\'t finished. Please wait for the upload to complete, then click "done with images" yourself.');
       return;
@@ -1229,6 +1327,7 @@
     // before giving up and handing off to the human with a clear, specific message instead of a
     // toast that just hangs forever.
     overlay('<b>FindA.Sale</b> - moving to the review screen...');
+    FT('step', 'Moving to the review screen', 'Pressing "done with images" so Craigslist shows the draft preview before publishing.');
     doneBtn.click(); // -> ?s=preview (unpublished draft, NOT live) if it actually took.
     let advanced = await waitForStepChange('images', 6000);
     if (!advanced) {
@@ -1239,6 +1338,7 @@
         advanced = await waitForStepChange('images', 6000);
       }
     }
+    if (advanced) FT('ok', 'Craigslist moved to the review screen');
     if (!advanced) {
       overlayError('Images', 'Clicked "Done with images" but Craigslist didn\'t move to the review screen -- the photo upload may still be processing. Please check this screen and continue yourself.');
       return;
@@ -1251,22 +1351,25 @@
   async function doPreviewStep(item, index, total, autoPublish) {
     const photosOk = sessionStorage.getItem('fasCLPhotosOk') !== '0';
     sessionStorage.removeItem('fasCLPhotosOk');
-    if (!autoPublish) { showReviewOverlay(item, index, total, photosOk); return; }
-    if (guardStop('preview')) { showReviewOverlay(item, index, total, photosOk); return; }
+    if (!autoPublish) { showReviewOverlay(item, index, total, photosOk, 'auto_off'); return; }
+    if (guardStop('preview')) { showReviewOverlay(item, index, total, photosOk, 'guard'); return; }
+    FT('step', 'Looking for the publish button on the draft', 'The draft is not live until it is published; FindA.Sale presses publish for you because "Publish automatically" is on.');
 
     const publishBtn = Array.from(document.querySelectorAll('button')).find((b) => norm(b.textContent) === 'publish');
     if (!publishBtn) {
       // No publish button here -- most likely Craigslist inserted a phone/email verification
       // step this script doesn't recognize. Never guess past that; hand off to the human.
-      showReviewOverlay(item, index, total, photosOk);
+      showReviewOverlay(item, index, total, photosOk, 'no_publish_button');
       return;
     }
 
+    FT('step', 'Publishing the listing', 'Pressing Craigslist\'s publish button, then watching for the page to leave the draft preview to confirm it went live.');
     overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
     await humanPause(500, 900);
     publishBtn.click();
 
     const published = await waitForCraigslistPublish(6000);
+    if (published) FT('ok', 'Craigslist accepted the publish'); 
     if (!published) {
       overlayError('Publish', 'Clicked publish but couldn\'t confirm it went through -- Craigslist may be asking for phone/email verification. Check this listing yourself before assuming it posted.');
       return;
@@ -1277,7 +1380,7 @@
     // ADR-100 §2.2) and so a renewal-due date gets computed. Reuses the EXISTING 'markListed'
     // message type already handled in background.js -- not a new message. Best-effort: a
     // failure here must never undo or block the publish that already happened.
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('CRAIGSLIST', 0)), platform: 'CRAIGSLIST' }); } catch (e) {}
+    await markListedTraced(item, 0, 'auto_publish');
     try { await recordCraigslistPost(item); } catch (e) {} // S-EXT-CRAIGSLIST-48H-REPOST-GUARD
 
     clearAttempts();
@@ -1295,8 +1398,10 @@
       // just started a long session-cooldown pause (CRAIGSLIST_SESSION_CAP reached, or a rate-limit
       // hit) -- doing so would fight the intentional pause instead of respecting it.
       let advanceResp = null;
-      try { advanceResp = await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) {}
+      try { advanceResp = await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) { FT('warn', 'advance_queue_threw', 'Could not advance the Craigslist queue: ' + ((e && e.message) || 'unknown')); }
+      FT('info', 'advance_queue_result', 'Moved the Craigslist queue forward' + (advanceResp && advanceResp.sessionPaused ? ' (pausing for the posting limit)' : ''), Object.assign({ sessionPaused: !!(advanceResp && advanceResp.sessionPaused) }, ftRespCtx(advanceResp)));
       if (advanceResp && advanceResp.sessionPaused) {
+        FT('end', 'Published "' + String(item.title || '').slice(0, 40) + '". Pausing for Craigslist\'s posting limit, will resume automatically.');
         overlayInfo('Published <b>' + escapeHtml(item.title) + '</b>. Pausing for Craigslist\'s posting limit -- will resume automatically.');
         return;
       }
@@ -1304,9 +1409,11 @@
         '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>' +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
       await humanPause(600, 1200);
+      FT('end', 'Published "' + String(item.title || '').slice(0, 40) + '". Opening the next item.');
       location.href = POST_URL;
       return;
     }
+    FT('end', 'Published "' + String(item.title || '').slice(0, 40) + '". Queue complete.');
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
       button('fas-cl-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
@@ -1333,11 +1440,13 @@
     markCraigslistPostedHandled();
     clearAttempts();
 
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('CRAIGSLIST', 2000)), platform: 'CRAIGSLIST' }); } catch (e) {}
+    FT('step', 'Craigslist confirmed the post is live', 'This is Craigslist\'s own confirmation page, so the item is recorded as listed and the queue moves on.', { index: index, total: total });
+    await markListedTraced(item, 2000, 'confirmation_page');
     try { await recordCraigslistPost(item); } catch (e) {} // S-EXT-CRAIGSLIST-48H-REPOST-GUARD
 
     const more = (index + 1) < total;
     if (!more) {
+      FT('end', 'Posted "' + String(item.title || '').slice(0, 40) + '". Queue complete.');
       overlay('<b>FindA.Sale</b><div style="margin-top:6px">Item posted -- queue complete.</div>' +
         '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
         button('fas-cl-posted-close', 'Close', false) +
@@ -1347,7 +1456,10 @@
       return;
     }
 
-    try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) {}
+    let postedAdv = null;
+    try { postedAdv = await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) { FT('warn', 'advance_queue_threw', 'Could not advance the Craigslist queue: ' + ((e && e.message) || 'unknown')); }
+    FT('info', 'advance_queue_result', 'Moved the Craigslist queue forward', ftRespCtx(postedAdv));
+    FT('step', 'Moving on to the next item', 'Clicking Craigslist\'s own "Post another" so its flow decides the next screen.', { next: index + 2, total: total });
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Item posted -- advancing to the next item.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Published <b>' + escapeHtml(item.title) + '</b>. Auto-publish is on -- moving to the next item...</div>' +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
@@ -1360,8 +1472,10 @@
     const postAnother = Array.from(document.querySelectorAll('a, button')).find((el) => /post another/i.test(el.textContent || ''));
     if (postAnother) {
       console.log('[FAS Craigslist] clicking "Post another" to resume the queue for item', index + 2, 'of', total);
+      FT('end', 'Posted "' + String(item.title || '').slice(0, 40) + '". Starting the next item.');
       postAnother.click();
     } else {
+      FT('warn', 'post_another_missing', '"Post another" was not on the confirmation page; opening the Craigslist posting start page instead');
       console.log('[FAS Craigslist] "Post another" control not found on the confirmation page -- falling back to POST_URL navigation.');
       location.href = POST_URL;
     }
@@ -1379,6 +1493,7 @@
   // simpler, safer, and sidesteps region/location/address reuse risk too (e.g. an organizer
   // running sales from more than one address).
   async function doCopyFromPreviousStep() {
+    FT('step', 'Skipping Craigslist\'s "copy from previous posting" screen', 'Reusing the previous post\'s data could silently carry over the wrong category, area or address, so a clean form is requested.');
     overlay('<b>FindA.Sale</b> - skipping Craigslist\'s "copy from previous posting" prompt for a clean form...');
     console.log('[FAS Craigslist] copy-from-previous-posting prompt detected, clicking skip for a clean form');
     const findSkipBtn = () => Array.from(document.querySelectorAll('a, button, input[type="submit"], input[type="button"]'))
@@ -1405,6 +1520,7 @@
         advanced = await waitForStepChange('copyFromPrevious', 6000);
       }
     }
+    if (advanced) FT('ok', 'Craigslist gave a fresh posting form');
     if (!advanced) {
       throw hardError('CopyFromPrevious', 'Clicked "skip" but Craigslist didn\'t move to a fresh posting form -- please check this screen and continue yourself so a stale category or details don\'t carry over.');
     }
@@ -1417,6 +1533,7 @@
   // clickContinueOrThrow() helpers, same defensive text-match approach doTypeStep()/doCatStep()
   // already use (never a hardcoded selector/id that hasn't been verified live).
   async function doChooseAreaStep() {
+    FT('step', 'Confirming the pre-filled posting region', 'Craigslist re-asks which area to post to; your account\'s own region is already selected, so it is confirmed unchanged.');
     overlay('<b>FindA.Sale</b> - confirming the pre-filled posting region...');
     console.log('[FAS Craigslist] choose-area step detected, clicking continue to confirm the pre-filled region');
     await humanPause(400, 800);
@@ -1430,6 +1547,11 @@
   // back up automatically once the human finishes and the real confirmation content appears,
   // without requiring a page reload.
   async function doPhoneVerificationStep() {
+    FT('step', 'Waiting for you to enter Craigslist\'s phone verification code', 'Only you can receive the code on your phone, so FindA.Sale pauses; it continues by itself once Craigslist moves on.');
+    if (!window.__fasClPhoneProblemShown) {
+      window.__fasClPhoneProblemShown = true;
+      FT('problem', { code: 'cl_phone_verification', title: 'Craigslist wants to verify your phone', what: 'Craigslist is asking for a phone verification code before it will finish this post.', why: 'Craigslist requires this for some accounts and posts. A code is texted or called to your phone, and FindA.Sale never enters it for you.', next: 'Close this, enter the code on the Craigslist page, and FindA.Sale will continue automatically once the post goes through. Nothing has been published yet.' });
+    }
     overlayInfo('Craigslist needs phone verification for this post -- enter the code you receive, then FindA.Sale will continue automatically once it\'s done.');
   }
 
@@ -1504,6 +1626,7 @@
         console.error('[FAS Craigslist] rate-limit report THREW synchronously:', e && e.message);
       }
     }
+    FT('problem', { code: 'cl_rate_limited', title: 'Craigslist\'s posting limit was hit', what: 'Craigslist says you are posting too rapidly and has blocked new posts for now.', why: 'Craigslist limits how many posts an account can make in a short time. Nothing is wrong with this listing.', next: 'FindA.Sale stopped here. The remaining items are still queued; resume this batch in a few hours when the limit resets.' });
     overlayInfo('<b style="color:#ffcf7a">Craigslist\'s posting limit was hit</b><br>Stopping here -- nothing wrong with this listing. ' +
       'The remaining items are still queued; try resuming this batch in a few hours once Craigslist\'s limit resets.');
   }
@@ -1526,6 +1649,8 @@
     if (step === 'geoverify') { if (!guardStop('geoverify')) await doGeoverifyStep(item); return; }
     // subarea / area / unrecognized location chooser: we can't pick a location confidently (the
     // item carries no Craigslist area), so guide the human rather than guess.
+    FT('step', 'Waiting at a Craigslist screen FindA.Sale does not fill', 'FindA.Sale has no safe way to pick the location/area here, so you continue through it and it takes over at the posting details.', { detectedStep: step });
+    FT('info', 'unrecognized_step', 'No handler for this Craigslist screen', { snapshot: FT('snapshot') });
     overlayInfo('Ready to autofill. Continue through this Craigslist screen -- FindA.Sale takes over at the posting details.');
   }
 
@@ -1542,8 +1667,11 @@
     // same "always run" pattern as fas-remove.js's sold-detection scan.
     reportLoginState();
     let queued;
-    try { queued = await chrome.runtime.sendMessage({ type: 'getCraigslistQueueItem' }); } catch (e) { return; }
+    try { queued = await chrome.runtime.sendMessage({ type: 'getCraigslistQueueItem' }); } catch (e) { FT('info', 'queue_fetch_failed', 'Could not ask the extension for the Craigslist queue: ' + ((e && e.message) || 'unknown')); return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent (page also loads for normal use)
+    FT('begin', { platform: 'CRAIGSLIST', flow: 'post', item: { id: queued.item.id, title: queued.item.title }, itemPos: (queued.index + 1) + ' of ' + queued.total });
+    FT('info', 'queue_item', 'Got the next Craigslist item from the queue', { index: queued.index, total: queued.total, autoPublish: queued.autoPublish !== false, photos: (queued.item.photoUrls || []).length, category: queued.item.category || '' });
+    FT('step', 'Checking Craigslist\'s prohibited-items rules and 48-hour repost rule', 'Craigslist bans some item types and only allows reposting the same item once every 48 hours, so FindA.Sale checks before touching the form.');
 
     // Craigslist Prohibited Items gate (S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- checked BEFORE any
     // DOM interaction, same placement as fas-content.js's identical Facebook check. Defense-in-depth:
@@ -1555,11 +1683,12 @@
     const clReason = craigslistRestrictionReason(queued.item.category, queued.item.title);
     if (clReason) {
       console.warn('[FAS Craigslist] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, clReason);
+      FT('problem', { code: 'cl_prohibited_item_skipped', title: 'Skipped: Craigslist does not allow this item', what: 'This item matches one of Craigslist\'s prohibited categories, so FindA.Sale skipped it.', why: clReason, next: 'It was not posted and was not marked as listed, so it stays available for other channels. Moving on to the next queued item, if any.', ctx: { category: queued.item.category || '' } });
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(clReason) + '</div>');
       await humanPause(1200, 1800);
       try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: queued.item.id }); } catch (e) {}
       const next = await (async () => { try { return await chrome.runtime.sendMessage({ type: 'getCraigslistQueueItem' }); } catch (e) { return null; } })();
-      if (next && next.ok && next.item) { location.href = POST_URL; } else { overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
+      if (next && next.ok && next.item) { location.href = POST_URL; } else { FT('end', 'Skipped the last queued item (prohibited on Craigslist). Queue finished.'); overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
       return;
     }
 
@@ -1571,14 +1700,16 @@
     const clRepostReason = await craigslistRepostBlockReason(queued.item);
     if (clRepostReason) {
       console.warn('[FAS Craigslist] skipping listing (48h repost guard):', queued.item.id, queued.item.title, clRepostReason);
+      FT('problem', { code: 'cl_repost_48h_skipped', title: 'Skipped: posted on Craigslist less than 48 hours ago', what: 'FindA.Sale skipped this item because the same item/category/area was already posted on Craigslist within the last 48 hours.', why: clRepostReason, next: 'It was not posted again and the queue moves on. Try again after the 48 hours, or change the category or area if it is genuinely different.' });
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(clRepostReason) + '</div>');
       await humanPause(1200, 1800);
       try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: queued.item.id }); } catch (e) {}
       const repostNext = await (async () => { try { return await chrome.runtime.sendMessage({ type: 'getCraigslistQueueItem' }); } catch (e) { return null; } })();
-      if (repostNext && repostNext.ok && repostNext.item) { location.href = POST_URL; } else { overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
+      if (repostNext && repostNext.ok && repostNext.item) { location.href = POST_URL; } else { FT('end', 'Skipped the last queued item (48-hour repost rule). Queue finished.'); overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
       return;
     }
 
+    FT('ok', 'Item passed the pre-checks');
     currentRunArgs = { item: queued.item, index: queued.index, total: queued.total, autoPublish: queued.autoPublish !== false };
     // Watch for client-side content changes (round 8 fix -- see setupReRunObserver() above) BEFORE
     // the first run so a transition that happens mid-run() (e.g. verification wall clearing while

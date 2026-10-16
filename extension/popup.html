@@ -75,10 +75,13 @@
             <button type="button" class="linkbtn" id="editSyncNowBtn">Sync now</button> &middot;
             <button type="button" class="linkbtn" id="editLogCopyBtn">Copy log</button> &middot;
             <button type="button" class="linkbtn" id="editDiagCopyBtn">Copy edit diagnostics</button> &middot;
-            <button type="button" class="linkbtn" id="editLogClearBtn">Clear</button>
+            <button type="button" class="linkbtn" id="editLogClearBtn">Clear</button> &middot;
+            <button type="button" class="linkbtn" id="traceViewBtn">Activity log</button> &middot;
+            <button type="button" class="linkbtn" id="traceCopyBtn">Copy activity log</button>
           </div>
           <div class="dim" id="editSyncResult"></div>
           <div id="editSyncLog" class="editLog"></div>
+          <div id="traceLog" class="editLog" hidden></div>
         </div>
         <button type="button" class="linkbtn" id="resyncListingsBtn">Resync listings</button>
         <details class="note"><summary>What does this do?</summary>Use this if FindA.Sale and a marketplace disagree, for example an item you already removed there still shows as live here. It re-checks every sold, deleted or no-longer-eligible listing on Poshmark, Mercari, Vinted and the other non-Facebook marketplaces. Anything the marketplace no longer shows is marked as removed on FindA.Sale right away; anything still live is removed as usual.</details>

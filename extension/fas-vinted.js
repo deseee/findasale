@@ -47,6 +47,30 @@
   // transition, not a real page load, since content_scripts only inject at document_idle on an
   // actual navigation) -- a different problem than anything inside this file's own logic.
   console.log('[FAS Vinted] content script loaded on ' + location.pathname + location.search);
+  // Shared step narration / diagnostics (fas-trace.js). Every call is guarded so logging can never break the flow.
+  const T = {
+    begin(o) { try { if (window.FAS_TRACE) window.FAS_TRACE.begin(o); } catch (e) {} },
+    step(w, y, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.step(w, y, c); } catch (e) {} },
+    ok(m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.ok(m, c); } catch (e) {} },
+    info(k, m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.info(k, m, c); } catch (e) {} },
+    warn(k, m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.warn(k, m, c); } catch (e) {} },
+    error(k, m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.error(k, m, c); } catch (e) {} },
+    problem(o) { try { if (window.FAS_TRACE) window.FAS_TRACE.problem(o); } catch (e) {} },
+    end(m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.end(m, c); } catch (e) {} },
+  };
+  // What each form field is and why it is being filled, in plain language (shown in the FindA.Sale panel).
+  const VIN_FIELD_NARR = {
+    'Title': ['Typing the title', 'Copied from your FindA.Sale item; ALL CAPS titles are softened because Vinted dislikes them.'],
+    'Description': ['Writing the description', 'Copied from your FindA.Sale item.'],
+    'Category': ['Choosing the Vinted category', 'Vinted only shows Brand, Size, Condition and shipping fields once a category is chosen.'],
+    'Brand': ['Choosing the brand', 'Vinted brand lists are fixed; if nothing matches, "No brand" is used so the form can continue.'],
+    'Size': ['Choosing the size', 'Required for clothing and shoes before Vinted lets the listing go live.'],
+    'Color': ['Choosing the colour', 'Vinted has a fixed colour list, so your colour is matched to the closest swatch.'],
+    'Material': ['Choosing the material', 'Vinted asks for a material on some categories.'],
+    'Condition': ['Setting the condition', 'Your FindA.Sale condition is translated to Vinted\'s own condition names.'],
+    'Price': ['Entering the price', 'Copied from your FindA.Sale price (Vinted\'s minimum applies).'],
+  };
+
   const LISTING_URL_HINT = 'https://www.vinted.com/items/new'; // UNVERIFIED -- best-effort guess, not live-confirmed
 
   // 2026-09-23 (console noise): when the extension is reloaded or updated, the content script
@@ -1373,18 +1397,24 @@
     // two messages, and do not invent/guess a default value here -- the fix is honest visibility
     // into missing source data, not fabricating data that doesn't exist.
     if (value === undefined || value === null || value === '') {
+      T.warn('field_empty', fieldLabel + ' has no value on the FindA.Sale item, so it cannot be filled; set it by hand', { field: fieldLabel });
       console.warn('[FAS Vinted] Field "' + fieldLabel + '" -- no value set on this item, skipped.');
       if (warnings) warnings.push(fieldLabel + ' has no value set on this item -- please set it manually before publishing.');
       return false;
     }
+    const vinNar = VIN_FIELD_NARR[fieldLabel];
+    if (vinNar) T.step(vinNar[0], vinNar[1], { field: fieldLabel });
     try {
       const ok = await fillFn(value);
+      if (ok) T.ok(fieldLabel + ' set');
       if (!ok) {
+        T.warn('field_not_found', fieldLabel + ' was not found or could not be set on the Vinted form; please set it yourself', { field: fieldLabel });
         console.warn('[FAS Vinted] Field "' + fieldLabel + '" -- selector not found, skipped (UNVERIFIED -- confirm against live DOM).');
         if (warnings) warnings.push(fieldLabel + ' could not be filled automatically -- please set it yourself.');
       }
       return ok;
     } catch (e) {
+      T.error('field_error', fieldLabel + ' threw while filling: ' + ((e && e.message) || e), { field: fieldLabel });
       console.warn('[FAS Vinted] Field "' + fieldLabel + '" -- error while filling, skipped:', e && e.message);
       if (warnings) warnings.push(fieldLabel + ' hit an error while filling -- please check it.');
       return false;
@@ -2750,6 +2780,8 @@
     // S-EXT-VINTED-REMOTE-LISTING-ID: remember (per tab, 15 min) that this item was just filled, so
     // the organizer's own post-publish page can be tied back to it (see vintCapMaybeCapture).
     vintCapRecordFill(item);
+    try { (warnings || []).forEach((w) => T.warn('review_warning', String(w).slice(0, 300))); } catch (e) { /* diagnostics only */ }
+    T.step(deferred ? 'Waiting for you to pick a category' : 'Waiting for you to review and click Upload', deferred ? 'Vinted hides most fields until a category is chosen; once you pick one the rest fills in automatically. Then click Upload yourself.' : 'FindA.Sale never presses Vinted\'s Upload button (a human must publish). Check every field, click Upload, then press "I posted".', { warnings: (warnings || []).length, photosOk: !!photosOk, deferred: !!deferred });
     scrollToVintedUploadButton();
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): render every collected fillListing() warning
     // (Category miss chief among them) persistently on this screen -- see tryFill's comment above
@@ -2852,7 +2884,8 @@
       if (!more) startQueueDelayCountdown(0, 'we finish up');
       // Records this as a single, human-confirmed listing post -- this is NOT a relist/bump call
       // and must never be reused as one. See the file-header constraint.
-      try { const mr = await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'VINTED' }); if (mr && !mr.ok && !mr.deduped) console.warn('[FAS Vinted] markListed was NOT recorded:', JSON.stringify(mr)); } catch (e) { console.warn('[FAS Vinted] markListed threw:', e && e.message); }
+      T.step('Recording this listing as posted in FindA.Sale', 'You confirmed you posted it, so FindA.Sale marks the item as listed on Vinted.');
+      try { const mr = await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'VINTED' }); if (mr && (mr.ok || mr.deduped)) T.ok('Backend markListed accepted', { deduped: !!mr.deduped }); else T.warn('mark_listed_failed', 'Backend did not record markListed', { res: mr }); if (mr && !mr.ok && !mr.deduped) console.warn('[FAS Vinted] markListed was NOT recorded:', JSON.stringify(mr)); } catch (e) { console.warn('[FAS Vinted] markListed threw:', e && e.message); }
       // S-EXT-VINTED-REMOTE-LISTING-ID: markListed above never knows the Vinted id (fill-and-stop);
       // look it up in the organizer's own wardrobe while the queue delay runs (bounded, best-effort).
       const capture = vintCapAfterMarkListed(item);
@@ -2864,6 +2897,7 @@
       window.removeEventListener('beforeunload', fasReviewUnloadHandler);
       window.removeEventListener('pagehide', fasReviewUnloadHandler);
       document.removeEventListener('click', fasUploadClickWatcher, true);
+      T.end('Posted on Vinted (manual Upload): ' + item.title + (more ? ' (next item loading)' : ' (queue finished)'));
       if (more) { location.href = LISTING_URL_HINT; } else { bar && bar.remove(); }
     };
     closeBtnHandler();
@@ -2906,6 +2940,7 @@
     fasVintedDeferredToken++; // cancels any deferred category watch left over from an earlier fill
     fasMarkStep('fillListing:start');
     overlay('<b>FindA.Sale</b> - filling the Vinted listing form...');
+    T.step('Filling in the listing details', 'Title and description first, then the category, which unlocks the remaining fields.');
     fasVintedPaceSuggestion().then((h) => { if (h && bar) bar.insertAdjacentHTML('beforeend', h); }).catch(() => {});
     const warnings = fasNewWarnings();
     await tryFill('Title', item.title, (v) => fillText('Title', normalizeVintedTitleCaps(v)), warnings);
@@ -2930,9 +2965,11 @@
   // `deferred` result. Title/Description/Category were already attempted by fillListing().
   async function fillVintedWithoutCategory(item, warnings) {
     fasMarkStep('fillListing:categoryDeferred');
+    T.warn('category_deferred', 'No Vinted category was chosen, so Brand, Size, Color, Material, Condition and package size are paused until you pick one; they fill automatically afterwards');
+    T.step('Uploading photos and price while waiting for a category', 'Photos and price exist before a category is chosen; the rest of the form appears after you pick one.');
     console.warn('[FAS Vinted] Category is not set -- skipping Brand/Size/Color/Material/Condition/Package size for now (their controls do not exist until a Category is chosen). Waiting for the organizer to pick one.');
     const photosOk = await injectPhotos(item.photoUrls);
-    if (!photosOk) console.warn('[FAS Vinted] Photos did not attach (deferred path).');
+    if (!photosOk) { console.warn('[FAS Vinted] Photos did not attach (deferred path).'); T.warn('photos_not_attached', 'Photos could not be attached (none on the item, download failed, or no upload box found); add them by hand'); } else T.ok('Photos handed to the Vinted uploader');
     await humanPause(400, 800);
     // BUG FIX 2026-10-11 (S-EXT-VINTED-CENT-ROUNDING, live-tested). Price was previously rounded to
     // the nearest WHOLE DOLLAR before being typed into Vinted's Price field (Math.round(Number(...))
@@ -3210,7 +3247,10 @@
     // right after Category and before Brand/Size/Color, so Vinted has real wall-clock time (the DOM
     // interactions + sleeps for Brand and Size below) to actually analyze the photos before Color's
     // suggested-swatch check runs.
-    let photosOk = (preset && preset.photosOk !== undefined) ? preset.photosOk : await injectPhotos(item.photoUrls);
+    const fasPhotosPreset = !!(preset && preset.photosOk !== undefined);
+    if (!fasPhotosPreset) T.step('Uploading photos', 'Photos go in before brand and colour so Vinted can analyse them and suggest a colour.', { photoCount: (item.photoUrls || []).length });
+    let photosOk = fasPhotosPreset ? preset.photosOk : await injectPhotos(item.photoUrls);
+    if (!fasPhotosPreset) { if (photosOk) T.ok('Photos handed to the Vinted uploader'); else T.warn('photos_not_attached', 'Photos could not be attached (none on the item, download failed, or no upload box found); add them by hand'); }
     if (!photosOk) console.warn('[FAS Vinted] Photos did not attach -- Color\'s suggested-swatch check below will very likely find nothing to accept, since Vinted has no photos to analyze from.');
     await humanPause(400, 800);
     // 2026-08-18: brand/size/color/material now exist on Item (single string each, not an
@@ -3322,7 +3362,9 @@
     }
     let packageSizeOk = true;
     if (!fasSkipIfSet('package', 'Package size')) {
+      T.step('Choosing the package size', 'Vinted needs a parcel size that matches the item\'s weight before it will accept the listing.');
       packageSizeOk = await fillPackageSize(item, warnings);
+      if (packageSizeOk) T.ok('Package size set'); else T.warn('package_size_failed', 'Package size could not be set automatically; Vinted requires it before publishing');
     }
     if (!packageSizeOk) warnings.push('Package size could not be set automatically -- Vinted requires it before publishing.');
     {
@@ -3330,6 +3372,7 @@
       if (domesticEl && typeof domesticEl.value === 'string' && domesticEl.value.trim()) {
         console.log('[FAS Vinted] deferred fill: Domestic shipping price is already set ("' + domesticEl.value.trim().slice(0, 20) + '") -- not overwriting it.');
       } else {
+        T.step('Checking the domestic shipping price', 'Vinted sets shipping from the parcel size; the price box is confirmed so no stale error is left on screen.');
         await fillDomesticShippingPrice(item, warnings);
       }
     }
@@ -3403,6 +3446,7 @@
         console.log('[FAS Vinted] Language already shows "' + languageInput.value.trim() + '" -- leaving it untouched.');
       } else {
         languageStepRan = true;
+        T.step('Choosing the book language (English)', 'Vinted requires a language for Books and Comics and resets it when other fields change, so it is set last.');
         fasMarkStep('language:aboutToOpenModal');
         let langOk = await pickFromPanel('language', 'Language', 'English');
         fasMarkStep('language:modalResolved');
@@ -3675,13 +3719,19 @@
     // confirmed SPA-hydration race this pattern is vulnerable to on every one of these 4 files.
     // Merged into a single poll: waits for either signal to become true instead of judging the
     // page's state from a single snapshot taken right as the content script loads.
+    T.step('Waiting for the Vinted listing form to load', 'Vinted builds the page in the browser, so the fields appear a few seconds after the page opens.');
     const formState = await waitForFormReady(8000);
+    if (formState === 'ready') T.ok('Listing form is ready');
     if (formState === 'interstitial') {
+      T.problem({ code: 'vinted_challenge', title: 'Vinted wants you to verify something', what: 'Vinted is showing a verification or security screen instead of the listing form.', why: 'FindA.Sale never tries to solve captchas or identity checks, that is a human step.', next: 'Complete the verification on the page, then reopen the extension to continue this item. Nothing was filled or published.' });
+      T.end('Stopped: Vinted verification screen');
       overlayWarn('Vinted is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
       return;
     }
     if (formState === 'timeout') {
+      T.problem({ code: 'vinted_form_not_found', title: 'Could not find the Vinted listing form', what: 'The listing form did not appear after waiting about 8 seconds.', why: 'Either this is not the new-listing page, the page is still loading, or Vinted changed its layout.', next: 'Nothing was filled. Fill this listing by hand, or reload the page and reopen the extension. Use Copy diagnostics if it keeps happening.' });
+      T.end('Stopped: listing form not found');
       overlayWarn('This doesn\'t look like a fillable Vinted listing form yet (checked repeatedly for several seconds). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -3732,6 +3782,8 @@
     }
     fasMarkStep('run:fillListingReturned');
     if (looksLikeInterstitial()) {
+      T.problem({ code: 'vinted_challenge_midfill', title: 'Vinted asked you to verify mid-listing', what: 'A verification or security screen appeared partway through filling this listing.', why: 'FindA.Sale never solves verifications; it stops and hands control back to you.', next: 'Complete the verification, then finish this listing by hand. Nothing further was auto-filled and nothing was published.' });
+      T.end('Stopped: verification mid-listing');
       overlayWarn('Vinted is showing a verification/security screen partway through filling this listing. Please complete it yourself, then finish this listing manually -- nothing further was auto-filled.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -5635,6 +5687,8 @@
   async function vintedSkipPickupOnlyItem(item) {
     if (!item || item.localPickupOnly !== true) return false;
     console.warn('[FAS Vinted] skipping listing (local pickup only, Vinted has no local pickup option):', item.id, item.title);
+    T.problem({ code: 'vinted_pickup_only', title: 'Skipped: local pickup only', what: 'This item is marked local pickup only.', why: 'Vinted has no local pickup option (the buyer always pays shipping), so it cannot be sold here as intended.', next: 'Nothing was filled and the item was not marked as listed. Use Continue to move to the next item.' });
+    T.end('Skipped (local pickup only): ' + (item.title || ''));
     overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(item.title || 'this item') + '</b> -- it is marked local pickup only, and Vinted has no local pickup option (the buyer always pays for shipping). Nothing was filled or published.</div>');
     await humanPause(1200, 1800);
     try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) {}
@@ -5694,6 +5748,8 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+    T.begin({ platform: 'VINTED', flow: 'post', item: { id: queued.item.id, title: queued.item.title }, itemPos: (queued.index + 1) + ' of ' + queued.total });
+    T.step('Checking the item can be sold on Vinted', 'Vinted has no local pickup and bans some categories; those are skipped up front to protect your account.');
 
     // S-VINTED-PICKUP-ONLY: refuse before anything is filled, counted as an attempt, or marked reviewed.
     if (await vintedSkipPickupOnlyItem(queued.item)) return;
@@ -5725,6 +5781,8 @@
       const reviewPhotosPresent = !!(photoInput() && photoInput().files && photoInput().files.length);
       const reviewLooksStillFilled = !!(reviewTitleField && reviewTitleField.value) || reviewPhotosPresent;
       if (reviewLooksStillFilled) {
+        T.info('review_memory', 'This item already reached review earlier this session and the page is still filled; showing the continue prompt instead of re-filling');
+        T.end('Already filled earlier: showing the continue prompt');
         console.log('[FAS Vinted] start(): item ' + queued.item.id + ' already reached the review screen this session (recorded ' + new Date(vintedReachedReviewStore[queued.item.id]).toISOString() + ') -- showing the continue prompt instead of re-filling from scratch.');
         await maybeShowVintedContinuePrompt();
         return;
@@ -5762,6 +5820,8 @@
     if (vintedPriorAttempt && vintedPriorAttempt.count >= FAS_VINTED_MAX_ATTEMPTS &&
         (vintedAttemptsNow - vintedPriorAttempt.lastAt) < FAS_VINTED_ATTEMPT_COOLDOWN_MS) {
       const waitMin = Math.ceil((FAS_VINTED_ATTEMPT_COOLDOWN_MS - (vintedAttemptsNow - vintedPriorAttempt.lastAt)) / 60000);
+      T.problem({ code: 'vinted_attempt_cap', title: 'Paused to protect your Vinted account', what: 'This item has been auto-filled ' + vintedPriorAttempt.count + ' times in a short period.', why: 'Repeated fast form fills are the pattern Vinted\'s abuse detection looks for and has restricted this account for before.', next: 'Finish this listing by hand, or wait about ' + waitMin + ' minute' + (waitMin === 1 ? '' : 's') + ' before reloading.', ctx: { attempts: vintedPriorAttempt.count, waitMin: waitMin } });
+      T.end('Paused: too many repeated attempts');
       overlayWarn('FindA.Sale paused automatic filling for <b>' + escapeHtml(queued.item.title || 'this item') +
         '</b> after ' + vintedPriorAttempt.count + ' repeated attempts in a short time -- to protect your Vinted ' +
         'account from being flagged for unusual activity, please finish this one by hand, or wait about ' + waitMin +
@@ -5785,6 +5845,8 @@
     const vintedReason = vintedRestrictionReason(queued.item.category, queued.item.title);
     if (vintedReason) {
       console.warn('[FAS Vinted] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, vintedReason);
+      T.problem({ code: 'vinted_prohibited_item', title: 'Skipped: not allowed on Vinted', what: String(vintedReason), why: 'The title or category matches Vinted\'s not-allowed list, and listing it could get your Vinted account restricted.', next: 'Nothing was filled and the item was not marked as listed. Use Continue to move to the next item.', ctx: { category: queued.item.category } });
+      T.end('Skipped (not allowed on Vinted): ' + (queued.item.title || ''));
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(vintedReason) + '</div>');
       await humanPause(1200, 1800);
       try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) {}
@@ -5816,9 +5878,12 @@
       return;
     }
 
+    T.ok('Item cleared for Vinted');
     try {
       await run(queued.item, queued.index, queued.total);
     } catch (e) {
+      T.problem({ code: 'vinted_unexpected_error', title: 'Something went wrong filling this listing', what: (e && e.message) || 'Unknown error', why: 'An unexpected error stopped the fill.', next: 'Nothing was published. Complete this listing yourself, or reopen the extension to try again. Use Copy diagnostics if you report it.' });
+      T.end('Stopped: unexpected error');
       overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
     }

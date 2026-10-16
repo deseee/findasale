@@ -42,6 +42,11 @@
     return;
   }
 
+  // Diagnostics (fas-trace.js). Guarded; log-only here, this script runs passively on many pages.
+  function T(fn) {
+    try { const t = window.FAS_TRACE; if (t && typeof t[fn] === 'function') return t[fn].apply(t, Array.prototype.slice.call(arguments, 1)); } catch (e) { /* never break the page script */ }
+  }
+
   // ---- Step 1: URL-pattern gate (defensive, per this feature's build rules) --
   // never assume a DOM structure is present just because the manifest's host match
   // fired. manifest.json scopes this file to marketplace/you/* and marketplace/inbox/*,
@@ -127,6 +132,7 @@
     if (el) {
       el.addEventListener('click', dismissOverlay, { once: true });
     } else {
+      T('error', 'fb_tracking_dismiss_missing', 'Reminder dismiss control missing after render (bug in fas-tracking.js, not a Facebook change).');
       console.error('[FindA.Sale][fas-tracking] dismiss control not found in overlay markup after render -- overlay will stay visible until page navigation. This indicates a bug in this file, not a live-FB-DOM mismatch.');
     }
   }
@@ -144,6 +150,7 @@
       if (!bar) {
         overlay(REMINDER_HTML);
         wireDismiss();
+        T('info', 'fb_tracking_reminder_shown', 'Showed the Facebook own-label tracking-number reminder.', { trigger: dialog ? 'tracking dialog' : 'orders heading' });
       }
     } else if (bar) {
       // URL still matches but neither guessed marker is present anymore (organizer
@@ -156,6 +163,7 @@
       // explanation is the selectors in findOrdersHeading/findTrackingDialog above are
       // wrong for Facebook's real DOM -- see file header, live verification needed.
       warnedThisPage = true;
+      T('warn', 'fb_tracking_markers_missing', 'On a Facebook order/inbox page but neither the orders heading nor a tracking-number dialog was found; selectors may not match Facebook\'s current layout.');
       console.warn('[FindA.Sale][fas-tracking] On a marketplace/you or /inbox page, but neither the "Orders with delivery" heading nor a tracking-number dialog was found. The guessed selectors in fas-tracking.js may not match Facebook\'s real DOM -- needs live verification against an actual order (see file header comment).');
     }
   }

@@ -41,6 +41,29 @@
  * Mercari's own irrelevant suggested value.
  */
 (function () {
+  // Shared step narration / diagnostics (fas-trace.js). Every call is guarded so logging can never break the flow.
+  const T = {
+    begin(o) { try { if (window.FAS_TRACE) window.FAS_TRACE.begin(o); } catch (e) {} },
+    step(w, y, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.step(w, y, c); } catch (e) {} },
+    ok(m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.ok(m, c); } catch (e) {} },
+    info(k, m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.info(k, m, c); } catch (e) {} },
+    warn(k, m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.warn(k, m, c); } catch (e) {} },
+    error(k, m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.error(k, m, c); } catch (e) {} },
+    problem(o) { try { if (window.FAS_TRACE) window.FAS_TRACE.problem(o); } catch (e) {} },
+    end(m, c) { try { if (window.FAS_TRACE) window.FAS_TRACE.end(m, c); } catch (e) {} },
+  };
+  // What each form field is and why it is being filled, in plain language (shown in the FindA.Sale panel).
+  const MERC_FIELD_NARR = {
+    'Title': ['Typing the title', 'Mercari search matches on the title, so it is copied exactly from your FindA.Sale item.'],
+    'Description': ['Writing the description', 'Mercari needs at least 5 words; the colour is folded into the text because Mercari has no colour field.'],
+    'Category': ['Choosing the Mercari category', 'The category decides which brand, size and fee options Mercari shows, so it is picked before brand.'],
+    'Brand': ['Setting the brand', 'Mercari brand lists depend on the category chosen just before.'],
+    'Size': ['Setting the size', 'Apparel and shoes need a size before Mercari lets the listing be submitted.'],
+    'Condition': ['Setting the condition', 'Your FindA.Sale condition is translated to Mercari\'s own condition names.'],
+    'Price': ['Entering the price', 'Copied from your FindA.Sale price, rounded to whole dollars as Mercari requires.'],
+    'Shipping payer': ['Choosing who pays shipping', 'Buyer pays unless you turned on free shipping for this item.'],
+  };
+
   const SELL_URL_HINT = 'https://www.mercari.com/sell/'; // UNVERIFIED -- best-effort guess, not live-confirmed
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -386,13 +409,14 @@
   }
 
   async function tryFill(fieldLabel, value, fillFn) {
-    if (value === undefined || value === null || value === '') return false;
+    if (value === undefined || value === null || value === '') { T.info('field_empty', fieldLabel + ' has no value on the FindA.Sale item, left for Mercari to handle'); return false; }
     try {
       const ok = await fillFn(value);
-      if (!ok) console.warn('[FAS Mercari] Field "' + fieldLabel + '" -- selector not found, skipped (UNVERIFIED -- confirm against live DOM).');
+      if (!ok) { console.warn('[FAS Mercari] Field "' + fieldLabel + '" -- selector not found, skipped (UNVERIFIED -- confirm against live DOM).'); T.warn('field_not_found', fieldLabel + ' was not found or could not be set on the Mercari form; skipped, please check it', { field: fieldLabel }); }
       return ok;
     } catch (e) {
       console.warn('[FAS Mercari] Field "' + fieldLabel + '" -- error while filling, skipped:', e && e.message);
+      T.error('field_error', fieldLabel + ' threw while filling: ' + ((e && e.message) || e), { field: fieldLabel });
       return false;
     }
   }
@@ -2245,6 +2269,7 @@
 
   function showReviewOverlay(item, index, total, photosOk) {
     const more = (index + 1) < total;
+    T.step('Waiting for you to review and click List', 'FindA.Sale never presses Mercari\'s List button (Mercari bans automated submits). Check every field, then click List yourself and press "I posted".', { photosOk: !!photosOk });
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/weight are UNVERIFIED guesses), double-check the <b>Smart Pricing floor price</b> we set, then click Mercari\'s own <b>List this item</b> yourself -- this extension never publishes for you and never auto-relists on Mercari.</div>' +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
@@ -2253,7 +2278,11 @@
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     const next = document.getElementById('fas-merc-next');
     if (next) next.onclick = async () => {
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('MERCARI', 0)), platform: 'MERCARI' }); } catch (e) {}
+      T.step('Recording this listing as posted in FindA.Sale', 'You confirmed you posted it, so FindA.Sale marks the item as listed on Mercari and will keep it in sync.');
+      try {
+        const mlRes = await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('MERCARI', 0)), platform: 'MERCARI' });
+        if (mlRes && mlRes.ok === false) T.warn('mark_listed_failed', 'Backend did not accept markListed', { res: mlRes }); else T.ok('Backend markListed accepted', { res: mlRes && { ok: mlRes.ok } });
+      } catch (e) { T.warn('mark_listed_error', 'markListed message failed: ' + ((e && e.message) || e)); }
       // ADR-mercari-remote-listing-id-capture-2026-09-24 (mirrors S-EXT-VINTED-REMOTE-LISTING-ID):
       // remember (per tab, 15 min) that this item was just confirmed posted here, so the organizer's
       // own /mypage/listings/active/ page can later be tied back to it (see mercCapMaybeCapture).
@@ -2261,7 +2290,8 @@
       // Mercari's fill is review-then-organizer-confirms, unlike Vinted's fill-and-stop, so this
       // click is the actual "a fill genuinely completed" signal, not merely "a draft was rendered".
       mercCapRecordFill(item);
-      try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: item.id }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: item.id }); } catch (e) { T.warn('queue_advance_failed', 'advanceMercariQueue failed: ' + ((e && e.message) || e)); }
+      T.end('Posted on Mercari: ' + item.title + (more ? ' (next item loading)' : ' (queue finished)'));
       if (more) { location.href = SELL_URL_HINT; } else { bar && bar.remove(); }
     };
     closeBtnHandler();
@@ -2319,12 +2349,16 @@
   // (and must never try to) solve.
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - uploading photos first (Mercari auto-fills after photos, so we wait before touching the rest)...');
+    T.step('Uploading photos', 'Mercari reads the photos first and auto-fills some fields, so photos go in before anything else.', { photoCount: (item.photoUrls || []).length });
     const photosOk = await injectPhotos(item.photoUrls);
+    if (photosOk) T.ok('Photos handed to the Mercari uploader'); else T.warn('photos_not_attached', 'Photos could not be attached (none on the item, download failed, or no upload box found); add them by hand', { photoCount: (item.photoUrls || []).length });
+    T.step('Waiting for Mercari to finish its own auto-fill', 'Mercari may overwrite fields right after photos land; we pause 2.5 seconds, then overwrite with your values.');
     // UNVERIFIED settle time: no live session to measure how long Mercari's own recognition step
     // takes. A fixed generous wait, not a DOM-based "settled" detector (none of Mercari's own
     // loading-state markup has been observed).
     await sleep(2500);
 
+    T.ok('Mercari auto-fill settled');
     overlay('<b>FindA.Sale</b> - filling the rest of the listing (overwriting anything Mercari auto-filled)...');
     // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, Patrick-directed): these 8 field fills used to run
     // back-to-back with only each fillX function's own internal settle-sleep (150-700ms) between
@@ -2347,7 +2381,11 @@
       if (interstitialAt || navigatedAwayFrom) return false; // already stopped -- don't touch anything further
       if (!stillOnSellPage()) { navigatedAwayFrom = label; return false; }
       if (looksLikeInterstitial()) { interstitialAt = label; return false; }
+      const hasVal = !(value === undefined || value === null || value === '');
+      const nar = MERC_FIELD_NARR[label];
+      if (hasVal && nar) T.step(nar[0], nar[1], { field: label });
       const ok = await tryFill(label, value, fillFn);
+      if (hasVal && ok) T.ok(label + ' set');
       await humanPause(500, 1400);
       if (!stillOnSellPage()) { navigatedAwayFrom = label; return ok; }
       if (looksLikeInterstitial()) { interstitialAt = label; }
@@ -2387,7 +2425,11 @@
       // next to it is a separate field and IS filled -- see fillMercariSmartPricingFloor() below.
       await guardedFill('Price', priceVal, (v) => fillMercariPrice(String(v)));
     }
-    if (!interstitialAt) await fillWeight(item);
+    if (!interstitialAt) {
+      T.step('Entering the shipping weight', 'Mercari needs a package weight before it can price the shipping label.');
+      const weightOk = await fillWeight(item);
+      if (weightOk === false) T.warn('weight_not_set', 'Weight was not set automatically (no weight on the item or the field was not found); enter it by hand'); else T.ok('Weight step done');
+    }
     // S-EXT-MERCARI-BATCH-8: shipping label wizard must be completed BEFORE List is ever clicked --
     // see fillMercariShippingLabel()'s comment for why (Mercari's own validation blocks submission
     // otherwise, which is what was actually happening in Round 7, not a click-registration problem).
@@ -2413,8 +2455,10 @@
     await guardedFill('Shipping payer', '__SHIPPING_PAYER__', () => fillMercariShippingPayer(item));
     let shippingLabelFailedReason = null;
     if (!interstitialAt && stillOnSellPage()) {
+      T.step('Completing the shipping label section', 'Mercari blocks the List button until the shipping label wizard is finished.');
       const shippingResult = await fillMercariShippingLabel(item);
-      if (shippingResult !== true) shippingLabelFailedReason = shippingResult;
+      if (shippingResult !== true) { shippingLabelFailedReason = shippingResult; T.warn('shipping_label_failed', 'Shipping label section did not complete: ' + String(shippingResult).slice(0, 200)); }
+      else T.ok('Shipping label section complete');
     }
     // RE-ENABLED 2026-09-15 (both 2026-09-14-pause bugs now fixed, findasale-dev): (1) gated on
     // item.allowBestOffer, so items where the organizer turned OFF best-offer negotiation never
@@ -2432,7 +2476,11 @@
     // GAP FIX 2026-09-26: replaces the old conditional fillMercariSmartPricingFloor(item) call --
     // Smart Pricing is now turned off outright (see turnOffMercariSmartPricing() above) instead of
     // staying on with a synced floor, so the floor-price field is moot and no longer filled.
-    if (!interstitialAt && !shippingLabelFailedReason) await turnOffMercariSmartPricing();
+    if (!interstitialAt && !shippingLabelFailedReason) {
+      T.step('Turning off Smart Pricing', 'Smart Pricing would lower the price automatically; FindA.Sale manages markdowns itself.');
+      const spOk = await turnOffMercariSmartPricing();
+      if (spOk === false) T.warn('smart_pricing_not_off', 'Could not confirm Smart Pricing is off; check the toggle next to Price'); else T.ok('Smart Pricing handled');
+    }
     return { photosOk, interstitialAt, navigatedAwayFrom, shippingLabelFailedReason };
   }
 
@@ -2467,13 +2515,19 @@
     // BUG FIX 2026-08-19 (S-EXT-BATCH-5, P0): was a single immediate looksLikeSellForm() check --
     // see waitForFormReady()'s comment for the live-confirmed race (real Title label + file input
     // did not exist for the first ~couple seconds after navigation on a real Mercari page).
+    T.step('Waiting for the Mercari Sell form to load', 'Mercari builds the page in the browser, so the fields appear a few seconds after the page opens.');
     const formState = await waitForFormReady(8000);
+    if (formState === 'ready') T.ok('Sell form is ready');
     if (formState === 'interstitial') {
+      T.problem({ code: 'mercari_challenge', title: 'Mercari wants you to verify something', what: 'Mercari is showing a verification or security screen instead of the Sell form.', why: 'FindA.Sale never tries to solve captchas or identity checks, that is a human step.', next: 'Complete the verification on the page, then reopen the extension to continue this item. Nothing was filled or published.' });
+      T.end('Stopped: Mercari verification screen');
       overlayWarn('Mercari is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();
       return;
     }
     if (formState === 'timeout') {
+      T.problem({ code: 'mercari_form_not_found', title: 'Could not find the Mercari Sell form', what: 'No Title field or photo upload box appeared within 8 seconds.', why: 'Either this is not the new-listing page, the page is still loading, or Mercari changed its layout.', next: 'Nothing was filled. Fill this listing by hand, or reload the Sell page and reopen the extension. Use Copy diagnostics if it keeps happening.' });
+      T.end('Stopped: Sell form not found');
       overlayWarn('This doesn\'t look like a fillable Mercari Sell form yet (no Title field or photo dropzone found after waiting). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -2487,11 +2541,15 @@
     // unknown" -- live-confirmed case: Title/Description/Category/Brand filled, Size was where it
     // stopped.
     if (fillResult.navigatedAwayFrom) {
+      T.problem({ code: 'mercari_navigated_away', title: 'Mercari left the Sell page', what: 'The page changed to ' + location.pathname + ' while filling ' + fillResult.navigatedAwayFrom + '.', why: 'Something on the page was probably clicked that should not have been (for example Save draft), so the fill was stopped.', next: 'Fields before that point may be filled; nothing after was attempted. Check your Mercari drafts and finish this listing by hand.', ctx: { field: fillResult.navigatedAwayFrom } });
+      T.end('Stopped: Mercari navigated away');
       overlayWarn('Mercari navigated away from the Sell page (now on <b>' + escapeHtml(location.pathname) + '</b>) while filling <b>' + escapeHtml(fillResult.navigatedAwayFrom) + '</b> -- fields before that point may have filled, but nothing after it was attempted. This usually means something on the page got clicked that shouldn\'t have (e.g. a Save/List button) -- check your Mercari drafts list and finish this listing manually.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();
       return;
     }
     if (fillResult.interstitialAt) {
+      T.problem({ code: 'mercari_challenge_midfill', title: 'Mercari asked you to verify mid-listing', what: 'A verification or security screen appeared before the ' + fillResult.interstitialAt + ' field.', why: 'FindA.Sale never solves verifications; it stops and hands control back to you.', next: 'Complete the verification, then finish the remaining fields on this same draft by hand (earlier fields are already filled, do not start a new listing).', ctx: { field: fillResult.interstitialAt } });
+      T.end('Stopped: verification before ' + fillResult.interstitialAt);
       overlayWarn('Mercari is showing a verification/security screen -- filling stopped before <b>' + escapeHtml(fillResult.interstitialAt) + '</b>. Please complete the verification yourself, then finish the remaining fields on this draft manually (fields before ' + escapeHtml(fillResult.interstitialAt) + ' were already filled -- do not start a new listing).' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -2502,6 +2560,8 @@
     // comment for the full incident (the real diagnostic message was being silently overwritten by
     // later steps, leaving only a generic "couldn't confirm" message for Patrick to see).
     if (fillResult.shippingLabelFailedReason) {
+      T.problem({ code: 'mercari_shipping_incomplete', title: 'Shipping section needs you', what: String(fillResult.shippingLabelFailedReason).slice(0, 300), why: 'Mercari will not accept the listing until the shipping section is complete, so FindA.Sale stopped before the end instead of leaving it half done.', next: 'Finish the Shipping section on this draft, then click Mercari\'s own List button.' });
+      T.end('Stopped: shipping section incomplete');
       overlayWarn(escapeHtml(fillResult.shippingLabelFailedReason) + ' Please finish the Shipping section on this draft yourself, then use Mercari\'s own List button.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -2678,12 +2738,16 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getMercariQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+    T.begin({ platform: 'MERCARI', flow: 'post', item: { id: queued.item.id, title: queued.item.title }, itemPos: (queued.index + 1) + ' of ' + queued.total });
+    T.step('Checking the item is allowed on Mercari', 'Mercari bans some categories (weapons, alcohol, etc.); skipping up front protects your account.');
 
     // Prohibited Items check -- runs before the duplicate-listing check and before any DOM
     // interaction. See mercariRestrictionReason()'s comment above for the full incident writeup.
     const restrictionReason = mercariRestrictionReason(queued.item.category, queued.item.title);
     if (restrictionReason) {
       console.warn('[FAS Mercari] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, restrictionReason);
+      T.problem({ code: 'mercari_prohibited_item', title: 'Skipped: not allowed on Mercari', what: restrictionReason, why: 'The title or category matches Mercari\'s Prohibited Items policy, and listing it could get your Mercari account restricted.', next: 'This item was skipped and nothing was filled. ' + ((queued.index + 1) < queued.total ? 'Moving on to the next item in a few seconds.' : 'That was the last item in the queue.'), ctx: { category: queued.item.category } });
+      T.end('Skipped (prohibited item): ' + queued.item.title);
       const restrictionMore = (queued.index + 1) < queued.total;
       try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: queued.item.id }); } catch (e) {}
       // 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH): always auto-advances now -- a skip never fills
@@ -2692,7 +2756,7 @@
       overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- ' + escapeHtml(restrictionReason) + '</div>' +
         (restrictionMore ? '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Moving to the next item...</div>' : ''));
       if (restrictionMore) {
-        await humanPause(600, 1200);
+        await humanPause(3500, 4500); // long enough to read the explanation modal before the next item loads
         location.href = SELL_URL_HINT;
       } else {
         setTimeout(() => bar && bar.remove(), 4000);
@@ -2706,7 +2770,10 @@
     // platforms. Best-effort: falls through to the normal flow if the check itself fails.
     try {
       const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'MERCARI' });
+      T.info('dup_check', 'checkItemListedStatus result', { ok: !!(statusRes && statusRes.ok), listed: !!(statusRes && statusRes.listed) });
       if (statusRes && statusRes.ok && statusRes.listed) {
+        T.problem({ code: 'mercari_already_listed', title: 'Skipped: already on Mercari', what: 'FindA.Sale already shows this item as listed on Mercari.', why: 'Filling it again would create a duplicate listing.', next: 'Nothing was filled. ' + (((queued.index + 1) < queued.total) ? 'Moving on to the next item in a few seconds.' : 'That was the last item in the queue.') });
+        T.end('Skipped (already listed): ' + queued.item.title);
         const more = (queued.index + 1) < queued.total;
         try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: queued.item.id }); } catch (e) {}
         // 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH): always auto-advances now, same reasoning as
@@ -2714,17 +2781,20 @@
         overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Mercari, so it was not filled or published again (avoiding a duplicate listing).</div>' +
           (more ? '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Moving to the next item...</div>' : ''));
         if (more) {
-          await humanPause(600, 1200);
+          await humanPause(3500, 4500); // long enough to read the explanation modal
           location.href = SELL_URL_HINT;
         } else {
           setTimeout(() => bar && bar.remove(), 4000);
         }
         return;
       }
-    } catch (e) { /* best-effort -- fall through to normal fill/publish flow */ }
+    } catch (e) { T.warn('dup_check_failed', 'Duplicate check failed, continuing: ' + ((e && e.message) || e)); }
+    T.ok('Item cleared for Mercari');
     try {
       await run(queued.item, queued.index, queued.total);
     } catch (e) {
+      T.problem({ code: 'mercari_unexpected_error', title: 'Something went wrong filling this listing', what: (e && e.message) || 'Unknown error', why: 'An unexpected error stopped the fill.', next: 'Nothing was published. Complete this listing yourself, or reopen the extension to try again. Use Copy diagnostics if you report it.' });
+      T.end('Stopped: unexpected error');
       overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();
     }
