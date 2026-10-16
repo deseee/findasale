@@ -1080,10 +1080,10 @@ describe('updateItem: inStock, the one number the organizer edits', () => {
     expect(mockCommit).not.toHaveBeenCalled();
   });
 
-  it('a legacy SOLD item that still has stock on the ledger is not reopened by an inStock edit', async () => {
+  it('a legacy SOLD item that still has stock on the ledger is put back on sale by an inStock edit (2026-10-15: the in-stock number is the truth)', async () => {
     arrange(saleItem({ status: 'SOLD', stockTotal: 1, stockSold: 0 }), { stockTotal: 1, stockSold: 0 });
     await run({ inStock: 1 });
-    expect(writtenData()).not.toHaveProperty('status');
+    expect(writtenData().status).toBe('AVAILABLE');
   });
 
   it('a plain SOLD -> AVAILABLE edit on a manually settled item gives back exactly ONE unit in one atomic statement, then syncs', async () => {
