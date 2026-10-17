@@ -341,15 +341,25 @@
         await report('crossPlatformRemovalAttemptFailed', item, all.reason);
         return;
       }
-      const matches = all.rows.filter((r) => r.active && (r.title === wanted || r.rawTitle === wanted));
+      // 1.0.19: a saved Craigslist posting id (listingRefs) is looked for first, by id only, in every status. A row for that id that is
+      // no longer Active means the posting is already gone. An id that is on no page falls back to the exact-title rule below.
+      const savedId = item.listingRefs && item.listingRefs.CRAIGSLIST ? String(item.listingRefs.CRAIGSLIST) : '';
+      const idRows = savedId ? all.rows.filter((r) => r.postingId === savedId) : [];
+      let matches = idRows.filter((r) => r.active);
+      let goneRows = idRows.filter((r) => !r.active);
+      if (!idRows.length) {
+        matches = all.rows.filter((r) => r.active && (r.title === wanted || r.rawTitle === wanted));
+        goneRows = matches.length ? [] : all.rows.filter((r) => !r.active && (r.title === wanted || r.rawTitle === wanted));
+      }
       const ids = Array.from(new Set(matches.map((r) => r.postingId)));
+      if (!ids.length && goneRows.length) FTA('info', 'already_deleted', 'The posting for this item is already deleted or expired on Craigslist (' + goneRows.slice(0, 5).map((r) => r.postingId).join(', ') + '); nothing to delete', { ids: goneRows.slice(0, 5).map((r) => r.postingId), viaSavedId: !!idRows.length });
       FTA('info', 'match_result', 'Found ' + ids.length + ' active posting(s) with this exact title', { matches: ids.length, deleteAllMatches: item.deleteAllMatches === true });
       if (ids.length !== 1 && !(ids.length > 1 && item.deleteAllMatches === true)) {
         // 2026-09-30 (S-EXT-RESYNC): crRemAllRows() read EVERY page of the postings dashboard (all.ok),
         // so zero active matches is a real "already gone" -- report it as listing_not_found like
         // Poshmark/Mercari do, so the backend can resolve it instead of retrying forever.
         const reason = ids.length ? 'ambiguous_duplicate_title' : 'listing_not_found';
-        overlayWarn('Could not find exactly one active Craigslist posting titled "' + escapeHtml(item.title) + '" (' + reason + '). Please check it yourself.');
+        overlayWarn((goneRows.length && !ids.length ? 'This Craigslist posting is already deleted or expired. ' : '') + 'Could not find exactly one active Craigslist posting titled "' + escapeHtml(item.title) + '" (' + reason + '). Please check it yourself.');
         await setPending(null);
         await report('crossPlatformRemovalSkipped', item, reason);
         return;
@@ -559,6 +569,56 @@
     return true;
   }
 
+
+  // ---- Guarded reconcile scan (1.0.19) ----------------------------------------------------------------------------------------------
+  // Reads EVERY dashboard page (all statuses) and reports the rows to background.js, which decides (twice-absent rule, account check, cap) and
+  // clears the "listed on Craigslist" flag. This function never changes anything on Craigslist. Anything short of a complete read is reported as
+  // incomplete, which can only ever mean "do nothing".
+  async function runCraigslistReconcileScan() {
+    const text = (document.body && document.body.innerText) || '';
+    const out = { type: 'craigslistReconcileScan', loggedIn: !!document.querySelector('table.accthp_postings') && !document.querySelector('input[type="password"]'), accountText: text.slice(0, 4000), complete: false, total: null, rows: [] };
+    if (!out.loggedIn) { out.reason = 'no_postings_table'; return out; }
+    const m = /\bof\s+([\d,]+)\s+total\b/i.exec(text);
+    out.total = m ? parseInt(m[1].replace(/,/g, ''), 10) : null;
+    const rowsOf = (doc) => Array.from(doc.querySelectorAll('table.accthp_postings tr.posting-row')).map((tr) => {
+      const st = tr.querySelector('td.status[data-postingid]'); const a = tr.querySelector('td.title a');
+      const cls = st ? st.classList : null;
+      const status = cls ? (['active', 'deleted', 'expired', 'pending', 'removed', 'flagged'].find((k) => cls.contains(k)) || ((/\b(active|deleted|expired|pending|removed|flagged)\b/i.exec(st.textContent || '') || [])[1] || '').toLowerCase()) : '';
+      return { postingId: st ? String(st.getAttribute('data-postingid') || '') : '', status, titleRaw: a ? (a.textContent || '').replace(/\s+/g, ' ').trim() : '' };
+    }).filter((r) => /^\d{6,}$/.test(r.postingId));
+    const seen = new Set(); let lastLen = 0;
+    for (let n = 1; n <= CR_MAX_PAGES; n++) {
+      let rows;
+      try {
+        const res = await fetch(crRemPageUrl(n) + '&filter_active=all', { credentials: 'include', cache: 'no-store' });
+        if (!res.ok) { out.reason = 'page_' + n + '_http_' + res.status; return out; }
+        const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+        if (!doc.querySelector('table.accthp_postings')) { out.reason = 'page_' + n + '_no_table'; return out; }
+        rows = rowsOf(doc);
+      } catch (e) { out.reason = 'page_' + n + '_error'; return out; }
+      rows.forEach((r) => { if (!seen.has(r.postingId)) { seen.add(r.postingId); out.rows.push(r); } });
+      lastLen = rows.length;
+      if (rows.length < CR_PAGE_SIZE) { out.complete = true; break; }
+      await sleep(400 + Math.random() * 400);
+    }
+    if (!out.complete) out.reason = lastLen >= CR_PAGE_SIZE ? 'too_many_pages' : 'unknown';
+    return out;
+  }
+  async function maybeRunCraigslistReconcile() {
+    let req;
+    try { req = await chrome.runtime.sendMessage({ type: 'getCraigslistReconcileRequest' }); } catch (e) { return false; }
+    if (!req || !req.ok || !req.requested) return false;
+    ftActive = true;
+    FT('begin', { platform: 'CRAIGSLIST', flow: 'reconcile', item: { id: 'all', title: 'Craigslist postings check' }, ctx: { frame: FT_FRAME } });
+    let scan;
+    try { scan = await runCraigslistReconcileScan(); }
+    catch (e) { scan = { type: 'craigslistReconcileScan', loggedIn: false, complete: false, rows: [], reason: 'exception:' + ((e && e.message) || 'unknown') }; }
+    FTA('info', 'reconcile_scan_read', 'Read ' + scan.rows.length + ' postings (' + (scan.total == null ? 'total not shown' : scan.total + ' expected') + ', ' + (scan.complete ? 'complete' : 'incomplete') + ')', { reason: scan.reason || '' });
+    try { await chrome.runtime.sendMessage(scan); } catch (e) { FTA('warn', 'reconcile_report_failed', 'Could not hand the postings list to the extension: ' + ((e && e.message) || 'unknown')); }
+    FT('end', 'Craigslist postings check finished.');
+    return true;
+  }
+
   // Page-scoping is the manifest match (accounts.craigslist.org/login/home*, all_frames) plus the
   // dedicated-removal-tab check inside background.js's getRemovalQueueItemFor /
   // getCraigslistRenewAllRequested handlers. Removal takes priority (a sold item's posting should
@@ -566,6 +626,6 @@
   // queued this load, so the two flows never race for the same tab or the same click.
   (async () => {
     const didRemoval = await maybeRunCraigslistRemoval();
-    if (!didRemoval) await maybeRunCraigslistRenewAll();
+    if (!didRemoval) { const didRenew = await maybeRunCraigslistRenewAll(); if (!didRenew) await maybeRunCraigslistReconcile(); }
   })();
 })();

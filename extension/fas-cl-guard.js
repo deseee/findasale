@@ -1,4 +1,4 @@
-// fas-cl-guard.js -- Craigslist single-flight lock decision, posting-identity check and posting-confirmation detection (extension 1.0.18).
+// fas-cl-guard.js -- Craigslist single-flight lock decision, posting-identity check and posting-confirmation detection (extension 1.0.18); 1.0.19 adds the dashboard lookup order and the guarded reconcile.
 //
 // Why this exists (production auto-diagnostics 2026-10-17, extension 1.0.17): Craigslist keeps ONE posting-flow state per browser session,
 // but the post flow, the price-edit flow and the removal/renew flow each opened their own tab and ran at the same time, so they adopted each
@@ -124,9 +124,119 @@
     return priceSet ? 'verify_mismatch' : 'confirmed_without_price';
   }
 
+  // ---- dashboard lookup (1.0.19) ------------------------------------------------------------------------------------------
+  // Order: (1) saved posting id, id only; (2) one distinctive word searched with the dashboard's own terms box, exact title + Active;
+  // (3) full page scan. "Not found" is only ever concluded after (3). Deleted / Expired rows that match mean the posting is gone.
+  var STOPWORDS = {};
+  ('this that with from your have been will were what when where which while about above after again also and any are because before below between both but can could did does doing down during each few for further had has her here hers him his how into its just more most nor not now off once only other our out over own same she should some such than the their them then there these they those through too under until very was who whom why would you with set lot new used vintage nice great good like item items sale free ship shipping pick pickup size piece pieces made brand inch inches')
+    .split(/\s+/).forEach(function (w) { STOPWORDS[w] = 1; });
+  // Longest/most distinctive word of a title to put in the dashboard search box. Skips stopwords and words under 4 characters;
+  // prefers tokens that mix letters and digits (model numbers, "1990s") and brand-like capitalisation (BAYC, iPhone), then length.
+  // '' when nothing usable (the caller then scans the pages).
+  function pickSearchWord(title) {
+    var raw = String(title == null ? '' : title);
+    try { raw = raw.normalize('NFKC'); } catch (e) { /* old engine */ }
+    var toks = raw.match(/[A-Za-z0-9][A-Za-z0-9'&]*/g) || [];
+    var best = '', bestScore = -1;
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i].replace(/['&]+$/, '').replace(/'s$/i, '');
+      var low = t.toLowerCase();
+      if (low.length < 4 || STOPWORDS[low] || /^\d+$/.test(low) || /[&']/.test(low)) continue;
+      var score = low.length;
+      if (/\d/.test(low) && /[a-z]/.test(low)) score += 1000;
+      else if (/[A-Z]{3,}/.test(t) || /[a-z][A-Z]/.test(t)) score += 500;
+      if (score > bestScore) { bestScore = score; best = t; }
+    }
+    return best;
+  }
+  function parseTotal(text) {
+    var m = /\bof\s+([\d,]+)\s+total\b/i.exec(String(text || ''));
+    return m ? parseInt(m[1].replace(/,/g, ''), 10) : null;
+  }
+  // status word of a td.status cell: 'active' | 'deleted' | 'expired' | other word | ''.
+  function rowStatus(el) {
+    if (!el) return '';
+    var cls = el.classList;
+    var known = ['active', 'deleted', 'expired', 'pending', 'removed', 'flagged'];
+    for (var i = 0; i < known.length; i++) if (cls && cls.contains(known[i])) return known[i];
+    var m = /\b(active|deleted|expired|pending|removed|flagged)\b/i.exec(String(el.textContent || ''));
+    return m ? m[1].toLowerCase() : '';
+  }
+  // Rows of an account-dashboard document (live DOM or a fetched/parsed page). null when there is no postings table.
+  function parseDashboardRows(doc) {
+    var table = doc && doc.querySelector ? doc.querySelector('table.accthp_postings') : null;
+    if (!table) return null;
+    return Array.prototype.slice.call(table.querySelectorAll('tr.posting-row')).map(function (tr) {
+      var st = tr.querySelector('td.status[data-postingid]');
+      var a = tr.querySelector('td.title a');
+      var status = rowStatus(st);
+      return { tr: tr, postingId: st ? String(st.getAttribute('data-postingid') || '') : '', status: status, active: status === 'active', deleted: status === 'deleted', expired: status === 'expired', titleRaw: a ? a.textContent : '' };
+    }).filter(function (r) { return /^\d{6,}$/.test(r.postingId); });
+  }
+  function isNoPostings(text) { return /\bno postings\b/i.test(String(text || '').slice(0, 6000)); }
+  // rows: dashboard rows (any status). opts: { remoteId, title, matcher(rowTitleRaw, wantedTitle) -> bool }.
+  // -> { kind:'found', row } | { kind:'ambiguous', ids:[...] } | { kind:'gone', status, ids } | { kind:'none' }
+  // A saved id is matched by id only. Otherwise only an Active row can be 'found'; two Active matches are ambiguous (never edit);
+  // a matching Deleted/Expired row with no Active match means the posting is gone.
+  function classifyLookup(rows, opts) {
+    rows = rows || []; opts = opts || {};
+    var hits;
+    if (opts.remoteId) hits = rows.filter(function (r) { return r.postingId === String(opts.remoteId); });
+    else { var m = opts.matcher || function (a, b) { return titlesCompatible(a, b) === 'match'; }; hits = rows.filter(function (r) { return m(r.titleRaw, opts.title); }); }
+    if (!hits.length) return { kind: 'none' };
+    var act = hits.filter(function (r) { return r.status === 'active'; });
+    if (act.length === 1) return { kind: 'found', row: act[0] };
+    if (act.length > 1) return { kind: 'ambiguous', ids: act.map(function (r) { return r.postingId; }) };
+    return { kind: 'gone', status: hits[0].status || 'deleted', ids: hits.map(function (r) { return r.postingId; }) };
+  }
+
+  // ---- guarded reconcile (1.0.19) -----------------------------------------------------------------------------------------
+  // Items FindA.Sale believes are listed on a marketplace but whose posting is absent from the account in EVERY status. Pure decision:
+  // input = { platform, scan:{ complete, loggedIn, accountOk, total, rows:[{postingId,status,titleRaw}] }, items:[{id,title,remoteId}],
+  //           state:{ [itemId]:{ firstAt, lastAt, count } }, now, minGapMs, cap }
+  // -> { ok, skip, toReport:[{id,title}], state, absent:[ids], present:[ids], capped }
+  var RECON_MIN_GAP_MS = 4 * 60 * 1000, RECON_CAP = 20;
+  function reconcileDecide(inp) {
+    inp = inp || {};
+    var state = JSON.parse(JSON.stringify(inp.state || {}));
+    var now = inp.now || Date.now(), gap = inp.minGapMs != null ? inp.minGapMs : RECON_MIN_GAP_MS, cap = inp.cap != null ? inp.cap : RECON_CAP;
+    var sc = inp.scan || {}, rows = Array.isArray(sc.rows) ? sc.rows : [];
+    var skip = null;
+    if (!sc.loggedIn) skip = 'not_logged_in';
+    else if (!sc.accountOk) skip = 'account_not_confirmed';
+    else if (!sc.complete) skip = 'scan_incomplete';
+    else if (sc.total == null || rows.length !== sc.total) skip = 'row_count_mismatch';
+    if (skip) return { ok: false, skip: skip, toReport: [], state: state, absent: [], present: [], capped: false };
+    var items = inp.items || [], ids = {}, absent = [], present = [], toReport = [], capped = false;
+    items.forEach(function (it) {
+      ids[it.id] = 1;
+      var isThere = rows.some(function (r) {
+        if (it.remoteId && String(r.postingId) === String(it.remoteId)) return true;
+        return titlesCompatible(r.titleRaw, it.title) === 'match';
+      });
+      if (isThere) { present.push(it.id); delete state[it.id]; return; }
+      absent.push(it.id);
+      var s = state[it.id];
+      if (!s) state[it.id] = { firstAt: now, lastAt: now, count: 1 };
+      else if (now - s.lastAt >= gap) { s.count = (s.count || 1) + 1; s.lastAt = now; }
+      s = state[it.id];
+      if (s.count >= 2 && s.lastAt - s.firstAt >= gap) {
+        if (toReport.length < cap) toReport.push({ id: it.id, title: it.title }); else capped = true;
+      }
+    });
+    Object.keys(state).forEach(function (k) { if (!ids[k]) delete state[k]; });
+    return { ok: true, skip: null, toReport: toReport, state: state, absent: absent, present: present, capped: capped };
+  }
+  function accountConfirmed(pageText, expectedEmail) {
+    var e = String(expectedEmail || '').trim().toLowerCase();
+    return !!e && String(pageText || '').toLowerCase().indexOf(e) !== -1;
+  }
+
   var api = {
     LOCK_TTL_MS: LOCK_TTL_MS, CLAIM_MS: CLAIM_MS, decideLock: decideLock, queueTabVerdict: queueTabVerdict,
-    cleanTitle: cleanTitle, titlesCompatible: titlesCompatible, pagePostingTitle: pagePostingTitle, isPostingConfirmation: isPostingConfirmation, editOutcome: editOutcome
+    cleanTitle: cleanTitle, titlesCompatible: titlesCompatible, pagePostingTitle: pagePostingTitle, isPostingConfirmation: isPostingConfirmation, editOutcome: editOutcome,
+    pickSearchWord: pickSearchWord, parseTotal: parseTotal, rowStatus: rowStatus, parseDashboardRows: parseDashboardRows, isNoPostings: isNoPostings, classifyLookup: classifyLookup,
+    RECON_MIN_GAP_MS: RECON_MIN_GAP_MS, RECON_CAP: RECON_CAP, reconcileDecide: reconcileDecide, accountConfirmed: accountConfirmed
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   try { root.FAS_CL_GUARD = api; } catch (e) { /* ignore */ }

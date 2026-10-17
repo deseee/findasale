@@ -1106,6 +1106,79 @@ async function fasFlowForwardDiag(r) {
     return true;
   } catch (e) { return false; }
 }
+// ---- Guarded reconcile of "listed" flags (1.0.19) -------------------------------------------------------------------------------------
+// Production: items flagged "listed on Craigslist" (latest POST/POSTED job) with no posting on the account in ANY status. The flag can only be
+// cleared with the extension's bearer token, so the extension does it: POST /extension/items/:id/removed {platform} (idempotent server side).
+// Safety (pure logic in FAS_CL_GUARD.reconcileDecide, unit tested): complete scan of every dashboard page whose row count equals the "of N total"
+// figure, logged in as the expected account, item absent (saved id AND title, any status) in TWO scans at least FAS_CL_GUARD.RECON_MIN_GAP_MS apart,
+// at most RECON_CAP clears per run. Never on an incomplete / errored scan. Poshmark: the decision logic is platform-neutral, but no closet scanner
+// is wired yet (see the 1.0.19 report), so only Craigslist is started from here.
+const FAS_CL_RECON_KEY = 'fasClReconcile';
+const FAS_CL_RECON_REQ_KEY = 'fasClReconcileRequested';
+const FAS_CL_RECON_IDLE_MS = 6 * 60 * 60 * 1000;     // no pending sighting: look at most every 6 hours
+const FAS_CL_RECON_FOLLOWUP_MS = 5 * 60 * 1000;      // a sighting is pending: second look no sooner than this
+async function fasClMaybeStartReconcile() {
+  try {
+    const G = FAS_CL_GUARD_BG;
+    if (!G || typeof G.reconcileDecide !== 'function') return 'no_guard';
+    const { fasAutoRemoveMode = 'silent' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+    if (fasAutoRemoveMode !== 'silent') return 'mode_not_silent';
+    if (await fasIsPlatformPaused('CRAIGSLIST')) return 'paused';
+    const st = await chrome.storage.local.get([FAS_CL_RECON_KEY, FAS_CL_RECON_REQ_KEY]);
+    const rec = st[FAS_CL_RECON_KEY] || { state: {}, lastAttemptAt: 0 };
+    const pending = Object.keys(rec.state || {}).length > 0;
+    const wait = pending ? FAS_CL_RECON_FOLLOWUP_MS : FAS_CL_RECON_IDLE_MS;
+    if (Date.now() - (rec.lastAttemptAt || 0) < wait) return 'not_due';
+    if (st[FAS_CL_RECON_REQ_KEY] && Date.now() - (st[FAS_CL_RECON_REQ_KEY].at || 0) < 15 * 60 * 1000) return 'already_requested';
+    if (await silentCrossPlatformRemovalInProgress('CRAIGSLIST')) return 'removal_tab_busy';
+    const itemsResp = await apiFetch('/extension/items');
+    if (!itemsResp.ok) return 'items_error';
+    const items = ((itemsResp.data && itemsResp.data.items) || []).filter((it) => it && it.marketplaceListedCraigslist === true && it.title);
+    rec.lastAttemptAt = Date.now();
+    await chrome.storage.local.set({ [FAS_CL_RECON_KEY]: rec });
+    if (!items.length) { if (pending) { rec.state = {}; await chrome.storage.local.set({ [FAS_CL_RECON_KEY]: rec }); } return 'nothing_listed'; }
+    const expectedEmail = (itemsResp.data && itemsResp.data.organizer && itemsResp.data.organizer.email) || '';
+    const gate = await fasClTryClaim('removal');   // single-flight: waits for an active Craigslist post / edit and tries again on the next check
+    if (!gate.ok) { rec.lastAttemptAt = 0; await chrome.storage.local.set({ [FAS_CL_RECON_KEY]: rec }); return 'waiting_for_' + gate.heldBy; }
+    await chrome.storage.local.set({ [FAS_CL_RECON_REQ_KEY]: { at: Date.now(), expectedEmail: expectedEmail,
+      items: items.map((it) => ({ id: it.id, title: String(it.title), remoteId: (it.remoteListingId || (it.listingRefs && it.listingRefs.CRAIGSLIST) || '') || null })) } });
+    await openSilentCrossPlatformRemovalTab('CRAIGSLIST');
+    fasT('info', 'reconcile_started', 'Checking ' + items.length + ' Craigslist item(s) marked as listed against your account postings', { platform: 'CRAIGSLIST', flow: 'reconcile', ctx: { count: items.length } });
+    return 'started';
+  } catch (e) { return 'error:' + String((e && e.message) || e); }
+}
+// Applies one complete-or-not scan. Returns the decision plus which items were cleared on the server.
+async function fasClApplyReconcile(req, msg) {
+  const G = FAS_CL_GUARD_BG;
+  const st = await chrome.storage.local.get([FAS_CL_RECON_KEY]);
+  const rec = st[FAS_CL_RECON_KEY] || { state: {}, lastAttemptAt: 0 };
+  const scan = { loggedIn: msg.loggedIn === true, accountOk: G.accountConfirmed(msg.accountText, req.expectedEmail), complete: msg.complete === true, total: msg.total == null ? null : Number(msg.total),
+    rows: Array.isArray(msg.rows) ? msg.rows.slice(0, 5000).map((r) => ({ postingId: String(r.postingId || ''), status: String(r.status || ''), titleRaw: String(r.titleRaw || '') })) : [] };
+  const d = G.reconcileDecide({ platform: 'CRAIGSLIST', scan: scan, items: req.items || [], state: rec.state || {}, now: Date.now() });
+  rec.state = d.state; rec.lastAttemptAt = Date.now();
+  await chrome.storage.local.set({ [FAS_CL_RECON_KEY]: rec });
+  if (!d.ok) {
+    fasT('info', 'reconcile_skipped', 'Craigslist check skipped, nothing changed (' + d.skip + ')', { platform: 'CRAIGSLIST', flow: 'reconcile', ctx: { skip: d.skip, rows: scan.rows.length, total: scan.total, reason: msg.reason || '' } });
+    return { decision: d, cleared: [] };
+  }
+  const cleared = [];
+  for (const it of d.toReport) {
+    const r = await apiFetch('/extension/items/' + encodeURIComponent(it.id) + '/removed', { method: 'POST', body: { platform: 'CRAIGSLIST' } });
+    if (r && r.ok) {
+      cleared.push(it.id);
+      delete rec.state[it.id];
+      const text = 'Craigslist no longer has a posting for "' + String(it.title).slice(0, 60) + '" (checked twice, all ' + scan.rows.length + ' postings, any status), so FindA.Sale marked it as not listed there';
+      fasT('info', 'reconcile_cleared', text, { platform: 'CRAIGSLIST', flow: 'reconcile', itemId: it.id, title: it.title, ctx: { rows: scan.rows.length, total: scan.total } });
+      fasFlowForwardDiag({ plat: 'CRAIGSLIST', flow: 'reconcile', itemId: it.id, item: it.title, code: 'reconcile_cleared', msg: text, ctx: { rows: scan.rows.length, total: scan.total, firstSeenAbsentAt: (st[FAS_CL_RECON_KEY] && st[FAS_CL_RECON_KEY].state && st[FAS_CL_RECON_KEY].state[it.id] && st[FAS_CL_RECON_KEY].state[it.id].firstAt) || null } });
+    } else {
+      fasT('warn', 'reconcile_report_failed', 'Could not tell FindA.Sale that "' + String(it.title).slice(0, 60) + '" is no longer on Craigslist (' + ((r && (r.error || r.status)) || 'no response') + '); will try on the next check', { platform: 'CRAIGSLIST', flow: 'reconcile', itemId: it.id, title: it.title });
+    }
+  }
+  await chrome.storage.local.set({ [FAS_CL_RECON_KEY]: rec });
+  if (d.capped) fasT('info', 'reconcile_capped', 'More than ' + G.RECON_CAP + ' items need clearing; the rest wait for the next check', { platform: 'CRAIGSLIST', flow: 'reconcile' });
+  return { decision: d, cleared: cleared };
+}
+
 let fasEditPumping = false;
 
 async function fasEditGetState() {
@@ -2154,6 +2227,7 @@ async function throttledCheckPendingRemovals() {
     const removalOutcome = await checkPendingRemovals().catch((e) => 'error:' + String((e && e.message) || e));
     const updateOutcome = await checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e));
     await maybeOpenVintedForBundleOrders(); // never throws
+    await fasClMaybeStartReconcile(); // never throws
     // (2026-07-21) Same instrumentation as the alarm path, under separate keys -- lets the popup
     // tell "an automatic 20-min alarm tick did this" apart from "a manual/opportunistic trigger
     // (popup open, window refocus) did this", which is exactly the distinction needed to diagnose
@@ -2681,6 +2755,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   const updateOutcome = await checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e));
   const priceSyncOutcome = await checkPriceSyncQueue().catch((e) => 'error:' + String((e && e.message) || e));
   await maybeOpenVintedForBundleOrders(); // 2026-10-12: never throws
+  await fasClMaybeStartReconcile(); // 2026-10-17 (1.0.19): guarded 'listed but not on Craigslist' check; never throws
   fasPoshShipRunDetached(false); // 2026-10-14: Poshmark shipping normalizer; never throws, self-throttled
   await chrome.storage.local.set({
     fasLastAlarmFiredAt: Date.now(),
@@ -4061,6 +4136,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           await chrome.storage.local.set({ [cfg.indexKey]: next });
           const queue = st[cfg.queueKey] || [];
           sendResponse({ ok: true, item: queue[next] || null, index: next, total: queue.length });
+        }
+      } else if (msg.type === 'getCraigslistReconcileRequest') {
+        // 1.0.19: same tab-identity rule as Renew All: only the dedicated tab this worker opened gets the request, and it is consumed once.
+        const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG.CRAIGSLIST;
+        const st = await chrome.storage.local.get([FAS_CL_RECON_REQ_KEY, cfg.tabIdKey]);
+        const senderTabId = (sender && sender.tab && sender.tab.id != null) ? sender.tab.id : null;
+        const req = st[FAS_CL_RECON_REQ_KEY] || null;
+        if (!req || senderTabId == null || st[cfg.tabIdKey] == null || senderTabId !== st[cfg.tabIdKey] || Date.now() - (req.at || 0) > 15 * 60 * 1000) {
+          sendResponse({ ok: true, requested: false });
+        } else {
+          sendResponse({ ok: true, requested: true });
+        }
+      } else if (msg.type === 'craigslistReconcileScan') {
+        const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG.CRAIGSLIST;
+        const st = await chrome.storage.local.get([FAS_CL_RECON_REQ_KEY, cfg.tabIdKey]);
+        const senderTabId = (sender && sender.tab && sender.tab.id != null) ? sender.tab.id : null;
+        const req = st[FAS_CL_RECON_REQ_KEY] || null;
+        if (!req || senderTabId == null || senderTabId !== st[cfg.tabIdKey]) { sendResponse({ ok: false, error: 'no_request' }); }
+        else {
+          await chrome.storage.local.remove([FAS_CL_RECON_REQ_KEY]);
+          let out = null;
+          try { out = await fasClApplyReconcile(req, msg); }
+          catch (e) { fasT('warn', 'reconcile_error', 'Craigslist check stopped, nothing changed (' + String((e && e.message) || e).slice(0, 120) + ')', { platform: 'CRAIGSLIST', flow: 'reconcile' }); }
+          await finishSilentCrossPlatformRemoval('CRAIGSLIST');
+          sendResponse({ ok: true, skip: out && out.decision ? out.decision.skip : 'error', cleared: out ? out.cleared.length : 0 });
         }
       } else if (msg.type === 'getCraigslistRenewAllRequested') {
         // ADDED 2026-09-27 (Patrick-approved native Renew All switch, see autoRenewDueItems'

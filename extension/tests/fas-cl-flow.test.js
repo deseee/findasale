@@ -222,10 +222,10 @@ test('buildDiag keeps the new Craigslist codes and their details', () => {
   for (const code of ['edit_confirmed_without_price', 'posting_identity_mismatch', 'edit_flow_stuck', 'price_field_not_found']) {
     const d = C.buildDiag({ t: 1, platform: 'CRAIGSLIST', itemId: 'cmo3etb6i003hjqsue02qim86', title: 'Cecil Fielder card', outcome: 'fail', code: code, step: 'edit', reason: 'x',
       trail: ['edit:continue', 'edit:fail'], snapshots: [{ note: 'fail:' + code, url: 'https://post.craigslist.org/k/abc', buttons: [{ text: 'Manage your post' }], inputs: [], textSample: 'Thanks for posting!' }],
-      details: { pageTitle: 'Coca Cola sign', expected: 'Cecil Fielder card', liveShown: 9 } }, { version: '1.0.18' });
+      details: { pageTitle: 'Coca Cola sign', expected: 'Cecil Fielder card', liveShown: 9 } }, { version: '1.0.19' });
     assert.strictEqual(d.code, code);
     assert.strictEqual(d.platform, 'CRAIGSLIST');
-    assert.strictEqual(d.v, '1.0.18');
+    assert.strictEqual(d.v, '1.0.19');
     assert.strictEqual(d.snapshots[0].buttons[0], 'Manage your post');
     assert.strictEqual(d.details.liveShown, 9);
   }
@@ -235,7 +235,7 @@ test('buildDiag keeps the new Craigslist codes and their details', () => {
 test('wiring: manifest 1.0.18, guard loaded by background, the edit injection and the post content script', () => {
   const root = path.join(__dirname, '..');
   const man = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
-  assert.strictEqual(man.version, '1.0.18');
+  assert.strictEqual(man.version, '1.0.19');
   const post = man.content_scripts.find((c) => c.matches.indexOf('https://post.craigslist.org/*') !== -1);
   assert.ok(post.js.indexOf('fas-cl-guard.js') !== -1 && post.js.indexOf('fas-cl-guard.js') < post.js.indexOf('fas-craigslist.js'));
   const bg = fs.readFileSync(path.join(root, 'background.js'), 'utf8');

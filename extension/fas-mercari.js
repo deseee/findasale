@@ -1982,23 +1982,17 @@
     // same lbs/oz-remainder math and the same zero-oz-doesn't-stick skip, instead of the two call
     // sites drifting if only one copy is ever fixed later. Returns false (no-op) if there's no
     // trusted weight to set, matching this function's existing null-safety elsewhere.
+    let lastWeightFill = null;
     function setMercariWeightFields() {
       const totalOz = item.packageWeightOz != null ? item.packageWeightOz : item.aiPackageWeightOz;
       if (totalOz == null || !isFinite(Number(totalOz))) return false;
-      const lbs = Math.floor(Number(totalOz) / 16);
-      const remOz = Math.round(Number(totalOz) % 16);
       const lbEl = document.querySelector('input[data-testid="ItemWeightInPounds"]');
       const ozEl = document.querySelector('input[data-testid="ItemWeightInOunces"]');
-      if (lbEl) setNativeValue(lbEl, String(lbs));
-      // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-11, live-confirmed): live-tested setting this field
-      // to literal "0" directly and it does NOT stick (value reverts to empty) even though a
-      // non-zero value like "5" sets fine via the identical setNativeValue call -- some kind of
-      // zero-specific rejection on Mercari's own side, not a bug in the setter itself. Skips setting
-      // it when the real remainder is 0 -- Mercari's own default already shows "0" here on its own
-      // (confirmed in Patrick's own screenshot before this function ever touched the field), so
-      // leaving it alone in that case matches the field's own working default rather than fighting
-      // a quirk that only breaks things when triggered synthetically.
-      if (ozEl && remOz > 0) setNativeValue(ozEl, String(remOz));
+      // 1.0.19: BOTH boxes are always filled, "0" included (1.0.18 left pounds empty for a package under a pound and Next never enabled).
+      // fas-mercari-weight.js tries the normal write, a typed insert and a tracker reset, and reports which box refused.
+      const wf = self.FAS_MERC_WEIGHT ? self.FAS_MERC_WEIGHT.fillWeightBoxes(lbEl, ozEl, totalOz, setNativeValue, document) : null;
+      lastWeightFill = wf;
+      if (wf && !wf.ok) console.warn('[FAS Mercari] weight boxes: ' + wf.reason, wf);
       return true;
     }
 
@@ -2026,7 +2020,10 @@
       await sleep(200);
       const weighModalNext = await waitForSelector(() => document.querySelector('[data-testid="SelectCarrierButton"]:not([disabled])'), 4000);
       if (!weighModalNext) {
-        return 'Clicked the Shipping label field and reached Mercari\'s "how heavy will the package be?" modal, but its "Next" button never became enabled (UNVERIFIED state) -- the weight fields were set, but Mercari\'s own form still didn\'t accept it as complete.';
+        const lbNow = document.querySelector('input[data-testid="ItemWeightInPounds"]'), ozNow = document.querySelector('input[data-testid="ItemWeightInOunces"]');
+        const errTxt = norm(((qa('[role="alert"], [class*="rror"]').map((e) => e.textContent).join(' ')) || '')).slice(0, 120);
+        T.warn('weight_modal_next_disabled', 'The weight window\'s Next button stayed disabled', { pounds: lbNow ? lbNow.value : null, ounces: ozNow ? ozNow.value : null, fill: lastWeightFill, pageError: errTxt });
+        return 'Clicked the Shipping label field and reached Mercari\'s "how heavy will the package be?" modal, but its "Next" button never became enabled (UNVERIFIED state) -- pounds shows "' + (lbNow ? lbNow.value : '?') + '" and ounces "' + (ozNow ? ozNow.value : '?') + '"' + (errTxt ? ', Mercari says: ' + errTxt : '') + '.';
       }
       await realClick(weighModalNext);
       await sleep(500);

@@ -876,6 +876,90 @@
   }
   function hops0(S) { return S.hops || 0; }
   var CLG = self.FAS_CL_GUARD || null;   // fas-cl-guard.js (injected before this file); every use below is guarded so the engine still works without it
+
+  // ---- 1.0.19 dashboard lookup: saved id -> one-word search -> page scan (never "gone" from a search alone) -----------------------------
+  async function clFetchRows(url, init) {
+    var res;
+    try { res = await fetch(url, Object.assign({ credentials: 'same-origin', cache: 'no-store', headers: { 'Accept': 'text/html' } }, init || {})); }
+    catch (e) { return { ok: false, reason: 'fetch_error' }; }
+    if (!res.ok) return { ok: false, reason: 'http_' + res.status };
+    var html = await res.text();
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var rows = CLG.parseDashboardRows(doc);
+    if (!rows) {
+      if (CLG.isNoPostings(doc.body ? doc.body.textContent : html)) return { ok: true, rows: [], none: true };
+      return { ok: false, reason: /type=["']password["']/i.test(html) ? 'signed_out' : 'no_table' };
+    }
+    return { ok: true, rows: rows };
+  }
+  function clSearchForm() {
+    var input = q('input[name="terms"]');
+    return input && input.form ? { input: input, form: input.form } : null;
+  }
+  async function clSearchRows(word) {
+    var sf = clSearchForm();
+    if (!sf) return { ok: false, reason: 'no_search_form' };
+    var fd = new FormData(sf.form);
+    fd.set('terms', word);
+    if (!fd.has('show_tab')) fd.set('show_tab', 'postings');
+    if (!fd.has('filter_active')) fd.set('filter_active', 'all');
+    var method = String(sf.form.method || 'get').toLowerCase(), action = sf.form.action || location.href;
+    if (method === 'post') return clFetchRows(action, { method: 'POST', headers: { 'Accept': 'text/html', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fd).toString() });
+    var u = new URL(action, location.href);
+    fd.forEach(function (v, k) { if (typeof v === 'string') u.searchParams.set(k, v); });
+    return clFetchRows(u.toString());
+  }
+  // Every page of the dashboard (all statuses). Page 1 first, then filter_page=N until a page comes back short. ok:false when any page failed.
+  async function clScanPages() {
+    var all = [], pages = 0;
+    for (var n = 1; n <= 30; n++) {
+      var r = await clFetchRows('https://accounts.craigslist.org/login/home?filter_page=' + n + '&show_tab=postings&filter_active=all');
+      if (!r.ok) return { ok: false, reason: r.reason, pages: pages, rows: all.length };
+      pages++;
+      r.rows.forEach(function (x) { x.page = n; all.push(x); });
+      if (r.rows.length < 50) break;
+      await sleep(300);
+    }
+    return { ok: true, rows: all, pages: pages };
+  }
+  function clIdList(ids) { return (ids || []).slice(0, 10).map(function (i) { return String(i); }); }
+  // -> { go:result } | { fail:result } | { blocked:result } | { target:{id, via:'search'|'scan', page, word} }
+  async function clLookup(it, phase) {
+    var wanted = it.title, remoteId = it.remoteListingId ? String(it.remoteListingId) : '';
+    var diag = { lookup: remoteId ? 'id' : 'title' };
+    function bad(r, where) {
+      if (r.reason === 'signed_out') return { blocked: blocked('login_required', 'Craigslist dashboard asks for sign-in', phase) };
+      return { fail: fail('dashboard_scan_failed', 'Could not read the Craigslist dashboard (' + where + ': ' + r.reason + ')', 'locate', 'fetch filter_page', {}, { details: Object.assign(diag, { scanReason: r.reason, pagesRead: r.pages }) }) };
+    }
+    function verdict(c, via, word) {
+      if (c.kind === 'found') return { target: { id: c.row.postingId, via: via, page: c.row.page || null, word: word || '', titleRaw: c.row.titleRaw } };
+      if (c.kind === 'ambiguous') {
+        tLog('warn', 'ambiguous_title', c.ids.length + ' active Craigslist postings share this title; nothing was edited', { candidates: clIdList(c.ids) });
+        return { fail: fail('ambiguous_title', c.ids.length + ' active postings share this title', 'locate', 'td.title a', {}, { details: Object.assign(diag, { candidates: clIdList(c.ids) }) }) };
+      }
+      if (c.kind === 'gone') return { fail: fail('listing_gone_on_dashboard', 'The posting is ' + c.status + ' on the Craigslist dashboard (' + clIdList(c.ids).join(', ') + ')', 'locate', 'td.status', {}, { details: Object.assign(diag, { status: c.status, ids: clIdList(c.ids) }) }) };
+      return null;
+    }
+    var matcher = clTitleMatches;
+    if (!remoteId) {
+      var word = CLG.pickSearchWord(wanted);
+      diag.searchWord = word;
+      if (word) {
+        var sr = await clSearchRows(word);
+        diag.searchOk = sr.ok; diag.searchRows = sr.ok ? sr.rows.length : undefined;
+        if (sr.ok && sr.rows.length && sr.rows.length < 50) {
+          var v1 = verdict(CLG.classifyLookup(sr.rows, { title: wanted, matcher: matcher }), 'search', word);
+          if (v1) return v1;
+        }
+      }
+    }
+    var sc = await clScanPages();
+    if (!sc.ok) return bad(sc, 'page scan');
+    diag.pagesScanned = sc.pages; diag.rowsSeen = sc.rows.length;
+    var v2 = verdict(CLG.classifyLookup(sc.rows, remoteId ? { remoteId: remoteId } : { title: wanted, matcher: matcher }), 'scan', '');
+    if (v2) return v2;
+    return { fail: fail('listing_not_found_on_dashboard', (remoteId ? 'Posting id ' + remoteId : 'No posting with this title') + ' is not on any of ' + sc.pages + ' dashboard page(s), in any status', 'locate', 'tr.posting-row td.title a', {}, { details: diag }) };
+  }
   async function clStep(ctx) {
     var S = ctx.scratch || {}, W = wants(ctx), it = ctx.item;
     var phase = S.phase || 'locate';
@@ -907,14 +991,37 @@
         }
         return fail('verify_mismatch', 'Dashboard row shows "' + String(mine.titleRaw).replace(/\s+/g, ' ').trim().slice(-30) + '", wanted $' + C.formatPrice('CRAIGSLIST', W.price), 'verify', 'td.title a "- $price" suffix', {});
       }
-      var cands = rows.filter(function (r) { return r.active; });
       var chosen = null;
+      if (CLG && S.targetId) {
+        // Second hop: the lookup found the posting; its row is on this page now. Only the row with that exact id is used.
+        chosen = rows.filter(function (r) { return r.postingId === S.targetId; })[0] || null;
+        if (!chosen) return fail('listing_not_found_on_dashboard', 'Posting ' + S.targetId + ' was found by the lookup but is not on this dashboard page', 'locate', 'td.status[data-postingid]', {}, { details: { targetId: S.targetId, page: page } });
+        if (!chosen.active) return fail('listing_gone_on_dashboard', 'The posting is ' + (chosen.deleted ? 'deleted' : 'not active') + ' on the Craigslist dashboard (' + chosen.postingId + ')', 'locate', 'td.status', {}, { details: { ids: [chosen.postingId] } });
+      } else if (CLG) {
+        var lk = await clLookup(it, phase);
+        if (lk.blocked) return lk.blocked;
+        if (lk.fail) return lk.fail;
+        var tg = lk.target;
+        chosen = rows.filter(function (r) { return r.postingId === tg.id && r.active; })[0] || null;   // already on the page that is open
+        if (!chosen) {
+          // Open the row where its Edit button lives: a real search for a search hit, the page that holds it for a scan hit.
+          var sf = tg.via === 'search' ? clSearchForm() : null;
+          if (sf && tg.word) {
+            tStep('Searching your Craigslist posts for "' + tg.word + '"', 'one matching active post was found; I open it from the search results');
+            setNative(sf.input, tg.word);
+            setTimeout(function () { try { if (sf.form.requestSubmit) sf.form.requestSubmit(); else sf.form.submit(); } catch (e) { /* page may be gone */ } }, 80);
+            return cont(3000, { targetId: tg.id, rowTitle: String(tg.titleRaw || '').replace(/\s+/g, ' ').trim().slice(0, 140) });
+          }
+          return go(C.craigslistPageUrl(tg.page || 1), { targetId: tg.id, page: tg.page || 1 });
+        }
+      }
+      if (!CLG) {
+      var cands = rows.filter(function (r) { return r.active; });
       if (it.remoteListingId) chosen = cands.filter(function (r) { return r.postingId === it.remoteListingId; })[0] || null;
       if (!chosen) {
         var pick = clPickByTitle(cands, it.title);
         if (pick.reason === 'ambiguous') {
           var clC = cands.filter(function (r) { return clTitleMatches(r.titleRaw, it.title); }).slice(0, 10).map(function (r) { return { id: r.postingId, price: clRowPrice(r.titleRaw) }; });
-          tLog('warn', 'ambiguous_title', pick.count + ' active Craigslist postings share this title and the item has no saved posting id; nothing was edited', { candidates: clC });
           return fail('ambiguous_title', pick.count + ' active postings share this title', 'locate', 'td.title a', {}, { details: { candidates: clC } });
         }
         if (pick.match) chosen = pick.match.row;
@@ -922,6 +1029,7 @@
       if (!chosen) {
         if (rows.length >= 50 && page < 30) return go(C.craigslistPageUrl(page + 1), { page: page + 1 });
         return fail('listing_not_found_on_dashboard', 'No active posting with this title/id on ' + page + ' dashboard page(s)', 'locate', 'tr.posting-row td.title a', {});
+      }
       }
       var btn = qa('input[type="submit"], input.managebtn, button', chosen.tr).filter(function (b) { return /^edit$/.test(btnLabel(b)); })[0];
       if (!btn) return fail('edit_button_not_found', 'Row for posting ' + chosen.postingId + ' has no "edit" submit control', 'locate', 'tr.posting-row input.managebtn[value=edit]', {}, { diag: snapshot('cl_row') });
@@ -1110,7 +1218,7 @@
   function humanize(code, reason, L, item) {
     var r = String(reason || code || '');
     var m = {
-      ambiguous_title: ['More than one of your ' + L + ' listings has this exact title, and FindA.Sale has no saved listing id for this item.', 'Editing one at random could change the wrong listing, so nothing was edited.', 'This item is marked as needing its Poshmark listing id and will keep being skipped, with this reason in the activity log, until the id is saved or the listings get different titles. Candidate ids and prices are in the activity log.'],
+      ambiguous_title: ['More than one of your ' + L + ' listings has this exact title, and FindA.Sale has no saved listing id for this item.', 'Editing one at random could change the wrong listing, so nothing was edited.', 'This item is marked as needing its saved listing id and will keep being skipped, with this reason in the activity log, until the id is saved or the listings get different titles. Candidate ids and prices are in the activity log.'],
       login_required: ['You appear to be signed out of ' + L + '.', 'The marketplace showed a sign-in page instead of your listings.', 'Sign in to ' + L + ' in this browser. FindA.Sale pauses ' + L + ' edits for a while and resumes automatically.'],
       captcha_or_verification: [L + ' asked for a security check.', 'Automatic editing stops at captchas and verification screens so your account is not put at risk.', 'Complete the check in ' + L + ' yourself; FindA.Sale pauses ' + L + ' edits and tries again later.'],
       price_field_not_found: ['The edit form opened but no price box was found.', 'The marketplace page layout may have changed, or this listing type has no price field.', 'Nothing was changed. FindA.Sale will retry later; the page snapshot below shows what was on screen.'],
@@ -1120,7 +1228,9 @@
       price_value_did_not_stick: ['The price box would not keep the new value.', 'The page rewrote the field after FindA.Sale typed in it.', 'Nothing was saved. FindA.Sale will retry later.'],
       verify_mismatch: ['FindA.Sale saved the new price but the live listing still shows something different.', 'The marketplace may not have accepted the change yet, or it changed another value.', 'The item is not marked synced, so FindA.Sale re-checks it on the next retry. Look at the listing yourself if this repeats.'],
       save_control_not_found: ['The price was entered but no Save/Update button could be found.', 'The marketplace page layout may have changed.', 'Nothing was saved. FindA.Sale will retry later.'],
-      listing_not_found_on_dashboard: ['The listing was not found on your ' + L + ' dashboard.', 'It may have expired, sold, been removed, or have a different title there.', 'FindA.Sale will retry later; if the listing is gone the sync will be cleared by the next removal check.'],
+      listing_gone_on_dashboard: ['This post is already ' + 'deleted or expired on your ' + L + ' dashboard.', 'The dashboard shows a post with this title, but its status is Deleted or Expired, so there is nothing live to edit.', 'Nothing was changed and no new post was made. FindA.Sale clears the Craigslist sync for this item on its next removal check.'],
+      dashboard_scan_failed: ['Could not read your ' + L + ' dashboard pages.', 'A dashboard page did not load completely, so I cannot tell whether the post exists.', 'Nothing was changed. FindA.Sale will retry later.'],
+      listing_not_found_on_dashboard: ['The listing was not found on your ' + L + ' dashboard.', 'I searched your posts and then read every dashboard page (all statuses) and none matched, so it may have a different title there or be missing from this account.', 'FindA.Sale will retry later; if the listing is gone the sync will be cleared by the next removal check.'],
       listing_not_found_in_closet: ['The listing was not found in your ' + L + ' closet.', 'It may be sold, removed, or titled differently than on FindA.Sale.', 'FindA.Sale will retry later.'],
       edit_control_not_found: ['No Edit control was found for this listing.', 'The marketplace page layout may have changed, or the listing is not editable right now.', 'Nothing was changed. FindA.Sale will retry later.'],
       engine_exception: ['FindA.Sale hit an unexpected error while editing.', r, 'Nothing was confirmed as changed. FindA.Sale will retry later.']
