@@ -18,6 +18,9 @@ const CRAWLER_PATTERNS: { pattern: RegExp; name: string }[] = [
   // event UAs across 2026-09-03 through 2026-09-17 all matching this exact substring. Same
   // fix shape as the pre-existing GoogleBot/ClaudeBot/etc. entries above (2026-07-28).
   { pattern: /meta-webindexer|meta-externalagent/i, name: 'MetaCrawler' },
+  // 2026-10-16 (Sentry FINDASALE-NODEJS-7V): Exa's search crawler renders pages in a headless browser, so each
+  // page view fires ~8-10 client-side GETs from a few AWS IPs and spends the anonymous 500/15min budget.
+  { pattern: /ExaSearchBot/i, name: 'ExaSearchBot' },
 ];
 
 export function detectCrawler(userAgent: string): string | null {
