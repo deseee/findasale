@@ -829,6 +829,19 @@
         deleted: !!(cls && cls.contains('deleted')), titleRaw: a ? a.textContent : '' };
     }).filter(function (r) { return /^\d{6,}$/.test(r.postingId); });
   }
+  // Craigslist cuts posting titles to ~70 chars, so a long FindA.Sale title shows on the dashboard as its first 60-72 characters (plus "- $price").
+  // titleEquals only forgives one dangling word on titles of 75+ chars; here we also accept the dashboard text as a pure PREFIX of the wanted title when
+  // it is long enough (60+ chars) that it cannot be a different listing. Callers still demand exactly one matching row.
+  function clTitleMatches(raw, wanted) {
+    if (C.titleEquals(raw, wanted)) return true;
+    var c = C.cleanCandidateTitle(raw), w = C.foldTitle(wanted).replace(/\s*\.{3,}\s*$/, '');
+    return !!(c && w && c.length >= 60 && c.length <= 72 && w.length > c.length && w.indexOf(c) === 0);
+  }
+  function clPickByTitle(cands, wanted) {
+    var hits = cands.filter(function (r) { return clTitleMatches(r.titleRaw, wanted); });
+    if (hits.length === 1) return { match: { key: hits[0].postingId, row: hits[0] }, reason: 'ok', count: 1 };
+    return { match: null, reason: hits.length === 0 ? 'none' : 'ambiguous', count: hits.length };
+  }
   function clRowPrice(titleRaw) {
     var m = /-\s*\$\s?([\d,]+(?:\.\d+)?)\s*$/.exec(String(titleRaw || '').replace(/\s+/g, ' ').trim());
     return m ? C.parsePriceText(m[1]) : null;
@@ -868,9 +881,9 @@
       var chosen = null;
       if (it.remoteListingId) chosen = cands.filter(function (r) { return r.postingId === it.remoteListingId; })[0] || null;
       if (!chosen) {
-        var pick = C.pickUnique(cands.map(function (r) { return { key: r.postingId, texts: [r.titleRaw], row: r }; }), it.title, 'equals');
+        var pick = clPickByTitle(cands, it.title);
         if (pick.reason === 'ambiguous') {
-          var clC = cands.filter(function (r) { return C.titleEquals(r.titleRaw, it.title); }).slice(0, 10).map(function (r) { return { id: r.postingId, price: clRowPrice(r.titleRaw) }; });
+          var clC = cands.filter(function (r) { return clTitleMatches(r.titleRaw, it.title); }).slice(0, 10).map(function (r) { return { id: r.postingId, price: clRowPrice(r.titleRaw) }; });
           tLog('warn', 'ambiguous_title', pick.count + ' active Craigslist postings share this title and the item has no saved posting id; nothing was edited', { candidates: clC });
           return fail('ambiguous_title', pick.count + ' active postings share this title', 'locate', 'td.title a', {}, { details: { candidates: clC } });
         }
