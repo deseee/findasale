@@ -446,13 +446,27 @@
     } catch (e) { /* ignore */ }
     return '';
   }
-  function poshAmbiguous(it) {
+  async function poshAmbiguous(it) {
+    // Load the whole closet first (it lazy-loads), so a candidate that has not rendered yet can never be missed.
+    var prevN = -1, complete = false;
+    for (var ex = 0; ex < 12; ex++) {
+      var nowN = poshClosetCards().length;
+      if (nowN === prevN) { complete = true; break; }
+      prevN = nowN;
+      window.scrollTo(0, document.body.scrollHeight);
+      await sleep(1100);
+    }
     var cands = [];
     try {
       poshClosetCards().forEach(function (c) { if ((c.texts || []).some(function (t) { return C.titleEquals(t, it.title); })) cands.push({ id: c.key, price: poshCandidatePrice(c.key) }); });
     } catch (e) { /* ignore */ }
-    tLog('warn', 'ambiguous_title', cands.length + ' Poshmark listings have the exact title "' + String(it.title || '').slice(0, 60) + '" and this item has no saved Poshmark listing id; nothing was edited', { candidates: cands.slice(0, 10) });
-    return fail('ambiguous_title', cands.length + ' closet listings share this exact title (' + cands.slice(0, 5).map(function (c) { return c.id.slice(-6) + (c.price ? '@$' + c.price : ''); }).join(', ') + '); not editing any of them', 'locate', '.tile-grid-redesign__title', {}, { details: { candidates: cands.slice(0, 10) } });
+    var res = C.resolveDuplicateTitleId(cands, it.titleGroup, complete);
+    if (res.id) {
+      tLog('info', 'posh_dup_resolved', 'Several closet listings share this title, but only one is not already tied to another FindA.Sale item and this is the only item waiting; using its id', { id: res.id, candidates: cands.slice(0, 10) });
+      return go('https://poshmark.com/edit-listing/' + res.id, { remoteId: res.id, phase: 'api', discovered: true });
+    }
+    tLog('warn', 'ambiguous_title', cands.length + ' Poshmark listings have the exact title "' + String(it.title || '').slice(0, 60) + '" and this item has no saved Poshmark listing id; nothing was edited. ' + res.message, { candidates: cands.slice(0, 10), reason: res.reason });
+    return fail('ambiguous_title', res.message + ' (' + cands.length + ' closet listings: ' + cands.slice(0, 5).map(function (c) { return c.id.slice(-6) + (c.price ? '@$' + c.price : ''); }).join(', ') + ')', 'locate', '.tile-grid-redesign__title', {}, { details: { candidates: cands.slice(0, 10), needsInfo: res.reason } });
   }
   async function poshStep(ctx) {
     var S = ctx.scratch || {}, W = wants(ctx), it = ctx.item;
@@ -485,12 +499,12 @@
             window.scrollTo(0, document.body.scrollHeight);
             await sleep(1100);
             var again = C.pickUnique(poshClosetCards(), it.title, 'equals');
-            if (again.reason === 'ambiguous') return poshAmbiguous(it);
+            if (again.reason === 'ambiguous') return await poshAmbiguous(it);
           }
           tLog('info', 'posh_title_match', 'Exactly one Poshmark listing has this title; using its id', { id: found });
           break;
         }
-        if (pick.reason === 'ambiguous') return poshAmbiguous(it);
+        if (pick.reason === 'ambiguous') return await poshAmbiguous(it);
         window.scrollTo(0, document.body.scrollHeight);
         await sleep(1100);
       }
@@ -1050,7 +1064,7 @@
   function humanize(code, reason, L, item) {
     var r = String(reason || code || '');
     var m = {
-      ambiguous_title: ['More than one of your ' + L + ' listings has this exact title, and FindA.Sale has no saved listing id for this item.', 'Editing one at random could change the wrong listing, so nothing was edited.', 'It will keep skipping this item until the listing id is known (open the right listing once, or give the listings different titles). Candidate ids and prices are in the activity log.'],
+      ambiguous_title: ['More than one of your ' + L + ' listings has this exact title, and FindA.Sale has no saved listing id for this item.', 'Editing one at random could change the wrong listing, so nothing was edited.', 'This item is marked as needing its Poshmark listing id and will keep being skipped, with this reason in the activity log, until the id is saved or the listings get different titles. Candidate ids and prices are in the activity log.'],
       login_required: ['You appear to be signed out of ' + L + '.', 'The marketplace showed a sign-in page instead of your listings.', 'Sign in to ' + L + ' in this browser. FindA.Sale pauses ' + L + ' edits for a while and resumes automatically.'],
       captcha_or_verification: [L + ' asked for a security check.', 'Automatic editing stops at captchas and verification screens so your account is not put at risk.', 'Complete the check in ' + L + ' yourself; FindA.Sale pauses ' + L + ' edits and tries again later.'],
       price_field_not_found: ['The edit form opened but no price box was found.', 'The marketplace page layout may have changed, or this listing type has no price field.', 'Nothing was changed. FindA.Sale will retry later; the page snapshot below shows what was on screen.'],

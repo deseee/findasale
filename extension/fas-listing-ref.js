@@ -111,6 +111,22 @@
     } catch (e) { /* capture must never break a posting */ }
     return null;
   }
+  // From the live exact-title closet matches read right after a publish (the closet had none before), the new listing's reference --
+  // only when there is exactly ONE and the read was not truncated. { ref, reason: 'ok'|'none'|'ambiguous'|'truncated'|'invalid', count }.
+  function pickPostedListing(platform, live, truncated) {
+    var seen = {}, refs = [];
+    (live || []).forEach(function (l) {
+      var id = normalizeRemoteId(platform, l && l.id);
+      if (!id || seen[id]) return;
+      seen[id] = 1;
+      var r = (l && l.url) ? listingRefFromUrl(platform, l.url) : null;
+      refs.push({ remoteListingId: id, remoteListingUrl: r && r.remoteListingId === id ? r.remoteListingUrl : null });
+    });
+    if (truncated) return { ref: null, reason: 'truncated', count: refs.length };
+    if (refs.length === 0) return { ref: null, reason: 'none', count: 0 };
+    if (refs.length > 1) return { ref: null, reason: 'ambiguous', count: refs.length };
+    return { ref: refs[0], reason: 'ok', count: 1 };
+  }
   function abs(h, base) {
     var s = String(h || '');
     if (/^https?:\/\//i.test(s)) return s;
@@ -120,7 +136,7 @@
   var api = {
     REMOTE_ID_RE: REMOTE_ID_RE, HOST_RE: HOST_RE,
     normalizeRemoteId: normalizeRemoteId, idFromUrl: idFromUrl, listingRefFromUrl: listingRefFromUrl,
-    sanitizeListedRef: sanitizeListedRef, capturePageListingRef: capturePageListingRef
+    sanitizeListedRef: sanitizeListedRef, capturePageListingRef: capturePageListingRef, pickPostedListing: pickPostedListing
   };
   root.FAS_LISTING_REF = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

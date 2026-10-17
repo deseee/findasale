@@ -370,6 +370,29 @@
       }
     } catch (e) { return empty; }
   }
+  // 2026-10-17: Poshmark leaves the sell form for a page with no listing id in its URL, so fasListingRef() usually finds nothing and the
+  // item was saved with no id (then edited by exact title, which refuses when titles repeat). Fallback: re-read the live closet. This is
+  // only trusted when the last closet check before publishing found NO live copy of this title (marker below), so exactly one live
+  // exact-title match afterwards is the listing just posted. Two or more matches (or a truncated read) are never guessed.
+  const POSH_CLEAR_KEY = 'fasPoshClosetClearItem';
+  function poshMarkClosetClear(itemId, clear) { try { if (clear) sessionStorage.setItem(POSH_CLEAR_KEY, String(itemId)); else sessionStorage.removeItem(POSH_CLEAR_KEY); } catch (e) { /* optional */ } }
+  function poshWasClosetClear(itemId) { try { return sessionStorage.getItem(POSH_CLEAR_KEY) === String(itemId); } catch (e) { return false; } }
+  async function fasPoshCaptureFromCloset(item, ref) {
+    if (ref && ref.remoteListingId) return ref;
+    if (!item || !poshWasClosetClear(item.id)) return ref;
+    const C = (typeof self !== 'undefined' && self.FAS_LISTING_REF) || null;
+    if (!C || typeof C.pickPostedListing !== 'function') return ref;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await sleep(attempt === 0 ? 2000 : 3000);   // the closet can lag the publish by a few seconds
+      let r = null;
+      try { r = await fasPoshClosetDupCheck(item); } catch (e) { r = null; }
+      if (!r || r.state === 'failed') continue;
+      const pick = C.pickPostedListing('POSHMARK', r.state === 'dup' ? r.live : [], !!r.truncated);
+      if (pick.ref) { tInfo('listing_ref_closet', 'Captured the new Poshmark listing id from your closet', { id: pick.ref.remoteListingId }); return pick.ref; }
+      if (pick.reason === 'ambiguous') { tWarn('listing_ref_ambiguous', 'More than one live listing has this title now, so the new listing id was not guessed', { count: pick.count }); break; }
+    }
+    return ref;
+  }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
   // ---- FAS_TRACE wiring (extension 1.0.13): plain-language step narration + diagnostics. Every call is guarded so a missing or
@@ -2028,7 +2051,7 @@
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     const next = document.getElementById('fas-posh-next');
     if (next) next.onclick = async () => {
-      await fasPoshMarkListed(item.id, await fasListingRef('POSHMARK', 0));
+      await fasPoshMarkListed(item.id, await fasPoshCaptureFromCloset(item, await fasListingRef('POSHMARK', 0)));
       await fasPoshAdvance(item.id);
       if (more) { await navigateToPoshmarkCreateListing(); } else { clearPoshNavRetryState(); clearPoshPublishAttemptState(); bar && bar.remove(); }
     };
@@ -2201,6 +2224,7 @@
     // CLOSET-TITLE DUPLICATE GUARD, second pass (2026-10-16): right before the real click, re-check the live closet by exact title.
     tStep('Last duplicate check', 'Looking at your live Poshmark closet one more time so this item is not published twice');
     const preClick = await fasPoshClosetDupCheck(item);
+    poshMarkClosetClear(item.id, preClick.state === 'clear');
     if (preClick.state === 'dup') { await poshSkipAsDuplicate(item, index, total, true, preClick, 'before publish click'); return; }
     if (preClick.state === 'failed') tWarn('closet_check_failed', 'Could not check your closet for duplicates before publishing (' + preClick.reason + '); continuing without it', { stage: 'before publish click', reason: preClick.reason });
     else tOk('No live copy found in your closet');
@@ -2237,7 +2261,7 @@
     clearPoshPublishAttemptState();
     tOk('Poshmark accepted the listing');
     tStep('Telling FindA.Sale', 'Recording that this item is now listed on Poshmark so it is not posted again');
-    const postedRef = await fasListingRef('POSHMARK', 3000);
+    const postedRef = await fasPoshCaptureFromCloset(item, await fasListingRef('POSHMARK', 3000));
     tInfo('listing_ref', postedRef.remoteListingId ? 'Captured the new Poshmark listing id' : 'Could not read the new listing id from the page (backend will fill it in later)', { hasId: !!postedRef.remoteListingId, hasUrl: !!postedRef.remoteListingUrl });
     await fasPoshMarkListed(item.id, postedRef);
     await fasPoshAdvance(item.id);
@@ -2735,7 +2759,7 @@
         tOk('The sell form did not come back, so the earlier click is treated as published');
         clearPoshPublishAttemptState();
         clearPoshNavRetryState();
-        await fasPoshMarkListed(queued.item.id, await fasListingRef('POSHMARK', 1500));
+        await fasPoshMarkListed(queued.item.id, await fasPoshCaptureFromCloset(queued.item, await fasListingRef('POSHMARK', 1500)));
         await fasPoshAdvance(queued.item.id);
         tEnd('Published (confirmed after a page reload)', {});
         const more = (queued.index + 1) < queued.total;
@@ -2764,7 +2788,7 @@
       if (dupeAck) dupeAck.onclick = async () => {
         clearPoshPublishAttemptState();
         clearPoshNavRetryState();
-        await fasPoshMarkListed(queued.item.id, await fasListingRef('POSHMARK', 0));
+        await fasPoshMarkListed(queued.item.id, await fasPoshCaptureFromCloset(queued.item, await fasListingRef('POSHMARK', 0)));
         await fasPoshAdvance(queued.item.id);
         location.reload();
       };
@@ -2814,6 +2838,7 @@
     // CLOSET-TITLE DUPLICATE GUARD, first pass (2026-10-16): ask Poshmark itself before filling anything.
     tStep('Checking your Poshmark closet', 'Looking for a live listing with this exact title so the same item is never posted twice');
     const dupFirst = await fasPoshClosetDupCheck(queued.item);
+    poshMarkClosetClear(queued.item.id, dupFirst.state === 'clear');
     if (dupFirst.state === 'dup') { await poshSkipAsDuplicate(queued.item, queued.index, queued.total, queued.autoPublish !== false, dupFirst, 'before filling the form'); return; }
     if (dupFirst.state === 'failed') tWarn('closet_check_failed', 'Could not check your closet for duplicates (' + dupFirst.reason + '); continuing without it. A second check runs right before publishing.', { stage: 'before filling the form', reason: dupFirst.reason });
     else tOk('No live copy of this title in your closet');
@@ -3133,7 +3158,7 @@
       const ctx = { scanned: all.size, queries: queries.length, queryOk: queryOk, queryFail: queryFail, matches: matches.length, checked: checked, ms: Date.now() - t0 };
       if (liveMatch) {
         tInfo('closet_check_result', 'Found a live listing in your closet with the same title', Object.assign({ state: 'dup' }, ctx));
-        return { state: 'dup', id: liveMatch.id, url: liveMatch.href, ms: Date.now() - t0, ctx: ctx };
+        return { state: 'dup', id: liveMatch.id, url: liveMatch.href, live: checked.filter((c) => c.live).map((c) => { const m = matches.find((x) => x.id === c.id); return { id: c.id, url: m && m.href }; }), truncated: matches.length > 5, ms: Date.now() - t0, ctx: ctx };
       }
       tInfo('closet_check_result', matches.length ? 'Same title found only on sold or inactive listings; safe to post' : 'No listing with this title in your closet; safe to post', Object.assign({ state: 'clear' }, ctx));
       return { state: 'clear', ms: Date.now() - t0, ctx: ctx };
@@ -3150,7 +3175,9 @@
     clearPoshNavRetryState();
     clearPoshPublishAttemptState();
     tStep('Recording the existing listing', 'Telling FindA.Sale this item is already on Poshmark so it stops being queued');
-    await fasPoshMarkListed(item.id, { remoteListingId: dup.id, remoteListingUrl: dup.url });
+    // Several identical-title live listings: the first one is not necessarily THIS item's, so only a lone match is saved as its id.
+    const dupPick = (typeof self !== 'undefined' && self.FAS_LISTING_REF && self.FAS_LISTING_REF.pickPostedListing) ? self.FAS_LISTING_REF.pickPostedListing('POSHMARK', dup.live || [], !!dup.truncated) : { ref: null };
+    await fasPoshMarkListed(item.id, dupPick.ref ? { remoteListingId: dupPick.ref.remoteListingId, remoteListingUrl: dupPick.ref.remoteListingUrl } : {});
     await fasPoshAdvance(item.id);
     tProblem({ code: 'dup_closet_title', title: 'Already listed on Poshmark', what: 'Your live Poshmark closet already has a listing with this exact title, so this item was skipped to avoid a duplicate.', why: 'Poshmark itself shows the item is live, even though FindA.Sale did not have a record of it. The existing listing was recorded in FindA.Sale.', next: (total && (index + 1) < total && autoPublish) ? 'Nothing was published or deleted. Moving on to the next item in a few seconds.' : 'Nothing was published or deleted.', ctx: ctx });
     tEnd('Skipped: already live in your closet', { existingListingId: dup.id });

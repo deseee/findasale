@@ -210,3 +210,29 @@ test('ring buffer and diagnostics store stay bounded', () => {
   assert.ok(JSON.stringify(store).length <= 30000);
   assert.strictEqual(store.FACEBOOK[store.FACEBOOK.length - 1].i, 29);
 });
+
+const A = 'aaaaaaaaaaaaaaaaaaaaaaaa', B = 'bbbbbbbbbbbbbbbbbbbbbbbb', D = 'dddddddddddddddddddddddd';
+test('normalizeEntry carries a sanitized titleGroup', () => {
+  const e = C.normalizeEntry({ id: 'i1', title: 'T', price: 5, titleGroup: { unresolved: 1, claimedIds: [A.toUpperCase(), 'nope', A] } }, 'POSHMARK');
+  assert.deepStrictEqual(e.titleGroup, { unresolved: 1, claimedIds: [A] });
+  assert.strictEqual(C.normalizeEntry({ id: 'i1', title: 'T', price: 5 }, 'POSHMARK').titleGroup, null);
+  assert.strictEqual(C.normalizeEntry({ id: 'i1', title: 'T', price: 5, titleGroup: { unresolved: 0 } }, 'POSHMARK').titleGroup, null);
+});
+
+test('resolveDuplicateTitleId picks only the single unclaimed listing when this is the only unresolved item', () => {
+  const r = C.resolveDuplicateTitleId([{ id: A }, { id: B }, { id: D }], { unresolved: 1, claimedIds: [A, B] }, true);
+  assert.strictEqual(r.id, D);
+});
+
+test('resolveDuplicateTitleId never guesses among identical duplicates and says what is needed', () => {
+  const nine = Array.from({ length: 9 }, (_, i) => ({ id: String(i).repeat(24) }));
+  const r = C.resolveDuplicateTitleId(nine, { unresolved: 9, claimedIds: [] }, true);
+  assert.strictEqual(r.id, '');
+  assert.strictEqual(r.reason, 'multiple_unresolved');
+  assert.match(r.message, /^Needs info:/);
+  assert.strictEqual(C.resolveDuplicateTitleId(nine, { unresolved: 1, claimedIds: [] }, true).reason, 'multiple_unclaimed');
+  assert.strictEqual(C.resolveDuplicateTitleId(nine, null, true).reason, 'no_accounting');
+  assert.strictEqual(C.resolveDuplicateTitleId([{ id: A }, { id: B }], { unresolved: 1, claimedIds: [A] }, false).reason, 'closet_incomplete');
+  assert.strictEqual(C.resolveDuplicateTitleId([{ id: A }], { unresolved: 1, claimedIds: [A] }, true).reason, 'all_claimed');
+  assert.strictEqual(C.resolveDuplicateTitleId([], { unresolved: 1, claimedIds: [] }, true).reason, 'no_candidates');
+});

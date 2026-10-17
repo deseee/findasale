@@ -3086,8 +3086,38 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
     }
   }
 
+  // Poshmark items with no saved listing id are matched in the closet by exact title, which is unsafe when several listings share it.
+  // Send the accounting the extension needs to resolve that without guessing: how many of this organizer's live Poshmark items with the
+  // same title still have no saved id, and which ids their siblings already hold.
+  const poshNoId = queues.POSHMARK.filter((e) => !e.remoteListingId);
+  if (poshNoId.length > 0) {
+    try {
+      const poshJobs = await prisma.marketplaceListingJob.findMany({
+        where: { platform: 'POSHMARK', item: { OR: organizerListableScope(organizer.id) } },
+        orderBy: { createdAt: 'desc' },
+        select: { itemId: true, action: true, status: true, remoteListingId: true, item: { select: { title: true } } },
+      });
+      const seenItems = new Set<string>();
+      const live: Array<{ itemId: string; title: string; id: string | null }> = [];
+      for (const j of poshJobs) {
+        if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
+        if (seenItems.has(j.itemId)) continue;
+        seenItems.add(j.itemId);
+        if (j.action === 'POST' && j.status === 'POSTED') live.push({ itemId: j.itemId, title: titleKey(j.item?.title), id: listingRefFields('POSHMARK', j.remoteListingId).remoteListingId ?? null });
+      }
+      for (const e of poshNoId) {
+        const key = titleKey(e.title);
+        const group = live.filter((l) => l.title === key);
+        const claimedIds = group.filter((l) => l.id).map((l) => l.id as string).slice(0, 50);
+        e.titleGroup = { unresolved: Math.max(1, group.filter((l) => !l.id).length), claimedIds };
+      }
+    } catch { /* accounting is optional: without it the extension refuses duplicate titles instead of guessing */ }
+  }
+
   res.json({ ok: true, queues });
 };
+// Exact-title key for grouping an organizer's items (case and whitespace folded only, so it is never looser than the extension's match).
+const titleKey = (t: string | null | undefined): string => String(t ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 /**
  * POST /api/extension/items/:id/price-synced-for-platform -- content-script (or, for now, the

@@ -77,3 +77,16 @@ test('capturePageListingRef: page URL first, canonical next, anchors only for Cr
   assert.strictEqual(R.capturePageListingRef('MERCARI', null, null), null);
   assert.strictEqual(R.capturePageListingRef('MERCARI', { href: 'https://www.mercari.com/sell/' }, { querySelector() { throw new Error('boom'); } }), null);
 });
+
+test('pickPostedListing accepts exactly one live match and refuses guesses', () => {
+  const A = 'abcdef0123456789abcdef01', B = 'abcdef0123456789abcdef02';
+  const one = R.pickPostedListing('POSHMARK', [{ id: A, url: 'https://poshmark.com/listing/Thing-' + A }], false);
+  assert.strictEqual(one.reason, 'ok');
+  assert.deepStrictEqual(one.ref, { remoteListingId: A, remoteListingUrl: 'https://poshmark.com/listing/Thing-' + A });
+  assert.strictEqual(R.pickPostedListing('POSHMARK', [{ id: A }, { id: B }], false).reason, 'ambiguous');
+  assert.strictEqual(R.pickPostedListing('POSHMARK', [{ id: A }, { id: A }], false).reason, 'ok');
+  assert.strictEqual(R.pickPostedListing('POSHMARK', [{ id: A }], true).reason, 'truncated');
+  assert.strictEqual(R.pickPostedListing('POSHMARK', [], false).reason, 'none');
+  assert.strictEqual(R.pickPostedListing('POSHMARK', [{ id: 'bad' }], false).reason, 'none');
+  assert.strictEqual(R.pickPostedListing('POSHMARK', [{ id: A, url: 'https://evil.example/listing/' + A }], false).ref.remoteListingUrl, null);
+});

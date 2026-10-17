@@ -107,8 +107,37 @@
       priceDrift: r.priceDrift !== false,      // pending-updates always sets it; a missing flag means "treat as drifted"
       quantityDrift: r.quantityDrift === true,
       remoteListingId: remote || extractIdFromUrl(platform, String(url)) || '',
-      remoteListingUrl: String(url || '')
+      remoteListingUrl: String(url || ''),
+      titleGroup: normalizeTitleGroup(r.titleGroup)
     };
+  }
+  // Backend-supplied accounting for items that share this item's exact title and still have no saved listing id (price-sync-queue,
+  // Poshmark only): { unresolved: items (this one included) with a live listing but no saved id, claimedIds: ids already saved on siblings }.
+  function normalizeTitleGroup(g) {
+    if (!g || typeof g !== 'object') return null;
+    var n = Number(g.unresolved);
+    if (!isFinite(n) || n < 1) return null;
+    var ids = [];
+    (Array.isArray(g.claimedIds) ? g.claimedIds : []).forEach(function (x) { var v = String(x || '').toLowerCase(); if (/^[0-9a-f]{24}$/.test(v) && ids.indexOf(v) === -1) ids.push(v); });
+    return { unresolved: Math.floor(n), claimedIds: ids };
+  }
+  // Pick the one closet listing that belongs to an item with no saved id, without guessing. Safe ONLY when every sibling is accounted
+  // for: the backend says this is the single unresolved item of its title, and exactly one closet candidate is left once the ids
+  // already saved on siblings are removed. `complete` must be true only after the closet was scrolled until no more cards loaded.
+  // Returns { id } or { id: '', reason, message } where message is the plain-language needs-info text for the activity log.
+  function resolveDuplicateTitleId(candidates, titleGroup, complete) {
+    var cands = [], seen = {};
+    (candidates || []).forEach(function (c) { var id = String(c && c.id || '').toLowerCase(); if (/^[0-9a-f]{24}$/.test(id) && !seen[id]) { seen[id] = 1; cands.push(id); } });
+    var tg = normalizeTitleGroup(titleGroup);
+    var no = function (reason, message) { return { id: '', reason: reason, message: 'Needs info: ' + message }; };
+    if (!cands.length) return no('no_candidates', 'no closet listing with this exact title was read.');
+    if (!tg) return no('no_accounting', cands.length + ' closet listings share this exact title and FindA.Sale did not send which of them are already tied to other items.');
+    var unclaimed = cands.filter(function (id) { return tg.claimedIds.indexOf(id) === -1; });
+    if (!complete) return no('closet_incomplete', 'the closet did not finish loading, so not every listing with this title could be counted.');
+    if (tg.unresolved > 1) return no('multiple_unresolved', tg.unresolved + ' FindA.Sale items share this title with no saved listing id and ' + unclaimed.length + ' closet listing(s) are unclaimed; they cannot be told apart, so none was edited. Each needs its Poshmark listing id saved once.');
+    if (unclaimed.length === 1) return { id: unclaimed[0], reason: 'single_unclaimed' };
+    if (!unclaimed.length) return no('all_claimed', 'every closet listing with this title is already tied to another item.');
+    return no('multiple_unclaimed', unclaimed.length + ' closet listings with this title are not tied to any item and this is the only one waiting, so they cannot be told apart; none was edited.');
   }
   // True when this entry is applicable and carries a usable target value.
   function hasWork(entry) {
@@ -366,7 +395,7 @@
     MAX_ATTEMPTS: MAX_ATTEMPTS, BACKOFF_BASE_MS: BACKOFF_BASE_MS, BACKOFF_CAP_MS: BACKOFF_CAP_MS, PARK_MS: PARK_MS,
     backoffMs: backoffMs, shouldAttempt: shouldAttempt, recordFailure: recordFailure,
     pruneHourly: pruneHourly, allowance: allowance, jitterDelay: jitterDelay,
-    normalizeEntry: normalizeEntry, hasWork: hasWork, wantsQuantity: wantsQuantity,
+    normalizeEntry: normalizeEntry, normalizeTitleGroup: normalizeTitleGroup, resolveDuplicateTitleId: resolveDuplicateTitleId, hasWork: hasWork, wantsQuantity: wantsQuantity,
     wholeDollars: wholeDollars, formatPrice: formatPrice, parsePriceText: parsePriceText, pricesMatch: pricesMatch,
     foldTitle: foldTitle, cleanCandidateTitle: cleanCandidateTitle, titleEquals: titleEquals, titleContained: titleContained, pickUnique: pickUnique,
     extractIdFromUrl: extractIdFromUrl, startUrl: startUrl, craigslistPageUrl: craigslistPageUrl,
