@@ -235,7 +235,7 @@ test('buildDiag keeps the new Craigslist codes and their details', () => {
 test('wiring: manifest 1.0.18, guard loaded by background, the edit injection and the post content script', () => {
   const root = path.join(__dirname, '..');
   const man = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
-  assert.strictEqual(man.version, '1.0.19');
+  assert.strictEqual(man.version, '1.0.20');
   const post = man.content_scripts.find((c) => c.matches.indexOf('https://post.craigslist.org/*') !== -1);
   assert.ok(post.js.indexOf('fas-cl-guard.js') !== -1 && post.js.indexOf('fas-cl-guard.js') < post.js.indexOf('fas-craigslist.js'));
   const bg = fs.readFileSync(path.join(root, 'background.js'), 'utf8');

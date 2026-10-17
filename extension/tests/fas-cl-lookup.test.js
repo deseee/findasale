@@ -145,10 +145,13 @@ test('mercari weight: a whole number of pounds fills ounces=0; 15.6 oz rounds up
 });
 test('mercari weight: if no method makes a box keep its value the failure names the box; no weight or no fields is reported', () => {
   const lb = box(), oz = box();
-  const r = W.fillWeightBoxes(lb, oz, 9, nativeSetter(true), { execCommand: () => false });
-  assert.strictEqual(r.ok, false);
-  assert.deepStrictEqual(r.failed, ['pounds']);
-  assert.strictEqual(r.reason, 'box_rejected_pounds');
+  // 1.0.20: 9 oz = 0 lb 9 oz; a pounds box that refuses "0" is NOT a failure while ounces stuck.
+  const sub = W.fillWeightBoxes(lb, oz, 9, nativeSetter(true), { execCommand: () => false });
+  assert.deepStrictEqual([sub.ok, sub.failed, sub.poundsEmptyOk], [true, [], true]);
+  // a package over a pound (41 oz = 2 lb 9 oz) with boxes that never keep a value still names both boxes
+  const never = W.fillWeightBoxes(box(), box(), 41, () => {}, { execCommand: () => false });
+  assert.deepStrictEqual(never.failed, ['pounds', 'ounces']);
+  assert.strictEqual(never.reason, 'box_rejected_pounds_ounces');
   assert.strictEqual(W.fillWeightBoxes(lb, oz, null, nativeSetter(false)).reason, 'no_weight');
   assert.strictEqual(W.fillWeightBoxes(null, null, 9, nativeSetter(false)).reason, 'no_fields');
 });
@@ -156,7 +159,7 @@ test('mercari weight: if no method makes a box keep its value the failure names 
 // ---- wiring ----
 test('wiring: 1.0.19 manifest loads the weight helper before fas-mercari.js; engine and frame carry the new code paths; buildDiag keeps the new codes', () => {
   const man = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8'));
-  assert.strictEqual(man.version, '1.0.19');
+  assert.strictEqual(man.version, '1.0.20');
   const merc = man.content_scripts.find((c) => c.js.indexOf('fas-mercari.js') !== -1).js;
   assert.ok(merc.indexOf('fas-mercari-weight.js') !== -1 && merc.indexOf('fas-mercari-weight.js') < merc.indexOf('fas-mercari.js'));
   const eng = fs.readFileSync(path.join(__dirname, '..', 'fas-edit-engine.js'), 'utf8');

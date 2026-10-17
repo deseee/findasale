@@ -1,4 +1,7 @@
-// fas-mercari-weight.js -- fills Mercari's "How heavy will the package be?" pound + ounce boxes (extension 1.0.19).
+// fas-mercari-weight.js -- fills Mercari's "How heavy will the package be?" pound + ounce boxes (1.0.19) and answers its shoebox question (1.0.20).
+// 1.0.20 (live-verified on mercari.com/sell, signed in): the weight dialog holds pounds (may stay EMPTY for sub-pound packages), ounces, the question
+// "Will your item fit in a shoebox? 14x10x5" (radios id/value yes|no, rendered as <label>Yes/No</label>) and a Next button that is DISABLED until that
+// question is answered. Empty pounds is NOT the blocker; the unanswered shoebox question is. This file now also decides + clicks that answer.
 // Production diagnostic 2026-10-17 (HDE MIDI Cable, 1.0.18): weight_in_pounds was EMPTY while weight_in_ounces was filled and Next never enabled.
 // Cause: for a package under a pound the pounds value is "0", and Mercari's box rejects a synthetic "0" (the old code only skipped the ounces
 // "0"; it still tried to write the pounds "0", and the write was silently dropped). Now BOTH boxes are always filled (0 where needed): the normal
@@ -37,11 +40,74 @@
     var out = { ok: true, lbs: sp.lbs, oz: sp.oz, failed: [] };
     if (lbEl) { out.lb = fillBox(lbEl, sp.lbs, setNative, doc); if (!out.lb.ok) out.failed.push('pounds'); }
     if (ozEl) { out.ozBox = fillBox(ozEl, sp.oz, setNative, doc); if (!out.ozBox.ok) out.failed.push('ounces'); }
+    // 1.0.20: an empty pounds box is fine for a sub-pound package (live-verified) -- only a rejected OUNCES box (or a rejected non-zero pounds) is a failure.
+    if (out.failed.indexOf('pounds') !== -1 && sp.lbs === 0 && (!ozEl || out.ozBox.ok)) { out.failed.splice(out.failed.indexOf('pounds'), 1); out.poundsEmptyOk = true; }
     out.ok = out.failed.length === 0;
     if (!out.ok) out.reason = 'box_rejected_' + out.failed.join('_');
     return out;
   }
-  var api = { splitOunces: splitOunces, fillWeightBoxes: fillWeightBoxes };
+  // ---- 1.0.20: shoebox question ----
+  var BOX = [14, 10, 5];
+  function num(v) { if (v == null || v === '') return null; var n = Number(v); return isFinite(n) && n > 0 ? n : null; }
+  // item: { packageLengthIn, packageWidthIn, packageHeightIn }. legacyFits: the older volume-tolerance verdict (true/false/null) kept so a thin foldable item
+  // Patrick already approved as "fits" is not turned into "No" by the strict per-axis rule. -> { fits, basis, dims, unknownDims }
+  function shoeboxDecision(item, totalOz, legacyFits) {
+    item = item || {};
+    var l = num(item.packageLengthIn), w = num(item.packageWidthIn), h = num(item.packageHeightIn);
+    if (l != null && w != null && h != null) {
+      var d = [l, w, h].sort(function (a, b) { return b - a; });
+      var strict = d[0] <= BOX[0] && d[1] <= BOX[1] && d[2] <= BOX[2];
+      var fits = strict || legacyFits === true;
+      return { fits: fits, basis: strict ? 'dimensions-strict' : (legacyFits === true ? 'dimensions-volume-tolerance' : 'dimensions-too-big'), dims: { l: l, w: w, h: h }, unknownDims: false };
+    }
+    var t = Number(totalOz);
+    var light = totalOz != null && totalOz !== '' && isFinite(t) && t < 16;
+    return { fits: light, basis: light ? 'guess-no-dims-under-1lb' : 'guess-no-dims-1lb-or-more', dims: null, unknownDims: true };
+  }
+  function lc(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+  function ancestorText(el, levels) {
+    var cur = el, t = '';
+    for (var i = 0; i < levels && cur; i++) { cur = cur.parentElement; if (cur) t = cur.textContent || ''; if (/shoebox/i.test(t)) return t; }
+    return t;
+  }
+  // -> the radio <input> for 'yes' | 'no', or null. testid first, then id/value, preferring one whose surroundings mention the shoebox.
+  function findShoeboxRadio(doc, ans) {
+    var cap = ans === 'yes' ? 'Yes' : 'No';
+    var byTid = doc.querySelector('input[data-testid="FitsInShoebox' + cap + '"]');
+    if (byTid) return byTid;
+    var list = [];
+    try { list = Array.prototype.slice.call(doc.querySelectorAll('input[type="radio"]')); } catch (e) { list = []; }
+    var cands = list.filter(function (r) { return lc(r.id) === ans || lc(r.value) === ans; });
+    var near = cands.filter(function (r) { return /shoebox/i.test(ancestorText(r, 6)); });
+    return near[0] || cands[0] || null;
+  }
+  function labelFor(doc, radio, ans) {
+    var cap = ans === 'yes' ? 'Yes' : 'No';
+    var lab = null;
+    try { if (radio.id) lab = doc.querySelector('label[for="' + radio.id + '"]'); } catch (e) { lab = null; }
+    if (!lab && radio.closest) lab = radio.closest('label');
+    if (!lab && radio.parentElement) {
+      var sibs = Array.prototype.slice.call(radio.parentElement.querySelectorAll('label'));
+      lab = sibs.filter(function (x) { return lc(x.textContent) === lc(cap); })[0] || null;
+    }
+    return lab;
+  }
+  // Clicks the visible LABEL first (the real radio is hidden), then the input itself only if the radio did not register. deps.click is the caller's realClick.
+  async function answerShoebox(doc, fits, deps) {
+    var ans = fits ? 'yes' : 'no';
+    var radio = findShoeboxRadio(doc, ans);
+    if (!radio) return { ok: false, answer: ans, reason: 'radio_not_found' };
+    var lab = labelFor(doc, radio, ans), via = 'input';
+    if (lab) { await deps.click(lab); via = 'label'; if (deps.sleep) await deps.sleep(150); }
+    if (!radio.checked) { await deps.click(radio); via = lab ? 'label+input' : 'input'; if (deps.sleep) await deps.sleep(150); }
+    return { ok: !!radio.checked, answer: ans, via: via, reason: radio.checked ? undefined : 'not_checked_after_click' };
+  }
+  // Diagnostics: which shoebox radios exist and which is selected (null = unanswered / not present).
+  function shoeboxRadioState(doc) {
+    var y = findShoeboxRadio(doc, 'yes'), n = findShoeboxRadio(doc, 'no');
+    return { present: !!(y || n), yesChecked: y ? !!y.checked : null, noChecked: n ? !!n.checked : null, selected: y && y.checked ? 'yes' : (n && n.checked ? 'no' : null) };
+  }
+  var api = { splitOunces: splitOunces, fillWeightBoxes: fillWeightBoxes, shoeboxDecision: shoeboxDecision, findShoeboxRadio: findShoeboxRadio, answerShoebox: answerShoebox, shoeboxRadioState: shoeboxRadioState };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   try { root.FAS_MERC_WEIGHT = api; } catch (e) { /* ignore */ }
 })(typeof self !== 'undefined' ? self : (typeof globalThis !== 'undefined' ? globalThis : this));

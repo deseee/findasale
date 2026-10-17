@@ -2014,22 +2014,80 @@
     // again, or it genuinely doesn't appear on some runs), this step is a silent no-op and
     // control falls through to the existing shoebox wait exactly as it did before this fix -- it
     // does not make this function newly fragile to Mercari NOT showing this modal.
+    // 1.0.20 (live-verified on mercari.com/sell): the weight dialog holds pounds (may stay EMPTY for a sub-pound package), ounces, the question "Will your
+    // item fit in a shoebox?" (radios yes/no, rendered as <label>Yes/No</label>) and a Next button that stays DISABLED until that question is answered. The
+    // old code waited for Next BEFORE answering, so it never enabled. This fills the weight, answers the question by label click, waits for Next, clicks it.
+    // Returns null when no shoebox question is on screen, {ok:true}, or {ok:false, message}.
+    let shoeboxDone = false;
+    const nextNow = () => document.querySelector('[data-testid="SelectCarrierButton"]:not([disabled])') || qa('button').find((b) => norm(b.textContent) === 'next' && !b.disabled);
+    function weightDiag(dec, extra) {
+      const lbNow = document.querySelector('input[data-testid="ItemWeightInPounds"]'), ozNow = document.querySelector('input[data-testid="ItemWeightInOunces"]');
+      const errTxt = norm(((qa('[role="alert"], [class*="rror"]').map((e) => e.textContent).join(' ')) || '')).slice(0, 120);
+      return Object.assign({ pounds: lbNow ? lbNow.value : null, ounces: ozNow ? ozNow.value : null, fill: lastWeightFill, shoebox: self.FAS_MERC_WEIGHT.shoeboxRadioState(document), decision: dec || null,
+        dims: { l: item.packageLengthIn, w: item.packageWidthIn, h: item.packageHeightIn }, pageError: errTxt }, extra || {});
+    }
+    async function answerShoeboxAndAdvance(waitMs) {
+      const W = self.FAS_MERC_WEIGHT;
+      if (!W) return null;
+      const present = await waitForSelector(() => W.findShoeboxRadio(document, 'yes') || W.findShoeboxRadio(document, 'no'), waitMs);
+      if (!present) return null;
+      if (setMercariWeightFields()) await sleep(200);
+      let dec = W.shoeboxDecision(item, trustedOunces, itemFitsInShoebox(item));
+      if (dec.unknownDims && !dec.fits && categoryLikelyShoeboxFit(item)) dec = Object.assign({}, dec, { fits: true, basis: 'guess-no-dims-category-likely-small' });
+      T.info('shoebox_answer', 'Shoebox question answered ' + (dec.fits ? 'Yes' : 'No') + ' (' + dec.basis + ')', { decision: dec, weightOz: trustedOunces });
+      let ans = await W.answerShoebox(document, dec.fits, { click: realClick, sleep: sleep });
+      if (!ans.ok) {
+        T.warn('shoebox_click_failed', 'Could not select the shoebox answer', weightDiag(dec, { answer: ans }));
+        return { ok: false, message: 'Reached Mercari\'s weight window but could not select "' + (dec.fits ? 'Yes' : 'No') + '" on the shoebox question (' + (ans.reason || 'unknown') + ').' };
+      }
+      const fillDims = () => {
+        if (dec.fits || !dec.dims) return;
+        const lEl = document.querySelector('input[data-testid="InputLength"]'), wEl = document.querySelector('input[data-testid="InputWidth"]'), hEl = document.querySelector('input[data-testid="InputHeight"]');
+        if (lEl) setNativeValue(lEl, String(Math.round(Number(item.packageLengthIn))));
+        if (wEl) setNativeValue(wEl, String(Math.round(Number(item.packageWidthIn))));
+        if (hEl) setNativeValue(hEl, String(Math.round(Number(item.packageHeightIn))));
+      };
+      fillDims();
+      await sleep(250);
+      let nextBtn = await waitForSelector(nextNow, 4000);
+      if (!nextBtn && !dec.fits && dec.unknownDims) {
+        // "No" reveals required Length/Width/Height boxes and we have no dimensions for them -> fall back to Yes so the listing is not blocked (recorded).
+        T.warn('shoebox_no_needs_dims', 'Answered No by weight but the item has no dimensions to enter, so switching to Yes', weightDiag(dec));
+        dec = Object.assign({}, dec, { fits: true, basis: dec.basis + '+fallback-yes' });
+        ans = await W.answerShoebox(document, true, { click: realClick, sleep: sleep });
+        await sleep(250);
+        nextBtn = await waitForSelector(nextNow, 4000);
+      }
+      if (!nextBtn) {
+        const diag = weightDiag(dec, { answer: ans });
+        T.warn('weight_modal_next_disabled', 'The weight window\'s Next button stayed disabled after the shoebox question was answered', diag);
+        return { ok: false, message: 'Mercari\'s weight window "Next" button never became enabled even after answering the shoebox question "' + (dec.fits ? 'Yes' : 'No') + '" (UNVERIFIED state) -- pounds "' + diag.pounds + '", ounces "' + diag.ounces + '"' + (diag.pageError ? ', Mercari says: ' + diag.pageError : '') + '.' };
+      }
+      await realClick(nextBtn);
+      await sleep(500);
+      return { ok: true };
+    }
+
     const weighModalField = await waitForSelector(() => document.querySelector('input[data-testid="ItemWeightInPounds"]'), 3500);
     if (weighModalField) {
-      setMercariWeightFields();
-      await sleep(200);
-      const weighModalNext = await waitForSelector(() => document.querySelector('[data-testid="SelectCarrierButton"]:not([disabled])'), 4000);
-      if (!weighModalNext) {
-        const lbNow = document.querySelector('input[data-testid="ItemWeightInPounds"]'), ozNow = document.querySelector('input[data-testid="ItemWeightInOunces"]');
-        const errTxt = norm(((qa('[role="alert"], [class*="rror"]').map((e) => e.textContent).join(' ')) || '')).slice(0, 120);
-        T.warn('weight_modal_next_disabled', 'The weight window\'s Next button stayed disabled', { pounds: lbNow ? lbNow.value : null, ounces: ozNow ? ozNow.value : null, fill: lastWeightFill, pageError: errTxt });
-        return 'Clicked the Shipping label field and reached Mercari\'s "how heavy will the package be?" modal, but its "Next" button never became enabled (UNVERIFIED state) -- pounds shows "' + (lbNow ? lbNow.value : '?') + '" and ounces "' + (ozNow ? ozNow.value : '?') + '"' + (errTxt ? ', Mercari says: ' + errTxt : '') + '.';
+      const r = await answerShoeboxAndAdvance(2500);
+      if (r && !r.ok) return r.message;
+      if (r && r.ok) shoeboxDone = true;
+      else {
+        // No shoebox question in this window: original behaviour (fill, wait for Next, click it).
+        setMercariWeightFields();
+        await sleep(200);
+        const weighModalNext = await waitForSelector(nextNow, 4000);
+        if (!weighModalNext) {
+          const diag = weightDiag(null);
+          T.warn('weight_modal_next_disabled', 'The weight window\'s Next button stayed disabled', diag);
+          return 'Clicked the Shipping label field and reached Mercari\'s "how heavy will the package be?" modal, but its "Next" button never became enabled (UNVERIFIED state) -- pounds shows "' + diag.pounds + '" and ounces "' + diag.ounces + '"' + (diag.pageError ? ', Mercari says: ' + diag.pageError : '') + '.';
+        }
+        await realClick(weighModalNext);
+        await sleep(500);
       }
-      await realClick(weighModalNext);
-      await sleep(500);
     }
-    // If the weight-entry modal wasn't found within the wait above, assume Mercari didn't show
-    // it on this run and proceed straight to the shoebox question exactly as before this fix.
+    // If the weight-entry modal wasn't found within the wait above, proceed straight to the shoebox question.
 
     // Step 2: weight/shoebox-fit modal -- weight fields are left alone (Mercari appears to carry
     // over the value already set on the main form; no evidence this modal's own fields are wrong).
@@ -2065,55 +2123,13 @@
     // fitsBasis records WHY, for future refinement, without changing today's outcome: a category
     // match (records, comics, jewelry, etc. -- see categoryLikelyShoeboxFit) is a confident Yes;
     // anything else unmeasured is still the same bounded-risk default Yes as before.
-    var fits = itemFitsInShoebox(item); // true / false / null (unknown)
-    var fitsBasis = 'measured';
-    if (fits === null) {
-      fits = true;
-      fitsBasis = categoryLikelyShoeboxFit(item) ? 'category-likely-small' : 'unmeasured-default';
+    if (!shoeboxDone) {
+      const r2 = await answerShoeboxAndAdvance(4000);
+      if (r2 === null) {
+        return 'Clicked the Shipping label field, but Mercari\'s "fits in a shoebox?" question never appeared (UNVERIFIED selector) -- either the opener click didn\'t register, or Mercari\'s own gating (it says "Add title and category to enable shipping") wasn\'t actually satisfied yet at the time this ran.';
+      }
+      if (!r2.ok) return r2.message;
     }
-    const shoeboxTestid = fits === false ? 'FitsInShoeboxNo' : 'FitsInShoeboxYes';
-    const shoeboxRadio = await waitForSelector(() => document.querySelector('input[data-testid="' + shoeboxTestid + '"]'), 4000);
-    if (!shoeboxRadio) {
-      return 'Clicked the Shipping label field, but Mercari\'s "fits in a shoebox?" question never appeared (UNVERIFIED selector) -- either the opener click didn\'t register, or Mercari\'s own gating (it says "Add title and category to enable shipping") wasn\'t actually satisfied yet at the time this ran.';
-    }
-    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-11): also sets the real weight fields defensively.
-    // Live-tested this modal's weight-oz field (`ItemWeightInOunces`) and found it can sit EMPTY
-    // (not "0" as it visually appears) even though the pounds field shows a real number -- this
-    // file's fillWeight() only ever touches the MAIN form's weight field, never this modal's own
-    // separate lb/oz pair, so an empty oz value here was never anyone's assumption to begin with.
-    // Sets both from the same item.packageWeightOz/aiPackageWeightOz already used by fillWeight(),
-    // same setNativeValue pattern already proven for Price -- UNVERIFIED whether this alone is
-    // sufficient to enable Next (this session's repeated testing against the same live draft left
-    // some open questions about that button's exact gating that a single clean run should settle),
-    // but setting real weight data here is a correct, no-downside improvement regardless.
-    // BUG FIX 2026-09-15: this exact lb/oz field pair also appears on the earlier weight-entry
-    // modal now handled above (same `ItemWeightInPounds`/`ItemWeightInOunces` testids, live-DOM
-    // confirmed this session) -- factored into the shared setMercariWeightFields() helper
-    // defined near Step 1 above so both call sites use identical logic (same lbs/oz-remainder
-    // math, same zero-oz-doesn't-stick skip -- see that helper's own comment for the "0" quirk)
-    // instead of drifting if only one copy is ever fixed. Same behavior as before: only pauses
-    // here if there was actually a trusted weight to set.
-    if (setMercariWeightFields()) await sleep(200);
-    await realClick(shoeboxRadio);
-    await sleep(250);
-    // "No" (a confirmed, real non-fit, not the unknown-defaults-to-Yes case) reveals a real
-    // Length/Width/Height section -- fill it from the same real dimensions that produced this
-    // answer in the first place. Live-confirmed real selectors.
-    if (fits === false) {
-      const lEl = document.querySelector('input[data-testid="InputLength"]');
-      const wEl = document.querySelector('input[data-testid="InputWidth"]');
-      const hEl = document.querySelector('input[data-testid="InputHeight"]');
-      if (lEl) setNativeValue(lEl, String(Math.round(Number(item.packageLengthIn))));
-      if (wEl) setNativeValue(wEl, String(Math.round(Number(item.packageWidthIn))));
-      if (hEl) setNativeValue(hEl, String(Math.round(Number(item.packageHeightIn))));
-      await sleep(200);
-    }
-    const nextBtn = await waitForSelector(() => document.querySelector('[data-testid="SelectCarrierButton"]:not([disabled])') || qa('button').find((b) => norm(b.textContent) === 'next' && !b.disabled), 4000);
-    if (!nextBtn) {
-      return 'Mercari\'s shipping-label setup didn\'t enable its "Next" button after answering the shoebox question (UNVERIFIED state) -- both the shoebox question and the weight fields were set, but Mercari\'s own form still didn\'t accept it as complete.';
-    }
-    await realClick(nextBtn);
-    await sleep(500);
 
     // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-11, P0, live-DOM-confirmed): live-tested the
     // label[for]/closest('label')/parentElement approach directly against this real screen and ALL
