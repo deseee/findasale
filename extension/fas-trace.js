@@ -203,13 +203,38 @@
         '<div class="row"><button class="copy">Copy diagnostics</button><button class="g close">Close</button></div><p class="res" style="font-size:12px;color:#4a6455;margin-top:8px"></p></div>';
       wrap.appendChild(mask);
       mask.querySelector('.close').onclick = function () { mask.remove(); if (typeof o.onClose === 'function') try { o.onClose(); } catch (e) { /* ignore */ } };
-      mask.querySelector('.copy').onclick = function () {
-        API.recent(60, function (recs) {
-          var txt = JSON.stringify({ when: new Date().toISOString(), version: (root.chrome && chrome.runtime && chrome.runtime.getManifest) ? chrome.runtime.getManifest().version : '', problem: { code: o.code, title: o.title, what: o.what, why: o.why, next: o.next }, snapshot: snap, trail: recs }, null, 1);
-          var done = function (ok) { mask.querySelector('.res').textContent = ok ? 'Copied. Paste it to support or to Claude.' : 'Copy blocked by the browser; open the extension popup > Activity log > Copy.'; };
-          try { navigator.clipboard.writeText(txt).then(function () { done(true); }, function () { done(false); }); } catch (e) { done(false); }
-        });
+      var resEl = mask.querySelector('.res');
+      var showBox = function (txt) {
+        try {
+          var ta = mask.querySelector('textarea.dx');
+          if (!ta) { ta = document.createElement('textarea'); ta.className = 'dx'; ta.readOnly = true; ta.style.cssText = 'width:100%;height:120px;margin-top:8px;font:11px monospace;box-sizing:border-box'; resEl.parentNode.appendChild(ta); }
+          ta.value = txt; ta.focus(); ta.select();
+        } catch (e) { /* ignore */ }
       };
+      var copyBtn = mask.querySelector('.copy');
+      var doCopy = function (ev) {
+        try { if (ev) { ev.preventDefault(); ev.stopPropagation(); } } catch (e) { /* ignore */ }
+        resEl.textContent = 'Copying\u2026';
+        var finish = function (recs) {
+          var txt = '';
+          try {
+            txt = JSON.stringify({ when: new Date().toISOString(), version: (root.chrome && chrome.runtime && chrome.runtime.getManifest) ? chrome.runtime.getManifest().version : '', problem: { code: o.code, title: o.title, what: o.what, why: o.why, next: o.next }, snapshot: snap, trail: recs }, null, 1);
+          } catch (e) { txt = 'diagnostics unavailable: ' + String(e && e.message || e); }
+          var ok = false;
+          try {
+            var ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+            mask.appendChild(ta); ta.focus(); ta.select(); ok = document.execCommand('copy'); ta.remove();
+          } catch (e) { ok = false; }
+          if (ok) { resEl.textContent = 'Copied. Paste it to support or to Claude.'; return; }
+          try { navigator.clipboard.writeText(txt).then(function () { resEl.textContent = 'Copied. Paste it to support or to Claude.'; }, function () { resEl.textContent = 'Browser blocked copying. Select the text below (Ctrl+A, Ctrl+C).'; showBox(txt); }); } catch (e) { resEl.textContent = 'Browser blocked copying. Select the text below (Ctrl+A, Ctrl+C).'; showBox(txt); }
+        };
+        var fired = false, once = function (r) { if (fired) return; fired = true; finish(r || []); };
+        try { API.recent(60, once); } catch (e) { once([]); }
+        setTimeout(function () { once([]); }, 1500);
+      };
+      copyBtn.addEventListener('click', doCopy, true);
+      copyBtn.addEventListener('mousedown', function (e) { e.stopPropagation(); }, true);
+      mask.addEventListener('keydown', function (e) { e.stopPropagation(); }, true);
     },
     end: function (summary, ctx) {
       if (state.current && state.current.status === 'run') state.current.status = 'ok';
