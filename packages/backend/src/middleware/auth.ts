@@ -75,7 +75,9 @@ export const optionalAuthenticate = async (req: AuthRequest, res: Response, next
 
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) return next();
-    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { id: string; role?: string; roles?: string[]; tokenVersion?: number; iat?: number };
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { id: string; role?: string; roles?: string[]; tokenVersion?: number; iat?: number; purpose?: string };
+    // Single-purpose tokens (e.g. the Socket.io handshake token) are never API credentials.
+    if (decoded.purpose) return next();
     if (tokenFromUrl && (typeof decoded.iat !== 'number' || Date.now() / 1000 - decoded.iat > URL_TOKEN_MAX_AGE_SECONDS)) {
       return next(); // a URL-borne token must be fresh; a stale one is anonymous, never an error
     }
@@ -245,7 +247,12 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     }
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) throw new Error('JWT_SECRET is not set');
-    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { id: string; role?: string; roles?: string[]; tokenVersion?: number; organizerTokenVersion?: number };
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { id: string; role?: string; roles?: string[]; tokenVersion?: number; organizerTokenVersion?: number; purpose?: string };
+
+    // Single-purpose tokens (e.g. the Socket.io handshake token) are never API credentials.
+    if (decoded.purpose) {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },

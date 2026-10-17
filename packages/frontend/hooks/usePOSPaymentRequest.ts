@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
+import { socketAuth } from '../lib/socketAuth';
 import api from '../lib/api';
 
 export interface POSPaymentRequestData {
@@ -68,12 +69,10 @@ export const usePOSPaymentRequest = (requestId: string | undefined): UsePOSPayme
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
       (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/^http/, 'ws');
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-
     if (!socketRef.current) {
       // S708: accessToken is in an httpOnly cookie — withCredentials carries it on handshake
       socketRef.current = io(socketUrl, {
-        auth: { token: token || undefined },
+        auth: socketAuth,
         withCredentials: true,
         transports: ['websocket'], // polling causes 502 on Railway. Websocket only
         upgrade: false,

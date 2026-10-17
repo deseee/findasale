@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { socketAuth } from '../lib/socketAuth';
 import api from '../lib/api';
 import { useAuth } from './AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -665,11 +666,9 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName, 
       process.env.NEXT_PUBLIC_SOCKET_URL ||
       (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/^http/, 'ws');
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-
-    // S708: accessToken is in an httpOnly cookie (withCredentials carries it on handshake)
+    // The socket host is a different origin, so the cookie is not sent; socketAuth fetches a short-lived token per attempt.
     const socket = io(socketUrl, {
-      auth: { token: token || undefined },
+      auth: socketAuth,
       withCredentials: true,
       transports: ['websocket'],
       upgrade: false,

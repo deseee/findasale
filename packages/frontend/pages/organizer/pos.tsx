@@ -34,6 +34,7 @@ import BulkQuantityModal from '../../components/BulkQuantityModal'; // ADR-136 (
 import { BULK_COPY, BULK_ERROR_COPY, BulkLot, BulkQuote, cartLabelForLot, cartLabelForPack, formatCardCount, parsePackCountInput, readBulkStatus } from '../../lib/bulkLot';
 import { PosTierStatus } from '../../lib/types/posTiers';
 import QRCode from 'react-qr-code';
+import { socketAuth } from '../../lib/socketAuth';
 
 // Cart line text for a consignor price tag: "Consigned tag $5.00, <consignor>, Booth <n>" (booth only on the venue register).
 function consignorTagLineTitle(priceCents: number, consignorName: string | null, boothNumber: string | null, boothName: string | null): string {
@@ -1132,15 +1133,13 @@ export default function POSPage() {
     // NEXT_PUBLIC_API_URL is like https://backend.railway.app/api: strip /api suffix for socket base
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
       (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/api\/?$/, '');
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-
     // Dynamic import to avoid SSR issues
     import('socket.io-client').then(({ io }) => {
       if (!isMounted) return;
 
       // S708: accessToken is in an httpOnly cookie: withCredentials carries it on handshake
       socketInstance = io(socketUrl, {
-        auth: token ? { token } : {},
+        auth: socketAuth,
         withCredentials: true,
         transports: ['websocket'],
         upgrade: false,

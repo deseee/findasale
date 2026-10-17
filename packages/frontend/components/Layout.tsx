@@ -69,6 +69,7 @@ import { useCart } from '../context/CartContext';
 import CartDrawer from './CartDrawer';
 import CartIcon from './CartIcon';
 import { io } from 'socket.io-client';
+import { socketAuth } from '../lib/socketAuth';
 import { useToast } from './ToastContext';
 import api from '../lib/api';
 
@@ -174,9 +175,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
     // S708: accessToken now lives in an httpOnly cookie. Send cookies on the socket handshake
     // (withCredentials) so the backend can read it. Keep legacy auth.token fallback for any
     // older code paths that still write to localStorage.
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     const socket = io(socketUrl, {
-      auth: { token: token || undefined },
+      auth: socketAuth,
       withCredentials: true,
       transports: ['websocket'],
       upgrade: false,

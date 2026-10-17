@@ -15,6 +15,7 @@ import { createNotification } from '../lib/notificationService';
 import { escapeHtml } from '../utils/htmlEscape';
 import { normalizeEmailInput, stripSensitiveUserFields, hashOpaqueToken, tokenLookupCandidates } from '../utils/authSecurity';
 import { requireSameSiteOrigin } from '../middleware/requireSameSiteOrigin'; // 2026-09-30: Origin/Referer allowlist for the CSRF-exempt cookie POSTs /logout and /refresh
+import { signSocketToken, SOCKET_TOKEN_TTL_SECONDS } from '../lib/socketToken';
 import { rotateRefreshToken, revokeAllRefreshTokensForUser, revokeFamilyOfToken, setRefreshCookie } from '../services/refreshTokenService';
 
 // Auth validation schemas
@@ -595,6 +596,23 @@ router.post('/refresh', requireSameSiteOrigin, async (req: AuthRequest, res: Res
 // their own exit route. The real guard is exitImpersonation() checking for a server-signed
 // impersonatedBy claim (see middleware/auth.ts and 2026-09-25 exit-impersonation-adr).
 router.post('/exit-impersonation', authenticate, exitImpersonation);
+
+// GET /auth/socket-token: short-lived single-purpose JWT for the Socket.io handshake (the socket host is a different
+// origin from the app, so the httpOnly cookie never reaches it). Read-only with no side effects, so it needs no CSRF token.
+const socketTokenLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again shortly.' },
+  store: createRateLimitStore('rl:socket-token:'),
+});
+
+router.get('/socket-token', socketTokenLimiter, authenticate, (req: AuthRequest, res: Response) => {
+  if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+  res.set('Cache-Control', 'no-store');
+  res.json({ token: signSocketToken(req.user), expiresIn: SOCKET_TOKEN_TTL_SECONDS });
+});
 
 // P1 Security Fix: GET /auth/me — strip sensitive credential fields before sending
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {

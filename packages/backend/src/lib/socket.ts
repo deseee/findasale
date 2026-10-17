@@ -4,6 +4,7 @@ import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-adapter';
 import jwt from 'jsonwebtoken';
 import { prisma } from './prisma';
+import { SOCKET_TOKEN_PURPOSE } from './socketToken';
 import { canAccessOrganizerSales } from '../utils/saleStaffAccess';
 
 let _io: Server | undefined;
@@ -90,6 +91,8 @@ export const initSocket = (httpServer: any, allowedOrigins: string[]): Server =>
     if (token) {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as any;
+        // Accept a normal access token (no purpose) or the dedicated socket token; any other purpose is not ours.
+        if (decoded.purpose && decoded.purpose !== SOCKET_TOKEN_PURPOSE) throw new Error('Token purpose not accepted');
         socket.data.userId = decoded.id;
         socket.data.role = decoded.role;
         socket.data.tokenVersion = decoded.tokenVersion;

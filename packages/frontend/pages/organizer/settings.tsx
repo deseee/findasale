@@ -30,6 +30,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { io as socketIO } from 'socket.io-client';
+import { socketAuth } from '../../lib/socketAuth';
 import WebsiteEmbedTab from '../../components/WebsiteEmbedTab';
 import DiscogsListingCheck from '../../components/DiscogsListingCheck'; // ADR-132 dry-run listing check
 import EtsyConnectPanel from '../../components/etsy/EtsyConnectPanel'; // ADR-135 Etsy connector tab
@@ -641,10 +642,8 @@ const OrganizerSettingsPage = () => {
     if (activeTab !== 'ebay' || typeof window === 'undefined') return;
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
       (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/^http/, 'ws');
-    const token = localStorage.getItem('token');
-    // S708: accessToken is in an httpOnly cookie — withCredentials carries it on handshake
     const socket = socketIO(socketUrl, {
-      auth: { token: token || undefined },
+      auth: socketAuth,
       withCredentials: true,
       transports: ['websocket'],
       upgrade: false,

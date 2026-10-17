@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
+import { socketAuth } from '../lib/socketAuth';
 import { useAuth } from './AuthContext';
 import api from '../lib/api';
 
@@ -66,8 +67,6 @@ export function PosPaymentRequestAlert() {
     // S708: accessToken now lives in an httpOnly cookie. Drop the legacy localStorage guard
     // (which always returned null post-migration and effectively disabled this socket) and
     // rely on withCredentials so the cookie travels on the WebSocket handshake.
-    const legacyToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-
     const socketUrl =
       process.env.NEXT_PUBLIC_SOCKET_URL ||
       (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001')
@@ -75,7 +74,7 @@ export function PosPaymentRequestAlert() {
         .replace(/^http/, 'ws');
 
     socketRef.current = io(socketUrl, {
-      auth: { token: legacyToken || undefined },
+      auth: socketAuth,
       withCredentials: true,
       transports: ['websocket'],
       upgrade: false,

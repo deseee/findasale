@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { socketAuth } from '../lib/socketAuth';
 import api from '../lib/api';
 
 // Financial fields (sold, holds, revenue) are only sent to the sale's organizer, staff and admin;
@@ -32,10 +33,9 @@ let socketInstance: Socket | null = null;
 
 const getSocket = (): Socket => {
   if (!socketInstance) {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    // accessToken is an httpOnly cookie: withCredentials carries it on the handshake
+    // Different origin from the app: socketAuth fetches a short-lived handshake token on every connection attempt
     socketInstance = io(SOCKET_URL, {
-      auth: { token: token || undefined },
+      auth: socketAuth,
       withCredentials: true,
       transports: ['websocket'], // polling causes 502 on Railway
       upgrade: false,
