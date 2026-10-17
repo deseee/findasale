@@ -4469,7 +4469,7 @@
   }
 
   async function runVintedRemovalQueue(item, index, total) {
-    overlay('<b>FindA.Sale</b><div style="margin-top:6px">This item sold elsewhere -- removing the matching Vinted listing for <b>' + escapeHtml(item.title) + '</b>...</div>');
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removing the matching Vinted listing (' + (window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.label(item) : 'sold elsewhere') + ') for <b>' + escapeHtml(item.title) + '</b>...</div>');
     // DELETE VERIFICATION 2026-09-23 (S-EXT-VINTED-DELETE-VERIFY): if a previous load already
     // clicked the final delete confirmation for THIS item (and was torn down by Vinted's
     // post-delete navigation before it could report), verify via the wardrobe API instead of

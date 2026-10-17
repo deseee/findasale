@@ -1733,7 +1733,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     stillLiveAvailablePlatformsByItem.set(itemId, arr);
   }
 
-  const complianceItems: Array<{ id: string; title: string; platforms: string[]; listingRefs: Record<string, string>; reason: 'POLICY_INELIGIBLE' | 'UNPUBLISHED'; deleteAllMatches?: boolean }> = [];
+  const complianceItems: Array<{ id: string; title: string; platforms: string[]; listingRefs: Record<string, string>; reason: 'POLICY_INELIGIBLE' | 'UNPUBLISHED'; policyReasons?: Record<string, string>; deleteAllMatches?: boolean }> = [];
   // S-EXT-RESYNC-VERIFY (2026-09-30): AVAILABLE items whose Poshmark/Mercari listing FindA.Sale still
   // thinks is live. Only ever served on an organizer-initiated resync, and tagged RESYNC_VERIFY so the
   // content scripts LOOK for the listing but never delete it (see markItemRemovalSkipped's verifyOnly).
@@ -1813,7 +1813,16 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
         const latest = latestAvailableByItemPlatform.get(it.id + ':' + p);
         if (latest?.remoteListingId) refs[p] = resolveListingRef(p, latest.remoteListingId).remoteListingId || latest.remoteListingId;
       }
-      complianceItems.push({ id: it.id, title: it.title, platforms: retryablePlatforms, listingRefs: refs, reason: unpublished ? 'UNPUBLISHED' : 'POLICY_INELIGIBLE' });
+      // 2026-10-17: per-platform rule reason string (additive, backwards compatible) so the extension can log WHY
+      // a listing is coming down instead of calling every takedown "sold".
+      const policyReasons: Record<string, string> = {};
+      if (!unpublished) {
+        for (const p of retryablePlatforms) {
+          const r = checkEligibility(p as MarketplaceListingPlatform, eligibilityItem).reason;
+          if (r) policyReasons[p] = r;
+        }
+      }
+      complianceItems.push({ id: it.id, title: it.title, platforms: retryablePlatforms, listingRefs: refs, reason: unpublished ? 'UNPUBLISHED' : 'POLICY_INELIGIBLE', ...(Object.keys(policyReasons).length ? { policyReasons } : {}) });
     }
   }
 

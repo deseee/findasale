@@ -79,7 +79,7 @@ beforeEach(() => {
     if (w.AND) return mainItems;
     return [];
   });
-  mockPrisma.marketplaceListingJob.findMany.mockImplementation(async (args: any) => (args?.where?.itemId ? jobRows : []));
+  mockPrisma.marketplaceListingJob.findMany.mockImplementation(async (args: any) => (args?.where?.itemId || args?.where?.item ? jobRows : []));
   mockPrisma.itemKitComponent.findMany.mockResolvedValue([
     { kitItemId: 'kit1', quantity: 2, componentItem: { title: 'Charger' } },
     { kitItemId: 'kit1', quantity: 1, componentItem: { title: 'Cable' } },
@@ -232,6 +232,30 @@ describe('GET pending-removals: zero stock flows to removal', () => {
       { sale: { organizerId: 'org1', deletedAt: null } },
       { saleId: null, organizerId: 'org1', listingType: 'KIT' },
     ]);
+  });
+});
+
+describe('GET pending-removals: policy takedowns carry the rule reason', () => {
+  const posted = (id: string, platform: string) => ({ itemId: id, action: 'POST', status: 'POSTED', lastErrorMessage: null, lastAttemptAt: null, platform, createdAt: new Date('2026-10-10T00:00:00Z'), remoteListingId: 'r1' });
+  it('a POLICY_INELIGIBLE entry includes policyReasons per platform with the matched rule reason', async () => {
+    extraRows = [{ id: 'cam1', title: 'Vivitar flash', category: 'Electronics > Cameras', ebayCategoryId: null, draftStatus: 'PUBLISHED' }];
+    jobRows = [posted('cam1', 'POSHMARK')];
+    const res = mockRes();
+    await getPendingRemovals(req(), res);
+    const entry = res.json.mock.calls[0][0].items.find((i: any) => i.id === 'cam1');
+    expect(entry).toBeDefined();
+    expect(entry.reason).toBe('POLICY_INELIGIBLE');
+    expect(typeof entry.policyReasons.POSHMARK).toBe('string');
+    expect(entry.policyReasons.POSHMARK.length).toBeGreaterThan(0);
+  });
+  it('an UNPUBLISHED entry has no policyReasons', async () => {
+    extraRows = [{ id: 'cam2', title: 'Anything', category: 'Misc', ebayCategoryId: null, draftStatus: 'DRAFT' }];
+    jobRows = [posted('cam2', 'POSHMARK')];
+    const res = mockRes();
+    await getPendingRemovals(req(), res);
+    const entry = res.json.mock.calls[0][0].items.find((i: any) => i.id === 'cam2');
+    expect(entry.reason).toBe('UNPUBLISHED');
+    expect(entry.policyReasons).toBeUndefined();
   });
 });
 

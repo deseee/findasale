@@ -3,7 +3,7 @@
  * Bearer token; (2) fetch item photos cross-origin (Cloudinary + eBay hosts) and
  * hand them to the content script as data URLs; (3) hold the listing queue.
  */
-importScripts('config.js', 'fas-trace.js', 'fas-edit-core.js', 'fas-listing-ref.js');
+importScripts('config.js', 'fas-trace.js', 'fas-edit-core.js', 'fas-listing-ref.js', 'fas-removal-reason.js');
 const CFG = self.FAS_CONFIG;
 
 // FEATURE 2026-09-27 (S-EXT-VINTED-DEBUG-BRIDGE) -- see fas-vinted.js's matching postMessage
@@ -1073,6 +1073,23 @@ async function fasEditForwardDiag(platform, rec) {
     return true;
   } catch (e) { return false; }
 }
+// 2026-10-17: reason a queued removal is happening (SOLD_ELSEWHERE / POLICY_INELIGIBLE + rule text / ...), looked up from the stored queue
+// so every removal log and auto-forwarded FAS_FLOW_DIAG says why, not just which item. Best effort; {} when unknown.
+async function fasRemovalReasonFor(platform, itemId) {
+  try {
+    if (!platform || !itemId) return {};
+    const key = platform === 'FACEBOOK' ? 'fasRemovalQueue' : (FAS_CROSS_PLATFORM_REMOVAL_CONFIG[platform] || {}).queueKey;
+    if (!key) return {};
+    const st = await chrome.storage.local.get([key]);
+    const it = (st[key] || []).find((q) => q && String(q.id) === String(itemId));
+    if (!it) return {};
+    const rr = self.FAS_REMOVAL_REASON;
+    const out = { removalReason: it.reason || 'SOLD_ELSEWHERE', removalReasonLabel: rr.label(it) };
+    const pr = rr.policyReason(it, platform);
+    if (pr) out.policyReason = pr;
+    return out;
+  } catch (e) { return {}; }
+}
 async function fasFlowForwardDiag(r) {
   try {
     const platform = String(r.plat || 'ext').slice(0, 30), code = String(r.code || 'error');
@@ -1081,6 +1098,7 @@ async function fasFlowForwardDiag(r) {
     const C = FAS_EDIT_CORE;
     const payload = { kind: 'flow', v: (chrome.runtime.getManifest() || {}).version, platform: platform, flow: C.scrubText(r.flow || '', 30), itemId: r.itemId ? String(r.itemId).slice(0, 40) : '', title: C.scrubText(String(r.item || '').slice(0, 60), 60),
       code: code.slice(0, 60), step: C.scrubText(r.step || '', 80), page: C.scrubText(r.page || '', 40), message: C.scrubText(r.msg || '', 400), ctx: C.scrubDeep(r.ctx),
+      removal: r.flow === 'remove' ? C.scrubDeep(await fasRemovalReasonFor(String(r.plat || '').toUpperCase(), r.itemId)) : undefined,
       suppressedSinceLast: gate.suppressed, firstSinceStart: gate.first };
     let guard = 0;
     while (JSON.stringify(payload).length > C.DIAG_MAX_CHARS && guard++ < 3) payload.ctx = guard < 3 ? { trimmed: true, snapshot: payload.ctx && payload.ctx.snapshot ? C.compactSnapshot(payload.ctx.snapshot) : undefined } : { trimmed: true };
@@ -1789,7 +1807,9 @@ async function checkCrossPlatformRemovals(pendingItems, opts) {
       // back with zero pacing is a real risk on its own (marketplace bot-detection).
       if (outcomes.length) await sleep(3000 + Math.random() * 2000);
       await openSilentCrossPlatformRemovalTab(platform);
-      fasT('info', 'removal_started', 'Removing ' + itemsForPlatform.length + ' sold/ended item(s) from ' + platform, { platform: platform, flow: 'remove', ctx: { count: itemsForPlatform.length, items: itemsForPlatform.slice(0, 10).map((i) => ({ id: i.id, reason: i.reason })) } });
+      // 2026-10-17: the text and ctx carry the REAL reason per item (was "sold/ended" for every batch, which mislabelled a Vivitar flash that was taken down for POLICY_INELIGIBLE). policyReason is the matched rule text.
+      const rr = self.FAS_REMOVAL_REASON;
+      fasT('info', 'removal_started', rr.headline(itemsForPlatform, platform), { platform: platform, flow: 'remove', ctx: { count: itemsForPlatform.length, reasons: rr.counts(itemsForPlatform), items: rr.itemsCtx(itemsForPlatform, platform, 10) } });
       outcomes.push(platform + ':silent_removal_started:' + itemsForPlatform.length);
     } else {
       // S-COMPLIANCE-STALE-PUBLISHED-DOT (2026-09-28) + item-delete-cross-marketplace-removal
@@ -1831,16 +1851,9 @@ async function checkCrossPlatformRemovals(pendingItems, opts) {
 // to both. Items with no `reason` field (older cached response shape) are treated as
 // SOLD_ELSEWHERE, matching every prior release's behavior.
 function describeRemovalReasons(removalItems) {
-  const counts = { SOLD_ELSEWHERE: 0, POLICY_INELIGIBLE: 0, ITEM_DELETED: 0 };
-  for (const i of removalItems) {
-    const key = Object.prototype.hasOwnProperty.call(counts, i.reason) ? i.reason : 'SOLD_ELSEWHERE';
-    counts[key]++;
-  }
-  const parts = [];
-  if (counts.SOLD_ELSEWHERE) parts.push(counts.SOLD_ELSEWHERE + (counts.SOLD_ELSEWHERE === 1 ? ' sold elsewhere' : ' sold elsewhere'));
-  if (counts.POLICY_INELIGIBLE) parts.push(counts.POLICY_INELIGIBLE + ' no longer allowed by policy');
-  if (counts.ITEM_DELETED) parts.push(counts.ITEM_DELETED + ' deleted from FindA.Sale');
-  return { counts, summary: parts.join(', ') || 'no longer needed' };
+  // 2026-10-17: delegates to FAS_REMOVAL_REASON so UNPUBLISHED and RESYNC_VERIFY are named too (they used to fall into "sold elsewhere").
+  const rr = self.FAS_REMOVAL_REASON;
+  return { counts: rr.counts(removalItems), summary: rr.summary(removalItems) };
 }
 
 // Builds the 'fasPendingRemovals' notification body for checkPendingRemovals below. Split out
@@ -1983,7 +1996,8 @@ async function checkPendingRemovals(opts) {
 
   if (fasAutoRemoveMode === 'silent' || forceFacebook) {
     await openSilentRemovalTab();
-    fasT('info', 'removal_started', (forceFacebook ? 'Facebook retry: ' : 'Removing ') + facebookItems.length + ' item(s) from Facebook Marketplace, ' + soldCheckCount + ' sold check(s)', { platform: 'FACEBOOK', flow: 'remove', ctx: { count: facebookItems.length, soldChecks: soldCheckCount, forced: forceFacebook } });
+    const fbRr = self.FAS_REMOVAL_REASON;
+    fasT('info', 'removal_started', (forceFacebook ? 'Facebook retry: ' : '') + (facebookItems.length ? fbRr.headline(facebookItems, 'Facebook Marketplace') : 'No removals pending on Facebook Marketplace') + ', ' + soldCheckCount + ' sold check(s)', { platform: 'FACEBOOK', flow: 'remove', ctx: { count: facebookItems.length, soldChecks: soldCheckCount, forced: forceFacebook, reasons: fbRr.counts(facebookItems), items: fbRr.itemsCtx(facebookItems, 'FACEBOOK', 10) } });
     return (forceFacebook ? 'facebook_retry_started:' : 'silent_removal_started:') + facebookItems.length + '_soldchecks:' + soldCheckCount;
   }
 
@@ -4115,7 +4129,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const skipResolved = !!(skipResp && skipResp.ok && skipResp.data && skipResp.data.resolved);
         fasLog(skipResolved ? 'info' : 'warn', 'crossPlatformRemovalSkipped',
           skipResolved ? 'listing confirmed gone -- marked removed' : 'skipped: ' + (msg.reason || 'unknown'),
-          null, { platform: msg.platform, itemId: msg.itemId });
+          await fasRemovalReasonFor(msg.platform, msg.itemId), { platform: msg.platform, itemId: msg.itemId });
         await clearRemovalAttempt(msg.platform, msg.itemId);
         const cont = await advanceAndContinueCrossPlatformRemoval(msg.platform, tabId, msg.continueUrl || null);
         sendResponse({ ok: true, next: cont.next });
@@ -4129,7 +4143,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await clearStalledRemovalRuns(msg.platform);
         const attempts = await bumpRemovalAttempt(msg.platform, msg.itemId);
         fasLog('warn', 'crossPlatformRemovalAttemptFailed', 'attempt ' + attempts + ': ' + (msg.reason || 'unknown'),
-          null, { platform: msg.platform, itemId: msg.itemId });
+          await fasRemovalReasonFor(msg.platform, msg.itemId), { platform: msg.platform, itemId: msg.itemId });
         if (attempts >= FAS_REMOVAL_MAX_ATTEMPTS) {
           await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
             { method: 'POST', body: { reason: 'delete_unconfirmed_after_' + attempts + '_attempts: ' + (msg.reason || 'unknown'), platform: msg.platform } });

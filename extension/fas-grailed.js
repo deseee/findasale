@@ -2390,7 +2390,7 @@
   // Every send is fire-and-forget: background navigates this tab onward, so awaiting the reply would
   // just race the navigation that tears this content script down.
   async function runGrailedRemovalQueue(item, index, total) {
-    overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
+    overlay('<b>FindA.Sale</b> \u2014 ' + (window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.overlayLine(item, index, total) : 'removing item ' + (index + 1) + ' of ' + total) + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
     await humanPause(400, 800);
     const pageTitleEl = grRemFindListingTitleEl();
     const onListingDetailPage = pageTitleEl && grRemNorm(pageTitleEl.textContent).indexOf(grRemNorm(item.title)) !== -1;

@@ -3435,7 +3435,7 @@
   }
 
   async function runPoshmarkRemovalQueue(item, index, total) {
-    overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
+    overlay('<b>FindA.Sale</b> \u2014 ' + (window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.overlayLine(item, index, total) : 'removing item ' + (index + 1) + ' of ' + total) + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
 
     // Resolved ONCE per run and handed to background.js as `continueUrl` in every message below.
     // background.js owns the queue advance and the navigation to the next item now

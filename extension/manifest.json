@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "FindA.Sale \u2014 Marketplace Autofill",
   "short_name": "FindA.Sale",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "Fill your Facebook Marketplace listings from your FindA.Sale inventory \u2014 title, price, condition, description, and photos. You review and publish. Price and stock changes made on FindA.Sale are applied to your live listings automatically.",
   "permissions": [
     "storage",
@@ -64,6 +64,7 @@
       ],
       "js": [
         "fas-trace.js",
+        "fas-removal-reason.js",
         "fas-selectors.js",
         "fas-remove.js"
       ],
@@ -135,6 +136,7 @@
       ],
       "js": [
         "fas-trace.js",
+        "fas-removal-reason.js",
         "fas-listing-ref.js",
         "fas-condition.js",
         "fas-challenge.js",
@@ -149,6 +151,7 @@
       ],
       "js": [
         "fas-trace.js",
+        "fas-removal-reason.js",
         "fas-listing-ref.js",
         "fas-condition.js",
         "fas-challenge.js",
@@ -173,6 +176,7 @@
       ],
       "js": [
         "fas-trace.js",
+        "fas-removal-reason.js",
         "fas-condition.js",
         "fas-challenge.js",
         "fas-vinted.js"
@@ -185,6 +189,7 @@
       ],
       "js": [
         "fas-trace.js",
+        "fas-removal-reason.js",
         "fas-listing-ref.js",
         "fas-condition.js",
         "fas-challenge.js",

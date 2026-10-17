@@ -148,7 +148,9 @@
       return { ok: false, reason: 'No confident match for this listing on the page (zero or more than one "' + item.title + '" found) -- skipped, not guessed.' };
     }
     T('ok', 'Found the listing.');
-    T('step', 'Clicking "Mark as sold"', 'This item sold on FindA.Sale, so the Facebook listing has to be closed to avoid selling it twice.');
+    const fbWhy = window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.label(item) : 'sold elsewhere';
+    const fbPolicy = window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.policyReason(item, 'FACEBOOK') : '';
+    T('step', 'Clicking "Mark as sold"', (fbWhy === 'sold elsewhere' ? 'This item sold on FindA.Sale, so the Facebook listing has to be closed to avoid selling it twice.' : 'This listing has to come down (' + fbWhy + (fbPolicy ? ': ' + fbPolicy : '') + '). Facebook only offers "Mark as sold" to close it.'), { itemId: item.id, reason: item.reason || 'SOLD_ELSEWHERE', policyReason: fbPolicy || undefined });
     await realClick(match.button);
 
     // Facebook's "Mark as sold" opens a multi-step SURVEY modal (DOM-verified live 2026-07-16),
@@ -166,7 +168,7 @@
 
     if (!surveyDialog) T('warn', 'fb_remove_survey_missing', 'The "Did you sell this item?" window did not appear; looking for a plain confirm button instead.');
     if (surveyDialog) {
-      T('step', 'Answering Facebook\'s "Did you sell this item?"', 'Choosing "Yes, sold elsewhere" because it sold on FindA.Sale, so Facebook\'s own sold-on-Facebook numbers are not inflated.');
+      T('step', 'Answering Facebook\'s "Did you sell this item?"', 'Choosing "Yes, sold elsewhere" so Facebook\'s own sold-on-Facebook numbers are not inflated (this item did not sell on Facebook; reason here: ' + fbWhy + ').');
       // Pick "Yes, sold elsewhere" -- it sold on FindA.Sale, not on Facebook, so we must NOT
       // inflate FB's "sold on Facebook" metric. Fall back to "Yes, sold on Facebook" ONLY if the
       // accurate option is missing (FB copy change) -- never to "No"/"I'd rather not answer",
@@ -304,7 +306,7 @@
   }
 
   async function runRemovalQueue(item, index, total) {
-    overlay('<b>FindA.Sale</b> — removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>…');
+    overlay('<b>FindA.Sale</b>: ' + (window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.overlayLine(item, index, total) : 'removing item ' + (index + 1) + ' of ' + total) + ': <b>' + escapeHtml(item.title) + '</b>…');
     T('begin', { platform: 'FACEBOOK', flow: 'remove', item: { id: item.id, title: item.title }, itemPos: (index + 1) + ' of ' + total });
     let result;
     try { result = await removeOne(item); }
@@ -347,7 +349,7 @@
       await ensureFilteredThenRun(next.item, next.index, next.total);
     } else {
       T('info', 'fb_remove_queue_done', 'Removal queue finished.');
-      overlay('<b>FindA.Sale</b> — done removing sold items.');
+      overlay('<b>FindA.Sale</b>: done with removals.');
       setTimeout(() => bar && bar.remove(), 4000);
       // Tell the background the queue is finished so silent ("Remove automatically") mode can
       // restore the organizer's previous tab and auto-close the removal tab it opened. Wrapped

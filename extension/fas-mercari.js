@@ -3372,7 +3372,7 @@
   }
 
   async function runMercariRemovalQueue(item, index, total) {
-    overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
+    overlay('<b>FindA.Sale</b> \u2014 ' + (window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.overlayLine(item, index, total) : 'removing item ' + (index + 1) + ' of ' + total) + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
     // S-EXT-MERCARI-DELETE-ON-EDIT-PAGE (2026-10-03): the actual delete happens on /sell/edit/<id>/.
     // On that page mercRemItemIdFromHref (which only knows /item/<id>) returns null, so this MUST be
     // dispatched before the listings-page scan below -- otherwise the scan finds no cards and would
