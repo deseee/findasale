@@ -445,20 +445,26 @@
   // updated to match by hand.
   const POSHMARK_PROHIBITED_RULES = [
     {
-      // Prohibited categories / unvetted electronics (backend rule, added S-CROSS-MARKETPLACE-
-      // AUDIT): Poshmark's Electronics is a curated/vetted catalog per Poshmark's own 2021 policy
-      // post, not a general secondhand-electronics marketplace.
-      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18: added 'used sock' (v4.1
-      // policy also bans used socks, not just used underwear). Electronics blanket-block left
-      // AS-IS despite v4.1 listing it as "Restricted" not "Prohibited" -- Patrick's business
-      // decision, not an automatic code fix (see the backend rule's own comment).
+      // 2026-10-17: mirrors the backend rule. The old blanket electronics block ('electronics',
+      // 'computer', 'laptop', 'television', 'appliance', 'printer', 'camera') was removed: Poshmark's
+      // Prohibited Items Policy lists Electronics as RESTRICTED (factory reset + sign out of accounts),
+      // not prohibited. Remaining keywords are the genuinely prohibited/restricted-to-new classes.
       nameKeywords: [
         'food', 'opened beauty', 'used beauty', 'opened cosmetic', 'used cosmetic',
         'used personal care', 'used underwear', 'used sock', 'counterfeit', 'replica', 'recalled',
-        'electronics', 'computer', 'laptop', 'television', 'appliance', 'printer', 'camera',
       ],
       excludeKeywords: ['sealed', 'unopened', 'new,', 'nwt', 'nwot'],
-      reason: 'This category isn\'t supported on Poshmark (prohibited item, or electronics outside Poshmark\'s curated catalog).',
+      reason: 'This category isn\'t supported on Poshmark (prohibited item under Poshmark\'s Prohibited Items Policy).',
+    },
+    {
+      // 2026-10-17: mirrors the backend narrow rule (source: Poshmark 2021 "What Not to List":
+      // "Cell phones, DVDs, furniture, appliances" outside the Electronics Market).
+      nameKeywords: ['cell phone', 'cellphone', 'smartphone', 'iphone', 'dvd', 'major appliance'],
+      excludeKeywords: [
+        'case', 'cover', 'charger', 'cable', 'cord', 'adapter', 'mount', 'holder', 'stand', 'strap',
+        'screen protector', 'accessory', 'accessories', 'player', 'remote',
+      ],
+      reason: 'Poshmark doesn\'t allow cell phones, DVDs or major appliances (Poshmark\'s "What Not to List").',
     },
     {
       // Weapons/alcohol (backend rule, added S-CROSS-MARKETPLACE-AUDIT-2026-09-03): confirmed via
@@ -2458,6 +2464,13 @@
       fieldNotes.push('This item had no description, so a short one was made from its title and condition -- add real detail on FindA.Sale when you can.');
       tWarn('description_fallback', 'Item has no description; used a short one built from its title and condition because Poshmark requires one', {});
     }
+    // 2026-10-17: Poshmark restricts (does not prohibit) electronics: items must be reset to factory settings and signed
+    // out of personal accounts before shipping. Surfaced as a non-blocking review hint (never added to the description,
+    // so nothing is claimed about the item's state).
+    try {
+      const elecHint = self.FAS_POSH_ELECTRONICS && self.FAS_POSH_ELECTRONICS.factoryResetHint(item);
+      if (elecHint) fieldNotes.push(elecHint);
+    } catch (e) { /* hint only, never blocks */ }
     tStep('Description', 'Poshmark requires a description, so entering it now', { len: poshDescription.length });
     if (await tryFill('Description', poshDescription, (v) => fillText('Description', v))) tOk('Description set');
     try { if (self.FAS_QTY) self.FAS_QTY.fillQuantity(item); } catch (e) { /* kits: best-effort Quantity field, never blocks */ }

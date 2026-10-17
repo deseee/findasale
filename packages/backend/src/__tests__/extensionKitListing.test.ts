@@ -238,7 +238,7 @@ describe('GET pending-removals: zero stock flows to removal', () => {
 describe('GET pending-removals: policy takedowns carry the rule reason', () => {
   const posted = (id: string, platform: string) => ({ itemId: id, action: 'POST', status: 'POSTED', lastErrorMessage: null, lastAttemptAt: null, platform, createdAt: new Date('2026-10-10T00:00:00Z'), remoteListingId: 'r1' });
   it('a POLICY_INELIGIBLE entry includes policyReasons per platform with the matched rule reason', async () => {
-    extraRows = [{ id: 'cam1', title: 'Vivitar flash', category: 'Electronics > Cameras', ebayCategoryId: null, draftStatus: 'PUBLISHED' }];
+    extraRows = [{ id: 'cam1', title: 'Opened cosmetic palette', category: 'Beauty', ebayCategoryId: null, draftStatus: 'PUBLISHED' }];
     jobRows = [posted('cam1', 'POSHMARK')];
     const res = mockRes();
     await getPendingRemovals(req(), res);
@@ -247,6 +247,20 @@ describe('GET pending-removals: policy takedowns carry the rule reason', () => {
     expect(entry.reason).toBe('POLICY_INELIGIBLE');
     expect(typeof entry.policyReasons.POSHMARK).toBe('string');
     expect(entry.policyReasons.POSHMARK.length).toBeGreaterThan(0);
+  });
+  it('a live Vivitar flash is NOT taken down (electronics are eligible), even when Item.category is a breadcrumb', async () => {
+    extraRows = [{ id: 'cam3', title: 'Vivitar 2500 Zoom Thyristor Electronic Flash with Original Box', category: 'Electronics:Cameras & Photo:Flashes', ebayCategoryName: 'Cameras & Photo', ebayCategoryId: null, draftStatus: 'PUBLISHED' }];
+    jobRows = [posted('cam3', 'POSHMARK')];
+    const res = mockRes();
+    await getPendingRemovals(req(), res);
+    expect(res.json.mock.calls[0][0].items.find((i: any) => i.id === 'cam3')).toBeUndefined();
+  });
+  it('takedown reads ebayCategoryName like the publish gate: blocked leaf with harmless breadcrumb is taken down', async () => {
+    extraRows = [{ id: 'cos1', title: 'Palette', category: 'Everything Else', ebayCategoryName: 'Opened cosmetic', ebayCategoryId: null, draftStatus: 'PUBLISHED' }];
+    jobRows = [posted('cos1', 'POSHMARK')];
+    const res = mockRes();
+    await getPendingRemovals(req(), res);
+    expect(res.json.mock.calls[0][0].items.find((i: any) => i.id === 'cos1')?.reason).toBe('POLICY_INELIGIBLE');
   });
   it('an UNPUBLISHED entry has no policyReasons', async () => {
     extraRows = [{ id: 'cam2', title: 'Anything', category: 'Misc', ebayCategoryId: null, draftStatus: 'DRAFT' }];

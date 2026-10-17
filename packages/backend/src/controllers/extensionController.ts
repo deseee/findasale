@@ -9,7 +9,7 @@ import { processVintedSoldReport, sanitizeVintedSoldEntries, VINTED_SOLD_MAX_ENT
 import { hasPendingVintedBundleSale, acknowledgeLegacyVintedBundleSales, listOpenVintedBundleOrders } from '../services/vintedBundleSaleService';
 import { reportVintedBundleOrder } from '../services/vintedBundleOrderService';
 import { decideMessageAutosend } from '../services/messageAutosendService';
-import { checkEligibility } from '../services/marketplaceEligibilityRules';
+import { checkEligibility, buildListingEligibilityItem } from '../services/marketplaceEligibilityRules';
 import { resolveVintedCategory } from '../services/vintedCategoryResolver';
 import { resolvePoshmarkCategory } from '../services/poshmarkCategoryResolver';
 import { resolveMercariCategory } from '../services/mercariCategoryResolver';
@@ -336,6 +336,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       category: true, condition: true, conditionGrade: true, photoUrls: true, qrEmbedEnabled: true, qrAssetReady: true, createdAt: true,
       // S-EXT-BATCH-12 (2026-08-20): ebayCategoryName -- see the `category` field build below for why.
       ebayCategoryName: true,
+      tags: true, // 2026-10-17: Poshmark electronics factory-reset review hint reads tags
       // 2026-08-18 (S-CROSSLISTER-ESTATE-VERTICAL-RESEARCH batch 5): brand/size/color/material --
       // fas-poshmark.js/fas-mercari.js/fas-vinted.js/fas-grailed.js already reference
       // item.brand/item.size/item.color/item.material(s), but NONE of the four were ever in
@@ -688,6 +689,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // (eligibility/facebookRestricted checks below still read it directly) -- this only changes what's
     // sent to the crosslister extension as the `category` field in ITS payload.
     category: it.ebayCategoryName || it.category || null,
+    tags: Array.isArray((it as any).tags) ? (it as any).tags : [],
     // Full original breadcrumb, kept as a SEPARATE field so content scripts that benefit from
     // department/gender-level signal (e.g. Grailed's Menswear/Womenswear picker) can still use it --
     // never a straight replacement, since ebayCategoryName alone drops that signal entirely.
@@ -742,42 +744,16 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // unconfirmed guess costing Patrick money, whereas this is a permissive UX filter where an
     // unconfirmed estimate is still useful "don't even suggest this platform" signal (see
     // marketplaceEligibilityRules.ts's own comment on EligibilityCheckItem for the full rationale).
+    // 2026-10-17: every platform now builds its check object via buildListingEligibilityItem, the same
+    // helper the auto-list queue and the takedown (compliance) gate use, so they cannot disagree.
+    // Poshmark opts into the new-listing-only gates (size/no-data, $ minimum); the others are unchanged.
     eligibility: {
-      CRAIGSLIST: checkEligibility('CRAIGSLIST', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
-      GUMTREE_AU: checkEligibility('GUMTREE_AU', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
-      GRAILED: checkEligibility('GRAILED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
-      POSHMARK: checkEligibility('POSHMARK', {
-        forNewListing: true, // 2026-10-14: Poshmark size/no-data gate for new listings
-        price: it.price != null ? Number(it.price) : null, // 2026-10-15: Poshmark $3 minimum
-        category: it.ebayCategoryName || it.category,
-        ebayCategoryId: it.ebayCategoryId,
-        title: it.title,
-        packageWeightOz: it.packageWeightOz,
-        aiPackageWeightOz: it.aiPackageWeightOz,
-        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
-        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
-        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
-      }),
-      MERCARI: checkEligibility('MERCARI', {
-        category: it.ebayCategoryName || it.category,
-        ebayCategoryId: it.ebayCategoryId,
-        title: it.title,
-        packageWeightOz: it.packageWeightOz,
-        aiPackageWeightOz: it.aiPackageWeightOz,
-        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
-        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
-        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
-      }),
-      VINTED: checkEligibility('VINTED', {
-        category: it.ebayCategoryName || it.category,
-        ebayCategoryId: it.ebayCategoryId,
-        title: it.title,
-        packageWeightOz: it.packageWeightOz,
-        aiPackageWeightOz: it.aiPackageWeightOz,
-        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
-        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
-        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
-      }),
+      CRAIGSLIST: checkEligibility('CRAIGSLIST', buildListingEligibilityItem(it, { forNewListing: false })),
+      GUMTREE_AU: checkEligibility('GUMTREE_AU', buildListingEligibilityItem(it, { forNewListing: false })),
+      GRAILED: checkEligibility('GRAILED', buildListingEligibilityItem(it, { forNewListing: false })),
+      POSHMARK: checkEligibility('POSHMARK', buildListingEligibilityItem(it, { forNewListing: true })),
+      MERCARI: checkEligibility('MERCARI', buildListingEligibilityItem(it, { forNewListing: false })),
+      VINTED: checkEligibility('VINTED', buildListingEligibilityItem(it, { forNewListing: false })),
     },
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false, it.qrAssetReady)) : (it.photoUrls || []),
     // Gated 2026-09-14 (see hasTrustedPackage above) -- previously exposed the raw,
@@ -1743,7 +1719,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     const candidateItems = await prisma.item.findMany({
       where: { id: { in: candidateItemIds } },
       select: {
-        id: true, title: true, category: true, ebayCategoryId: true, draftStatus: true,
+        id: true, title: true, category: true, ebayCategoryName: true, ebayCategoryId: true, draftStatus: true,
         packageWeightOz: true, aiPackageWeightOz: true,
         packageLengthIn: true, packageWidthIn: true, packageHeightIn: true,
       },
@@ -1757,17 +1733,8 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
       // EligibilityCheckItem wants plain numbers (same conversion ebayShippingResolver.ts already
       // does for the identical fields). aiPackageWeightOz/packageWeightOz are already plain Float
       // columns, no conversion needed.
-      const eligibilityItem = {
-        id: it.id,
-        title: it.title,
-        category: it.category,
-        ebayCategoryId: it.ebayCategoryId,
-        packageWeightOz: it.packageWeightOz,
-        aiPackageWeightOz: it.aiPackageWeightOz,
-        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
-        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
-        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
-      };
+      // 2026-10-17: same builder as the publish gates (ebayCategoryName || category), takedown-side (no new-listing-only gates).
+      const eligibilityItem = { id: it.id, ...buildListingEligibilityItem(it, { forNewListing: false }) };
       const livePlatforms = stillLiveAvailablePlatformsByItem.get(it.id) || [];
       // 2026-10-11 (Patrick, unpublish-withdraws-listings): an item moved from Published back to Draft / Pending Review
       // must come down from EVERY marketplace. Nothing is queued when that happens; it is derived here: an AVAILABLE item
@@ -2795,7 +2762,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     take: 2000,
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
-      category: true, ebayCategoryName: true, ebayCategoryId: true, condition: true, conditionGrade: true,
+      category: true, ebayCategoryName: true, tags: true, ebayCategoryId: true, condition: true, conditionGrade: true,
       photoUrls: true, qrEmbedEnabled: true, qrAssetReady: true,
       brand: true, size: true, color: true, material: true, isbn: true,
       packageWeightOz: true, aiPackageWeightOz: true,
@@ -2879,6 +2846,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     description: buildDescription(descriptionOf(it), it.saleId),
     descriptionWithBacklink: buildDescriptionWithBacklink(descriptionOf(it), it.saleId),
     category: it.ebayCategoryName || it.category || null,
+    tags: Array.isArray((it as any).tags) ? (it as any).tags : [],
     categoryBreadcrumb: it.category || null,
     ...vintedCategoryFields(it),
     // S-EXT-CATEGORY-MAPS: Poshmark/Mercari/Grailed/Craigslist exact leaves -- see marketplaceCategoryFields.
@@ -2926,7 +2894,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     CRAIGSLIST: [], FACEBOOK: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
   };
   for (const it of items) {
-    const eligibilityCategory = it.ebayCategoryName || it.category;
+    const eligibilityItem = buildListingEligibilityItem(it, { forNewListing: true });
     for (const platform of enabledPlatforms) {
       if (isAlreadyListed(it.id, platform)) continue;
       // TOCTOU-safe: re-run fresh on every call, never cached -- a category/title edit between
@@ -2937,18 +2905,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
       // this loop is exactly the unattended fan-out Patrick was asking about ("why is the extension
       // allowing me to push those kind of items"), so it needs the same gate getExtensionItems' UI
       // filter now has, not just the manual popup.js path.
-      const eligibility = checkEligibility(platform, {
-        forNewListing: true, // 2026-10-14: Poshmark size/no-data gate (no effect on other platforms)
-        price: it.price != null ? Number(it.price) : null, // 2026-10-15: Poshmark $3 minimum
-        category: eligibilityCategory,
-        ebayCategoryId: it.ebayCategoryId,
-        title: it.title,
-        packageWeightOz: it.packageWeightOz,
-        aiPackageWeightOz: it.aiPackageWeightOz,
-        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
-        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
-        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
-      });
+      const eligibility = checkEligibility(platform, eligibilityItem);
       if (!eligibility.eligible) continue;
       queues[platform].push(shapeItem(it));
     }

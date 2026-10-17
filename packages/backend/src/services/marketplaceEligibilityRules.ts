@@ -722,33 +722,57 @@ const RULES: EligibilityRule[] = [
     reason: 'Grailed is a fashion/streetwear-only marketplace -- this item’s category doesn’t look like apparel, footwear, or accessories.',
   },
 
-  // ---- POSHMARK -- broadened well beyond fashion (Home, Kids, Pet, sealed Beauty), but
-  // Electronics is a separate CURATED catalog per Poshmark's own 2021 policy post
-  // (blog.poshmark.com/2021/11/18/policy-update-introducing-electronics-on-poshmark: "does not
-  // currently support items outside of our electronics catalog") -- ordinary secondhand
-  // electronics are treated as ineligible here since catalog-membership can't be verified
-  // programmatically. Confirmed 2026-08-19.
+  // ---- POSHMARK -- broadened well beyond fashion (Home, Kids, Pet, sealed Beauty, and Electronics).
+  //
+  // 2026-10-17 (Patrick decision, same day): ordinary electronics and cameras/photo gear are NO LONGER
+  // blocked. The earlier blanket block ('electronics', 'computer', 'laptop', 'television', 'appliance',
+  // 'printer', 'camera') was a conservative default that over-blocked: a real Vivitar flash (category
+  // "Cameras & Photo") posted to Poshmark fine and was then auto-taken-down by this rule as
+  // POLICY_INELIGIBLE. Poshmark's live Prohibited Items Policy (poshmark.com/prohibited_items_policy,
+  // read 2026-10-17) lists Electronics as RESTRICTED, not prohibited: "Qualifying electronic items must
+  // be reset to factory settings if applicable. Sellers must sign out of or disable any personal
+  // accounts prior to shipping." Poshmark's own sell-form also has an Electronics department with
+  // Cameras, Photo & Video, Computers & Laptops, Audio and more (see poshmarkCategoryTree.ts).
+  // The factory-reset duty is surfaced to the organizer as a non-blocking review hint by the extension
+  // (fas-posh-electronics.js), not enforced here, because it cannot be verified from category/title text.
+  //
+  // What this rule still blocks (Poshmark Prohibited Items Policy, read 2026-10-17): food and drink;
+  // used/opened makeup and personal care (Restricted: new, never swatched, alcohol-free only); used
+  // underwear and used socks (Restricted); counterfeits and replicas; recalled items. Other
+  // prohibited classes (weapons and knives, alcohol, drugs and paraphernalia, hazardous materials,
+  // medical devices, impersonation items, hate content, sanctioned-region goods) are separate
+  // POSHMARK rules below.
   {
     type: 'CATEGORY_BLOCKLIST',
     platform: 'POSHMARK',
-    // RESOLVED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (Patrick decision 2026-09-18):
-    // re-fetched Poshmark's Prohibited Items Policy live -- current version is v4.1, "Effective
-    // August 27 2026", which lists Electronics under "Restricted Items" (allowed if factory-reset),
-    // NOT "Prohibited". CONFIRMED KEPT as the intentional default anyway: factory-reset status
-    // can't be verified from listing category/title text, so there's no reliable way to only let
-    // through the electronics Poshmark's own policy would actually allow -- staying blocked avoids
-    // guessing. Poshmark's Electronics is also a curated/vetted catalog per their 2021 policy post,
-    // not a general secondhand-electronics category, which was the original reasoning for this
-    // block. Added 'used sock' (policy also bans used socks, not just used underwear).
     nameKeywords: [
       'food', 'opened beauty', 'used beauty', 'opened cosmetic', 'used cosmetic',
       'used personal care', 'used underwear', 'used sock', 'counterfeit', 'replica', 'recalled',
-      // Conservative default -- Poshmark's Electronics is a curated/vetted catalog, not general
-      // secondhand electronics (see comment above).
-      'electronics', 'computer', 'laptop', 'television', 'appliance', 'printer', 'camera',
     ],
     excludeKeywords: ['sealed', 'unopened', 'new,', 'nwt', 'nwot'],
-    reason: 'This category isn’t supported on Poshmark (prohibited item, or electronics outside Poshmark’s curated catalog).',
+    reason: 'This category isn’t supported on Poshmark (prohibited item under Poshmark’s Prohibited Items Policy).',
+  },
+
+  // ---- POSHMARK phones / DVDs / major appliances (narrow, added 2026-10-17 when the blanket
+  // electronics block above was removed). Source: Poshmark's 2021 post "What you can and can't sell
+  // on Poshmark" (blog.poshmark.com/what-you-can-and-cant-sell-on-poshmark), "What Not to List",
+  // heading "Electronics (outside of Electronics Market)": "Cell phones, DVDs, furniture, appliances."
+  // The post does not define the Electronics Market, so only the named, unambiguous items are kept
+  // blocked, as narrow phrases: handsets ('cell phone', 'cellphone', 'smartphone', 'iphone'), DVDs
+  // ('dvd'), and 'major appliance'. Not blocked: furniture (never blocked by this registry; Poshmark's
+  // Home department lists furniture covers and decor, so it is left to Poshmark), small appliances,
+  // and everything else electronic (cameras, flashes, lenses, speakers, cables, radios, guitar pedals).
+  // excludeKeywords let accessories through (phone cases, chargers, mounts) and DVD players, since
+  // Poshmark's Electronics department has Cell Phones & Accessories and Audio/Video gear.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'POSHMARK',
+    nameKeywords: ['cell phone', 'cellphone', 'smartphone', 'iphone', 'dvd', 'major appliance'],
+    excludeKeywords: [
+      'case', 'cover', 'charger', 'cable', 'cord', 'adapter', 'mount', 'holder', 'stand', 'strap',
+      'screen protector', 'accessory', 'accessories', 'player', 'remote',
+    ],
+    reason: 'Poshmark doesn’t allow cell phones, DVDs or major appliances (Poshmark’s “What Not to List”).',
   },
 
   // ---- POSHMARK WEAPONS/ALCOHOL (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- the existing
@@ -1400,6 +1424,43 @@ export function listBlocklistKeywords(): { platform: EligibilityPlatform; keywor
  */
 function buildHaystack(item: EligibilityCheckItem): string {
   return `${normText(item.category)} ${normText(item.title)}`.trim();
+}
+
+/**
+ * 2026-10-17: the ONE place that turns an Item row into the object checkEligibility reasons about,
+ * used by the publish-time gates (getExtensionItems, getAutoListQueue) AND the takedown gate
+ * (getPendingRemovals compliance block) so they cannot disagree. Item.category can be a stale value
+ * or an eBay colon breadcrumb ("Electronics:Cameras & Photo:..."); ebayCategoryName is the
+ * organizer-confirmed leaf, so it wins (same expression the extension-facing `category` field uses).
+ */
+export function resolveEligibilityCategory(it: { ebayCategoryName?: string | null; category?: string | null }): string | null | undefined {
+  return it.ebayCategoryName || it.category;
+}
+
+export function buildListingEligibilityItem(
+  it: {
+    ebayCategoryName?: string | null; category?: string | null; ebayCategoryId?: string | null; title?: string | null;
+    price?: unknown; packageWeightOz?: number | null; aiPackageWeightOz?: number | null;
+    packageLengthIn?: unknown; packageWidthIn?: unknown; packageHeightIn?: unknown;
+  },
+  opts: { forNewListing: boolean }
+): EligibilityCheckItem {
+  const num = (v: unknown): number | null => (v != null ? Number(v) : null);
+  const out: EligibilityCheckItem = {
+    category: resolveEligibilityCategory(it),
+    ebayCategoryId: it.ebayCategoryId,
+    title: it.title,
+    packageWeightOz: it.packageWeightOz,
+    aiPackageWeightOz: it.aiPackageWeightOz,
+    packageLengthIn: num(it.packageLengthIn),
+    packageWidthIn: num(it.packageWidthIn),
+    packageHeightIn: num(it.packageHeightIn),
+  };
+  if (opts.forNewListing) {
+    out.forNewListing = true; // Poshmark size/no-data gate and $ minimum apply to NEW listings only
+    out.price = num(it.price);
+  }
+  return out;
 }
 
 /**
