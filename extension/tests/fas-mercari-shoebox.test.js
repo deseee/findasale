@@ -116,3 +116,32 @@ test('source pin: the weight dialog answers the shoebox question before it waits
   assert.ok(src.indexOf('async function answerShoeboxAndAdvance') < i);
   assert.ok(src.indexOf('shoebox_answer') !== -1 && src.indexOf('shoeboxRadioState') !== -1);
 });
+
+// 1.0.21: Smart Pricing toggle ignores a bare click; needs the full pointer sequence, polled, with retries.
+function makeToggle(pressed, flipsOnClickNumber) {
+  let n = 0;
+  const btn = { _p: pressed, getAttribute: (a) => (a === 'aria-pressed' ? btn._p : null) };
+  const click = async () => { n++; if (flipsOnClickNumber && n >= flipsOnClickNumber) btn._p = 'false'; };
+  return { btn, click, count: () => n };
+}
+const noSleep = async () => {};
+test('setToggleOff: already OFF is a no-op', async () => {
+  const t = makeToggle('false', 1);
+  const r = await W.setToggleOff(t.btn, { click: t.click, sleep: noSleep });
+  assert.deepStrictEqual([r.ok, r.attempts, t.count()], [true, 0, 0]);
+});
+test('setToggleOff: flips on first click', async () => {
+  const t = makeToggle('true', 1);
+  const r = await W.setToggleOff(t.btn, { click: t.click, sleep: noSleep });
+  assert.deepStrictEqual([r.ok, r.attempts], [true, 1]);
+});
+test('setToggleOff: retries and succeeds on the third click', async () => {
+  const t = makeToggle('true', 3);
+  const r = await W.setToggleOff(t.btn, { click: t.click, sleep: noSleep });
+  assert.deepStrictEqual([r.ok, r.attempts], [true, 3]);
+});
+test('setToggleOff: gives up after 3 clicks when it never flips', async () => {
+  const t = makeToggle('true', 0);
+  const r = await W.setToggleOff(t.btn, { click: t.click, sleep: noSleep });
+  assert.deepStrictEqual([r.ok, r.attempts, r.state], [false, 3, 'true']);
+});

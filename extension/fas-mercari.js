@@ -1384,11 +1384,10 @@
       return false;
     }
     if (btn.getAttribute('aria-pressed') !== 'true') return true; // already off, nothing to do
-    btn.click();
-    await sleep(300); // let the toggle's own state update settle before reading it back
-    const nowOff = btn.getAttribute('aria-pressed') === 'false';
-    if (!nowOff) console.warn('[FAS Mercari] Smart Pricing toggle click did not register as OFF afterward -- UNVERIFIED, please check before publishing.');
-    return nowOff;
+    // 1.0.21: a plain btn.click() does NOT toggle this control (live-verified); the full pointer sequence does.
+    const r = await self.FAS_MERC_WEIGHT.setToggleOff(btn, { click: realClick, sleep: sleep }, { waitMs: 2000, retries: 2 });
+    if (!r.ok) console.warn('[FAS Mercari] Smart Pricing toggle did not register as OFF after ' + r.attempts + ' attempts (aria-pressed=' + r.state + ') -- please check before publishing.');
+    return r.ok;
   }
 
   async function fillMercariSmartPricingFloor(item) {
@@ -1714,14 +1713,18 @@
   // UNVERIFIED (label text, tier boundaries, and unit are all guesses) -- this fills the closest
   // available field by label match and logs a loud warning either way, since even a "successful"
   // fill here is an unconfirmed guess.
+  let lastWeightReason = null;
   async function fillWeight(item) {
+    lastWeightReason = null;
     const ounces = item.packageWeightOz != null ? item.packageWeightOz : item.aiPackageWeightOz;
     if (ounces == null) {
+      lastWeightReason = 'no_weight';
       overlayWarn('Mercari requires a shipping weight before you can publish, and this item has no weight on FindA.Sale -- please fill that field in yourself before publishing.');
       return false;
     }
     const el = fieldByLabel('Weight') || fieldByLabel('Shipping weight') || openerByLabel('Weight');
     if (!el) {
+      lastWeightReason = 'field_not_found';
       overlayWarn('Mercari requires a shipping weight before you can publish -- FindA.Sale couldn\'t find that field automatically (UNVERIFIED selector). Please fill it in yourself: ~' + (Math.round((ounces / 16) * 100) / 100) + ' lb.');
       return false;
     }
@@ -1731,6 +1734,7 @@
       const lbs = ounces / 16;
       const opt = Array.from(el.options).find((o) => norm(o.textContent).indexOf(String(Math.ceil(lbs))) !== -1);
       if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); return true; }
+      lastWeightReason = 'tier_unmatched';
       overlayWarn('Mercari requires a shipping weight -- FindA.Sale found the weight field but couldn\'t confidently match a tier (UNVERIFIED taxonomy). Please double-check it before publishing: ~' + (Math.round(lbs * 100) / 100) + ' lb.');
       return false;
     }
@@ -2441,7 +2445,12 @@
     if (!interstitialAt) {
       T.step('Entering the shipping weight', 'Mercari needs a package weight before it can price the shipping label.');
       const weightOk = await fillWeight(item);
-      if (weightOk === false) T.warn('weight_not_set', 'Weight was not set automatically (no weight on the item or the field was not found); enter it by hand'); else T.ok('Weight step done');
+      if (weightOk === false) {
+        // 1.0.21: say WHICH cause, and name the item. Only no_weight is a real problem (the later shipping-label step needs a weight and will stop); the main form may have no Weight field at all since the real weight window opens from the shipping label field.
+        const wctx = { itemId: item.id, title: item.title, reason: lastWeightReason, packageWeightOz: item.packageWeightOz, aiPackageWeightOz: item.aiPackageWeightOz };
+        if (lastWeightReason === 'field_not_found') T.info('weight_field_absent', 'No Weight field on the main form for "' + item.title + '" (' + item.id + '); the shipping-label weight window sets it instead', wctx);
+        else T.warn('weight_not_set', (lastWeightReason === 'no_weight' ? 'No confirmed weight on FindA.Sale for "' + item.title + '" (item ' + item.id + ')' : 'Weight tier not matched for "' + item.title + '" (item ' + item.id + ')') + '; enter it by hand', wctx);
+      } else T.ok('Weight step done');
     }
     // S-EXT-MERCARI-BATCH-8: shipping label wizard must be completed BEFORE List is ever clicked --
     // see fillMercariShippingLabel()'s comment for why (Mercari's own validation blocks submission

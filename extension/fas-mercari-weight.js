@@ -107,7 +107,26 @@
     var y = findShoeboxRadio(doc, 'yes'), n = findShoeboxRadio(doc, 'no');
     return { present: !!(y || n), yesChecked: y ? !!y.checked : null, noChecked: n ? !!n.checked : null, selected: y && y.checked ? 'yes' : (n && n.checked ? 'no' : null) };
   }
-  var api = { splitOunces: splitOunces, fillWeightBoxes: fillWeightBoxes, shoeboxDecision: shoeboxDecision, findShoeboxRadio: findShoeboxRadio, answerShoebox: answerShoebox, shoeboxRadioState: shoeboxRadioState };
+  // 1.0.21: Mercari's Smart Pricing toggle ignores a bare element.click() (live: aria-pressed stayed "true" after 1.8s) but flips on the full pointer sequence (deps.click = realClick).
+  // Polls aria-pressed for up to waitMs after each click, retries up to `retries` more times, never clicks when already OFF. Returns { ok, attempts, state }.
+  async function setToggleOff(btn, deps, opts) {
+    opts = opts || {};
+    var waitMs = opts.waitMs != null ? opts.waitMs : 2000, step = opts.stepMs != null ? opts.stepMs : 100, retries = opts.retries != null ? opts.retries : 2;
+    var state = function () { return btn.getAttribute('aria-pressed'); };
+    if (state() !== 'true') return { ok: true, attempts: 0, state: state() };
+    var attempts = 0;
+    for (var a = 0; a <= retries; a++) {
+      attempts++;
+      await deps.click(btn);
+      var waited = 0;
+      while (waited <= waitMs) {
+        if (state() === 'false') return { ok: true, attempts: attempts, state: 'false' };
+        await deps.sleep(step); waited += step;
+      }
+    }
+    return { ok: state() === 'false', attempts: attempts, state: state() };
+  }
+  var api = { setToggleOff: setToggleOff, splitOunces: splitOunces, fillWeightBoxes: fillWeightBoxes, shoeboxDecision: shoeboxDecision, findShoeboxRadio: findShoeboxRadio, answerShoebox: answerShoebox, shoeboxRadioState: shoeboxRadioState };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   try { root.FAS_MERC_WEIGHT = api; } catch (e) { /* ignore */ }
 })(typeof self !== 'undefined' ? self : (typeof globalThis !== 'undefined' ? globalThis : this));
