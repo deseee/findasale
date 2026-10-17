@@ -433,6 +433,100 @@
     }
     return s;
   }
+
+  // ---- Automatic failure forwarding (2026-10-17) ---------------------------------------------------------------------
+  // A failed/blocked edit used to leave its diagnostics only in chrome.storage until someone clicked "Copy diagnostics".
+  // buildDiag() makes a compact, scrubbed, size-capped record that background.js posts to the backend runtime log
+  // (source FAS_EDIT_DIAG); diagThrottle() keeps a long queue from flooding it. Pure functions: unit-tested in Node.
+  var DIAG_MAX_CHARS = 12000;
+  var DIAG_WINDOW_MS = 15 * 60 * 1000;
+  var DIAG_TRAIL_MAX = 25;
+  // Path only: no origin, no query string, no fragment. Anything unparsable is cut at the first ? or #.
+  function pathOnly(u) {
+    var t = String(u == null ? '' : u);
+    try { return new URL(t, 'https://x.invalid/').pathname.slice(0, 160); } catch (e) { return t.split(/[?#]/)[0].slice(0, 160); }
+  }
+  // Removes things that must never leave the browser from free text: emails, URLs (reduced to their path), long digit runs
+  // (phones, card-like numbers), token-like strings and "Bearer x" / "key=value" secrets.
+  function scrubText(v, max) {
+    var t = String(v == null ? '' : v);
+    t = t.replace(/https?:\/\/[^\s"'<>)]+/gi, function (m) { return pathOnly(m); });
+    t = t.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[email]');
+    t = t.replace(/\bBearer\s+[A-Za-z0-9._~+\/=-]+/gi, 'Bearer [redacted]');
+    t = t.replace(/\b(token|csrf|xsrf|cookie|authorization|password|secret|session|jazoest|fb_dtsg|lsd)(["']?\s*[:=]\s*["']?)[^\s"',;&]+/gi, '$1$2[redacted]');
+    t = t.replace(/\b[A-Za-z0-9_-]{28,}\b/g, '[token]');
+    t = t.replace(/\b\d{13,19}\b/g, '[number]');
+    t = t.replace(/\+?\(?\d{2,4}\)?[\s.-]\d{2,4}[\s.-]\d{2,4}(?:[\s.-]\d{2,4})?/g, function (m) { return m.replace(/\D/g, '').length >= 7 ? '[number]' : m; });
+    var lim = max || 300;
+    return t.length > lim ? t.slice(0, lim) + '...' : t;
+  }
+  // redact() (secret-named keys, depth/size caps) plus scrubText on every string leaf.
+  function scrubDeep(value, depth) {
+    var d = depth || 0;
+    if (d > 6) return '[deep]';
+    if (value == null) return value;
+    if (typeof value === 'string') return scrubText(value, 300);
+    if (typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.slice(0, 40).map(function (v) { return scrubDeep(v, d + 1); });
+    var out = {};
+    Object.keys(value).slice(0, 60).forEach(function (k) { out[k] = SECRET_KEY_RE.test(k) ? '[redacted]' : scrubDeep(value[k], d + 1); });
+    return out;
+  }
+  // One page snapshot -> form field names/types, button labels, headings/visible text, request paths. Field VALUES are dropped.
+  function compactSnapshot(d) {
+    if (!d || typeof d !== 'object') return null;
+    var o = { note: d.note ? scrubText(d.note, 80) : undefined, path: d.url ? pathOnly(d.url) : undefined, title: d.title ? scrubText(d.title, 80) : undefined,
+      dialogs: d.dialogs, text: d.textSample ? scrubText(d.textSample, 200) : undefined };
+    if (Array.isArray(d.buttons)) o.buttons = d.buttons.slice(0, 30).map(function (b) { return scrubText(typeof b === 'string' ? b : (b && (b.text || b.aria)) || '', 40); }).filter(Boolean);
+    if (Array.isArray(d.inputs)) o.fields = d.inputs.slice(0, 30).map(function (i) {
+      if (typeof i === 'string') return scrubText(i, 60);
+      return scrubText([i.name || i.id || i.aria || i.ph || i.label || '', i.type || '', i.vis === false ? 'hid' : 'vis'].join(':'), 60);
+    });
+    if (Array.isArray(d.editish)) o.editish = d.editish.slice(0, 8).map(function (e) { return scrubText(typeof e === 'string' ? e : (e && (e.text || e.aria)) || '', 40); }).filter(Boolean);
+    if (Array.isArray(d.requests)) o.requests = d.requests.slice(-8).map(function (r) { return pathOnly(typeof r === 'string' ? r : r && r.url); });
+    if (d.resp != null) o.resp = scrubDeep(d.resp);         // HTTP error body captured by the engine (already redacted there, scrubbed again here)
+    if (d.status != null) o.status = d.status;
+    if (d.keys != null) o.keys = scrubDeep(d.keys);
+    return o;
+  }
+  // The payload posted to the backend. rec = the diagRecord background.js already builds for the popup; meta = { version, suppressed, firstSinceStart }.
+  function buildDiag(rec, meta) {
+    rec = rec || {}; meta = meta || {};
+    var det = rec.details && typeof rec.details === 'object' ? rec.details : {};
+    var snaps = Array.isArray(rec.snapshots) ? rec.snapshots.slice(-2).map(compactSnapshot).filter(Boolean) : [];
+    var trail = Array.isArray(rec.trail) ? rec.trail.slice(-DIAG_TRAIL_MAX).map(function (t) { return scrubText(typeof t === 'string' ? t : JSON.stringify(t), 120); }) : [];
+    var out = {
+      kind: 'edit', v: meta.version || '', platform: String(rec.platform || '').slice(0, 30), itemId: rec.itemId != null ? String(rec.itemId).slice(0, 40) : '',
+      title: scrubText(String(rec.title || '').slice(0, 60), 60), outcome: rec.outcome || '', code: String(rec.code || '').slice(0, 60), step: scrubText(rec.step || '', 80),
+      selector: scrubText(rec.selector || '', 120), reason: scrubText(rec.reason || '', 400),
+      counts: { trail: Array.isArray(rec.trail) ? rec.trail.length : 0, snapshots: Array.isArray(rec.snapshots) ? rec.snapshots.length : 0 },
+      http: det.status != null || det.resp != null ? { status: det.status, body: scrubDeep(det.resp) } : undefined,
+      details: scrubDeep(det), trail: trail, snapshots: snaps,
+      suppressedSinceLast: meta.suppressed || 0, firstSinceStart: !!meta.firstSinceStart
+    };
+    if (out.http && out.http.status == null && snaps.length) { var hs = snaps.filter(function (s) { return s && s.status != null; })[0]; if (hs) out.http.status = hs.status; }
+    // Shrink until it fits: details first, then older snapshot, then trail.
+    var guard = 0;
+    while (JSON.stringify(out).length > DIAG_MAX_CHARS && guard++ < 8) {
+      if (out.details && Object.keys(out.details).length) out.details = { trimmed: true };
+      else if (out.snapshots.length > 1) out.snapshots = out.snapshots.slice(-1);
+      else if (out.trail.length > 10) out.trail = out.trail.slice(-10);
+      else if (out.snapshots.length) { out.snapshots = out.snapshots.map(function (s) { return { path: s.path, buttons: (s.buttons || []).slice(0, 10), fields: (s.fields || []).slice(0, 10), resp: s.resp }; }); }
+      else { out.trail = []; out.http = undefined; }
+    }
+    return out;
+  }
+  // Per-(platform, code) throttle. store: { 'PLATFORM|code': { at, suppressed } } (kept by the caller). Returns { send, suppressed, store }.
+  // The first occurrence for a key is always sent (callers pass a fresh store after an extension restart); repeats inside the window are
+  // only counted, and the count rides along with the next full diagnostic.
+  function diagThrottle(store, platform, code, now, windowMs) {
+    var s = store && typeof store === 'object' ? JSON.parse(JSON.stringify(store)) : {};
+    var key = String(platform || '') + '|' + String(code || '');
+    var e = s[key], win = windowMs || DIAG_WINDOW_MS;
+    if (!e || now - e.at >= win || now < e.at) { var sup = e ? e.suppressed || 0 : 0; s[key] = { at: now, suppressed: 0 }; return { send: true, suppressed: sup, store: s }; }
+    e.suppressed = (e.suppressed || 0) + 1;
+    return { send: false, suppressed: e.suppressed, store: s };
+  }
   function describeFailure(platform, entry, code, step, selector) {
     return { platform: platform, itemId: entry && entry.id, title: entry && String(entry.title || '').slice(0, 80), code: code, step: step || '', selector: selector || '' };
   }
@@ -449,7 +543,7 @@
     extractIdFromUrl: extractIdFromUrl, startUrl: startUrl, craigslistPageUrl: craigslistPageUrl,
     isPoshmarkErrorPayload: isPoshmarkErrorPayload, unwrapPoshmarkPost: unwrapPoshmarkPost, poshmarkPriceVal: poshmarkPriceVal,
     buildPoshmarkUpdate: buildPoshmarkUpdate, poshmarkCollateralDiff: poshmarkCollateralDiff, poshmarkQuantity: poshmarkQuantity,
-    classifyBlock: classifyBlock, redact: redact, safeUrl: safeUrl, pushRing: pushRing, addDiag: addDiag, describeFailure: describeFailure
+    classifyBlock: classifyBlock, redact: redact, safeUrl: safeUrl, pathOnly: pathOnly, scrubText: scrubText, scrubDeep: scrubDeep, compactSnapshot: compactSnapshot, buildDiag: buildDiag, diagThrottle: diagThrottle, DIAG_WINDOW_MS: DIAG_WINDOW_MS, DIAG_MAX_CHARS: DIAG_MAX_CHARS, pushRing: pushRing, addDiag: addDiag, describeFailure: describeFailure
   };
   root.FAS_EDIT_CORE = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

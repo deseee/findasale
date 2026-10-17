@@ -3730,7 +3730,7 @@
       return;
     }
     if (formState === 'timeout') {
-      T.problem({ code: 'vinted_form_not_found', title: 'Could not find the Vinted listing form', what: 'The listing form did not appear after waiting about 8 seconds.', why: 'Either this is not the new-listing page, the page is still loading, or Vinted changed its layout.', next: 'Nothing was filled. Fill this listing by hand, or reload the page and reopen the extension. Use Copy diagnostics if it keeps happening.' });
+      T.problem({ code: 'vinted_form_not_found', title: 'Could not find the Vinted listing form', what: 'The listing form did not appear after waiting about 8 seconds.', why: 'Either this is not the new-listing page, the page is still loading, or Vinted changed its layout.', next: 'Nothing was filled. Fill this listing by hand, or reload the page and reopen the extension. Details were sent automatically; nothing is needed from you.' });
       T.end('Stopped: listing form not found');
       overlayWarn('This doesn\'t look like a fillable Vinted listing form yet (checked repeatedly for several seconds). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
@@ -5882,7 +5882,7 @@
     try {
       await run(queued.item, queued.index, queued.total);
     } catch (e) {
-      T.problem({ code: 'vinted_unexpected_error', title: 'Something went wrong filling this listing', what: (e && e.message) || 'Unknown error', why: 'An unexpected error stopped the fill.', next: 'Nothing was published. Complete this listing yourself, or reopen the extension to try again. Use Copy diagnostics if you report it.' });
+      T.problem({ code: 'vinted_unexpected_error', title: 'Something went wrong filling this listing', what: (e && e.message) || 'Unknown error', why: 'An unexpected error stopped the fill.', next: 'Nothing was published. Complete this listing yourself, or reopen the extension to try again. Details were sent automatically; nothing is needed from you.' });
       T.end('Stopped: unexpected error');
       overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();

@@ -1043,6 +1043,51 @@ const FAS_EDIT_RUN_MAX_MS = 25 * 60 * 1000;
 const FAS_EDIT_ITEM_MAX_MS = 150 * 1000;
 const FAS_EDIT_MAX_STEPS = 32;
 const FAS_EDIT_CORE = self.FAS_EDIT_CORE;
+
+// 2026-10-17 automatic failure forwarding. Every failed or blocked edit (and every error-level publish/removal trace record from the page
+// scripts) is posted, scrubbed and size-capped, to the backend runtime log so the developer can read it without anyone clicking
+// "Copy diagnostics". Backend: POST /api/extension/logs -> ExtensionRuntimeLog row (source FAS_EDIT_DIAG / FAS_FLOW_DIAG) and one
+// stdout JSON line prefixed FAS_EDIT_DIAG / FAS_FLOW_DIAG (greppable in Railway logs). Throttle: one full diagnostic per (platform, code)
+// per FAS_EDIT_CORE.DIAG_WINDOW_MS, repeats only counted (the count rides on the next full one). The throttle store lives in
+// chrome.storage.session, which is cleared whenever the extension restarts or updates, so the first occurrence after a restart always goes.
+const FAS_DIAG_THROTTLE_KEY = 'fasDiagThrottle';
+let fasDiagMemStore = {};
+async function fasDiagGate(platform, code) {
+  const now = Date.now();
+  let store = fasDiagMemStore;
+  const area = chrome.storage && chrome.storage.session;
+  try { if (area) { const st = await area.get([FAS_DIAG_THROTTLE_KEY]); store = st[FAS_DIAG_THROTTLE_KEY] || {}; } } catch (e) { store = fasDiagMemStore; }
+  const first = Object.keys(store).length === 0;
+  const g = FAS_EDIT_CORE.diagThrottle(store, platform, code, now, FAS_EDIT_CORE.DIAG_WINDOW_MS);
+  fasDiagMemStore = g.store;
+  try { if (area) await area.set({ [FAS_DIAG_THROTTLE_KEY]: g.store }); } catch (e) { /* memory copy still throttles */ }
+  return { send: g.send, suppressed: g.send ? g.suppressed : 0, first: first };
+}
+async function fasEditForwardDiag(platform, rec) {
+  try {
+    const code = String(rec.code || rec.outcome || 'failed');
+    const gate = await fasDiagGate(platform, code);
+    if (!gate.send) return false;
+    const payload = FAS_EDIT_CORE.buildDiag(rec, { version: (chrome.runtime.getManifest() || {}).version, suppressed: gate.suppressed, firstSinceStart: gate.first });
+    fasLog(rec.outcome === 'blocked' ? 'error' : 'warn', 'FAS_EDIT_DIAG', platform + ' ' + code + ' ' + String(payload.reason || '').slice(0, 200), payload, { platform: platform, itemId: rec.itemId });
+    return true;
+  } catch (e) { return false; }
+}
+async function fasFlowForwardDiag(r) {
+  try {
+    const platform = String(r.plat || 'ext').slice(0, 30), code = String(r.code || 'error');
+    const gate = await fasDiagGate(platform, 'flow:' + code);
+    if (!gate.send) return false;
+    const C = FAS_EDIT_CORE;
+    const payload = { kind: 'flow', v: (chrome.runtime.getManifest() || {}).version, platform: platform, flow: C.scrubText(r.flow || '', 30), itemId: r.itemId ? String(r.itemId).slice(0, 40) : '', title: C.scrubText(String(r.item || '').slice(0, 60), 60),
+      code: code.slice(0, 60), step: C.scrubText(r.step || '', 80), page: C.scrubText(r.page || '', 40), message: C.scrubText(r.msg || '', 400), ctx: C.scrubDeep(r.ctx),
+      suppressedSinceLast: gate.suppressed, firstSinceStart: gate.first };
+    let guard = 0;
+    while (JSON.stringify(payload).length > C.DIAG_MAX_CHARS && guard++ < 3) payload.ctx = guard < 3 ? { trimmed: true, snapshot: payload.ctx && payload.ctx.snapshot ? C.compactSnapshot(payload.ctx.snapshot) : undefined } : { trimmed: true };
+    fasLog('error', 'FAS_FLOW_DIAG', platform + ' ' + code + ' ' + String(r.msg || '').slice(0, 200), payload, { platform: platform, itemId: r.itemId });
+    return true;
+  } catch (e) { return false; }
+}
 let fasEditPumping = false;
 
 async function fasEditGetState() {
@@ -1330,8 +1375,9 @@ async function fasEditRunPlatform(platform, rawEntries) {
         state.platformBackoff[platform] = { until: Date.now() + Core.backoffMs(cnt, Math.random()), count: cnt };
         stopped = res.code;
         fasT('warn', 'platform_backoff_set', platform + ' edits stopped for this run and backed off until ' + new Date(state.platformBackoff[platform].until).toISOString() + ' (' + res.code + ')', { platform: platform, flow: 'edit', ctx: { code: res.code, until: state.platformBackoff[platform].until, blocks: cnt, remaining: batch.length - i - 1 } });
-        await fasEditLogEntry('error', platform, entry, res.code, 'Run stopped: ' + res.reason + '. ' + Core.LABELS[platform] + ' will not be touched again until ' + new Date(state.platformBackoff[platform].until).toLocaleTimeString(), { step: res.step, selector: res.selector });
+        await fasEditLogEntry('error', platform, entry, res.code, 'Run stopped: ' + res.reason + '. ' + Core.LABELS[platform] + ' will not be touched again until ' + new Date(state.platformBackoff[platform].until).toLocaleTimeString() + '. Details were sent automatically; nothing is needed from you.', { step: res.step, selector: res.selector });
         await fasEditAddDiag(platform, diagRecord);
+        await fasEditForwardDiag(platform, diagRecord);
         failures.push({ platform: platform, title: entry.title, reason: res.code === 'login_required' ? 'signed out, sign in to ' + Core.LABELS[platform] : res.code });
         break;
       } else {
@@ -1339,8 +1385,9 @@ async function fasEditRunPlatform(platform, rawEntries) {
         const prev = state.items[key];
         const next = Core.recordFailure(prev, Date.now(), Math.random(), res.code + ':' + (res.reason || ''));
         state.items[key] = next;
-        await fasEditLogEntry('error', platform, entry, res.code || 'failed', (res.reason || '') + ' -- attempt ' + (next.parked ? Core.MAX_ATTEMPTS : next.attempts) + ', ' + (next.parked ? 'parked 24 h' : 'retry after ' + new Date(next.nextAt).toLocaleTimeString()), { step: res.step, selector: res.selector });
+        await fasEditLogEntry('error', platform, entry, res.code || 'failed', (res.reason || '') + ' -- attempt ' + (next.parked ? Core.MAX_ATTEMPTS : next.attempts) + ', ' + (next.parked ? 'parked 24 h' : 'retry after ' + new Date(next.nextAt).toLocaleTimeString()) + '. Details were sent automatically; nothing is needed from you.', { step: res.step, selector: res.selector });
         await fasEditAddDiag(platform, diagRecord);
+        await fasEditForwardDiag(platform, diagRecord);
         if (!prev || next.parked) failures.push({ platform: platform, title: entry.title, reason: (res.code || 'failed') + (res.selector ? ' at ' + String(res.selector).slice(0, 40) : ''), parked: !!next.parked });
       }
       await fasEditSaveState(state);
@@ -3010,6 +3057,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const r = msg.rec;
         fasLog(r.lvl === 'error' ? 'error' : 'warn', 'trace:' + String(r.plat || 'ext'), '[' + String(r.code || '') + '] ' + String(r.msg || '').slice(0, 300),
           { flow: r.flow, step: r.step, item: r.item, itemId: r.itemId, page: r.page, run: r.run, ctx: r.ctx });
+        if (r.lvl === 'error' && r.flow !== 'edit') fasFlowForwardDiag(r);   // publish / removal failures: full scrubbed context, throttled
       }
     } catch (e) { /* never break the page */ }
     try { sendResponse({ ok: true }); } catch (e) { /* ignore */ }

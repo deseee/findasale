@@ -180,6 +180,25 @@ router.get('/outreach-stats', getOutreachStats);
 router.get('/outreach-opens', getOutreachOpens);
 router.get('/drilldown/:metric', getDrilldown);
 
+// GET /api/admin/extension-diagnostics?platform=&code=&organizerId=&sinceHours=48&limit=50
+// Automatic browser-extension failure diagnostics (ExtensionRuntimeLog rows with source FAS_EDIT_DIAG for price/stock edits,
+// FAS_FLOW_DIAG for publish/removal page errors). Same entries are also in Railway logs as lines starting "FAS_EDIT_DIAG {" / "FAS_FLOW_DIAG {".
+router.get('/extension-diagnostics', authenticate, requireAdmin, async (req: any, res: any) => {
+  try {
+    const q = req.query || {};
+    const limit = Math.min(Math.max(parseInt(String(q.limit || '50'), 10) || 50, 1), 200);
+    const sinceHours = Math.min(Math.max(parseInt(String(q.sinceHours || '48'), 10) || 48, 1), 24 * 30);
+    const where: any = { source: { in: ['FAS_EDIT_DIAG', 'FAS_FLOW_DIAG'] }, createdAt: { gte: new Date(Date.now() - sinceHours * 3600 * 1000) } };
+    if (q.platform) where.platform = String(q.platform);
+    if (q.organizerId) where.organizerId = String(q.organizerId);
+    let rows = await (prisma as any).extensionRuntimeLog.findMany({ where, orderBy: { createdAt: 'desc' }, take: limit });
+    if (q.code) rows = rows.filter((r: any) => r.context && r.context.code === String(q.code));
+    res.json({ count: rows.length, entries: rows });
+  } catch (e: any) {
+    res.status(500).json({ message: 'Failed to load extension diagnostics' });
+  }
+});
+
 // Feature #362: GET /api/admin/xp-velocity — XP exploit detection
 router.get('/xp-velocity', authenticate, requireAdmin, async (req: any, res: any) => {
   try {

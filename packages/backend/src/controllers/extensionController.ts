@@ -3177,6 +3177,18 @@ export const markItemPriceSyncedForPlatform = async (req: AuthRequest, res: Resp
 const EXTENSION_LOG_MAX_BATCH = 50;
 const EXTENSION_LOG_LEVELS = ['info', 'warn', 'error'];
 const EXTENSION_LOG_MESSAGE_MAX_LEN = 500;
+// 2026-10-17 automatic failure diagnostics: the extension posts a compact, already-scrubbed record for every failed/blocked edit
+// (source FAS_EDIT_DIAG) and every error-level publish/removal trace (FAS_FLOW_DIAG). They get a larger context cap than ordinary
+// log lines, are scrubbed AGAIN here (defence in depth), stored in ExtensionRuntimeLog like any other entry (no new table), and
+// emitted as ONE stdout JSON line with a stable prefix so they can be grepped in Railway logs.
+const EXTENSION_DIAG_SOURCES = ['FAS_EDIT_DIAG', 'FAS_FLOW_DIAG'];
+const EXTENSION_DIAG_CONTEXT_MAX_LEN = 16000;
+export function scrubDiagString(raw: string): string {
+  return raw
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[email]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/=-]+/gi, 'Bearer [redacted]')
+    .replace(/https?:\/\/[^\s"'<>)\\]+\?[^\s"'<>)\\]*/gi, (m) => m.split('?')[0]);
+}
 
 export const postExtensionLogs = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
@@ -3202,11 +3214,19 @@ export const postExtensionLogs = async (req: AuthRequest, res: Response): Promis
       // Guard against a caller accidentally passing something huge (e.g. a full page's worth of
       // data) -- this is an event log, not a blob store. JSON.stringify a second time is cheap at
       // this size and keeps the cap exact regardless of what shape `context` is.
-      context: entry.context != null && JSON.stringify(entry.context).length <= 2000 ? entry.context : undefined,
+      context: entry.context != null && JSON.stringify(entry.context).length <= (EXTENSION_DIAG_SOURCES.includes(entry.source) ? EXTENSION_DIAG_CONTEXT_MAX_LEN : 2000)
+        ? (EXTENSION_DIAG_SOURCES.includes(entry.source) ? JSON.parse(scrubDiagString(JSON.stringify(entry.context))) : entry.context)
+        : undefined,
     }));
 
   if (rows.length > 0) {
     await prisma.extensionRuntimeLog.createMany({ data: rows });
+    for (const row of rows) {
+      if (!EXTENSION_DIAG_SOURCES.includes(row.source)) continue;
+      try {
+        console.log(row.source + ' ' + JSON.stringify({ organizerId: row.organizerId, level: row.level, platform: row.platform, itemId: row.itemId, message: scrubDiagString(row.message), diag: row.context }));
+      } catch { /* logging must never fail the request */ }
+    }
   }
   res.json({ ok: true, accepted: rows.length, rejected: rawLogs.length - rows.length });
 };

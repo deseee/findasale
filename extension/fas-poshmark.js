@@ -2651,7 +2651,7 @@
       }
       clearPoshNavRetryState();
       clearPoshPublishAttemptState();
-      tProblem({ code: 'form_not_found', title: 'The Poshmark listing form did not load', what: 'The create-listing form never appeared after several seconds, so nothing was filled in.', why: 'Poshmark may have sent the tab to another page, may need a recent login in its mobile app, or changed its page layout.', next: 'Nothing was published. Open Poshmark\'s Sell page yourself and reopen the extension. Use Copy diagnostics to send this to support.', ctx: { path: location.pathname, bounceRetries: retryState ? retryState.attempt : 0 } });
+      tProblem({ code: 'form_not_found', title: 'The Poshmark listing form did not load', what: 'The create-listing form never appeared after several seconds, so nothing was filled in.', why: 'Poshmark may have sent the tab to another page, may need a recent login in its mobile app, or changed its page layout.', next: 'Nothing was published. Open Poshmark\'s Sell page yourself and reopen the extension. Details were sent automatically; nothing is needed from you.', ctx: { path: location.pathname, bounceRetries: retryState ? retryState.attempt : 0 } });
       if (maybeShowAppLoginHint()) return;
       overlayWarn('This doesn\'t look like a fillable Poshmark listing form yet (checked repeatedly for several seconds). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
@@ -2864,7 +2864,7 @@
     try {
       await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
     } catch (e) {
-      tProblem({ code: 'run_exception', title: 'Something went wrong filling this listing', what: 'An unexpected error stopped the listing partway.', why: String((e && e.message) || 'unknown error').slice(0, 160), next: 'Nothing was published by the extension. Complete this listing yourself, or reopen the extension to try again. Use Copy diagnostics to send details.', ctx: { error: String((e && e.stack || e && e.message) || e).slice(0, 300) } });
+      tProblem({ code: 'run_exception', title: 'Something went wrong filling this listing', what: 'An unexpected error stopped the listing partway.', why: String((e && e.message) || 'unknown error').slice(0, 160), next: 'Nothing was published by the extension. Complete this listing yourself, or reopen the extension to try again. Details were sent automatically; nothing is needed from you.', ctx: { error: String((e && e.stack || e && e.message) || e).slice(0, 300) } });
       overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
     }
