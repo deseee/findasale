@@ -137,7 +137,54 @@
     if (tg.unresolved > 1) return no('multiple_unresolved', tg.unresolved + ' FindA.Sale items share this title with no saved listing id and ' + unclaimed.length + ' closet listing(s) are unclaimed; they cannot be told apart, so none was edited. Each needs its Poshmark listing id saved once.');
     if (unclaimed.length === 1) return { id: unclaimed[0], reason: 'single_unclaimed' };
     if (!unclaimed.length) return no('all_claimed', 'every closet listing with this title is already tied to another item.');
-    return no('multiple_unclaimed', unclaimed.length + ' closet listings with this title are not tied to any item and this is the only one waiting, so they cannot be told apart; none was edited.');
+    // Exactly one FindA.Sale item owns this title and several unclaimed closet listings carry it: they are all copies of that one item
+    // (the item was published more than once). Nothing is guessed between different items, so every copy gets the same edit.
+    return { id: '', reason: 'copies_of_single_item', copies: unclaimed.slice() };
+  }
+  // ---- Multi-copy edits (one FindA.Sale item that exists as several identical live listings) -------------------------
+  // State lives in the engine scratch so it survives page navigations: copies (ids, canonical first), copyIdx, copyDone [ids],
+  // copyFail [{id, code, reason}], copyGone [ids]. Only ever edits; never deletes or delists anything.
+  function copyStart(copies) {
+    var ids = [], seen = {};
+    (copies || []).forEach(function (c) { var id = String(c || '').toLowerCase(); if (/^[0-9a-f]{24}$/.test(id) && !seen[id]) { seen[id] = 1; ids.push(id); } });
+    return { copies: ids, copyIdx: 0, copyDone: [], copyFail: [], copyGone: [], remoteId: ids[0] || '', copyWait: false };
+  }
+  function isListingGone(code, reason) {
+    return /^(api_get_failed|verify_get_failed|csrf_not_found|edit_page_http)/.test(String(code || '')) && /\b(404|410)\b/.test(String(reason || ''));
+  }
+  // One copy finished with `outcome` ({ state:'done'|'fail'|'blocked', code, reason }). Returns { next:'goto'|'finish', scratch, summary? }
+  // where scratch is the PATCH to merge. A failed copy never stops the others; a block stops the rest (they are reported as untried).
+  function copyAdvance(S, outcome) {
+    var copies = (S && S.copies) || [];
+    var idx = Number(S && S.copyIdx) || 0;
+    var cur = copies[idx];
+    var done = ((S && S.copyDone) || []).slice(), fail = ((S && S.copyFail) || []).slice(), gone = ((S && S.copyGone) || []).slice();
+    var o = outcome || {};
+    if (o.state === 'done') done.push(cur);
+    else if (o.state === 'fail' && isListingGone(o.code, o.reason)) gone.push(cur);
+    else fail.push({ id: cur, code: String(o.code || o.state || 'failed'), reason: String(o.reason || '').slice(0, 140) });
+    var blocked = o.state === 'blocked';
+    var nextIdx = idx + 1;
+    var base = { copyDone: done, copyFail: fail, copyGone: gone };
+    if (!blocked && nextIdx < copies.length) {
+      return { next: 'goto', scratch: Object.assign(base, { copyIdx: nextIdx, remoteId: copies[nextIdx], copyWait: true, phase: 'api', apiTried: false, formFallback: false, oldPrice: null }) };
+    }
+    var untried = blocked ? copies.slice(nextIdx) : [];
+    var summary = { canonical: copies[0] || '', total: copies.length, edited: done, failed: fail, gone: gone, untried: untried, blocked: blocked ? { code: o.code || 'blocked', reason: String(o.reason || '').slice(0, 140) } : null };
+    summary.allOk = !fail.length && !untried.length && !blocked && done.length > 0;
+    return { next: 'finish', scratch: Object.assign(base, { copyIdx: nextIdx }), summary: summary };
+  }
+  function short(id) { return String(id || '').slice(-6); }
+  // One plain-language activity-log line listing every copy touched.
+  function copySummaryLine(title, summary) {
+    var s = summary || {};
+    var parts = ['Edited ' + (s.edited || []).length + ' of ' + (s.total || 0) + ' identical Poshmark copies of "' + String(title || '').slice(0, 50) + '" (one FindA.Sale item published more than once)'];
+    if ((s.edited || []).length) parts.push('edited: ' + s.edited.map(short).join(', '));
+    if ((s.failed || []).length) parts.push('FAILED: ' + s.failed.map(function (f) { return short(f.id) + ' (' + f.code + ')'; }).join(', '));
+    if ((s.gone || []).length) parts.push('no longer on Poshmark: ' + s.gone.map(short).join(', '));
+    if ((s.untried || []).length) parts.push('not attempted (stopped early): ' + s.untried.map(short).join(', '));
+    parts.push('nothing was deleted or delisted');
+    return parts.join('; ');
   }
   // True when this entry is applicable and carries a usable target value.
   function hasWork(entry) {
@@ -395,7 +442,8 @@
     MAX_ATTEMPTS: MAX_ATTEMPTS, BACKOFF_BASE_MS: BACKOFF_BASE_MS, BACKOFF_CAP_MS: BACKOFF_CAP_MS, PARK_MS: PARK_MS,
     backoffMs: backoffMs, shouldAttempt: shouldAttempt, recordFailure: recordFailure,
     pruneHourly: pruneHourly, allowance: allowance, jitterDelay: jitterDelay,
-    normalizeEntry: normalizeEntry, normalizeTitleGroup: normalizeTitleGroup, resolveDuplicateTitleId: resolveDuplicateTitleId, hasWork: hasWork, wantsQuantity: wantsQuantity,
+    normalizeEntry: normalizeEntry, normalizeTitleGroup: normalizeTitleGroup, resolveDuplicateTitleId: resolveDuplicateTitleId,
+    copyStart: copyStart, copyAdvance: copyAdvance, copySummaryLine: copySummaryLine, isListingGone: isListingGone, hasWork: hasWork, wantsQuantity: wantsQuantity,
     wholeDollars: wholeDollars, formatPrice: formatPrice, parsePriceText: parsePriceText, pricesMatch: pricesMatch,
     foldTitle: foldTitle, cleanCandidateTitle: cleanCandidateTitle, titleEquals: titleEquals, titleContained: titleContained, pickUnique: pickUnique,
     extractIdFromUrl: extractIdFromUrl, startUrl: startUrl, craigslistPageUrl: craigslistPageUrl,

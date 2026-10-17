@@ -1048,18 +1048,20 @@ let fasEditPumping = false;
 async function fasEditGetState() {
   const st = await chrome.storage.local.get([FAS_EDIT_STATE_KEY]);
   const s = st[FAS_EDIT_STATE_KEY] || {};
-  return { items: s.items || {}, hourly: s.hourly || {}, idCache: s.idCache || {}, platformBackoff: s.platformBackoff || {}, reportedIds: s.reportedIds || {} };
+  return { items: s.items || {}, hourly: s.hourly || {}, idCache: s.idCache || {}, platformBackoff: s.platformBackoff || {}, reportedIds: s.reportedIds || {}, copyIds: s.copyIds || {} };
 }
 async function fasEditSaveState(s) {
   // keep the id cache bounded
   const keys = Object.keys(s.idCache || {});
   if (keys.length > 500) keys.slice(0, keys.length - 500).forEach((k) => delete s.idCache[k]);
+  const ck = Object.keys(s.copyIds || {});
+  if (ck.length > 200) ck.slice(0, ck.length - 200).forEach((k) => delete s.copyIds[k]);
   await chrome.storage.local.set({ [FAS_EDIT_STATE_KEY]: s });
 }
 async function fasEditLogEntry(level, platform, entry, code, message, extra) {
   try {
     const st = await chrome.storage.local.get([FAS_EDIT_LOG_KEY]);
-    const rec = Object.assign({ t: Date.now(), level: level, platform: platform, itemId: entry ? entry.id : undefined, title: entry ? String(entry.title || '').slice(0, 70) : undefined, code: code || '', msg: String(message || '').slice(0, 260) }, extra || {});
+    const rec = Object.assign({ t: Date.now(), level: level, platform: platform, itemId: entry ? entry.id : undefined, title: entry ? String(entry.title || '').slice(0, 70) : undefined, code: code || '', msg: String(message || '').slice(0, 700) }, extra || {});
     await chrome.storage.local.set({ [FAS_EDIT_LOG_KEY]: FAS_EDIT_CORE.pushRing(st[FAS_EDIT_LOG_KEY], rec, 120) });
   } catch (e) { /* logging never breaks the run */ }
   if (level !== 'info') fasLog(level === 'error' ? 'error' : 'warn', 'autoApply', platform + ': ' + (code || '') + ' ' + String(message || '').slice(0, 300), extra && extra.step ? { step: extra.step, selector: extra.selector || '' } : null, { platform: platform, itemId: entry ? entry.id : undefined });
@@ -1125,8 +1127,10 @@ async function fasEditApplyItem(tabId, platform, entry, state, itemPos) {
   const t0 = Date.now();
   let errs = 0;
   await fasEditNavigate(tabId, FAS_EDIT_CORE.startUrl(platform, entry, CFG, state.idCache));
-  for (let i = 0; i < FAS_EDIT_MAX_STEPS; i++) {
-    if (Date.now() - t0 > FAS_EDIT_ITEM_MAX_MS) return { state: 'fail', code: 'item_timeout', reason: 'Item took longer than ' + Math.round(FAS_EDIT_ITEM_MAX_MS / 1000) + 's', step: (scratch.phase || ''), scratch: scratch, diags: diags, trail: trail };
+  for (let i = 0; i < FAS_EDIT_MAX_STEPS + 8 * Math.min(12, (scratch.copies ? scratch.copies.length : 0)); i++) {
+    // one FindA.Sale item that exists as several identical Poshmark listings is edited copy by copy, so its time budget grows per copy
+    const copyExtraMs = 60 * 1000 * Math.min(12, (scratch.copies ? scratch.copies.length : 0));
+    if (Date.now() - t0 > FAS_EDIT_ITEM_MAX_MS + copyExtraMs) return { state: 'fail', code: 'item_timeout', reason: 'Item took longer than ' + Math.round(FAS_EDIT_ITEM_MAX_MS / 1000) + 's', step: (scratch.phase || ''), scratch: scratch, diags: diags, trail: trail };
     await fasEditWaitComplete(tabId, 25000);
     const tab = await tabsGet(tabId);
     if (!tab) return { state: 'fail', code: 'tab_closed', reason: 'The edit tab was closed during the run', step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
@@ -1134,7 +1138,7 @@ async function fasEditApplyItem(tabId, platform, entry, state, itemPos) {
     if (urlBlock) return { state: 'blocked', code: urlBlock.code, reason: 'Tab landed on ' + FAS_EDIT_CORE.safeUrl(tab.url || ''), step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
     let res = null;
     try {
-      res = await fasEditExec(tabId, { platform: platform, item: entry, scratch: scratch, cfg: { MERC_EDIT_URL_PREFIX: CFG.MERC_EDIT_URL_PREFIX, MERC_MANAGE_URL: CFG.MERC_MANAGE_URL, GRAILED_MANAGE_URL: CFG.GRAILED_MANAGE_URL }, idCache: state.idCache, stepNo: i, itemPos: itemPos || '' });
+      res = await fasEditExec(tabId, { platform: platform, item: entry, scratch: scratch, cfg: { MERC_EDIT_URL_PREFIX: CFG.MERC_EDIT_URL_PREFIX, MERC_MANAGE_URL: CFG.MERC_MANAGE_URL, GRAILED_MANAGE_URL: CFG.GRAILED_MANAGE_URL }, idCache: state.idCache, copyIds: state.copyIds, stepNo: i, itemPos: itemPos || '' });
     } catch (e) {
       errs++;
       if (errs > 3) return { state: 'fail', code: 'inject_failed', reason: String((e && e.message) || e).slice(0, 160) + ' @ ' + FAS_EDIT_CORE.safeUrl(tab.url || ''), step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
@@ -1288,7 +1292,19 @@ async function fasEditRunPlatform(platform, rawEntries) {
       state.hourly[platform] = stamps;
       const diagRecord = { t: Date.now(), platform: platform, itemId: entry.id, title: String(entry.title || '').slice(0, 60), outcome: res.state, code: res.code || '', step: res.step || '', selector: res.selector || '', reason: res.reason || '', trail: res.trail, snapshots: res.diags, details: res.details };
       fasT(res.state === 'done' ? 'info' : 'warn', 'item_' + res.state, (res.state === 'done' ? 'Verified ' : 'Did not finish ') + 'edit of "' + String(entry.title || '').slice(0, 50) + '" on ' + platform + (entry.priceDrift ? ' (target $' + Core.formatPrice(platform, entry.price) + (res.scratch && res.scratch.oldPrice != null ? ', was $' + res.scratch.oldPrice : '') + ')' : '') + (res.code ? ': ' + res.code : ''), { platform: platform, flow: 'edit', itemId: entry.id, title: entry.title, ctx: { outcome: res.state, code: res.code, reason: res.reason, step: res.step, selector: res.selector, trail: res.trail, ms: Date.now() - itemT0, remoteId: res.scratch && res.scratch.remoteId, candidates: res.details && res.details.candidates } });
-      if (res.scratch && res.scratch.remoteId && /^[0-9a-z]+$/i.test(String(res.scratch.remoteId))) state.idCache[key] = String(res.scratch.remoteId);
+      // Multi-copy edits (one item, several identical Poshmark listings): the id cached/reported is the canonical copy and only after every copy
+      // was edited; a partial result must not cache whichever copy happened to be open last, or the remaining copies would never be retried.
+      const copyRun = !!(res.scratch && res.scratch.copies && res.scratch.copies.length);
+      if (copyRun) {
+        const sc0 = res.scratch;
+        const sum0 = sc0.copySummary || { canonical: sc0.copies[0], total: sc0.copies.length, edited: sc0.copyDone || [], failed: sc0.copyFail || [], gone: sc0.copyGone || [], untried: sc0.copies.slice(Number(sc0.copyIdx) || 0), blocked: null };
+        await fasEditLogEntry(res.state === 'done' && !(sum0.failed || []).length ? 'info' : 'warn', platform, entry, res.state === 'done' ? 'copies_edited' : 'copies_incomplete', FAS_EDIT_CORE.copySummaryLine(entry.title, sum0), { step: 'copies' });
+        for (let x = 1; x < Math.min(sum0.total || 1, 12); x++) stamps.push(Date.now());   // each extra copy is a real edit against the hourly cap
+        if (res.state === 'done' && sc0.copyDone && sc0.copyDone.length) {
+          state.idCache[key] = String(sc0.copies[0]);
+          state.copyIds[key] = sc0.copies.filter((c) => (sc0.copyGone || []).indexOf(c) === -1).slice(0, 12);
+        }
+      } else if (res.scratch && res.scratch.remoteId && /^[0-9a-z]+$/i.test(String(res.scratch.remoteId))) state.idCache[key] = String(res.scratch.remoteId);
       // 1.0.7 after-the-fact capture: the engine found (and, on 'done', verified) this item's live listing by
       // title; record its id on the backend (set-once, idempotent) so later edits go straight to it. Covers
       // Facebook (itemIdFound), Craigslist (postingId) and the platforms whose engine reports remoteId.

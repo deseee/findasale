@@ -446,6 +446,7 @@
     } catch (e) { /* ignore */ }
     return '';
   }
+  function W_price_for_log(it) { return it && it.priceDrift ? it.price : null; }
   async function poshAmbiguous(it) {
     // Load the whole closet first (it lazy-loads), so a candidate that has not rendered yet can never be missed.
     var prevN = -1, complete = false;
@@ -461,6 +462,13 @@
       poshClosetCards().forEach(function (c) { if ((c.texts || []).some(function (t) { return C.titleEquals(t, it.title); })) cands.push({ id: c.key, price: poshCandidatePrice(c.key) }); });
     } catch (e) { /* ignore */ }
     var res = C.resolveDuplicateTitleId(cands, it.titleGroup, complete);
+    if (res.copies && res.copies.length > 1) {
+      // One FindA.Sale item owns this title (the backend counted exactly one unresolved item) and several unclaimed closet listings carry it:
+      // they are copies of that single item. Edit every copy, one after another (see poshCopyWrap / the step() hook); nothing is deleted.
+      var cs = C.copyStart(res.copies);
+      tLog('warn', 'posh_copies_found', 'FindA.Sale has ONE item with this title but ' + cs.copies.length + ' identical Poshmark listings exist (it was published more than once). Editing every copy, one at a time, and deleting nothing: ' + cs.copies.map(function (x) { return x.slice(-6); }).join(', '), { copies: cs.copies, price: W_price_for_log(it) });
+      return go('https://poshmark.com/edit-listing/' + cs.remoteId, Object.assign(cs, { phase: 'api', apiTried: false, discovered: true }));
+    }
     if (res.id) {
       tLog('info', 'posh_dup_resolved', 'Several closet listings share this title, but only one is not already tied to another FindA.Sale item and this is the only item waiting; using its id', { id: res.id, candidates: cands.slice(0, 10) });
       return go('https://poshmark.com/edit-listing/' + res.id, { remoteId: res.id, phase: 'api', discovered: true });
@@ -1133,6 +1141,51 @@
     } catch (e) { /* narration must never change the result */ }
     return res;
   }
+  // ---- Poshmark multi-copy driver ----------------------------------------------------------------------------------------------
+  // While scratch.copies is set, every per-listing result from poshStep is turned into "next copy" or one final result for the item.
+  function poshCopyWrap(ctx, res) {
+    var S = ctx.scratch || {};
+    if (!S.copies || !S.copies.length || !res) return res;
+    if (res.state === 'continue' || res.state === 'goto') return res;     // still working on the current copy
+    var cur = S.copies[Number(S.copyIdx) || 0];
+    var adv = C.copyAdvance(S, { state: res.state, code: res.code, reason: res.reason });
+    var title = (ctx.item && ctx.item.title) || '';
+    tLog(res.state === 'done' ? 'info' : 'warn', 'posh_copy_' + res.state, 'Copy ' + ((Number(S.copyIdx) || 0) + 1) + ' of ' + S.copies.length + ' (…' + String(cur).slice(-6) + '): ' + (res.state === 'done' ? 'price/quantity verified on the live listing' : 'not finished (' + (res.code || res.state) + ')'), { id: cur, code: res.code || null });
+    if (adv.next === 'goto') {
+      // serial and jittered: a pause of 3 to 7 s on the current page, then the step() hook navigates to the next copy's edit page
+      return cont(3000 + Math.floor(Math.random() * 4000), Object.assign({}, adv.scratch), { details: { copyProgress: (Number(S.copyIdx) || 0) + 1 } });
+    }
+    var sum = adv.summary;
+    var line = C.copySummaryLine(title, sum);
+    tLog(sum.allOk ? 'info' : 'warn', 'posh_copies_summary', line, { summary: sum });
+    var fin = Object.assign({}, adv.scratch, { remoteId: sum.canonical, copySummary: sum });
+    if (sum.blocked) return { state: 'blocked', code: sum.blocked.code, reason: line.slice(0, 220), step: 'copies', scratch: fin, details: { copies: sum } };
+    if (sum.allOk || (sum.edited.length && !sum.failed.length && !sum.untried.length)) {
+      return done({ readBack: { copies: sum.edited.length }, via: 'posh_copies', copies: sum, copyLine: line }, fin);
+    }
+    return fail('copies_partial', line, 'copies', '/vm-rest/posts/<id> per copy', fin, { details: { copies: sum, copyLine: line } });
+  }
+  // Runs before the platform handler on every Poshmark step: starts remembered copy lists and navigates between copies.
+  function poshCopyPre(ctx) {
+    var S = ctx.scratch || {}, it = ctx.item || {};
+    if (S.copies && S.copies.length && S.copyWait) {
+      return go('https://poshmark.com/edit-listing/' + S.remoteId, { copyWait: false, phase: 'api', apiTried: false, formFallback: false });
+    }
+    if (!S.copies) {
+      // A previous run edited several copies of this one item and saved one canonical id; keep every remembered copy in step on later edits.
+      var saved = String(S.remoteId || it.remoteListingId || (ctx.idCache && ctx.idCache['POSHMARK:' + it.id]) || '').toLowerCase();
+      var mem = ctx.copyIds && ctx.copyIds['POSHMARK:' + it.id];
+      if (saved && Array.isArray(mem) && mem.length > 1 && mem.indexOf(saved) !== -1 && S.phase == null) {
+        var ordered = [saved].concat(mem.filter(function (x) { return x !== saved; }));
+        var cs = C.copyStart(ordered);
+        if (cs.copies.length > 1) {
+          tLog('info', 'posh_copies_remembered', 'This item has ' + cs.copies.length + ' identical Poshmark copies from an earlier run; editing all of them, one at a time', { copies: cs.copies });
+          return go('https://poshmark.com/edit-listing/' + cs.remoteId, Object.assign(cs, { phase: 'api', apiTried: false }));
+        }
+      }
+    }
+    return null;
+  }
   var HANDLERS = { FACEBOOK: fbStep, POSHMARK: poshStep, MERCARI: mercStep, GRAILED: grStep, CRAIGSLIST: clStep, GUMTREE_AU: gtStep };
   async function step(ctx) {
     try {
@@ -1143,11 +1196,16 @@
       var bl = pageBlock();
       if (bl && bl.code !== 'login_required') return traceResult(ctx, blocked(bl.code, 'Marketplace page state: ' + bl.code, 'guard'));
       if (bl && bl.code === 'login_required') return traceResult(ctx, blocked('login_required', 'Redirected to a sign-in page', 'guard'));
+      if (ctx.platform === 'POSHMARK') {
+        var pre = poshCopyPre(ctx);
+        if (pre) return traceResult(ctx, pre);
+      }
       var res = await h(ctx);
+      if (ctx.platform === 'POSHMARK') res = poshCopyWrap(ctx, res);
       return traceResult(ctx, res);
     } catch (e) {
       return traceResult(ctx, { state: 'fail', code: 'engine_exception', reason: ((e && e.message) || String(e)).slice(0, 200), step: (ctx.scratch && ctx.scratch.phase) || '', diag: (function () { try { return snapshot('exception'); } catch (e2) { return null; } })() });
     }
   }
-  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7' };
+  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7', _test: { poshCopyWrap: poshCopyWrap, poshCopyPre: poshCopyPre } };
 })();

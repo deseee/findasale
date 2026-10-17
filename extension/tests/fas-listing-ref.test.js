@@ -90,3 +90,10 @@ test('pickPostedListing accepts exactly one live match and refuses guesses', () 
   assert.strictEqual(R.pickPostedListing('POSHMARK', [{ id: 'bad' }], false).reason, 'none');
   assert.strictEqual(R.pickPostedListing('POSHMARK', [{ id: A, url: 'https://evil.example/listing/' + A }], false).ref.remoteListingUrl, null);
 });
+
+test('unconfirmedPublishVerdict: a live closet copy means published; otherwise it stays unconfirmed', () => {
+  assert.deepStrictEqual(R.unconfirmedPublishVerdict([{ state: 'clear' }, { state: 'failed' }, { state: 'dup' }]), { published: true, reason: 'live_in_closet' });
+  assert.deepStrictEqual(R.unconfirmedPublishVerdict([{ state: 'clear' }, { state: 'clear' }]), { published: false, reason: 'not_in_closet' });
+  assert.deepStrictEqual(R.unconfirmedPublishVerdict([{ state: 'failed' }, { state: 'failed' }]), { published: false, reason: 'closet_unreadable' });
+  assert.deepStrictEqual(R.unconfirmedPublishVerdict([]), { published: false, reason: 'no_checks' });
+});

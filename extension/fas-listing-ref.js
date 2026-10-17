@@ -127,6 +127,15 @@
     if (refs.length > 1) return { ref: null, reason: 'ambiguous', count: refs.length };
     return { ref: refs[0], reason: 'ok', count: 1 };
   }
+  // The publish click happened but the page never showed a confirmation. `checks` are the closet exact-title results read afterwards
+  // ({ state: 'dup'|'clear'|'failed' }). A live exact-title listing means the item IS on the platform (ours, or one already there): it must be
+  // recorded as listed and never posted again. Anything else stays unconfirmed (never marked listed, never re-posted blindly).
+  function unconfirmedPublishVerdict(checks) {
+    var list = checks || [];
+    for (var i = 0; i < list.length; i++) if (list[i] && list[i].state === 'dup') return { published: true, reason: 'live_in_closet' };
+    var anyClear = list.some(function (c) { return c && c.state === 'clear'; });
+    return { published: false, reason: list.length === 0 ? 'no_checks' : (anyClear ? 'not_in_closet' : 'closet_unreadable') };
+  }
   function abs(h, base) {
     var s = String(h || '');
     if (/^https?:\/\//i.test(s)) return s;
@@ -136,7 +145,7 @@
   var api = {
     REMOTE_ID_RE: REMOTE_ID_RE, HOST_RE: HOST_RE,
     normalizeRemoteId: normalizeRemoteId, idFromUrl: idFromUrl, listingRefFromUrl: listingRefFromUrl,
-    sanitizeListedRef: sanitizeListedRef, capturePageListingRef: capturePageListingRef, pickPostedListing: pickPostedListing
+    sanitizeListedRef: sanitizeListedRef, capturePageListingRef: capturePageListingRef, pickPostedListing: pickPostedListing, unconfirmedPublishVerdict: unconfirmedPublishVerdict
   };
   root.FAS_LISTING_REF = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

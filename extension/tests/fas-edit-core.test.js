@@ -230,9 +230,71 @@ test('resolveDuplicateTitleId never guesses among identical duplicates and says 
   assert.strictEqual(r.id, '');
   assert.strictEqual(r.reason, 'multiple_unresolved');
   assert.match(r.message, /^Needs info:/);
-  assert.strictEqual(C.resolveDuplicateTitleId(nine, { unresolved: 1, claimedIds: [] }, true).reason, 'multiple_unclaimed');
+  // unresolved === 1: one FindA.Sale item owns the title, so the nine listings are copies of it (no guessing between items)
+  const cp = C.resolveDuplicateTitleId(nine, { unresolved: 1, claimedIds: [] }, true);
+  assert.strictEqual(cp.id, '');
+  assert.strictEqual(cp.reason, 'copies_of_single_item');
+  assert.strictEqual(cp.copies.length, 9);
+  // copies already tied to a sibling item are never included
+  const cp2 = C.resolveDuplicateTitleId(nine, { unresolved: 1, claimedIds: ['0'.repeat(24)] }, true);
+  assert.strictEqual(cp2.copies.length, 8);
+  assert.ok(cp2.copies.indexOf('0'.repeat(24)) === -1);
+  // an incomplete closet read or missing accounting never yields copies
+  assert.strictEqual(C.resolveDuplicateTitleId(nine, { unresolved: 1, claimedIds: [] }, false).reason, 'closet_incomplete');
+  assert.strictEqual(C.resolveDuplicateTitleId(nine, { unresolved: 2, claimedIds: [] }, true).copies, undefined);
   assert.strictEqual(C.resolveDuplicateTitleId(nine, null, true).reason, 'no_accounting');
   assert.strictEqual(C.resolveDuplicateTitleId([{ id: A }, { id: B }], { unresolved: 1, claimedIds: [A] }, false).reason, 'closet_incomplete');
   assert.strictEqual(C.resolveDuplicateTitleId([{ id: A }], { unresolved: 1, claimedIds: [A] }, true).reason, 'all_claimed');
   assert.strictEqual(C.resolveDuplicateTitleId([], { unresolved: 1, claimedIds: [] }, true).reason, 'no_candidates');
+});
+
+test('copyStart keeps valid unique ids, canonical first', () => {
+  const s = C.copyStart([A, B.toUpperCase(), A, 'bad']);
+  assert.deepStrictEqual(s.copies, [A, B]);
+  assert.strictEqual(s.remoteId, A);
+  assert.strictEqual(s.copyIdx, 0);
+});
+
+test('copyAdvance walks every copy serially, collects failures and keeps going', () => {
+  let S = C.copyStart([A, B, D]);
+  let r = C.copyAdvance(S, { state: 'done' });
+  assert.strictEqual(r.next, 'goto');
+  assert.strictEqual(r.scratch.remoteId, B);
+  assert.strictEqual(r.scratch.copyWait, true);
+  assert.strictEqual(r.scratch.apiTried, false);
+  S = Object.assign({}, S, r.scratch);
+  r = C.copyAdvance(S, { state: 'fail', code: 'verify_mismatch', reason: 'shows 9' });
+  assert.strictEqual(r.next, 'goto');
+  S = Object.assign({}, S, r.scratch);
+  r = C.copyAdvance(S, { state: 'done' });
+  assert.strictEqual(r.next, 'finish');
+  assert.deepStrictEqual(r.summary.edited, [A, D]);
+  assert.strictEqual(r.summary.failed.length, 1);
+  assert.strictEqual(r.summary.failed[0].id, B);
+  assert.strictEqual(r.summary.allOk, false);
+  assert.strictEqual(r.summary.canonical, A);
+  const line = C.copySummaryLine('Camel sign', r.summary);
+  assert.match(line, /Edited 2 of 3/);
+  assert.ok(line.indexOf('FAILED: ' + B.slice(-6)) !== -1);
+  assert.match(line, /nothing was deleted or delisted/);
+});
+
+test('copyAdvance: all copies edited is allOk; a gone listing is skipped not failed; a block stops the rest', () => {
+  let S = C.copyStart([A, B]);
+  let r = C.copyAdvance(S, { state: 'done' });
+  S = Object.assign({}, S, r.scratch);
+  r = C.copyAdvance(S, { state: 'done' });
+  assert.strictEqual(r.summary.allOk, true);
+  S = C.copyStart([A, B]);
+  r = C.copyAdvance(S, { state: 'fail', code: 'api_get_failed', reason: 'GET post: HTTP 404' });
+  assert.strictEqual(r.next, 'goto');
+  S = Object.assign({}, S, r.scratch);
+  r = C.copyAdvance(S, { state: 'done' });
+  assert.deepStrictEqual(r.summary.gone, [A]);
+  assert.strictEqual(r.summary.failed.length, 0);
+  S = C.copyStart([A, B, D]);
+  r = C.copyAdvance(S, { state: 'blocked', code: 'http_429', reason: 'slow down' });
+  assert.strictEqual(r.next, 'finish');
+  assert.deepStrictEqual(r.summary.untried, [B, D]);
+  assert.strictEqual(r.summary.allOk, false);
 });

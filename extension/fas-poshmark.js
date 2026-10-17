@@ -2245,7 +2245,26 @@
     // overlay while a real second modal sat on screen untouched. Widened to give 2 full chained
     // modal dismissals real headroom without making a genuinely-stuck run wait unreasonably long
     // before falling back to the organizer.
-    const published = await waitForPoshmarkPublishConfirmation(15000);
+    let published = await waitForPoshmarkPublishConfirmation(15000);
+    if (!published) {
+      // ROOT CAUSE (2026-10-17): this used to give up here with the item NOT recorded and the queue NOT advanced even when Poshmark HAD
+      // accepted the listing (confirmation slower than 15 s, fragile-item modals, a reload). The next attempt for the same item (queue
+      // resume, reopened tab after the 45 s marker expired, re-queue from the popup or the auto-list poll) then published it again, and again.
+      // Settle the ambiguity with evidence from Poshmark itself: re-read the live closet a few times. A live exact-title listing means the
+      // item is on Poshmark, so it is recorded as listed and moves on instead of being left open for another publish.
+      tStep('Confirming in your closet', 'Poshmark did not show a confirmation, so the live closet is checked before anything could be posted again');
+      const seen = [];
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await sleep(attempt === 0 ? 3000 : 5000);
+        let r = null;
+        try { r = await fasPoshClosetDupCheck(item); } catch (e) { r = null; }
+        seen.push({ state: r ? r.state : 'failed' });
+        if (r && r.state === 'dup') break;
+      }
+      const verdict = (typeof self !== 'undefined' && self.FAS_LISTING_REF && self.FAS_LISTING_REF.unconfirmedPublishVerdict) ? self.FAS_LISTING_REF.unconfirmedPublishVerdict(seen) : { published: false, reason: 'helper_missing' };
+      tInfo('publish_unconfirmed_closet', 'Closet re-check after the unconfirmed publish: ' + verdict.reason, { verdict: verdict.reason, checks: seen.map((c) => c.state) });
+      if (verdict.published) { published = true; tOk('The listing is live in your closet, so it is treated as published'); }
+    }
     if (!published) {
       // Deliberately NOT clearing the publish-attempt marker here -- this is exactly the ambiguous
       // case the marker exists to protect against: we don't actually know whether the click went
