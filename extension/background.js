@@ -3,7 +3,7 @@
  * Bearer token; (2) fetch item photos cross-origin (Cloudinary + eBay hosts) and
  * hand them to the content script as data URLs; (3) hold the listing queue.
  */
-importScripts('config.js', 'fas-trace.js', 'fas-edit-core.js', 'fas-listing-ref.js', 'fas-removal-reason.js');
+importScripts('config.js', 'fas-trace.js', 'fas-edit-core.js', 'fas-cl-guard.js', 'fas-listing-ref.js', 'fas-removal-reason.js');
 const CFG = self.FAS_CONFIG;
 
 // FEATURE 2026-09-27 (S-EXT-VINTED-DEBUG-BRIDGE) -- see fas-vinted.js's matching postMessage
@@ -1156,7 +1156,7 @@ async function fasEditWaitComplete(tabId, timeoutMs) {
 }
 // fas-trace.js is injected first so FAS_TRACE (step narration panel + diagnostics) exists before the engine runs; the engine works without it.
 async function fasEditExec(tabId, ctx) {
-  await chrome.scripting.executeScript({ target: { tabId: tabId }, files: ['fas-trace.js', 'fas-edit-core.js', 'fas-quantity.js', 'fas-edit-engine.js'] });
+  await chrome.scripting.executeScript({ target: { tabId: tabId }, files: ['fas-trace.js', 'fas-edit-core.js', 'fas-cl-guard.js', 'fas-quantity.js', 'fas-edit-engine.js'] });
   const out = await chrome.scripting.executeScript({ target: { tabId: tabId }, func: (c) => self.FAS_EDIT_ENGINE.step(c), args: [ctx] });
   return out && out[0] ? out[0].result : null;
 }
@@ -1263,6 +1263,83 @@ async function fasEditEnqueue(platform, rawEntries) {
 }
 const fasTQueuedSig = {};
 
+
+// ---- Craigslist single-flight lock (2026-10-17, extension 1.0.18) ---------------------------------------------------------------
+// Craigslist keeps ONE posting-flow state per browser session. Production diagnostics (1.0.17) proved the post flow and the price-edit flow
+// running at once in the same session adopt each other's pages. So at most one Craigslist flow that touches post.craigslist.org /
+// accounts.craigslist.org (posting queue, price edit, removal / Renew All) may be active; the others WAIT (they are not failed).
+// Holders are derived from the records each flow already keeps, each with a liveness check so a crashed flow cannot hold it forever:
+//   post    fasCraigslistQueue has items left AND its tab is alive AND (heartbeat < FAS_CL_GUARD.LOCK_TTL_MS OR a session cooldown pause is on)
+//   edit    fasEditRun is a CRAIGSLIST run whose tab is alive and started (heartbeat refreshed per item) < LOCK_TTL_MS ago
+//   removal silentCrossPlatformRemovalInProgress('CRAIGSLIST') (its own FAS_REMOVAL_MAX_MS timeout)
+// A claim record (60 s) plus an in-worker mutex makes check-then-start atomic. Pure decision logic: fas-cl-guard.js (unit tested).
+const FAS_CL_CLAIM_KEY = 'fasClClaim';
+const FAS_CL_GUARD_BG = self.FAS_CL_GUARD;
+let fasClLockChain = Promise.resolve();
+function fasClSerial(fn) { const run = fasClLockChain.then(fn, fn); fasClLockChain = run.catch(() => {}); return run; }
+async function fasClGatherLockState(excludeKind) {
+  const st = await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex', 'fasCraigslistQueueTabId', 'fasCraigslistPostBeat', 'fasCraigslistSessionPaused', 'fasCraigslistPostWaiting', FAS_EDIT_RUN_KEY, FAS_CL_CLAIM_KEY]);
+  const queueTabId = st.fasCraigslistQueueTabId != null ? st.fasCraigslistQueueTabId : null;
+  const queueTab = queueTabId != null ? await tabsGet(queueTabId) : null;
+  const run = st[FAS_EDIT_RUN_KEY] || null;
+  const runTab = run && run.tabId != null ? await tabsGet(run.tabId) : null;
+  return {
+    post: { queueRemaining: !st.fasCraigslistPostWaiting && (st.fasCraigslistIndex || 0) < (st.fasCraigslistQueue || []).length, tabAlive: queueTabId == null ? true : !!queueTab, beatAt: Number(st.fasCraigslistPostBeat) || 0, paused: !!st.fasCraigslistSessionPaused },
+    edit: run ? { platform: run.platform, startedAt: run.startedAt || 0, tabAlive: !!runTab } : null,
+    removal: { inProgress: excludeKind === 'removal' ? false : await silentCrossPlatformRemovalInProgress('CRAIGSLIST') },
+    claim: st[FAS_CL_CLAIM_KEY] || null
+  };
+}
+// -> { ok:true } (and a 60 s claim is recorded) or { ok:false, heldBy:'post'|'edit'|'removal', reason }.
+function fasClTryClaim(kind) {
+  return fasClSerial(async () => {
+    const g = FAS_CL_GUARD_BG.decideLock(kind, await fasClGatherLockState(kind), Date.now());
+    if (g.ok) await chrome.storage.local.set({ [FAS_CL_CLAIM_KEY]: { kind: kind, at: Date.now() } });
+    return g;
+  });
+}
+// Which tab may receive / advance the Craigslist posting queue. 'serve' | 'adopt' | 'refuse' (see FAS_CL_GUARD.queueTabVerdict).
+async function fasClQueueVerdict(sender) {
+  const rmKey = FAS_CROSS_PLATFORM_REMOVAL_CONFIG.CRAIGSLIST.tabIdKey;
+  const st = await chrome.storage.local.get(['fasCraigslistQueueTabId', 'fasCraigslistPostWaiting', 'fasCraigslistPostBeat', FAS_EDIT_RUN_KEY, rmKey]);
+  if (st.fasCraigslistPostWaiting) return 'refuse';
+  const senderTabId = sender && sender.tab && sender.tab.id != null ? sender.tab.id : null;
+  let queueTabId = st.fasCraigslistQueueTabId != null ? st.fasCraigslistQueueTabId : null;
+  // No tab id for longer than the ~30 s a new queue needs to open its tab = a queue saved before this version: treat its tab as gone (adoptable).
+  if (queueTabId == null && Date.now() - (Number(st.fasCraigslistPostBeat) || 0) > 30000) queueTabId = -1;
+  const queueTab = queueTabId != null ? await tabsGet(queueTabId) : null;
+  const run = st[FAS_EDIT_RUN_KEY] || null;
+  return FAS_CL_GUARD_BG.queueTabVerdict(queueTabId, !!queueTab, senderTabId, [run && run.tabId, st[rmKey]]);
+}
+// Opens the posting tab for a stored queue once the lock is free. Safe to call repeatedly; one waiter at a time.
+let fasClPostWaiter = false;
+async function fasClStartWaitingPost() {
+  const st = await chrome.storage.local.get(['fasCraigslistPostWaiting', 'fasCraigslistQueue', 'fasCraigslistIndex']);
+  if (!st.fasCraigslistPostWaiting) return 'not_waiting';
+  if ((st.fasCraigslistIndex || 0) >= (st.fasCraigslistQueue || []).length) { await chrome.storage.local.set({ fasCraigslistPostWaiting: false }); return 'queue_empty'; }
+  const g = await fasClTryClaim('post');
+  if (!g.ok) return 'waiting_for_' + g.heldBy;
+  const tab = await chrome.tabs.create({ url: CFG.CL_POST_URL });
+  await chrome.storage.local.set({ fasCraigslistPostWaiting: false, fasCraigslistQueueTabId: tab && tab.id != null ? tab.id : null, fasCraigslistPostBeat: Date.now() });
+  fasT('info', 'cl_post_started_after_wait', 'The Craigslist posting run started now that other Craigslist work finished', { platform: 'CRAIGSLIST', flow: 'post' });
+  return 'started';
+}
+function fasClWatchWaitingPost() {
+  if (fasClPostWaiter) return;
+  fasClPostWaiter = true;
+  (async () => {
+    try {
+      const end = Date.now() + 40 * 60 * 1000;
+      while (Date.now() < end) {
+        const r = await fasClStartWaitingPost();
+        if (r === 'started' || r === 'not_waiting' || r === 'queue_empty') return;
+        await sleep(6000);
+      }
+    } catch (e) { /* the periodic alarm tick calls fasClStartWaitingPost again */ }
+    finally { fasClPostWaiter = false; }
+  })();
+}
+
 async function fasEditRunLockFree() {
   const st = await chrome.storage.local.get([FAS_EDIT_RUN_KEY]);
   const run = st[FAS_EDIT_RUN_KEY];
@@ -1292,17 +1369,29 @@ async function fasEditPump() {
       Object.keys(pst[FAS_EDIT_PENDING_KEY] || {}).forEach((k) => { const a = pst[FAS_EDIT_PENDING_KEY][k]; if (Array.isArray(a) && a.length) pcounts[k] = a.length; });
       fasT('info', 'pump_start', 'Price/stock edit pump started', { flow: 'edit', ctx: { queued: pcounts } });
     } catch (e) { /* ignore */ }
+    const clBusy = new Set();
     for (;;) {
       const st = await chrome.storage.local.get([FAS_EDIT_PENDING_KEY]);
       const pending = st[FAS_EDIT_PENDING_KEY] || {};
-      const platform = FAS_EDIT_CORE.PLATFORM_ORDER.filter((p) => Array.isArray(pending[p]) && pending[p].length)[0];
+      const platform = FAS_EDIT_CORE.PLATFORM_ORDER.filter((p) => !clBusy.has(p) && Array.isArray(pending[p]) && pending[p].length)[0];
       if (!platform) break;
+      if (platform === 'CRAIGSLIST') {
+        // Single-flight: never run a Craigslist edit while a Craigslist post / removal / renew is active. The entries stay queued (not failed).
+        const gate = await fasClTryClaim('edit');
+        if (!gate.ok) {
+          clBusy.add(platform);
+          outcomes.push('CRAIGSLIST:waiting_for_' + gate.heldBy);
+          fasTOnce('cl_edit_wait', 10 * 60 * 1000, 'info', 'craigslist_busy', 'Craigslist price edits are waiting: ' + gate.reason + '. They run on their own when it finishes.', { platform: platform, flow: 'edit', ctx: { heldBy: gate.heldBy, queued: pending[platform].length } });
+          continue;
+        }
+      }
       const entries = pending[platform];
       delete pending[platform];
       await chrome.storage.local.set({ [FAS_EDIT_PENDING_KEY]: pending });
       try { outcomes.push(platform + ':' + (await fasEditRunPlatform(platform, entries))); }
       catch (e) { outcomes.push(platform + ':error:' + String((e && e.message) || e).slice(0, 80)); fasT('error', 'run_exception', 'The ' + platform + ' edit run crashed: ' + String((e && e.message) || e).slice(0, 200), { platform: platform, flow: 'edit' }); await fasEditLogEntry('error', platform, null, 'run_exception', String((e && e.message) || e)); }
     }
+    if (clBusy.size) setTimeout(() => { fasEditPumpDetached().catch(() => {}); }, 2 * 60 * 1000);   // best effort; the alarm tick re-enqueues and re-pumps regardless
     fasT('info', 'pump_end', 'Price/stock edit pump finished: ' + (outcomes.join(', ') || 'nothing queued'), { flow: 'edit', ctx: { outcomes: outcomes, ms: Date.now() - pumpT0 } });
     return outcomes.join(',') || 'nothing_queued';
   } finally {
@@ -1806,6 +1895,14 @@ async function checkCrossPlatformRemovals(pendingItems, opts) {
       // defensively regardless of exact root cause, since opening several automated tabs back to
       // back with zero pacing is a real risk on its own (marketplace bot-detection).
       if (outcomes.length) await sleep(3000 + Math.random() * 2000);
+      if (platform === 'CRAIGSLIST') {
+        const clGate = await fasClTryClaim('removal');
+        if (!clGate.ok) {
+          fasTOnce('cl_rm_wait', 10 * 60 * 1000, 'info', 'craigslist_busy', 'Craigslist removals are waiting: ' + clGate.reason + '. They run on the next check.', { platform: platform, flow: 'remove', ctx: { heldBy: clGate.heldBy, pending: itemsForPlatform.length } });
+          outcomes.push(platform + ':waiting_for_' + clGate.heldBy);
+          continue;
+        }
+      }
       await openSilentCrossPlatformRemovalTab(platform);
       // 2026-10-17: the text and ctx carry the REAL reason per item (was "sold/ended" for every batch, which mislabelled a Vivitar flash that was taken down for POLICY_INELIGIBLE). policyReason is the matched rule text.
       const rr = self.FAS_REMOVAL_REASON;
@@ -2427,7 +2524,12 @@ async function autoRenewDueItems(dueItems) {
       fasT('info', 'renew_skipped', 'Craigslist Renew All skipped: the 6 hour cooldown is still running (last attempt ' + Math.round((Date.now() - lastAt) / 60000) + ' min ago)', { platform: 'CRAIGSLIST', flow: 'renew', ctx: { minutesSinceLastAttempt: Math.round((Date.now() - lastAt) / 60000) } });
     }
   }
+  let craigslistRenewGate = { ok: true };
   if (craigslistDueCount > 0 && !craigslistRenewAllCooling && !(await silentCrossPlatformRemovalInProgress('CRAIGSLIST'))) {
+    craigslistRenewGate = await fasClTryClaim('removal');   // single-flight: Renew All waits for an active Craigslist post / edit and runs on the next renewal check
+    if (!craigslistRenewGate.ok) fasT('info', 'renew_skipped', 'Craigslist Renew All is waiting: ' + craigslistRenewGate.reason, { platform: 'CRAIGSLIST', flow: 'renew', ctx: { heldBy: craigslistRenewGate.heldBy } });
+  }
+  if (craigslistDueCount > 0 && !craigslistRenewAllCooling && craigslistRenewGate.ok && !(await silentCrossPlatformRemovalInProgress('CRAIGSLIST'))) {
     await chrome.storage.local.set({ fasCraigslistRenewAllRequested: true });
     await openSilentCrossPlatformRemovalTab('CRAIGSLIST');
     started += craigslistDueCount;
@@ -2574,6 +2676,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   // outright -- it opened a hidden background tab against Facebook roughly once an hour whenever
   // the organizer had any live Facebook listing, a confirmed bot fingerprint. checkPendingRemovals
   // and checkPendingUpdates/checkPriceSyncQueue below are unchanged.
+  await fasClStartWaitingPost().catch(() => {});   // 2026-10-17: a post run that waited behind other Craigslist work (a worker restart loses the in-memory waiter)
   const removalOutcome = await checkPendingRemovals().catch((e) => 'error:' + String((e && e.message) || e));
   const updateOutcome = await checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e));
   const priceSyncOutcome = await checkPriceSyncQueue().catch((e) => 'error:' + String((e && e.message) || e));
@@ -2630,7 +2733,13 @@ chrome.notifications.onClicked.addListener((notifId) => {
       // uses, so its id is recorded under cfg.tabIdKey. getRemovalQueueItemFor only serves a
       // queued item to that exact tab -- any other tab (the organizer browsing the marketplace
       // normally) gets item:null and the content script never attempts a delete there.
-      openSilentCrossPlatformRemovalTab(platform).catch((e) => console.log('[FAS removal tab open FAILED]', platform, e && e.message));
+      (async () => {
+        if (platform === 'CRAIGSLIST') {
+          const clGate = await fasClTryClaim('removal');
+          if (!clGate.ok) { fasT('info', 'craigslist_busy', 'Craigslist removal not opened yet: ' + clGate.reason + '. It runs on the next check.', { platform: platform, flow: 'remove', ctx: { heldBy: clGate.heldBy } }); return; }
+        }
+        await openSilentCrossPlatformRemovalTab(platform);
+      })().catch((e) => console.log('[FAS removal tab open FAILED]', platform, e && e.message));
     }
     return;
   }
@@ -2982,7 +3091,12 @@ async function injectCraigslistSessionPauseOverlay(tabId, resumeAtMs, postedCoun
 async function craigslistDelayWithOverlay(tabId, range, isBatchCooldown) {
   const ms = range.MIN + Math.random() * (range.MAX - range.MIN);
   injectCraigslistCountdownOverlay(tabId, ms, isBatchCooldown); // fire-and-forget, cosmetic only
-  await sleep(ms);
+  // 2026-10-17: heartbeat for the Craigslist single-flight lock - a long pacing / hourly-cap hold is still an active posting run.
+  const holdEnd = Date.now() + ms;
+  while (Date.now() < holdEnd) {
+    await sleep(Math.min(60000, Math.max(0, holdEnd - Date.now())));
+    try { await chrome.storage.local.set({ fasCraigslistPostBeat: Date.now() }); } catch (e) { /* lock heartbeat is best effort */ }
+  }
 }
 
 // 2026-08-30 addition (Patrick live report -- watching a real run, couldn't tell if it had
@@ -3158,6 +3272,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // own fast-path report and the net's independent report for the SAME item+platform can now
         // only ever actually hit the backend once, no matter which one runs first or whether they race.
         const markListedResp = await reportItemListedOnce(msg.itemId, msg.platform || 'FACEBOOK', msg.remoteListingId, msg.remoteListingUrl);
+        // 2026-10-17: the LAST queued Craigslist item is published, so the posting run no longer holds the Craigslist single-flight lock
+        // (the queue index is not advanced past the last item, so release it by zeroing the heartbeat instead of waiting for the TTL).
+        if (msg.platform === 'CRAIGSLIST') {
+          try {
+            const clq = await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex']);
+            const clCur = (clq.fasCraigslistQueue || [])[clq.fasCraigslistIndex || 0];
+            if (clCur && clCur.id === msg.itemId && (clq.fasCraigslistIndex || 0) + 1 >= (clq.fasCraigslistQueue || []).length) await chrome.storage.local.set({ fasCraigslistPostBeat: 0 });
+          } catch (e) { /* best effort */ }
+        }
         // (2026-08-09) markListed is called fire-and-forget from fas-remove.js/fas-content.js/
         // fas-craigslist.js, none of which check the response -- a failure here (auth, 500,
         // etc.) previously vanished with zero trace anywhere, which is exactly how the
@@ -3391,14 +3514,34 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // defaults true unless the popup checkbox was explicitly unchecked.
         // fasCraigslistQueueTabId cleared first (fail-closed) then set to the real tab id once
         // creation resolves -- see the S-EXT-AUTOPUBLISH-TAB-SCOPE fix in the onUpdated listener above.
-        await chrome.storage.local.set({ fasCraigslistQueue: msg.queue || [], fasCraigslistIndex: 0, fasCraigslistAutoPublish: msg.autoPublish !== false, fasCraigslistQueueTabId: null });
-        const clQueueTab = await chrome.tabs.create({ url: CFG.CL_POST_URL });
-        await chrome.storage.local.set({ fasCraigslistQueueTabId: clQueueTab && clQueueTab.id != null ? clQueueTab.id : null });
-        sendResponse({ ok: true });
+        await chrome.storage.local.set({ fasCraigslistQueue: msg.queue || [], fasCraigslistIndex: 0, fasCraigslistAutoPublish: msg.autoPublish !== false, fasCraigslistQueueTabId: null, fasCraigslistPostWaiting: false, fasCraigslistPostBeat: Date.now() });
+        // 2026-10-17 single-flight (see fasClTryClaim): if a Craigslist price edit or removal/renew is running, the queue is kept and the tab opens
+        // by itself when that work finishes (the run waits, it does not fail).
+        const clPostGate = await fasClTryClaim('post');
+        if (!clPostGate.ok) {
+          await chrome.storage.local.set({ fasCraigslistPostWaiting: true });
+          fasT('info', 'cl_post_wait', 'Craigslist posting is waiting: ' + clPostGate.reason + '. It starts on its own when that finishes.', { platform: 'CRAIGSLIST', flow: 'post', ctx: { heldBy: clPostGate.heldBy, items: (msg.queue || []).length } });
+          fasClWatchWaitingPost();
+          sendResponse({ ok: true, waiting: true, heldBy: clPostGate.heldBy });
+        } else {
+          const clQueueTab = await chrome.tabs.create({ url: CFG.CL_POST_URL });
+          await chrome.storage.local.set({ fasCraigslistQueueTabId: clQueueTab && clQueueTab.id != null ? clQueueTab.id : null, fasCraigslistPostBeat: Date.now() });
+          sendResponse({ ok: true });
+        }
       } else if (msg.type === 'getCraigslistQueueItem') {
         const { fasCraigslistQueue = [], fasCraigslistIndex = 0, fasCraigslistAutoPublish = true } =
           await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex', 'fasCraigslistAutoPublish']);
-        sendResponse({ ok: true, item: fasCraigslistQueue[fasCraigslistIndex] || null, index: fasCraigslistIndex, total: fasCraigslistQueue.length, autoPublish: fasCraigslistAutoPublish });
+        // 2026-10-17: fas-craigslist.js runs on EVERY post.craigslist.org tab, including the price-edit flow's own tab, which used to be handed
+        // this queue item and drive the edit tab's pages as a post (production: a post run stuck on another item's posting page). Only the
+        // tab the queue opened (or, if that tab is gone, the tab the organizer reopened by hand) gets the item.
+        const clVerdict = await fasClQueueVerdict(sender);
+        if (clVerdict === 'refuse') {
+          sendResponse({ ok: true, item: null, index: fasCraigslistIndex, total: fasCraigslistQueue.length, autoPublish: fasCraigslistAutoPublish, reason: 'not_post_tab' });
+        } else {
+          if (clVerdict === 'adopt') await chrome.storage.local.set({ fasCraigslistQueueTabId: sender.tab.id });
+          if (fasCraigslistQueue[fasCraigslistIndex]) await chrome.storage.local.set({ fasCraigslistPostBeat: Date.now() });
+          sendResponse({ ok: true, item: fasCraigslistQueue[fasCraigslistIndex] || null, index: fasCraigslistIndex, total: fasCraigslistQueue.length, autoPublish: fasCraigslistAutoPublish });
+        }
       } else if (msg.type === 'advanceCraigslistQueue') {
         // FIX (S-EXT-AUTOPUBLISH-DEDUP, 2026-08-29): compare-and-swap on msg.itemId -- see the
         // reportItemListedOnce() comment above for the full incident. A content script's own
@@ -3415,11 +3558,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const queue = st.fasCraigslistQueue || [];
         const curIndex = st.fasCraigslistIndex || 0;
         const curItem = queue[curIndex];
-        if (msg.itemId != null && (!curItem || curItem.id !== msg.itemId)) {
+        if ((msg.itemId != null && (!curItem || curItem.id !== msg.itemId)) || (await fasClQueueVerdict(sender)) === 'refuse') {
           sendResponse({ ok: true, item: curItem || null, index: curIndex, total: queue.length, alreadyAdvanced: true });
         } else {
           const next = curIndex + 1;
-          await chrome.storage.local.set({ fasCraigslistIndex: next });
+          await chrome.storage.local.set({ fasCraigslistIndex: next, fasCraigslistPostBeat: Date.now() });
           const item = queue[next] || null;
           // 2026-08-31: pass sender.tab.id (was undefined) so the overlay has a tab to inject
           // into on the rare path where this in-page continuation actually runs -- see the

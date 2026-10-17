@@ -1631,12 +1631,36 @@
       'The remaining items are still queued; try resuming this batch in a few hours once Craigslist\'s limit resets.');
   }
 
+  function postingIdentityMismatch(item, step) {
+    try {
+      const G = (typeof window !== 'undefined' && window.FAS_CL_GUARD) || null;
+      if (!G || !item) return false;
+      const pageTitle = G.pagePostingTitle(document);
+      if (!pageTitle || G.titlesCompatible(pageTitle, item.title) !== 'mismatch') return false;
+      FT('problem', {
+        code: 'cl_posting_identity_mismatch',
+        title: 'Craigslist is showing a different posting',
+        what: 'This Craigslist page is for "' + String(pageTitle).slice(0, 60) + '", not for "' + String(item.title || '').slice(0, 60) + '".',
+        why: 'Craigslist keeps one posting in progress per session, and another Craigslist task left its page open here. Continuing would publish or record the wrong item.',
+        next: 'FindA.Sale stopped here. Nothing was published or marked as listed for this item. Finish or close the other Craigslist tab, then start this item again.',
+        ctx: { step: step, pageTitle: String(pageTitle).slice(0, 80), expected: String(item.title || '').slice(0, 80) }
+      });
+      overlayInfo('<b style="color:#ffcf7a">Stopped: this Craigslist page is for a different posting</b><br>Nothing was published or marked as listed. Close the other Craigslist tab and start this item again.');
+      currentRunArgs = null;   // stop the re-run observer from acting on this page
+      return true;
+    } catch (e) { return false; }
+  }
+
   async function run(item, index, total, autoPublish) {
     const step = detectStep();
     lastObservedStep = step; // keeps the MutationObserver re-run comparison above in sync with
                               // whatever step actually got acted on, whether this run() call came
                               // from start() or from a later mutation-triggered re-check.
     if (step === 'rateLimited') { await doRateLimitedStep(); return; }
+    // 2026-10-17 identity check: Craigslist keeps one posting-flow state per browser session, so another Craigslist task (a price edit, a
+    // second tab) can leave THIS tab on a different item's preview / images / confirmation page. Publishing, or recording "listed", from
+    // there would act on someone else's posting. Only a positive title mismatch stops; an unreadable title never does.
+    if ((step === 'preview' || step === 'images' || step === 'posted') && postingIdentityMismatch(item, step)) return;
     if (step === 'edit') { if (!guardStop('edit')) await doEditStep(item); return; }
     if (step === 'images') { await doImagesStep(item, index, total); return; }
     if (step === 'preview') { await doPreviewStep(item, index, total, autoPublish); return; }
