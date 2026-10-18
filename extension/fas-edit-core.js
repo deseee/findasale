@@ -531,7 +531,18 @@
     return { platform: platform, itemId: entry && entry.id, title: entry && String(entry.title || '').slice(0, 80), code: code, step: step || '', selector: selector || '' };
   }
 
+  // 1.0.23: hard pause of Craigslist PRICE-EDIT runs. cfg = self.FAS_CONFIG. Only the literal false turns the pause off (fail closed).
+  function isEditPausedByConfig(platform, cfg) {
+    return platform === 'CRAIGSLIST' && !(cfg && cfg.FAS_CL_PRICE_EDITS_PAUSED === false);
+  }
+  // Which queued platform the edit pump works on next: first in PLATFORM_ORDER that has entries, is not in `busy` (a Set) and is not paused by config.
+  function nextEditPlatform(pending, busy, cfg) {
+    pending = pending || {};
+    return PLATFORM_ORDER.filter(function (p) { return !(busy && busy.has(p)) && !isEditPausedByConfig(p, cfg) && Array.isArray(pending[p]) && pending[p].length; })[0];
+  }
+
   var api = {
+    isEditPausedByConfig: isEditPausedByConfig, nextEditPlatform: nextEditPlatform,
     LIMITS: LIMITS, PLATFORM_ORDER: PLATFORM_ORDER, LABELS: LABELS, QTY_PLATFORMS: QTY_PLATFORMS,
     MAX_ATTEMPTS: MAX_ATTEMPTS, BACKOFF_BASE_MS: BACKOFF_BASE_MS, BACKOFF_CAP_MS: BACKOFF_CAP_MS, PARK_MS: PARK_MS,
     backoffMs: backoffMs, shouldAttempt: shouldAttempt, recordFailure: recordFailure,

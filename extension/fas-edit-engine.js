@@ -1072,13 +1072,26 @@
         tStep('Craigslist showed its confirmation page; checking the live price', 'the edit finished on Craigslist\'s side; I read the price from your dashboard before calling it done');
         return go(C.craigslistPageUrl(S.page || 1), { phase: 'verify', verifyTries: 0, viaConfirmation: true }, { diag: snapshot('cl_confirmation'), details: { requests: recentRequests() } });
       }
-      // Identity check: Craigslist keeps one posting-flow state per session, so a page may belong to a DIFFERENT posting than the one this run
-      // chose. Only a positive title mismatch aborts (an unreadable title never does). Nothing is clicked or edited.
+      // Identity check (1.0.23, fail closed): Craigslist keeps one posting-flow state per session, so the page may belong to a DIFFERENT posting than
+      // the one this run chose (a leftover edit session). A positive title mismatch aborts at once. An UNREADABLE title no longer passes: before any
+      // click that advances or publishes (edit post, edit this posting, continue on the form, publish) the title must be read on this very page and be
+      // compatible with the dashboard row title / FindA.Sale title, otherwise posting_identity_unverified and nothing is clicked (see idGate below).
+      var idStatus = 'unknown', pgTitle = '';
       if (!onDash && CLG) {
-        var pgTitle = CLG.pagePostingTitle(document);
-        if (pgTitle && CLG.titlesCompatible(pgTitle, [S.rowTitle, it.title]) === 'mismatch') {
+        var previewUp = qa('input[type="submit"], button, a').some(function (b) { return visible(b) && /^(edit post|edit this posting|publish)$/.test(btnLabel(b)); });
+        pgTitle = CLG.pagePostingTitle(document, { preview: previewUp });
+        idStatus = pgTitle ? CLG.titlesCompatible(pgTitle, [S.rowTitle, it.title]) : 'unknown';
+        if (idStatus === 'mismatch') {
           return fail('posting_identity_mismatch', 'The Craigslist page is for "' + pgTitle.slice(0, 60) + '", not "' + String(it.title || '').slice(0, 60) + '"; nothing was edited', 'edit', '#PostingTitle | .postingtitle', { hops: hops0(S) }, { details: { pageTitle: pgTitle.slice(0, 80), expected: String(S.rowTitle || it.title || '').slice(0, 80) } });
         }
+      }
+      // strict: this page's own title must have been read and matched. lenient (generic Continue / Done pages such as the images or location
+      // step, which carry no title): allowed only after an earlier page of THIS run already matched.
+      function idGate(strict, what) {
+        if (!CLG) return null;
+        if (idStatus === 'match') return null;
+        if (!strict && S.identityOk) return null;
+        return fail('posting_identity_unverified', 'Could not confirm this Craigslist page belongs to "' + String(it.title || '').slice(0, 60) + '" (' + (pgTitle ? 'title not comparable' : 'no posting title could be read') + ') so "' + what + '" was NOT pressed and nothing was changed', 'edit', '#PostingTitle | .postingtitle | preview heading', { hops: hops0(S) }, { details: { pageTitle: pgTitle.slice(0, 80), expected: String(S.rowTitle || it.title || '').slice(0, 80), blockedClick: what, signature: clPageSig() } });
       }
       // 1.0.22: hops counts real page TRANSITIONS only (a new page signature), not polling steps on the same page. The same signature seen again
       // is a page that did not advance: the step after the first sighting only waits, the next one may retry the click once, and the fourth
@@ -1088,7 +1101,7 @@
       var rep = sameAsLast ? (S.sigRep || 1) + 1 : 1;
       var hops = (S.hops || 0) + (sameAsLast ? 0 : 1);
       var sigTrail = sameAsLast ? (S.sigTrail || []) : (S.sigTrail || []).concat([sig]).slice(-6);
-      var mark = { hops: hops, sig: sig, sigRep: rep, sigTrail: sigTrail };
+      var mark = { hops: hops, sig: sig, sigRep: rep, sigTrail: sigTrail, identityOk: idStatus === 'match' || !!S.identityOk };
       if (rep >= 4) {
         return fail('edit_page_not_advancing', 'The Craigslist page did not change after ' + (rep - 1) + ' tries (same page signature); stopped instead of looping', 'edit', 'button.continue | button publish', mark, { details: { signature: sig, repeats: rep - 1, sigTrail: sigTrail, priceSet: !!S.priceSet } });
       }
@@ -1109,6 +1122,7 @@
         }
         var cont1 = visibleContinue() || findButton(/^continue$/) || qa('input[type="submit"]').filter(function (b) { return /continue/i.test(b.value || ''); })[0];
         if (!cont1) return fail('continue_button_not_found', 'No Continue button after setting the price', 'edit', 'button.continue | input[type=submit][value=Continue]', { hops: hops });
+        var g1 = idGate(true, 'continue'); if (g1) return g1;
         tStep('Pressing Continue to keep the new price ' + (W.price != null ? money('CRAIGSLIST', W.price) : ''), 'Craigslist saves the change when the edit steps are continued and published');
         deferClick(cont1);
         return cont(3000, Object.assign({}, mark, { priceSet: true, formSnap: true }), { diag: diag });
@@ -1118,19 +1132,19 @@
       // (listing "updated", price untouched). Never click publish until the price has been set.
       if (!S.priceSet) {
         var editPost = qa('input[type="submit"], button, a').filter(function (b) { return visible(b) && /^edit post$/.test(btnLabel(b)); })[0];
-        if (editPost) { tStep('Clicking "edit post"', 'Craigslist opened the preview page; the price box only appears after "edit post"'); deferClick(editPost); return cont(3000, mark); }
+        if (editPost) { var g2 = idGate(true, 'edit post'); if (g2) return g2; tStep('Clicking "edit post"', 'Craigslist opened the preview page; the price box only appears after "edit post"'); deferClick(editPost); return cont(3000, mark); }
       }
       var editThis = qa('input[type="submit"], button, a').filter(function (b) { return visible(b) && /^edit this posting$/.test(btnLabel(b)); })[0];
-      if (editThis && !S.priceSet) { tStep('Clicking "edit this posting"', 'Craigslist is showing the manage page for this post'); deferClick(editThis); return cont(3000, mark, { diag: S.manageSnap ? undefined : snapshot('cl_manage_page') }); }
+      if (editThis && !S.priceSet) { var g3 = idGate(true, 'edit this posting'); if (g3) return g3; tStep('Clicking "edit this posting"', 'Craigslist is showing the manage page for this post'); deferClick(editThis); return cont(3000, mark, { diag: S.manageSnap ? undefined : snapshot('cl_manage_page') }); }
       var imgDone = q('button.done') || findButton(/^done with images$/);
-      if (imgDone) { deferClick(imgDone); return cont(3000, mark); }
+      if (imgDone) { var g4 = idGate(false, 'done with images'); if (g4) return g4; deferClick(imgDone); return cont(3000, mark); }
       // 1.0.22: the preview page ("press publish to apply edits") needs the publish button, and Craigslist keeps hidden button.continue
       // elements around, which the old q('button.continue') picked first (click on an invisible control = nothing happens, 13 times).
       // Only VISIBLE controls count, and with the price already typed publish wins over continue.
       var pubBtn = S.priceSet ? clPublishButton() : null;
-      if (pubBtn) { tStep('Pressing "publish" to apply the Craigslist edit', 'the preview page shows the new price; publish applies it, then Craigslist shows its confirmation page'); deferClick(pubBtn); return cont(3000, Object.assign({}, mark, { published: true })); }
+      if (pubBtn) { var g5 = idGate(true, 'publish'); if (g5) return g5; tStep('Pressing "publish" to apply the Craigslist edit', 'the preview page shows the new price; publish applies it, then Craigslist shows its confirmation page'); deferClick(pubBtn); return cont(3000, Object.assign({}, mark, { published: true })); }
       var anyCont = visibleContinue() || findButton(/^(continue|publish|done|ok)$/) || qa('input[type="submit"]').filter(function (b) { return /^(continue|publish|done)/i.test(b.value || ''); })[0];
-      if (anyCont && S.priceSet) { tStep('Pressing "' + (btnLabel(anyCont) || 'continue') + '" to finish the Craigslist edit', 'the price is already changed; this publishes it'); deferClick(anyCont); return cont(3000, mark); }
+      if (anyCont && S.priceSet) { var g6 = idGate(!/^(continue|done|ok)$/.test(btnLabel(anyCont).toLowerCase()), btnLabel(anyCont) || 'continue'); if (g6) return g6; tStep('Pressing "' + (btnLabel(anyCont) || 'continue') + '" to finish the Craigslist edit', 'the price is already changed; this publishes it'); deferClick(anyCont); return cont(3000, mark); }
       // 2026-10-17: price_field_not_found now means exactly one thing: the real posting form (it has the Title box) is on screen and, after a
       // wait for a late-rendering price box, still has no price input. Any other page (preview, images, confirmation, a hijacked page) just keeps
       // going until the 12 page limit and is reported as edit_flow_stuck, so it can no longer be mislabelled as "category has no price field".

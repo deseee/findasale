@@ -1428,6 +1428,12 @@ async function fasEditRunLockFree() {
   return false;
 }
 
+// 1.0.23: one info line per hour while Craigslist price edits are hard-paused (FAS_CONFIG.FAS_CL_PRICE_EDITS_PAUSED, config.js).
+function fasClPriceEditsPausedNote(queued) {
+  if (!FAS_EDIT_CORE.isEditPausedByConfig('CRAIGSLIST', CFG)) return;
+  fasTOnce('cl_price_edits_paused', 60 * 60 * 1000, 'info', 'cl_price_edits_paused', 'Craigslist price edits are paused (FAS_CL_PRICE_EDITS_PAUSED)', { platform: 'CRAIGSLIST', flow: 'edit', ctx: { queuedLeftPending: queued || 0 } });
+}
+
 // Works through every enqueued platform, one at a time. Safe to call repeatedly: only one pump runs.
 async function fasEditPump() {
   if (fasEditPumping) return 'already_pumping';
@@ -1446,7 +1452,8 @@ async function fasEditPump() {
     for (;;) {
       const st = await chrome.storage.local.get([FAS_EDIT_PENDING_KEY]);
       const pending = st[FAS_EDIT_PENDING_KEY] || {};
-      const platform = FAS_EDIT_CORE.PLATFORM_ORDER.filter((p) => !clBusy.has(p) && Array.isArray(pending[p]) && pending[p].length)[0];
+      const platform = FAS_EDIT_CORE.nextEditPlatform(pending, clBusy, CFG);
+      fasClPriceEditsPausedNote(Array.isArray(pending.CRAIGSLIST) ? pending.CRAIGSLIST.length : 0);
       if (!platform) break;
       if (platform === 'CRAIGSLIST') {
         // Single-flight: never run a Craigslist edit while a Craigslist post / removal / renew is active. The entries stay queued (not failed).
@@ -1474,6 +1481,8 @@ async function fasEditPump() {
 
 async function fasEditRunPlatform(platform, rawEntries) {
   const Core = FAS_EDIT_CORE;
+  // 1.0.23 defensive second gate: even if something calls this directly, a paused Craigslist run starts nothing and confirms/fails nothing (no trivial-confirm either).
+  if (FAS_EDIT_CORE.isEditPausedByConfig(platform, CFG)) { fasClPriceEditsPausedNote(rawEntries.length); return 'paused_by_config'; }
   if (await fasIsPlatformPaused(platform)) { fasTOnce('skip_paused_' + platform, 30 * 60 * 1000, 'info', 'run_skipped', platform + ' edits skipped: this marketplace is paused in the extension', { platform: platform, flow: 'edit', ctx: { reason: 'paused', queued: rawEntries.length } }); return 'paused'; }
   if (platform === 'FACEBOOK' && (await getPlatformUnavailable('FACEBOOK'))) { fasTOnce('skip_fbunavail', 30 * 60 * 1000, 'warn', 'run_skipped', 'Facebook edits skipped: the Facebook account is flagged unavailable', { platform: platform, flow: 'edit', ctx: { reason: 'account_unavailable', queued: rawEntries.length } }); return 'facebook_account_unavailable'; }
   const state = await fasEditGetState();

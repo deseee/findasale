@@ -69,13 +69,13 @@
   // Drops a trailing "- $price", "$price", "(location)" and a trailing ellipsis from a Craigslist title.
   function cleanTitle(s) {
     var t = fold(s);
-    t = t.replace(/\s*-?\s*\$\s?\d[\d,]*(?:\.\d{1,2})?\s*$/, '').trim();
+    t = t.replace(/\s*-?\s*\$\s?\d[\d,]*(?:\.\d{1,2})?(?:\s*\([^)]*\))?\s*$/, '').trim();   // 1.0.23: also "- $25 (City)" as the preview heading shows it
     t = t.replace(/\s*\.{3,}\s*$/, '').trim();
     return t;
   }
   // pageTitle: what the Craigslist page shows as the posting title ('' when unreadable).
   // expected: string or array of strings (the FindA.Sale title, and the title the dashboard row showed).
-  // -> 'match' | 'mismatch' | 'unknown'.  Unknown (no readable title) never aborts a flow; only a positive mismatch does.
+  // -> 'match' | 'mismatch' | 'unknown'.  'unknown' is NOT a pass: since 1.0.23 the edit engine refuses to click anything on an 'unknown' page (posting_identity_unverified).
   // Craigslist cuts titles around 70 characters, so a prefix relationship (shorter side at least 20 characters) counts as the same posting.
   function titlesCompatible(pageTitle, expected) {
     var p = cleanTitle(pageTitle);
@@ -90,7 +90,21 @@
     return 'mismatch';
   }
   // Reads the posting title from a Craigslist posting-flow page (edit form input, preview heading, confirmation heading). '' when none.
-  function pagePostingTitle(doc) {
+  // 1.0.23: opts.preview = true is passed only when the page is the preview/manage page (publish / edit post / edit this posting on screen). There the
+  // posting title is a heading (production snapshot: headings ["Attention: posting will expire in 28 days", "<TITLE> ..."]); other pages' headings are NOT read
+  // (a location or images page has unrelated headings and must never produce a false mismatch).
+  var PREVIEW_HEADING_SKIP = /^(attention\b|posting will expire|your posting|preview\b|edit (your )?post|edit location|edit images|publish\b|manage your post|thanks for posting|craigslist\b|account\b|my account|log ?in|please\b|note\b|warning\b)/;
+  function previewHeadingTitle(headingTexts) {
+    var list = Array.isArray(headingTexts) ? headingTexts : [];
+    for (var i = 0; i < list.length; i++) {
+      var h = String(list[i] == null ? '' : list[i]).replace(/\s+/g, ' ').trim();
+      if (h.length < 3) continue;
+      if (PREVIEW_HEADING_SKIP.test(fold(h))) continue;
+      return h;
+    }
+    return '';
+  }
+  function pagePostingTitle(doc, opts) {
     try {
       doc = doc || root.document;
       var input = doc.querySelector('#PostingTitle, input[name="PostingTitle"]');
@@ -100,6 +114,11 @@
         var el = doc.querySelector(sels[i]);
         var tx = el && (el.innerText || el.textContent);
         if (tx && String(tx).trim()) return String(tx).trim();
+      }
+      if (opts && opts.preview) {
+        var hs = Array.prototype.slice.call(doc.querySelectorAll('h1,h2,h3,h4')).map(function (h) { return h.innerText || h.textContent || ''; });
+        var ht = previewHeadingTitle(hs);
+        if (ht) return ht;
       }
     } catch (e) { /* unreadable */ }
     return '';
@@ -234,7 +253,7 @@
 
   var api = {
     LOCK_TTL_MS: LOCK_TTL_MS, CLAIM_MS: CLAIM_MS, decideLock: decideLock, queueTabVerdict: queueTabVerdict,
-    cleanTitle: cleanTitle, titlesCompatible: titlesCompatible, pagePostingTitle: pagePostingTitle, isPostingConfirmation: isPostingConfirmation, editOutcome: editOutcome,
+    cleanTitle: cleanTitle, titlesCompatible: titlesCompatible, pagePostingTitle: pagePostingTitle, previewHeadingTitle: previewHeadingTitle, isPostingConfirmation: isPostingConfirmation, editOutcome: editOutcome,
     pickSearchWord: pickSearchWord, parseTotal: parseTotal, rowStatus: rowStatus, parseDashboardRows: parseDashboardRows, isNoPostings: isNoPostings, classifyLookup: classifyLookup,
     RECON_MIN_GAP_MS: RECON_MIN_GAP_MS, RECON_CAP: RECON_CAP, reconcileDecide: reconcileDecide, accountConfirmed: accountConfirmed
   };

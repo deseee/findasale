@@ -188,7 +188,7 @@ test('engine identity: an edit page for a DIFFERENT posting aborts with posting_
   assert.strictEqual(r.state, 'fail');
   assert.strictEqual(r.code, 'posting_identity_mismatch');
 });
-test('engine identity: the matching posting passes the check (a title that cannot be read never aborts)', async () => {
+test('engine identity: an unreadable title is not a MISMATCH (since 1.0.23 it fails closed as posting_identity_unverified before any click, see fas-cl-pause.test.js)', async () => {
   const step = loadEngine({ document: { title: 'edit', body: { innerText: 'edit posting', textContent: '' } } });
   const r = await step(ctx({ phase: 'edit', postingId: '123456789', priceSet: false, hops: 0, rowTitle: ITEM.title }));
   assert.notStrictEqual(r.code, 'posting_identity_mismatch');
@@ -228,10 +228,13 @@ function btn(label, o) {
     getBoundingClientRect: () => (o.hidden ? { width: 0, height: 0 } : { width: 10, height: 10 }), click: () => o.clicks.push(label) });
 }
 // The Superman production page: Craigslist's PREVIEW of an edit. A hidden button.continue is kept in the page (the old code picked it first).
-function previewDom(clicks) {
+// 1.0.23: the preview shows the posting title in a heading (production: headings ["Attention: posting will expire in 28 days", "<TITLE> ..."]); the edit flow
+// now refuses to click anything on a preview whose title it cannot read, so the fixture carries it.
+function previewDom(clicks, headTitle) {
+  const heads = ['Attention: posting will expire in 28 days', headTitle || ITEM.title].map((t) => el({ tagName: 'H2', innerText: t, textContent: t }));
   const bs = [btn('publish', { clicks }), btn('edit post', { clicks }), btn('edit location', { clicks }), btn('edit images', { clicks }), btn('cancel edit', { clicks }), btn('continue', { clicks, cls: 'continue', hidden: true })];
   return { document: { title: 'kalamazoo | preview', body: { innerText: 'Attention: posting will expire in 28 days press "publish" to apply edits', textContent: '' },
-    querySelectorAll: (sel) => /button\.continue/.test(sel) ? bs.filter((b) => b._cls === 'continue') : bs.filter(() => /button|submit|role/.test(sel)) },
+    querySelectorAll: (sel) => /^h1/.test(sel) ? heads : /button\.continue/.test(sel) ? bs.filter((b) => b._cls === 'continue') : bs.filter(() => /button|submit|role/.test(sel)) },
     location: { href: 'https://post.craigslist.org/k/rgCu1K7yX8RmqkJ3jkCFkm', hostname: 'post.craigslist.org', pathname: '/k/rgCu1K7yX8RmqkJ3jkCFkm', search: '' } };
 }
 const merge = (sc, r) => Object.assign({}, sc, r.scratch);
@@ -326,7 +329,7 @@ test('buildDiag keeps the new Craigslist codes and their details', () => {
 test('wiring: manifest 1.0.18, guard loaded by background, the edit injection and the post content script', () => {
   const root = path.join(__dirname, '..');
   const man = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
-  assert.strictEqual(man.version, '1.0.22');
+  assert.strictEqual(man.version, '1.0.23');
   const post = man.content_scripts.find((c) => c.matches.indexOf('https://post.craigslist.org/*') !== -1);
   assert.ok(post.js.indexOf('fas-cl-guard.js') !== -1 && post.js.indexOf('fas-cl-guard.js') < post.js.indexOf('fas-craigslist.js'));
   const bg = fs.readFileSync(path.join(root, 'background.js'), 'utf8');

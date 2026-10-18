@@ -57,7 +57,12 @@ self.FAS_CONFIG = {
   GUMTREE_AU_MANAGE_URL: 'https://www.gumtree.com.au/',
   // Patrick-confirmed (2026-08-22, not a guess): this account page lists every one of the
   // organizer's own Craigslist postings, so it doubles as the Craigslist "my listings" page.
-  CRAIG_MANAGE_URL: 'https://www.craigslist.org/account'
+  CRAIG_MANAGE_URL: 'https://www.craigslist.org/account',
+  // 1.0.23 (Patrick: "pause"): HARD PAUSE of every Craigslist PRICE-EDIT run (the background edit scheduler never opens a tab, takes the lock,
+  // visits the dashboard or clicks for CRAIGSLIST; the queued items are left pending, never marked synced or failed). Craigslist posting,
+  // removal, Renew All and the stale-flag reconcile are NOT affected. TO TURN IT BACK ON: set this to false and bump the extension version.
+  // Anything other than the literal false keeps the pause (fail closed).
+  FAS_CL_PRICE_EDITS_PAUSED: true
 };
 
 // ---- Kits / bundles (Item.listingType 'KIT') -- shared, pure helpers (2026-10-16) ----
