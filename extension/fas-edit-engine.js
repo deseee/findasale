@@ -960,6 +960,21 @@
     if (v2) return v2;
     return { fail: fail('listing_not_found_on_dashboard', (remoteId ? 'Posting id ' + remoteId : 'No posting with this title') + ' is not on any of ' + sc.pages + ' dashboard page(s), in any status', 'locate', 'tr.posting-row td.title a', {}, { details: diag }) };
   }
+  // 1.0.22 helpers. Page signature = host + path (ids masked) + title + which key controls exist + the visible button labels; values are
+  // left out so typing a price does not change it. Used to count real page transitions and to spot a page that never advances.
+  function clPageSig() {
+    try {
+      var labels = {};
+      qa(BTN_SEL).filter(visible).forEach(function (b) { var l = btnLabel(b).toLowerCase().slice(0, 24); if (l) labels[l] = 1; });
+      var names = Object.keys(labels).sort().slice(0, 14).join(',');
+      return [location.hostname, String(location.pathname || '').replace(/[0-9A-Za-z_-]{12,}/g, '#'), String(document.title || '').toLowerCase().slice(0, 40), ((/[?&]s=([a-z_]+)/.exec(location.search || '') || [])[1] || ''),
+        (q('input[name="price"]') ? 'P' : '-') + ((q('#PostingTitle') || q('input[name="PostingTitle"]')) ? 'T' : '-'), names].join('|');
+    } catch (e) { return 'sig_error'; }
+  }
+  function visibleContinue() { return qa('button.continue').filter(function (b) { return visible(b) && !isDisabled(b); })[0] || null; }
+  function clPublishButton() {
+    return qa('button, input[type="submit"], input[type="button"], [role="button"]').filter(function (b) { return visible(b) && !isDisabled(b) && /^publish$/.test(btnLabel(b).toLowerCase()); })[0] || null;
+  }
   async function clStep(ctx) {
     var S = ctx.scratch || {}, W = wants(ctx), it = ctx.item;
     var phase = S.phase || 'locate';
@@ -1041,6 +1056,14 @@
       if (bl) return blocked(bl.code, 'Craigslist edit flow: ' + bl.code, 'edit');
       var vs = clVerificationSurface();
       if (vs) return blocked('captcha_or_verification', 'Craigslist asks for ' + vs + ' during the edit flow (stopped, not looping)', 'edit');
+      // 1.0.22: the edit flow must never sit on the account dashboard. After the price was typed the dashboard is where the result is read
+      // (handled below, phase verify). With NO price typed it means the edit session was lost (the Edit click never opened an edit page, or
+      // Craigslist sent the browser back): stop now with a snapshot instead of pressing buttons on the dashboard (production: 13 x "continue"
+      // on /login/home, then edit_flow_stuck). One short grace step is allowed right after the Edit click in case the navigation is still loading.
+      if (onDash && !S.priceSet) {
+        if ((S.hops || 0) === 0 && !S.dashGrace) return cont(3000, { dashGrace: true });
+        return fail('edit_lost_to_dashboard', 'The Craigslist edit flow is back on the account dashboard before any price was entered; the edit was lost and nothing was changed', 'edit', 'a.edit | input.managebtn[value=edit]', { hops: S.hops || 0 }, { details: { signature: clPageSig(), sigTrail: S.sigTrail || [], priceSet: false } });
+      }
       // 2026-10-17: Craigslist's terminal page ("Thanks for posting!", button "Manage your post") is the END of the edit flow, never a form to
       // continue through (the old loop pressed Continue on it 12 times). Do not click anything here: go read the live price from the dashboard
       // and decide from that. No republish, no second posting.
@@ -1057,11 +1080,23 @@
           return fail('posting_identity_mismatch', 'The Craigslist page is for "' + pgTitle.slice(0, 60) + '", not "' + String(it.title || '').slice(0, 60) + '"; nothing was edited', 'edit', '#PostingTitle | .postingtitle', { hops: hops0(S) }, { details: { pageTitle: pgTitle.slice(0, 80), expected: String(S.rowTitle || it.title || '').slice(0, 80) } });
         }
       }
-      var hops = (S.hops || 0) + 1;
+      // 1.0.22: hops counts real page TRANSITIONS only (a new page signature), not polling steps on the same page. The same signature seen again
+      // is a page that did not advance: the step after the first sighting only waits, the next one may retry the click once, and the fourth
+      // consecutive sighting fails fast with the signature in the diag. mark carries this bookkeeping into every continue below.
+      var sig = clPageSig();
+      var sameAsLast = S.sig === sig;
+      var rep = sameAsLast ? (S.sigRep || 1) + 1 : 1;
+      var hops = (S.hops || 0) + (sameAsLast ? 0 : 1);
+      var sigTrail = sameAsLast ? (S.sigTrail || []) : (S.sigTrail || []).concat([sig]).slice(-6);
+      var mark = { hops: hops, sig: sig, sigRep: rep, sigTrail: sigTrail };
+      if (rep >= 4) {
+        return fail('edit_page_not_advancing', 'The Craigslist page did not change after ' + (rep - 1) + ' tries (same page signature); stopped instead of looping', 'edit', 'button.continue | button publish', mark, { details: { signature: sig, repeats: rep - 1, sigTrail: sigTrail, priceSet: !!S.priceSet } });
+      }
+      if (rep === 2) return cont(3000, mark);   // the click may still be navigating: wait, do not click again
       if (hops > 12) {
         // The price was typed and the flow kept going: the dashboard may already show it. Check once before declaring the flow stuck.
         if (S.priceSet && !S.stuckChecked) return go(C.craigslistPageUrl(S.page || 1), { phase: 'verify', verifyTries: 0, stuckChecked: true });
-        return fail('edit_flow_stuck', 'More than 12 pages in the edit flow without finishing', 'edit', 'button.continue', { hops: hops });
+        return fail('edit_flow_stuck', 'More than 12 pages in the edit flow without finishing', 'edit', 'button.continue', mark, { details: { signature: sig, sigTrail: sigTrail, priceSet: !!S.priceSet } });
       }
       var saved = /(your changes (have been )?(saved|made)|posting has been (updated|saved|changed)|your posting (has been|was) (updated|saved))/.test(textOf(document.body).slice(0, 3000));
       if (saved || (onDash && S.priceSet)) return go(C.craigslistPageUrl(S.page || 1), { phase: 'verify', verifyTries: 0 }, { details: { requests: recentRequests() } });
@@ -1072,37 +1107,42 @@
           var ok = await writeField(price, C.formatPrice('CRAIGSLIST', W.price));
           if (!ok && !C.pricesMatch('CRAIGSLIST', price.value, W.price)) return fail('price_value_did_not_stick', 'input[name="price"] kept "' + price.value + '"', 'edit', 'input[name="price"]', { hops: hops });
         }
-        var cont1 = q('button.continue') || findButton(/^continue$/) || qa('input[type="submit"]').filter(function (b) { return /continue/i.test(b.value || ''); })[0];
+        var cont1 = visibleContinue() || findButton(/^continue$/) || qa('input[type="submit"]').filter(function (b) { return /continue/i.test(b.value || ''); })[0];
         if (!cont1) return fail('continue_button_not_found', 'No Continue button after setting the price', 'edit', 'button.continue | input[type=submit][value=Continue]', { hops: hops });
         tStep('Pressing Continue to keep the new price ' + (W.price != null ? money('CRAIGSLIST', W.price) : ''), 'Craigslist saves the change when the edit steps are continued and published');
         deferClick(cont1);
-        return cont(3000, { hops: hops, priceSet: true, formSnap: true }, { diag: diag });
+        return cont(3000, Object.assign({}, mark, { priceSet: true, formSnap: true }), { diag: diag });
       }
       // 2026-10-16: the edit flow lands on a PREVIEW page (publish / edit post / edit location / edit images / cancel edit). The price
       // input only exists after "edit post". Without this the generic Publish click below re-published the listing UNCHANGED
       // (listing "updated", price untouched). Never click publish until the price has been set.
       if (!S.priceSet) {
         var editPost = qa('input[type="submit"], button, a').filter(function (b) { return visible(b) && /^edit post$/.test(btnLabel(b)); })[0];
-        if (editPost) { tStep('Clicking "edit post"', 'Craigslist opened the preview page; the price box only appears after "edit post"'); deferClick(editPost); return cont(3000, { hops: hops }); }
+        if (editPost) { tStep('Clicking "edit post"', 'Craigslist opened the preview page; the price box only appears after "edit post"'); deferClick(editPost); return cont(3000, mark); }
       }
       var editThis = qa('input[type="submit"], button, a').filter(function (b) { return visible(b) && /^edit this posting$/.test(btnLabel(b)); })[0];
-      if (editThis && !S.priceSet) { tStep('Clicking "edit this posting"', 'Craigslist is showing the manage page for this post'); deferClick(editThis); return cont(3000, { hops: hops }, { diag: S.manageSnap ? undefined : snapshot('cl_manage_page') }); }
+      if (editThis && !S.priceSet) { tStep('Clicking "edit this posting"', 'Craigslist is showing the manage page for this post'); deferClick(editThis); return cont(3000, mark, { diag: S.manageSnap ? undefined : snapshot('cl_manage_page') }); }
       var imgDone = q('button.done') || findButton(/^done with images$/);
-      if (imgDone) { deferClick(imgDone); return cont(3000, { hops: hops }); }
-      var anyCont = q('button.continue') || findButton(/^(continue|publish|done|ok)$/) || qa('input[type="submit"]').filter(function (b) { return /^(continue|publish|done)/i.test(b.value || ''); })[0];
-      if (anyCont && S.priceSet) { tStep('Pressing "' + (btnLabel(anyCont) || 'continue') + '" to finish the Craigslist edit', 'the price is already changed; this publishes it'); deferClick(anyCont); return cont(3000, { hops: hops }); }
+      if (imgDone) { deferClick(imgDone); return cont(3000, mark); }
+      // 1.0.22: the preview page ("press publish to apply edits") needs the publish button, and Craigslist keeps hidden button.continue
+      // elements around, which the old q('button.continue') picked first (click on an invisible control = nothing happens, 13 times).
+      // Only VISIBLE controls count, and with the price already typed publish wins over continue.
+      var pubBtn = S.priceSet ? clPublishButton() : null;
+      if (pubBtn) { tStep('Pressing "publish" to apply the Craigslist edit', 'the preview page shows the new price; publish applies it, then Craigslist shows its confirmation page'); deferClick(pubBtn); return cont(3000, Object.assign({}, mark, { published: true })); }
+      var anyCont = visibleContinue() || findButton(/^(continue|publish|done|ok)$/) || qa('input[type="submit"]').filter(function (b) { return /^(continue|publish|done)/i.test(b.value || ''); })[0];
+      if (anyCont && S.priceSet) { tStep('Pressing "' + (btnLabel(anyCont) || 'continue') + '" to finish the Craigslist edit', 'the price is already changed; this publishes it'); deferClick(anyCont); return cont(3000, mark); }
       // 2026-10-17: price_field_not_found now means exactly one thing: the real posting form (it has the Title box) is on screen and, after a
       // wait for a late-rendering price box, still has no price input. Any other page (preview, images, confirmation, a hijacked page) just keeps
       // going until the 12 page limit and is reported as edit_flow_stuck, so it can no longer be mislabelled as "category has no price field".
       var onForm = !!(q('#PostingTitle') || q('input[name="PostingTitle"]'));
       if (!S.priceSet && onForm) {
         var late = await waitFor(function () { var pf = q('input[name="price"]') || q('#price'); return pf && visible(pf) ? pf : null; }, 4000);
-        if (late) return cont(300, { hops: hops - 1 });
+        if (late) return cont(300, Object.assign({}, mark, { hops: hops - 1 }));
         var np = (S.noPriceTries || 0) + 1;
         if (np >= 2) return fail('price_field_not_found', 'The Craigslist edit form (Title box present) has no input[name="price"] after ' + np + ' looks (category may have no price field)', 'edit', 'input[name="price"]', { hops: hops, noPriceTries: np });
-        return cont(1500, { hops: hops, noPriceTries: np });
+        return cont(1500, Object.assign({}, mark, { noPriceTries: np }));
       }
-      return cont(1500, { hops: hops });
+      return cont(1500, mark);
     }
     return fail('bad_phase', 'Unknown phase ' + phase, 'cl', '', {});
   }
@@ -1224,6 +1264,8 @@
       price_field_not_found: ['The edit form opened but no price box was found.', 'The marketplace page layout may have changed, or this listing type has no price field.', 'Nothing was changed. FindA.Sale will retry later; the page snapshot below shows what was on screen.'],
       edit_confirmed_without_price: ['Craigslist finished the edit but the live listing still shows the old price.', 'The price box was never filled in, so nothing was changed. The listing was not republished and no second post was made.', 'The item is not marked synced, so FindA.Sale tries again on the next retry. The page snapshot below shows what was on screen.'],
       posting_identity_mismatch: ['Craigslist showed a different posting than the one being edited.', 'Craigslist keeps one posting in progress per session, and another Craigslist task had its page open. Editing it would have changed the wrong listing.', 'Nothing was edited. FindA.Sale retries later, after the other Craigslist task is finished.'],
+      edit_lost_to_dashboard: ['The Craigslist edit was lost: the browser ended up on the account dashboard before the price was entered.', 'The Edit click did not open an edit page, or Craigslist sent the browser back. Nothing was changed.', 'FindA.Sale retries later; the page snapshot below shows what was on screen.'],
+      edit_page_not_advancing: ['A Craigslist page did not change after several tries.', 'The same page (see the signature in the details) stayed on screen, so FindA.Sale stopped instead of pressing buttons in a loop. Nothing was confirmed as changed.', 'FindA.Sale retries later; the page snapshot below shows what was on screen.'],
       edit_flow_stuck: ['The Craigslist edit pages kept going past the expected number of steps.', 'Craigslist did not reach its confirmation page.', 'Nothing was confirmed as changed. FindA.Sale will retry later; the page snapshot below shows what was on screen.'],
       price_value_did_not_stick: ['The price box would not keep the new value.', 'The page rewrote the field after FindA.Sale typed in it.', 'Nothing was saved. FindA.Sale will retry later.'],
       verify_mismatch: ['FindA.Sale saved the new price but the live listing still shows something different.', 'The marketplace may not have accepted the change yet, or it changed another value.', 'The item is not marked synced, so FindA.Sale re-checks it on the next retry. Look at the listing yourself if this repeats.'],
@@ -1358,5 +1400,5 @@
       return traceResult(ctx, { state: 'fail', code: 'engine_exception', reason: ((e && e.message) || String(e)).slice(0, 200), step: (ctx.scratch && ctx.scratch.phase) || '', diag: (function () { try { return snapshot('exception'); } catch (e2) { return null; } })() });
     }
   }
-  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7', _test: { poshCopyWrap: poshCopyWrap, poshCopyPre: poshCopyPre, clStep: clStep } };
+  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7', _test: { poshCopyWrap: poshCopyWrap, poshCopyPre: poshCopyPre, clStep: clStep, clPageSig: clPageSig } };
 })();

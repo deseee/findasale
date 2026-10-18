@@ -1884,6 +1884,7 @@ async function advanceAndContinueCrossPlatformRemoval(platform, tabId, continueU
 // hydrated). Without a cap, a deterministically-failing item blocks its whole platform queue
 // forever, because the transient-failure path deliberately does not advance.
 const FAS_REMOVAL_MAX_ATTEMPTS = 3;
+const FAS_REMOVAL_DEFER_MS = 20 * 60 * 1000;   // 1.0.22: how long an item is left alone after 'tab_not_visible' (not counted as an attempt)
 async function bumpRemovalAttempt(platform, itemId) {
   const { fasRemovalAttempts = {} } = await chrome.storage.local.get(['fasRemovalAttempts']);
   const key = platform + ':' + itemId;
@@ -1934,7 +1935,8 @@ async function checkCrossPlatformRemovals(pendingItems, opts) {
     // Per-marketplace pause: no queue, no tab, no backoff bookkeeping for a paused platform.
     if (pausedForRemoval.indexOf(platform) !== -1) { outcomes.push(platform + ':paused'); continue; }
     const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[platform];
-    const itemsForPlatform = pendingItems.filter((i) => Array.isArray(i.platforms) && i.platforms.includes(platform));
+    const deferredMap = (await chrome.storage.local.get(['fasRemovalDeferred'])).fasRemovalDeferred || {};
+    const itemsForPlatform = pendingItems.filter((i) => Array.isArray(i.platforms) && i.platforms.includes(platform) && !(deferredMap[platform + ':' + i.id] > Date.now()));
     if (!itemsForPlatform.length) continue;
     // SECURITY FIX 2026-09-22 (F2, hacker+architect review of Vinted auto-removal): notify mode
     // now ALSO records a dedicated removal tab id (on notification click, see onClicked below),
@@ -4376,6 +4378,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await clearRemovalAttempt(msg.platform, msg.itemId);
         const cont = await advanceAndContinueCrossPlatformRemoval(msg.platform, tabId, msg.continueUrl || null);
         sendResponse({ ok: true, next: cont.next });
+      } else if (msg.type === 'fasFocusRemovalTab') {
+        // 1.0.22: the Vinted removal tab reports it is hidden; bring it and its window to the front. Only the tab this removal run opened.
+        const fcfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[msg.platform];
+        const ftab = sender && sender.tab;
+        const fst = fcfg ? await chrome.storage.local.get([fcfg.tabIdKey]) : {};
+        if (!ftab || !fcfg || fst[fcfg.tabIdKey] !== ftab.id) { sendResponse({ ok: false, error: 'not_removal_tab' }); return; }
+        await new Promise((resolve) => chrome.tabs.update(ftab.id, { active: true }, () => { void chrome.runtime.lastError; resolve(); }));
+        if (ftab.windowId != null) await new Promise((resolve) => chrome.windows.update(ftab.windowId, { focused: true }, () => { void chrome.runtime.lastError; resolve(); }));
+        sendResponse({ ok: true });
       } else if (msg.type === 'crossPlatformRemovalAttemptFailed') {
         // TRANSIENT failure (delete control or confirm modal not found/confirmable). Does NOT
         // advance the queue -- the next poll retries the same item -- until FAS_REMOVAL_MAX_ATTEMPTS
@@ -4384,6 +4395,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // The content script reached the page and reported, so this is NOT a stalled run; the
         // per-item attempt cap below handles it.
         await clearStalledRemovalRuns(msg.platform);
+        // 2026-10-17 (1.0.22): 'tab_not_visible' means the removal tab was in the background, nothing was clicked and the listing was never tried.
+        // That is not a failure of this item: no attempt is counted and removal-skipped is NOT called (it would raise skipCount and push the item
+        // to manual review). The item is deferred locally and the queue moves on; the run ends if nothing else is queued, and the next poll retries.
+        if (msg.reason === 'tab_not_visible') {
+          const dk = String(msg.platform) + ':' + String(msg.itemId);
+          const dst = await chrome.storage.local.get(['fasRemovalDeferred']);
+          const dmap = dst.fasRemovalDeferred || {};
+          dmap[dk] = Date.now() + FAS_REMOVAL_DEFER_MS;
+          await chrome.storage.local.set({ fasRemovalDeferred: dmap });
+          fasLog('warn', 'crossPlatformRemovalDeferred', 'tab not visible; nothing clicked, retrying later (no attempt counted)',
+            await fasRemovalReasonFor(msg.platform, msg.itemId), { platform: msg.platform, itemId: msg.itemId });
+          const dcont = await advanceAndContinueCrossPlatformRemoval(msg.platform, tabId, msg.continueUrl || null);
+          sendResponse({ ok: true, deferred: true, next: dcont.next });
+          return;
+        }
         const attempts = await bumpRemovalAttempt(msg.platform, msg.itemId);
         fasLog('warn', 'crossPlatformRemovalAttemptFailed', 'attempt ' + attempts + ': ' + (msg.reason || 'unknown'),
           await fasRemovalReasonFor(msg.platform, msg.itemId), { platform: msg.platform, itemId: msg.itemId });

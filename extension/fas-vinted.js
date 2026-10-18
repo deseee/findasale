@@ -4309,6 +4309,14 @@
   // matter what. Go straight to the real delete button instead.
   async function deleteVintedListingOnDetailPage(item) {
     if (looksLikeInterstitial()) return 'interstitial';
+    // 2026-10-17 (1.0.22): a hidden tab (screen locked, window minimised, another window focused) never renders Vinted's delete modal or native
+    // confirm, so every attempt timed out as no_confirmation_prompt[hidden true...] and the item was skipped 5 times. Make the tab visible first
+    // (the background activates it and focuses its window); if it still is not visible nothing has been clicked and the reason is tab_not_visible.
+    const FAS_TV = self.FAS_TAB_VISIBLE;
+    if (FAS_TV) {
+      const vis = await FAS_TV.ensure(document, () => { try { chrome.runtime.sendMessage({ type: 'fasFocusRemovalTab', platform: 'VINTED' }, () => { void chrome.runtime.lastError; }); } catch (e) { /* non-fatal */ } }, { timeoutMs: 10000 });
+      if (!vis.visible) return FAS_TV.REASON;
+    }
     // 2026-10-01 (Patrick: prefer "mark sold" over delete -- delete/relist cycles are what actually gets
     // sellers banned): Vinted's own seller sidebar has `mark-as-sold-button` (live-confirmed testid,
     // see the comment above) and its Help Centre documents it for items sold outside Vinted. Try that
@@ -4693,6 +4701,10 @@
       // TRANSIENT, not permanent: a security screen clears once the organizer completes it, so the
       // background retries this same item rather than reporting it permanently skipped.
       vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, 'interstitial');
+    } else if (result === 'tab_not_visible') {
+      overlayWarn('This Vinted tab is in the background (screen locked or window minimised), so nothing was clicked. FindA.Sale will try again later.' + button('fas-vin-close', 'Close', false));
+      closeBtnHandler();
+      vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, 'tab_not_visible');
     } else {
       overlayWarn('Could not complete the delete on this Vinted listing page -- FindA.Sale will retry automatically (reason: ' + result + ')' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();

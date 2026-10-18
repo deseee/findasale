@@ -119,9 +119,12 @@ function loadEngine(dom) {
   sandbox.document = Object.assign({ querySelector: () => null, querySelectorAll: () => [], title: '', body: { innerText: '', textContent: '' } }, dom.document || {});
   sandbox.location = Object.assign({ href: 'https://post.craigslist.org/k/abc', hostname: 'post.craigslist.org', pathname: '/k/abc', search: '' }, dom.location || {});
   sandbox.getComputedStyle = () => ({ visibility: 'visible', display: 'block' });
+  sandbox.requestAnimationFrame = (f) => setTimeout(f, 0);
+  sandbox.PointerEvent = sandbox.MouseEvent = sandbox.Event = function (type, init) { this.type = type; Object.assign(this, init || {}); };
   vm.createContext(sandbox);
   for (const f of ['fas-edit-core.js', 'fas-cl-guard.js', 'fas-edit-engine.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), sandbox);
-  return sandbox.FAS_EDIT_ENGINE._test.clStep;
+  const fn = sandbox.FAS_EDIT_ENGINE._test.clStep; fn._sig = sandbox.FAS_EDIT_ENGINE._test.clPageSig;
+  return fn;
 }
 const ITEM = { id: 'it1', title: 'Cecil Fielder 1990 Fleer Detroit Tigers baseball card', priceDrift: true, price: 4 };
 const ctx = (scratch, item) => ({ platform: 'CRAIGSLIST', item: item || ITEM, scratch: scratch, stepNo: 3 });
@@ -217,6 +220,94 @@ test('engine: stuck after the price was typed checks the live dashboard once bef
   assert.strictEqual(r2.code, 'edit_flow_stuck');
 });
 
+// ---------------------------------------------------------------- 1.0.22: preview page, page-signature fail-fast, dashboard mid-flow -----
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+function btn(label, o) {
+  o = o || {};
+  return el({ tagName: o.tag || 'BUTTON', innerText: label, textContent: label, value: o.tag === 'INPUT' ? label : undefined, _cls: o.cls || '', dispatchEvent: () => true, scrollIntoView: () => {}, focus: () => {},
+    getBoundingClientRect: () => (o.hidden ? { width: 0, height: 0 } : { width: 10, height: 10 }), click: () => o.clicks.push(label) });
+}
+// The Superman production page: Craigslist's PREVIEW of an edit. A hidden button.continue is kept in the page (the old code picked it first).
+function previewDom(clicks) {
+  const bs = [btn('publish', { clicks }), btn('edit post', { clicks }), btn('edit location', { clicks }), btn('edit images', { clicks }), btn('cancel edit', { clicks }), btn('continue', { clicks, cls: 'continue', hidden: true })];
+  return { document: { title: 'kalamazoo | preview', body: { innerText: 'Attention: posting will expire in 28 days press "publish" to apply edits', textContent: '' },
+    querySelectorAll: (sel) => /button\.continue/.test(sel) ? bs.filter((b) => b._cls === 'continue') : bs.filter(() => /button|submit|role/.test(sel)) },
+    location: { href: 'https://post.craigslist.org/k/rgCu1K7yX8RmqkJ3jkCFkm', hostname: 'post.craigslist.org', pathname: '/k/rgCu1K7yX8RmqkJ3jkCFkm', search: '' } };
+}
+const merge = (sc, r) => Object.assign({}, sc, r.scratch);
+
+test('engine preview: price already typed -> the visible "publish" button is clicked (not the hidden button.continue), then it waits for the confirmation page', async () => {
+  const clicks = [];
+  const step = loadEngine(previewDom(clicks));
+  const r = await step(ctx({ phase: 'edit', postingId: '1', priceSet: true, hops: 3, rowTitle: ITEM.title }));
+  await sleepMs(350);
+  assert.strictEqual(r.state, 'continue');
+  assert.deepStrictEqual(clicks, ['publish']);
+  assert.strictEqual(r.scratch.published, true);
+});
+test('engine preview: price NOT yet typed -> "edit post" is clicked, never publish', async () => {
+  const clicks = [];
+  const step = loadEngine(previewDom(clicks));
+  const r = await step(ctx({ phase: 'edit', postingId: '1', priceSet: false, hops: 0, rowTitle: ITEM.title }));
+  await sleepMs(350);
+  assert.strictEqual(r.state, 'continue');
+  assert.deepStrictEqual(clicks, ['edit post']);
+});
+test('engine loop guard: the same page signature again waits (no second click), retries once, and the 4th sighting fails fast with the signature', async () => {
+  const clicks = [];
+  const step = loadEngine(previewDom(clicks));
+  let sc = { phase: 'edit', postingId: '1', priceSet: true, hops: 3, rowTitle: ITEM.title };
+  const r1 = await step(ctx(sc)); sc = merge(sc, r1); await sleepMs(350);
+  assert.strictEqual(r1.scratch.sigRep, 1);
+  assert.strictEqual(r1.scratch.hops, 4, 'a new page is one transition');
+  const r2 = await step(ctx(sc)); sc = merge(sc, r2); await sleepMs(350);
+  assert.strictEqual(r2.state, 'continue');
+  assert.strictEqual(r2.scratch.hops, 4, 'polling the same page is NOT a transition');
+  assert.deepStrictEqual(clicks, ['publish'], 'no second click while the first may still be navigating');
+  const r3 = await step(ctx(sc)); sc = merge(sc, r3); await sleepMs(350);
+  assert.strictEqual(r3.state, 'continue');
+  assert.deepStrictEqual(clicks, ['publish', 'publish'], 'one retry of the click');
+  const r4 = await step(ctx(sc));
+  assert.strictEqual(r4.state, 'fail');
+  assert.strictEqual(r4.code, 'edit_page_not_advancing');
+  assert.ok(r4.details.signature.indexOf('/k/#') !== -1 && r4.details.signature.indexOf('preview') !== -1 && r4.details.signature.indexOf('publish') !== -1, r4.details.signature);
+  assert.strictEqual(r4.details.repeats, 3);
+  assert.strictEqual(r4.scratch.hops, 4, 'never ran up to the old 12-page cap');
+  await sleepMs(350);
+  assert.strictEqual(clicks.length, 2, 'the failing step clicks nothing');
+});
+test('engine dashboard mid-flow: back on /login/home before any price was typed -> immediate edit_lost_to_dashboard with a signature, nothing clicked', async () => {
+  const clicks = [];
+  const row = { querySelector: () => null, querySelectorAll: () => [] };
+  const dom = { document: { title: 'craigslist account', body: { innerText: 'your postings', textContent: '' }, querySelector: () => null,
+    querySelectorAll: (sel) => /button|submit/.test(sel) ? [btn('continue', { clicks, cls: 'continue' }), btn('edit', { clicks })] : [] },
+    location: { href: 'https://accounts.craigslist.org/login/home', hostname: 'accounts.craigslist.org', pathname: '/login/home', search: '' } };
+  const step = loadEngine(dom);
+  const r = await step(ctx({ phase: 'edit', postingId: '1', priceSet: false, hops: 2, rowTitle: ITEM.title }));
+  await sleepMs(350);
+  assert.strictEqual(r.state, 'fail');
+  assert.strictEqual(r.code, 'edit_lost_to_dashboard');
+  assert.ok(r.details.signature.indexOf('accounts.craigslist.org|/login/home') === 0);
+  assert.ok(r.diag && r.diag.note === 'fail:edit_lost_to_dashboard', 'snapshot attached');
+  assert.deepStrictEqual(clicks, []);
+  // right after the Edit click (hops 0) one grace step is allowed for a slow navigation, the next sighting fails
+  const g1 = await step(ctx({ phase: 'edit', postingId: '1', priceSet: false, hops: 0 }));
+  assert.strictEqual(g1.state, 'continue');
+  const g2 = await step(ctx({ phase: 'edit', postingId: '1', priceSet: false, hops: 0, dashGrace: true }));
+  assert.strictEqual(g2.code, 'edit_lost_to_dashboard');
+  // price typed + dashboard = the normal verification path, unchanged
+  const v = await step(ctx({ phase: 'edit', postingId: '1', priceSet: true, hops: 5 }));
+  assert.strictEqual(v.state === 'goto' || v.state === 'fail', true);
+  assert.notStrictEqual(v.code, 'edit_lost_to_dashboard');
+});
+test('buildDiag keeps the 1.0.22 codes and the page signature', () => {
+  for (const code of ['edit_lost_to_dashboard', 'edit_page_not_advancing']) {
+    const d = C.buildDiag({ t: 1, platform: 'CRAIGSLIST', itemId: 'i1', title: 'x', outcome: 'fail', code, step: 'edit', reason: 'x', trail: ['edit:fail'], snapshots: [], details: { signature: 'post.craigslist.org|/k/#|preview|--|publish' } }, { version: '1.0.22' });
+    assert.strictEqual(d.code, code);
+    assert.strictEqual(d.details.signature, 'post.craigslist.org|/k/#|preview|--|publish');
+  }
+});
+
 // ---------------------------------------------------------------- diagnostics --------------------------------------------------------
 test('buildDiag keeps the new Craigslist codes and their details', () => {
   for (const code of ['edit_confirmed_without_price', 'posting_identity_mismatch', 'edit_flow_stuck', 'price_field_not_found']) {
@@ -235,7 +326,7 @@ test('buildDiag keeps the new Craigslist codes and their details', () => {
 test('wiring: manifest 1.0.18, guard loaded by background, the edit injection and the post content script', () => {
   const root = path.join(__dirname, '..');
   const man = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
-  assert.strictEqual(man.version, '1.0.21');
+  assert.strictEqual(man.version, '1.0.22');
   const post = man.content_scripts.find((c) => c.matches.indexOf('https://post.craigslist.org/*') !== -1);
   assert.ok(post.js.indexOf('fas-cl-guard.js') !== -1 && post.js.indexOf('fas-cl-guard.js') < post.js.indexOf('fas-craigslist.js'));
   const bg = fs.readFileSync(path.join(root, 'background.js'), 'utf8');
