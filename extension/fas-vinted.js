@@ -4162,7 +4162,7 @@
   // Async resolver used by the removal flow: API first, then (only when the API read was unusable or
   // found nothing) a card scan after waiting up to ~8s for cards to render. Exactly one distinct id
   // -> { id }; more than one -> 'ambiguous_duplicate_title'; none / incomplete -> 
-  // 'no_confident_listing_match'. The detail page still re-verifies URL id + exact title before any
+  // 'no_confident_listing_match' (incomplete read: 'wardrobe_read_incomplete'; complete read with zero matches: 'listing_not_found', 1.0.24). The detail page still re-verifies URL id + exact title before any
   // delete (runVintedRemovalQueue).
   async function resolveVintedListingIdByTitle(title) {
     const wanted = vintRemNorm(title);
@@ -4200,7 +4200,10 @@
     // at most the first 20 listings, so without a complete read the answer is
     // 'wardrobe_read_incomplete' (transient, retried), never a permanent no-match.
     if (!(api && api.ok && api.complete)) return { id: null, reason: 'wardrobe_read_incomplete', apiComplete: false, apiWhy };
-    return { id: null, reason: 'no_confident_listing_match', apiComplete: true, apiWhy };
+    // 1.0.24: a COMPLETE wardrobe read (every page parsed, page cap not hit) with ZERO exact folded-title matches means the listing is gone from
+    // Vinted. Report it as 'listing_not_found' -- the same outcome Mercari/Poshmark send -- so the backend can auto-resolve it after its consecutive
+    // confirmations. 'no_confident_listing_match' stays for the cases that are NOT proof of absence (title too short, above) and ambiguous/incomplete reads.
+    return { id: null, reason: 'listing_not_found', apiComplete: true, apiWhy };
   }
 
   // The listing id chosen on the profile page is handed to the detail-page load through
@@ -4649,7 +4652,8 @@
         const cm = /\/member\/(\d+)/.exec(String(cachedProfile || ''));
         const hereMember = vintRemMemberIdFromLocation();
         if (cm && hereMember && cm[1] !== hereMember) vintRemStorageSet(VINTED_OWN_PROFILE_URL_STORAGE_KEY, null);
-        const reasonText = match.reason + (match.apiWhy ? ', ' + match.apiWhy : '');
+        // 1.0.24: 'listing_not_found' is sent bare -- the backend's gone-listing streak compares lastErrorMessage === 'listing_not_found' exactly.
+        const reasonText = match.reason === 'listing_not_found' ? 'listing_not_found' : match.reason + (match.apiWhy ? ', ' + match.apiWhy : '');
         const reasonNote = '<div style="margin-top:6px;font-size:11px;opacity:.8">Reason: ' + escapeHtml(reasonText) + '</div>';
         if (match.reason === 'wardrobe_read_incomplete') {
           // TRANSIENT: the wardrobe could not be read in full, so "not listed" was never shown.
@@ -4661,7 +4665,9 @@
         }
         overlayWarn((match.reason === 'ambiguous_duplicate_title'
           ? 'More than one of your Vinted listings is titled "' + escapeHtml(item.title) + '" -- nothing was deleted because the right one cannot be told apart safely. Please delete it yourself.'
-          : 'Could not find a Vinted listing titled exactly "' + escapeHtml(item.title) + '" on your profile -- nothing was deleted. Please delete it yourself, then use "Mark removed" if the extension offers it.') + reasonNote + button('fas-vin-close', 'Close', false));
+          : match.reason === 'listing_not_found'
+            ? 'No Vinted listing titled exactly "' + escapeHtml(item.title) + '" is in your full list of Vinted listings, so it is probably already gone. Nothing was deleted. FindA.Sale records this item as not found on Vinted.'
+            : 'Could not find a Vinted listing titled exactly "' + escapeHtml(item.title) + '" on your profile -- nothing was deleted. Please delete it yourself, then use "Mark removed" if the extension offers it.') + reasonNote + button('fas-vin-close', 'Close', false));
         closeBtnHandler();
         // PERMANENT failure -- zero or ambiguous title match after a real look at the page. The
         // background reports the skip so the backend stops re-serving it, then advances and

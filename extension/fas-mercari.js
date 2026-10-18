@@ -1378,14 +1378,16 @@
   // page (mercari.com/sell/edit/<id>/, the page a future renewal price-push would drive) -- one
   // selector covers both.
   async function turnOffMercariSmartPricing() {
-    const btn = await waitForSelector(() => document.querySelector('button[data-testid="SmartPricingButton"]'), 5000);
+    // 1.0.24: Mercari's React REPLACES this button node after the click (live-verified: the old node stays aria-pressed="true", isConnected=false;
+    // a fresh query shows "false"). Never hold the node: setToggleOff gets a getter and re-queries on every poll and before every click.
+    const getBtn = () => document.querySelector('button[data-testid="SmartPricingButton"]');
+    const btn = await waitForSelector(getBtn, 5000);
     if (!btn) {
       console.warn('[FAS Mercari] Smart Pricing toggle button not found (UNVERIFIED selector on this form) -- please confirm Smart Pricing is OFF manually before publishing.');
       return false;
     }
-    if (btn.getAttribute('aria-pressed') !== 'true') return true; // already off, nothing to do
     // 1.0.21: a plain btn.click() does NOT toggle this control (live-verified); the full pointer sequence does.
-    const r = await self.FAS_MERC_WEIGHT.setToggleOff(btn, { click: realClick, sleep: sleep }, { waitMs: 2000, retries: 2 });
+    const r = await self.FAS_MERC_WEIGHT.setToggleOff(getBtn, { click: realClick, sleep: sleep }, { waitMs: 2000, retries: 2 });
     if (!r.ok) console.warn('[FAS Mercari] Smart Pricing toggle did not register as OFF after ' + r.attempts + ' attempts (aria-pressed=' + r.state + ') -- please check before publishing.');
     return r.ok;
   }

@@ -108,23 +108,41 @@
     return { present: !!(y || n), yesChecked: y ? !!y.checked : null, noChecked: n ? !!n.checked : null, selected: y && y.checked ? 'yes' : (n && n.checked ? 'no' : null) };
   }
   // 1.0.21: Mercari's Smart Pricing toggle ignores a bare element.click() (live: aria-pressed stayed "true" after 1.8s) but flips on the full pointer sequence (deps.click = realClick).
-  // Polls aria-pressed for up to waitMs after each click, retries up to `retries` more times, never clicks when already OFF. Returns { ok, attempts, state }.
-  async function setToggleOff(btn, deps, opts) {
+  // 1.0.24 (live-verified on the signed-in /sell/ form): the click DOES turn it OFF, but React then REPLACES the button node -- the old node stays isConnected=false with a stale
+  // aria-pressed="true" while a fresh query shows "false". So the caller passes a GETTER (getBtn, a function returning the live button or null) and this re-queries on EVERY poll and
+  // before EVERY click; state is always read from the freshly queried node. A missing node (mid re-render) is waited for, never treated as a failure or a click target.
+  // A plain element is still accepted (wrapped as a constant getter). Polls up to waitMs after each click, 1 + `retries` clicks at most, never clicks when the live node is OFF.
+  // Returns { ok, attempts, state } (state = last live aria-pressed, or null if no button was found).
+  async function setToggleOff(getBtn, deps, opts) {
     opts = opts || {};
     var waitMs = opts.waitMs != null ? opts.waitMs : 2000, step = opts.stepMs != null ? opts.stepMs : 100, retries = opts.retries != null ? opts.retries : 2;
-    var state = function () { return btn.getAttribute('aria-pressed'); };
-    if (state() !== 'true') return { ok: true, attempts: 0, state: state() };
+    var get = typeof getBtn === 'function' ? getBtn : function () { return getBtn; };
+    var live = function () { var b = null; try { b = get(); } catch (e) { b = null; } return b || null; };
+    var state = function () { var b = live(); return b ? b.getAttribute('aria-pressed') : null; };
+    // Waits (up to waitMs) for the live button to exist; returns its state or null.
+    var settle = async function () {
+      var s = state(), waited = 0;
+      while (s == null && waited < waitMs) { await deps.sleep(step); waited += step; s = state(); }
+      return s;
+    };
+    var s0 = await settle();
+    if (s0 == null) return { ok: false, attempts: 0, state: null };
+    if (s0 !== 'true') return { ok: true, attempts: 0, state: s0 };
     var attempts = 0;
     for (var a = 0; a <= retries; a++) {
+      var pre = await settle();                       // re-query right before the click
+      if (pre === 'false') return { ok: true, attempts: attempts, state: 'false' };   // flipped late: never click again
+      if (pre == null) break;                         // node never came back: do not click blind
       attempts++;
-      await deps.click(btn);
+      await deps.click(live());
       var waited = 0;
       while (waited <= waitMs) {
         if (state() === 'false') return { ok: true, attempts: attempts, state: 'false' };
         await deps.sleep(step); waited += step;
       }
     }
-    return { ok: state() === 'false', attempts: attempts, state: state() };
+    var last = state();
+    return { ok: last === 'false', attempts: attempts, state: last };
   }
   var api = { setToggleOff: setToggleOff, splitOunces: splitOunces, fillWeightBoxes: fillWeightBoxes, shoeboxDecision: shoeboxDecision, findShoeboxRadio: findShoeboxRadio, answerShoebox: answerShoebox, shoeboxRadioState: shoeboxRadioState };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
