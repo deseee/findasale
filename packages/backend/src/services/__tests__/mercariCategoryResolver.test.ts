@@ -227,6 +227,18 @@ describe('mercariCategoryResolver: regressions', () => {
     expect(idOf({ title: 'Acme hat', categoryBreadcrumb: 'Sporting Goods:Golf:Golf Clothing, Shoes & Accs:Hats' })).toBe(736);
   });
 
+  // 2026-10-18: the same hat as it is really stored in production (Patrick's live run still filed it under Golf balls).
+  // Its Item.category is the eBay root "Sports Mem, Cards & Fan Shop" and its eBay leaf is "Balls" (27280). The word
+  // "Cards" in that category name used to trip the golf-headwear exclusion, so the rule returned nothing and the
+  // extension fell back to searching its own category text ("Balls") and picked Golf balls.
+  it('a signed golf hat filed under Sports Mem, Cards & Fan Shop > Balls still resolves to Golf apparel', () => {
+    const real = { ebayCategoryId: '27280', ebayCategoryName: 'Balls', categoryBreadcrumb: 'Sports Mem, Cards & Fan Shop', brand: null as string | null };
+    expect(idOf({ ...real, title: 'Titleist Pro 98 Plus Golf Hat, Signed by Chi Chi Rodriguez and Billy Casper' })).toBe(736);
+    expect(idOf({ ...real, title: 'Titleist Pro 98 Plus Golf Hat, Signed by Chi Chi Rodriguez and Billy Casper', brand: 'Titleist' })).toBe(736);
+    // a golf-hat trading card is still not apparel (the exclusion only moved to the title)
+    expect(idOf({ ...real, title: 'Golf hat rookie card Tiger Woods' })).not.toBe(736);
+  });
+
   it('golf balls, clubs, bags still map to their own leaves and never to a sibling', () => {
     expect(idOf({ title: 'Titleist Pro V1 golf balls dozen', brand: 'Titleist' })).toBe(739);
     expect(idOf({ title: "Men's Acme driver golf club right hand", ebayCategoryId: '115280' })).toBe(734);
