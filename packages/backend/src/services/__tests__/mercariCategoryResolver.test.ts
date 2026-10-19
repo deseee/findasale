@@ -110,8 +110,8 @@ describe('mercariCategoryResolver: department comes from explicit words only', (
     expect(idOf({ ...base, title: "Women's Acme tracksuit set medium" })).toBe(1986);
     expect(idOf({ ...base, title: 'Acme tracksuit set womens small' })).toBe(1986);
     expect(idOf({ ...base, title: 'Mens Acme tracksuit set large' })).toBe(2023);
-    expect(idOf({ ...base, title: 'Acme tracksuit set medium' })).toBeNull();
-    expect(explainMercariCategory({ ...base, title: 'Acme tracksuit set medium' }).reason).toBe('department-unknown');
+    // unstated department falls back to the unisex Men's leaf rather than leaving the item uncategorised
+    expect(idOf({ ...base, title: 'Acme tracksuit set medium' })).toBe(2023);
     // only Women and Men were harvested: a boys item never falls into either
     expect(idOf({ ...base, title: 'Boys Acme tracksuit set' })).toBeNull();
     expect(explainMercariCategory({ ...base, title: 'Boys Acme tracksuit set' }).reason).toBe('department-leaf-missing');
@@ -121,7 +121,7 @@ describe('mercariCategoryResolver: department comes from explicit words only', (
     const base = { ebayCategoryId: '115280', ebayCategoryName: 'Golf Clubs' };
     expect(idOf({ ...base, title: "Men's Acme driver golf club right hand" })).toBe(734);
     expect(idOf({ ...base, title: 'Ladies Acme golf clubs set' })).toBe(735);
-    expect(idOf({ ...base, title: 'Acme golf club set with bag' })).toBeNull();
+    expect(idOf({ ...base, title: 'Acme golf club set with bag' })).toBe(734);
   });
 
   it('jeans need both a department and a cut word', () => {
@@ -159,13 +159,26 @@ describe('mercariCategoryResolver: null on ambiguous or unharvested input (never
     expect(resolveMercariCategory({ title: 'Gloves', ebayCategoryName: 'Gloves' })).toBeNull();
   });
 
-  it('unharvested Mercari groups resolve to null, not to a neighbour', () => {
-    expect(resolveMercariCategory({ title: 'Acme stoneware dinner plates set of four', ebayCategoryName: 'Dinnerware' })).toBeNull();
-    expect(resolveMercariCategory({ title: 'Acme cordless drill 18V', ebayCategoryName: 'Power Drills' })).toBeNull();
+  it('groups that are still unharvested resolve to null, not to a neighbour', () => {
     expect(resolveMercariCategory({ title: 'Acme smartphone 128GB unlocked', ebayCategoryName: 'Cell Phones & Smartphones' })).toBeNull();
-    expect(resolveMercariCategory({ title: 'Acme paperback novel', ebayCategoryName: 'Fiction & Literature' })).toBeNull();
-    expect(resolveMercariCategory({ title: 'Acme building bricks set 500 pieces', ebayCategoryName: 'Building Toys' })).toBeNull();
     expect(resolveMercariCategory({ title: 'Acme brake pads front set', ebayCategoryName: 'Brake Pads' })).toBeNull();
+  });
+
+  it('harvested Home / Kitchen / Toys / Books / Tools leaves now resolve', () => {
+    expect(idOf({ title: 'Acme stoneware dinner plates set of four', ebayCategoryName: 'Dinnerware' })).toBe(2379);
+    expect(idOf({ title: 'Blue 3-gallon stoneware crock' })).toBe(2482);
+    expect(idOf({ title: 'Acme crock pot 6 quart slow cooker' })).toBe(2465);
+    expect(idOf({ title: 'Coin tubes for quarters and dimes' })).toBe(2608);
+    expect(idOf({ title: 'Mouse Trap board game Milton Bradley' })).toBe(1669);
+    expect(idOf({ title: 'Acme art book hardcover Beeple everydays' })).toBe(2184);
+    expect(idOf({ title: 'Electric solenoid valve 120VAC plastic body' })).toBe(2824);
+    expect(idOf({ title: 'Ace keyed alike sash lock satin nickel' })).toBe(2849);
+    expect(idOf({ title: 'Metal halide grow lamp bulb 600W' })).toBe(71);
+    expect(idOf({ title: 'Mannequin head clamp stand cosmetology' })).toBe(71);
+  });
+
+  it('automotive headlight HID bulbs are not filed as grow lamps', () => {
+    expect(idOf({ title: 'HID xenon headlight bulb H11', ebayCategoryName: 'Headlight Bulbs' })).not.toBe(71);
   });
 
   it('a deliberate blank explains itself', () => {
@@ -277,7 +290,7 @@ describe('mercariCategoryResolver: regressions', () => {
 
 describe('mercariCategoryResolver: tree integrity', () => {
   it('has the harvested size and no orphans', () => {
-    expect(MERCARI_NODES.size).toBe(825);
+    expect(MERCARI_NODES.size).toBe(1605);
     MERCARI_NODES.forEach((n) => {
       if (n.parentId !== 0) expect(MERCARI_NODES.has(n.parentId)).toBe(true);
       expect(n.title.length).toBeGreaterThan(0);
@@ -301,14 +314,14 @@ describe('mercariCategoryResolver: tree integrity', () => {
       expect(n.childIds.length).toBeGreaterThan(0);
     }
     const leaves = mercariAllLeafIds();
-    expect(leaves.length).toBe(531);
+    expect(leaves.length).toBe(1313);
     for (const id of leaves) {
       const n = MERCARI_NODES.get(id)!;
       expect(n.childIds.length).toBe(0);
     }
     expect(isMercariLeaf(8)).toBe(false); // a family
     expect(isMercariLeaf(2126)).toBe(false); // a group
-    expect(isMercariLeaf(579)).toBe(false); // Kitchen Dinnerware: group not harvested
+    expect(isMercariLeaf(2744)).toBe(false); // Patio Furniture: group not harvested yet
     expect(isMercariLeaf(999999)).toBe(false);
     expect(isMercariLeaf(3100)).toBe(true);
   });

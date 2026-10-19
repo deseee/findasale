@@ -861,16 +861,796 @@ export const MERCARI_CATALOG_RAW = `
 3343|3170|Tools Storage
 3349|3170|Welding Equipment
 3362|3170|Wrenches
+567|60|Kids' bedding
+568|60|Kids' flatware
+569|60|Kids' furniture
+570|60|Kids' room décor
+571|60|Nursery décor
+574|60|Kids' bath
+575|60|Other
+1862|60|Kids' Storage
+593|62|Quilts
+594|62|Bed pillows
+596|62|Bed in a bag
+600|62|Mattress pads
+601|62|Inflatable beds
+602|62|Feather beds
+603|62|Other
+2075|62|Bedspreads
+2076|62|Coverlets
+2077|62|Comforter Sets
+2078|62|Comforters
+2079|62|Duvet Covers
+2080|62|Duvet Sets
+2081|62|Bed Sheets
+2082|62|Pillowcases
+2083|62|Bed Skirts
+2084|62|Shams
+2085|62|Decorative Pillows
+2086|62|Pillow Covers
+2087|62|Pillow Inserts
+2088|62|Blankets
+2089|62|Throws
+604|63|Bath linen sets
+605|63|Bath rugs
+606|63|Bathroom accessories
+607|63|Bathroom furniture sets
+608|63|Towels
+610|63|Other
+688|70|Air fresheners
+689|70|Brushes
+690|70|Dusting
+691|70|Gloves
+692|70|Household cleaners
+693|70|Mopping
+694|70|Paper towels
+695|70|Sponges
+696|70|Squeegees
+697|70|Sweeping
+698|70|Trash bags
+700|70|Other
+2297|576|Bakeware Sets
+2298|576|Baking Sheets
+2299|576|Bundt Pans
+2300|576|Cake Pans
+2301|576|Cookie Sheets
+2302|576|Cupcake & Muffin Pans
+2303|576|Loaf Pans
+2304|576|Pie Tins
+2340|577|Coffee Drippers
+2341|577|Coffee Grinders
+2342|577|Coffee Roasters
+2343|577|Espresso & Cappuccino Machines
+2344|577|Filter Coffee Machines
+2345|577|French Presses
+2346|577|Milk Frothers
+2347|578|Casserole Pans
+2348|578|Cookware Sets
+2349|578|Dutch Ovens
+2350|578|Fry Pans
+2351|578|Griddle Pans
+2352|578|Grill Pans
+2353|578|Saucepans
+2354|578|Saut Pans
+2355|578|Skillets
+2356|578|Steamers
+2357|578|Stock Pots & Multipots
+2358|578|Tagines
+2359|578|Woks
+2360|578|Other Cookware
+2377|579|Appetizer Plates
+2378|579|Bowls
+2379|579|Dinner Plates
+2380|579|Dinnerware Sets
+2381|579|Salad Plates
+2382|579|Other Dinnerware
+2432|580|Beverage Dispensers
+2433|580|Butter Dishes
+2434|580|Cheese Boards
+2435|580|Dessert & Cake Stands
+2436|580|Gravy Boats
+2437|580|Jugs
+2438|580|Pitchers
+2439|580|Salad Bowls
+2440|580|Serving Baskets
+2441|580|Serving Bowls
+2442|580|Serving Platters
+2443|580|Serving Trays
+2444|580|Trivets
+2284|582|Kitchen Aprons
+2285|582|Kitchen Cloth Napkins
+2286|582|Kitchen Napkin Holders
+2287|582|Kitchen Napkin Rings
+2288|582|Kitchen Oven Mitts
+2289|582|Kitchen Potholders
+2290|582|Kitchen Table Chargers
+2291|582|Kitchen Table Linen Sets
+2292|582|Kitchen Table Placemats
+2293|582|Kitchen Table Runners
+2294|582|Kitchen Tablecloths
+2295|582|Kitchen Towels
+2296|582|Other Kitchen Linens
+2493|584|Cooking Food Turners
+2494|584|Cooking Ladles
+2495|584|Kitchen Basting Brushes
+2496|584|Kitchen Choppers
+2497|584|Kitchen Colanders
+2498|584|Kitchen Graters
+2499|584|Kitchen Peelers
+2500|584|Kitchen Scoops
+2501|584|Kitchen Sifters
+2502|584|Kitchen Slicers & Mandolines
+2503|584|Kitchen Spatulas
+2504|584|Kitchen Spiralizers
+2505|584|Kitchen Strainers
+2506|584|Kitchen Tongs
+2507|584|Kitchen Utensil Sets
+2508|584|Kitchen Whisks
+2509|584|Kitchen Zesters
+2510|584|Lemon Squeezers
+2511|584|Measuring Cups
+2512|584|Measuring Spoons
+2513|584|Pasta Servers
+2514|584|Pizza Cutter
+2515|584|Potato Mashers
+2516|584|Salad Spinners
+2517|584|Slotted Spoons
+2518|584|Other Kitchen Utensils
+2445|585|Air Fryers
+2446|585|Blenders
+2447|585|Chafing Dishes
+2448|585|Chocolate Fountains
+2449|585|Contact Grills
+2450|585|Deep Fryers
+2451|585|Electric Griddles
+2452|585|Electric Skillets
+2453|585|Food Processors
+2454|585|Food Warming Trays
+2455|585|Hand Blenders
+2456|585|Hand Mixers
+2457|585|Ice Cream Makers
+2458|585|Juicers
+2459|585|Kitchen Burners
+2460|585|Kitchen Hot Plates
+2461|585|Pasta Makers
+2462|585|Popcorn Makers
+2463|585|Pressure Cookers
+2464|585|Rice Cookers
+2465|585|Slow Cookers
+2466|585|Soda Makers
+2467|585|Sous Vide
+2468|585|Stand Mixers
+2470|585|Toaster Ovens
+2471|585|Toasters
+2472|585|Waffle Makers
+2473|585|Other Small Appliances
+2474|586|Food Storage Bags
+2475|586|Food Storage Containers
+2476|586|Fruit Baskets
+2477|586|Kitchen Bread Boxes
+2478|586|Kitchen Canisters
+2479|586|Kitchen Cling Films
+2480|586|Kitchen Drawers Organizers
+2481|586|Kitchen Foils
+2482|586|Kitchen Jars
+2483|586|Kitchen Pantry Organizers
+2484|586|Kitchen Spice Jars
+2485|586|Kitchen Spice Racks
+2486|586|Kitchen Tote Bags
+2487|586|Other Kitchen Storage
+2315|588|Bar Tool Sets
+2316|588|Bottle Holders
+2317|588|Bottle Openers
+2318|588|Coasters
+2319|588|Cocktail Shakers
+2320|588|Decanters
+2321|588|Flasks
+2322|588|Ice Buckets
+2323|588|Liquor Dispensers
+2324|588|Wine Bottle Stoppers
+2325|588|Wine Boxes
+2326|588|Wine Openers & Corkscrews
+2327|588|Wine Racks
+2328|588|Other Bar & Wine Accessories
+2833|611|Bedroom Benches
+2834|611|Bedroom Sets
+2835|611|Beds
+2836|611|Dressers
+2837|611|Headboards
+2838|611|Mattresses
+2839|611|Nightstands
+2840|611|Vanities
+2841|611|Vanity Stools
+2842|611|Wardrobes & Armoires
+2843|611|Other Bedroom Furniture
+2407|612|Dining Benches
+2408|612|Dining Chairs
+2409|612|Dining Sets
+2410|612|Dining Tables
+2411|612|Kitchen Bar Stools
+2412|612|Other Dining Furniture
+2852|615|Bookcases
+2853|615|Desks
+2854|615|Filing Cabinets
+2855|615|Office Cabinets
+2856|615|Office Chairs
+2857|615|Office Chair Mats
+2858|615|Office Shelves
+2859|615|Other Home Office Furniture
+2860|616|Accent Chairs
+2861|616|Cabinets
+2862|616|Coffee Tables
+2863|616|Console Tables
+2864|616|Futons
+2865|616|Living Room Sets
+2867|616|Ottomans
+2868|616|Recliners
+2871|616|Sofas
+2872|616|TV Mounts
+2873|616|Other Living Room Furniture
+2826|617|Bathroom Cabinets
+2827|617|Bathroom Etagere
+2828|617|Bathroom Organizers
+2829|617|Bathroom Shelves
+2830|617|Bathroom Vanities
+2831|617|Hampers
+2832|617|Other Bathroom Storage
+620|618|Other Furniture Accessories
+2844|619|Backplates
+2845|619|Drawer Slides
+2846|619|Furniture Legs
+2847|619|Hinges
+2848|619|Knobs
+2849|619|Latches
+2850|619|Pulls & Handles
+2851|619|Other Furniture Hardware & Parts
+1854|1853|Greeting Cards & Invitations
+1855|1853|Gift Wrapping Supplies
+1856|1853|Party Decorations
+1857|1853|Balloons
+1858|1853|Party Tableware
+1859|1853|Piñatas
+1860|1853|Party Favors
+2244|1853|Party Hats
+2245|1853|Party Masks
+2361|2072|Cheese Knives
+2362|2072|Chef's Knives
+2363|2072|Kitchen Boning Knives
+2364|2072|Kitchen Bread Knives
+2365|2072|Kitchen Carving Knives
+2366|2072|Kitchen Cleavers
+2367|2072|Kitchen Knife Blocks
+2368|2072|Kitchen Knife Sets
+2369|2072|Kitchen Knife Sharpeners
+2370|2072|Kitchen Knife Storage
+2371|2072|Kitchen Paring Knives
+2372|2072|Kitchen Scissors & Shears
+2373|2072|Kitchen Steak Knives
+2374|2072|Kitchen Utility Knives
+2375|2072|Nakiri Knives
+2376|2072|Santoku Knives
+2306|2305|Cake Boards
+2307|2305|Cake Candles
+2308|2305|Cake Levelers
+2309|2305|Cake Scrapers
+2310|2305|Cake Toppers
+2311|2305|Cookie Cutters
+2312|2305|Icing Bags
+2313|2305|Icing Nozzles
+2314|2305|Rolling Pins
+2330|2329|Bar Glasses
+2331|2329|Beer Glasses
+2332|2329|Champagne Flutes
+2333|2329|Cocktail Glasses
+2334|2329|Highball Glasses
+2335|2329|Margarita Glasses
+2336|2329|Martini Glasses
+2337|2329|Old-Fashioned Glasses
+2338|2329|Shot Glasses
+2339|2329|Wine Glasses
+2384|2383|Coffee Mugs
+2385|2383|Drinking Glasses
+2386|2383|Glassware Collections
+2387|2383|Straws
+2388|2383|Tea Cups
+2389|2383|Travel Mugs
+2390|2383|Tumblers
+2391|2383|Water Bottles
+2392|2383|Other Drinkware Accessories
+2394|2393|Butter Knives
+2395|2393|Chopstick Holders
+2396|2393|Chopsticks
+2397|2393|Dinner Knives
+2398|2393|Flatware Sets
+2399|2393|Forks
+2400|2393|Pie Servers
+2401|2393|Salad Servers
+2402|2393|Serving Forks
+2403|2393|Serving Sets
+2404|2393|Serving Spoons
+2405|2393|Table Spoons
+2406|2393|Teaspoons
+2414|2413|Can Openers
+2415|2413|Cooking Funnels
+2416|2413|Cooking Thermometers
+2417|2413|Garlic Presses
+2418|2413|Ice Cube Trays
+2419|2413|Kitchen Cutting Boards
+2420|2413|Kitchen Mortar & Pestles
+2421|2413|Kitchen Scales
+2422|2413|Kitchen Timers
+2423|2413|Manual Juicers
+2424|2413|Mixing Bowls
+2425|2413|Nut & Shell Crackers
+2426|2413|Oil & Vinegar Dispensers
+2427|2413|Salt & Pepper Mills
+2428|2413|Salt & Pepper Shakers
+2429|2413|Spoon Rests
+2430|2413|Stove Burner Covers
+2431|2413|Other Kitchen Gadgets & Tools
+2489|2488|Electric Kettles
+2490|2488|Stovetop Kettles
+2491|2488|Tea Infusers
+2492|2488|Teapots
+2251|775|Computer Case Fans
+2252|775|Computer Controller Cards
+2253|775|Computer CPUs
+2254|775|Computer Drive Enclosures
+2255|775|Computer GPUs
+2256|775|Computer Memory (RAM)
+2257|775|Computer Motherboards
+2258|775|Computer Power Supplies
+2259|775|Computer Sound Cards
+2260|775|CPU Fans
+2261|775|Desktop Cases
+2262|775|Heatsinks
+2263|775|I/O Adapters
+2264|775|PC Water Cooling Accessories
+2265|775|PC Water Cooling Kits
+2266|775|Thermal Compound
+2267|775|Other Computer Parts & Components
+791|1580|Home surveillance
+1581|1580|Smart Thermostats
+1582|1580|Smart Lighting
+1583|1580|Smart Locks
+1584|1580|Smart Speakers & Assistants
+1585|1580|Smart Cleaning Appliances
+1586|1580|Other
+1532|146|Basic supplies
+1540|146|Desk Calendars
+1541|146|Presentation
+1542|146|Furniture
+1543|146|Other Office Supplies
+2919|146|Binder Clips
+2920|146|Clipboards
+2921|146|Correction Fluid
+2922|146|Dry Erase Calendar Boards
+2923|146|Paper Clips
+2924|146|Paper Cutters
+2925|146|Paper Punchers
+2926|146|Planners
+2927|146|Post-it Sticky Notes
+2928|146|Push Pins
+2929|146|Rubber Bands
+2930|146|Scotch Tape
+2931|146|Sheet Protectors
+2932|146|Staple Removers
+2933|146|Staplers
+2934|146|Staples
+2935|146|Tab Dividers
+2936|146|Tape Dispensers
+2937|146|Wall Calendars
+2938|146|Wall Clips
+2939|146|Wall Hooks
+2940|146|Whiteboards
+3495|1033|Carry-On Luggage
+3496|1033|Luggage Carts
+3497|1033|Luggage Scales
+3498|1033|Luggage Straps
+3499|1033|Luggage Tags
+3500|1033|Suitcases
+3501|1033|Travel Bags
+3502|1033|Other Travel & Luggage
+1010|1011|Comics
+1023|1011|Sci-fi & Fantasy Books
+1482|1011|Literary Fiction Books
+1487|1011|Fictional Children's Books
+3513|1011|Manga
+3514|1011|Romance Fiction Books
+3515|1011|Horror Fiction Books
+3516|1011|Western Books
+3517|1011|Historical Fiction Books
+3518|1011|Mystery & Crime Fiction Books
+3519|1011|Thriller Fiction Books
+3520|1011|Other Fiction Books
+3529|1011|Action & Adventure Books
+1018|1016|Craft Books
+1483|1016|Business & Finance Books
+1484|1016|Politics Books
+1486|1016|Religion & Spirituality Books
+1492|1016|Biographies & Memoirs
+2184|1016|Art Books
+2185|1016|Photography Books
+3521|1016|Nonfiction Children's Books
+3522|1016|Other Nonfiction Books
+1012|1480|Cookbooks
+1017|1480|Other Reference Books
+1489|1480|Educational & Instructional Books
+3523|1480|Dictionaries
+3524|1480|Thesauruses
+3525|1480|Encyclopedias
+3526|1480|Textbooks
+3530|1480|Health & Fitness Books
+3531|1480|Self-Help Books
+1669|1668|Board Games
+1670|1668|Card Games
+1671|1668|Chess & Checkers
+1673|1668|Tile Games
+1674|1668|Stacking Games
+1675|1668|Game Tables
+1676|1668|Game Accessories
+1677|1668|Jigsaw Puzzles
+1678|1668|Wooden Puzzles
+1679|1668|3-D Puzzles
+1680|1668|Dice Games
+1681|1668|Sudoku Puzzles
+1682|1668|Handheld Games
+1683|1668|Lawn Games
+1760|1759|Play Cooking & Baking
+1762|1759|Play Tool Sets
+1763|1759|Toddler & Baby Costumes
+1764|1759|Kids Costumes
+1765|1759|Playhouses
+1766|1759|Spy Gear
+1767|1759|Puppets
+1768|1759|Play Medical Toys
+1769|1759|Play Gardening Toys
+1770|1759|Other
+2239|1759|Play Teepees
+2240|1759|Play Tents
+2241|1759|Play Tunnels
+1772|1771|Fidget Toys
+1773|1771|Fortune Telling Toys
+1774|1771|Gag Toys & Practical Jokes
+1775|1771|Juggling Sets
+1776|1771|Magic Kits & Accessories
+1777|1771|Novelty Spinning Tops
+1779|1771|Novelty Surprise Toys
+2242|1771|Toy Putty
+2243|1771|Toy Slime
+1804|1803|Model Vehicles
+1805|1803|Model Kits
+1806|1803|Figurines
+1807|1803|Glass
+1808|1803|Souvenirs & Memorabilia
+1809|1803|Porcelain
+1810|1803|Arcade
+1811|1803|Paper Collectibles
+1812|1803|Antique Collectibles
+1813|1803|Other
+2635|2634|Bird Feeders
+2636|2634|Birdbaths
+2637|2634|Birdhouses
+2638|2634|Pathway Lights
+2639|2634|Landscape Flood Lights
+2640|2634|Outdoor Spotlights
+2641|2634|Flag Poles
+2642|2634|Flags
+2643|2634|Outdoor Fountains
+2644|2634|Garden Statues
+2645|2634|Garden Gazing Balls
+2646|2634|Outdoor Lanterns
+2647|2634|Patio Torches
+2648|2634|Landscape Rocks
+2649|2634|Plant Stands
+2650|2634|Outdoor Plant Vases
+2651|2634|Rain Gauges
+2652|2634|Outdoor String Lights
+2653|2634|Sundials
+2654|2634|Outdoor Thermometers
+2655|2634|Patio Umbrella Lights
+2656|2634|Weathervanes
+2657|2634|Wind Chimes
+2658|2634|Wind Spinners
+2659|2634|Other Outdoor Decor
+2661|2660|Garden Axes
+2662|2660|Fruit Pickers
+2663|2660|Garden Augers
+2664|2660|Garden Carts
+2665|2660|Garden Forks
+2666|2660|Garden Hoes
+2667|2660|Garden Picks
+2668|2660|Garden Scythes
+2669|2660|Garden Seeders
+2670|2660|Garden Sickles
+2671|2660|Garden Tool Racks
+2672|2660|Garden Wagons
+2673|2660|Garden Wheelbarrows
+2674|2660|Grass Shears
+2675|2660|Garden Hatchets
+2676|2660|Hedge Shears
+2677|2660|Lawn Aerators
+2678|2660|Lawn Rollers
+2679|2660|Loppers
+2680|2660|Manual Edgers
+2681|2660|Mattocks
+2682|2660|Post Hole Diggers
+2683|2660|Pruning Shears
+2684|2660|Pruning Snips
+2685|2660|Garden Rakes
+2686|2660|Pruning Saws
+2687|2660|Shovels
+2688|2660|Trowels
+2689|2660|Weeders
+2690|2660|Other Garden Hand Tools & Equipment
+2758|2757|Garden Fertilizers
+2759|2757|Garden Hangers
+2760|2757|Garden Hooks
+2761|2757|Garden Saucers
+2762|2757|Garden Sprayers
+2763|2757|Mulch
+2764|2757|Plant Labels
+2765|2757|Plant Ties & Supports
+2766|2757|Gardening Planters
+2767|2757|Gardening Pots
+2768|2757|Seed Starter Pots
+2769|2757|Soil
+2770|2757|Window Planting Boxes
+2771|2757|Other Planting Accessories
+2785|2784|Above-Ground Pools
+2786|2784|Inflatable Pools
+2787|2784|Pool Brushes
+2788|2784|Pool Clarifiers
+2789|2784|Pool Cleaners
+2790|2784|Pool Covers & Reels
+2791|2784|Pool Diving Boards
+2792|2784|Pool Fences
+2793|2784|Pool Filters
+2794|2784|Pool Heaters
+2795|2784|Pool Hoses
+2796|2784|Pool Ladders & Steps
+2797|2784|Pool Lights
+2798|2784|Pool Liners
+2799|2784|Pool Nets
+2800|2784|Pool Pumps
+2801|2784|Pool Slides
+2802|2784|Pool Thermometers
+2803|2784|Pool Vacuums
+2804|2784|Pool Water Levelers
+2805|2784|Other Pool Equipment
+3172|3171|Air Blow Guns
+3173|3171|Air Compressors
+3174|3171|Air Cut Off Tools
+3175|3171|Air Drills
+3176|3171|Air Grinders
+3177|3171|Air Hammers
+3178|3171|Air Hoses
+3179|3171|Air Impact Wrenches
+3180|3171|Air Nailer
+3181|3171|Air Polishers
+3182|3171|Air Pressure Regulators
+3183|3171|Air Ratchet Wrenches
+3184|3171|Air Sanders
+3185|3171|Air Sprayers
+3186|3171|Air Tool Fittings
+3187|3171|Grease Guns
+3188|3171|Inflators
+3189|3171|Other Air Tools
+3191|3190|Carabiners
+3192|3190|Chains
+3193|3190|Rope & Chain Connectors
+3194|3190|Ropes
+3195|3190|Wire Ropes
+3196|3190|Other Chain & Ropes
+3198|3197|Bolt Cutters
+3199|3197|Glass Cutters
+3200|3197|Jigs
+3201|3197|Machetes
+3202|3197|Miter Boxes
+3203|3197|Planes
+3204|3197|Other Cutting Tools
+3206|3205|Cable Cutters
+3207|3205|Cable Pliers
+3208|3205|Cable Pullers
+3209|3205|Conduit Benders
+3210|3205|Connector Tool Kits
+3211|3205|Crimping Dies
+3212|3205|Electrical Tool Kits
+3213|3205|Electrical Tweezers
+3214|3205|Fusion Splicers & Cleavers
+3215|3205|Soldering Guns
+3216|3205|Soldering Irons
+3217|3205|Wire Stripping Machines
+3218|3205|Other Electrical Tools
+3220|3219|C-Clamps
+3221|3219|Clamps
+3222|3219|Rivet Tools
+3223|3219|Staple Guns
+3224|3219|Staples
+3225|3219|Vises
+3226|3219|Other Fastening Tools
+3228|3227|Ball-Peen Hammers
+3229|3227|Claw Hammers
+3230|3227|Mallets
+3231|3227|Sledgehammers
+3232|3227|Other Hammers
+3234|3233|Adapters & Extenders
+3235|3233|Caulking & Sealing Guns
+3236|3233|Chisels
+3237|3233|Drill Bits
+3238|3233|Hand Crimpers
+3239|3233|Hex Keys
+3240|3233|Knives & Cutters
+3241|3233|Nut Drivers
+3242|3233|Pry Bars
+3243|3233|Punches
+3244|3233|Ratchets
+3245|3233|Sockets
+3246|3233|Stud Finders
+3247|3233|Wire Strippers
+3248|3233|Other Hand Tools
+3250|3249|Calipers
+3251|3249|Laser Levels
+3252|3249|Levels
+3253|3249|Measuring Tapes
+3254|3249|Measuring Wheels
+3255|3249|Range Meters
+3256|3249|Other Measuring & Layout
+3258|3257|Cutting Pliers
+3259|3257|Needle Nose Pliers
+3260|3257|Slip Joint Pliers
+3261|3257|Tongue & Groove Pliers
+3262|3257|Other Pliers
+3264|3263|Buffers & Polishers
+3265|3263|Combo Tool Sets
+3266|3263|Cordless Ratchets
+3267|3263|Grinders
+3268|3263|Hammer Drills
+3269|3263|Heat Guns
+3270|3263|Impact Drivers
+3271|3263|Impact Wrenches
+3272|3263|Lathes
+3273|3263|Multi-Tools
+3274|3263|Nail Guns
+3275|3263|Power Cutting Tools
+3276|3263|Power Drills
+3277|3263|Power Riveters
+3278|3263|Right Angle Drills
+3279|3263|Rotary Drills
+3280|3263|Routers
+3281|3263|Sanders
+3282|3263|Screw Guns
+3283|3263|Other Power Tools
+3285|3284|Power Tool Batteries
+3286|3284|Power Tool Battery Chargers
+3287|3284|Other Power Tool Accessories
+3289|3288|Back Support Belts
+3290|3288|Bump Caps
+3291|3288|Disposable Coveralls
+3292|3288|Disposable Gloves
+3293|3288|Ear Muffs
+3294|3288|Ear Plugs
+3295|3288|Emergency Response
+3296|3288|Face Shields
+3297|3288|First Aid Kits
+3298|3288|Hard Hats
+3299|3288|Knee Pads
+3300|3288|Lifelines
+3301|3288|PPE Kits
+3302|3288|Safety Glasses
+3303|3288|Safety Goggles
+3304|3288|Safety Vests
+3305|3288|Shoe Covers
+3306|3288|Work Gloves
+3307|3288|Other Safety Gear
+3309|3308|Band Saws
+3310|3308|Circular Saws
+3311|3308|Hand Saws
+3312|3308|Jigsaws
+3313|3308|Miter Saws
+3314|3308|Reciprocating Saws
+3315|3308|Tables Saws
+3316|3308|Other Saws
+3318|3317|Bandsaw Blades
+3319|3317|Circular Saw Blades
+3320|3317|Diamond Blades
+3321|3317|Jigsaw Blades
+3322|3317|Reciprocating Saw Blades
+3323|3317|Scroll Saw Blades
+3324|3317|Other Saw Accessories
+3326|3325|Multi-bit Screwdrivers
+3327|3325|Phillips Screwdrivers
+3328|3325|Screwdriver Bits
+3329|3325|Screwdriver Sets
+3330|3325|Slotted Screwdrivers
+3331|3325|Other Screwdrivers
+3333|3332|Bungee Cords
+3334|3332|Cargo Bars
+3335|3332|Cargo Nets
+3336|3332|D-Ring Anchors
+3337|3332|Load Binders
+3338|3332|Pulleys
+3339|3332|Ratchet Straps
+3340|3332|Tarp Straps
+3341|3332|Winch Straps
+3342|3332|Other Tie Downs
+3344|3343|Tool Bags
+3345|3343|Tool Belts
+3346|3343|Tool Chests
+3347|3343|Workbenches
+3348|3343|Other Tools Storage
+3350|3349|Spot Welders
+3351|3349|Welding Cables
+3352|3349|Welding Clamps
+3353|3349|Welding Fuel Cylinders
+3354|3349|Welding Helmet
+3355|3349|Welding Hoses
+3356|3349|Welding Machines
+3357|3349|Welding Tips
+3358|3349|Welding Torches
+3359|3349|Welding Valves
+3360|3349|Welding Wire
+3361|3349|Other Welding Equipment
+3363|3362|Adjustable Wrenches
+3364|3362|Box Wrenches
+3365|3362|Combination Wrenches
+3366|3362|Crescent Wrenches
+3367|3362|Open-End Wrenches
+3368|3362|Torque Wrenches
+3369|3362|Wrench Sets
+3370|3362|Other Wrenches
+1620|1619|Fashion Dolls
+1621|1619|Baby Dolls
+1622|1619|Interactive Dolls & Pets
+1623|1619|Dollhouses & Play Sets
+1624|1619|Dollhouse Furniture & Accessories
+1625|1619|Doll Clothes
+1626|1619|Doll Accessories
+1627|1619|Mini Dolls & Playsets
+1628|1619|Play Animals
+1656|1654|Electronic Games
+1657|1654|Kids Headphones
+1660|1654|Toy Walkie Talkies
+1661|1654|Kids Computer & Tablet Accessories
+1663|1654|Kids Telescopes
+1664|1654|Wind-Up & Walking Toys
+1665|1654|Toy Cameras
+1666|1654|Kids Watches
+1667|1654|Other
+2213|1654|Kids Computers
+2214|1654|Kids Tablets
+2215|1654|Kids Karaoke
+2216|1654|Kids Music Players
+2217|1654|Toy Electric Pets
+2218|1654|Toy Robots
+2219|1654|Toy Alarm Clocks
+2220|1654|Toy Phones
+922|99|Shoes
+923|99|Hat
+924|99|Scarf
+925|99|Eyewear
+926|99|Necktie
+927|99|Belt
+928|99|Handkerchief
+929|99|Cuff links
+930|99|Buckle
+932|99|Gloves
+933|99|Apron
+934|99|Compact
+935|99|Wallet
+936|99|Shawl
+937|99|Keychain
+938|99|Other
 `;
 
 /** Top-level families whose groups (level 1) were harvested completely. */
 export const MERCARI_EXPANDED_TOP_IDS: ReadonlyArray<number> = [1, 2, 3, 4, 5, 7, 8, 9, 10, 113, 141, 143, 1611, 2633, 3170];
 
 /** Groups (level 1) whose leaves (level 2) were harvested completely. Only leaves under these may be targeted. */
-export const MERCARI_EXPANDED_GROUP_IDS: ReadonlyArray<number> = [86, 84, 80, 85, 81, 139, 147, 1629, 1780, 3511, 142, 102, 103, 2603, 2609, 97, 76, 78, 2132, 77, 72, 65, 66, 61, 64, 67, 68, 69, 3008, 2710, 2813, 19, 12, 14, 17, 36, 27, 30, 33, 1587, 2126];
+export const MERCARI_EXPANDED_GROUP_IDS: ReadonlyArray<number> = [86, 84, 80, 85, 81, 139, 147, 1629, 1780, 3511, 142, 102, 103, 2603, 2609, 97, 76, 78, 2132, 77, 72, 65, 66, 61, 64, 67, 68, 69, 3008, 2710, 2813, 19, 12, 14, 17, 36, 27, 30, 33, 1587, 2126, 60, 62, 63, 70, 576, 577, 578, 579, 580, 582, 584, 585, 586, 588, 611, 612, 615, 616, 617, 618, 619, 1853, 2072, 2305, 2329, 2383, 2393, 2413, 2488, 775, 1580, 146, 1033, 1011, 1016, 1480, 1668, 1759, 1771, 1803, 2634, 2660, 2757, 2784, 3171, 3190, 3197, 3205, 3219, 3227, 3233, 3249, 3257, 3263, 3284, 3288, 3308, 3317, 3325, 3332, 3343, 3349, 3362, 1619, 1654, 99];
 
 /** Leaves whose own page was loaded and showed no deeper level (the rest of level 2 is treated as leaves by inference). */
-export const MERCARI_CONFIRMED_LEAF_IDS: ReadonlyArray<number> = [3100, 1472, 1641, 2606, 734, 3509];
+export const MERCARI_CONFIRMED_LEAF_IDS: ReadonlyArray<number> = [3100, 1472, 1641, 2606, 734, 3509, 71, 1494];
 
 export const MERCARI_ROOT_IDS = {
   WOMEN: 1,

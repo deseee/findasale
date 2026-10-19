@@ -215,10 +215,11 @@ export function marketplaceCategoryFields(it: {
   try {
     const r = resolveMercariCategory(input);
     if (r) { out.mercariCategoryId = r.id; out.mercariCategoryPath = r.pathText; out.mercariCategorySource = r.source; }
-    else if (typeof explainMercariCategory === 'function' && explainMercariCategory(input)?.stage === 'blank') {
-      // Deliberate blank (e.g. industrial pipe fittings have no consumer Mercari home): tell the extension NOT to guess
-      // with its own category search (it once filed a pipe fitting under Office > Business Envelopes).
-      out.mercariCategorySource = 'BLANK';
+    else if (typeof explainMercariCategory === 'function') {
+      // Only items Mercari cannot take at all (weapons, QA test rows) tell the extension NOT to run its own category
+      // search. Every other miss (including "tree group not harvested yet") keeps the extension's guarded search.
+      const ex = explainMercariCategory(input);
+      if (ex && ex.stage === 'blank' && (ex.detail === 'weapons' || ex.detail === 'test-rows')) out.mercariCategorySource = 'BLANK';
     }
   } catch (e: any) {
     console.warn('[Mercari category] resolve failed for item', e?.message || e);
