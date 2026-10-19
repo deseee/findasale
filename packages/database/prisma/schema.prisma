@@ -9086,3 +9086,18 @@ model ItemKitComponent {
   @@unique([kitItemId, componentItemId])
   @@index([componentItemId])
 }
+
+// Package change log (2026-10-19): filled by the database trigger "Item_package_change_log" on every change to an item's weight,
+// dimensions, package type, confirmed flag or estimate source. Intentionally no relation to Item: history outlives a deleted item.
+model ItemPackageChangeLog {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  itemId    String
+  changedAt DateTime @default(now())
+  oldValues Json?
+  newValues Json?
+  dbUser    String?
+  statement String?
+
+  @@index([itemId, changedAt])
+  @@index([changedAt])
+}
