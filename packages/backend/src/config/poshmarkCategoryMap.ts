@@ -123,6 +123,19 @@ const BOARD_GAMES = L('Home', 'Games', 'Board Games');
 const CARD_GAMES = L('Home', 'Games', 'Card Games');
 const OUTDOOR_GAMES = L('Home', 'Games', 'Outdoor Games');
 const HOME_PUZZLES = L('Home', 'Games', 'Puzzles');
+// 2026-10-19: Poshmark's own "Other" rows. Live listings (survey of ~110 item types) show sellers file golf clubs and
+// baseball gloves under Men > Other, guitars/amps/cables/pedals under Electronics > Other, and coins, paperbacks, plumbing
+// parts, valves, bulbs and locks under Home > Other.
+const OTHER_MEN = L('Men', 'Other');
+const OTHER_HOME = L('Home', 'Other');
+const OTHER_ELEC = L('Electronics', 'Other');
+const BACKPACKS = L('Men', 'Bags', 'Backpacks');
+const BBQ_TOOLS = L('Home', 'Kitchen', 'BBQ & Grilling Tools');
+const KITCHEN_TOOLS = L('Home', 'Kitchen', 'Kitchen Tools');
+const LABELS = L('Home', 'Office', 'Labels & Label Makers');
+const COMPUTER_MICS = L('Electronics', 'Computers, Laptops & Parts', 'Computer Microphones');
+const VIDEO_GAMES = L('Electronics', 'Video Games & Consoles', 'Video Games');
+const MEN_HATS = L('Men', 'Accessories', 'Hats');
 const STORAGE = L('Home', 'Storage & Organization', 'Storage');
 const CLOSET = L('Home', 'Storage & Organization', 'Closet Accessories');
 const BINDERS = L('Home', 'Office', 'Binders & Folders');
@@ -181,26 +194,34 @@ export const POSHMARK_CURATED_BY_EBAY_ID: Record<string, PoshmarkCuratedEntry> =
   '1438': CARD_GAMES, // Playing Cards
   '180349': BOARD_GAMES, // Board games, contemporary manufacture
   // Coins and paper money: no Poshmark home
-  '11981': null,
-  '40029': null,
+  '11981': OTHER_HOME,
+  '40029': OTHER_HOME,
   // Instruments and audio gear: no Poshmark home
-  '33021': null, '33034': null, '4713': null, '16224': null, '38072': null, '46677': null, '22672': null,
-  '22670': null, '22669': null, '41419': null, '29946': null, '29948': null, '41459': null, '14964': null,
-  '47075': null, '21766': null, '47091': null, '41408': null,
+  '33021': OTHER_ELEC, '33034': OTHER_ELEC, '4713': OTHER_ELEC, '16224': OTHER_ELEC, '38072': OTHER_ELEC, '46677': OTHER_ELEC, '22672': OTHER_ELEC,
+  '22670': OTHER_ELEC, '22669': OTHER_ELEC, '41419': OTHER_ELEC, '29946': COMPUTER_MICS, '29948': OTHER_ELEC, '41459': OTHER_ELEC, '14964': OTHER_ELEC,
+  '47075': OTHER_ELEC, '21766': OTHER_ELEC, '47091': OTHER_ELEC, '41408': OTHER_ELEC,
   // Video game accessories
   '117042': { split: [['controllers?|gamepad|joy ?cons?', CONTROLLERS], ['headsets?', GAME_HEADSETS]] }, // Controllers & Attachments
-  '182174': { split: [['strategy|guide|walkthrough', GAME_GUIDES]] }, // Manuals, Inserts & Box Art
+  '182174': { split: [['strategy|guide|walkthrough', GAME_GUIDES]], fallback: VIDEO_GAMES }, // Manuals, Inserts & Box Art
   // Sports: no Poshmark home
-  '115280': null, '16030': null, '16038': null, '181382': null, '15262': null, '159175': null, '24510': null,
-  '1226': null, '27280': null, '50807': null,
+  '115280': OTHER_MEN, '16030': OTHER_MEN, '16038': OTHER_HOME, '181382': BACKPACKS, '15262': OTHER_MEN, '159175': OTHER_MEN, '24510': OTHER_MEN,
+  '1226': OTHER_MEN, '27280': MEN_HATS, '50807': BACKPACKS,
   // Signs
   '38052': WALL_ART, '804': WALL_ART, '10805': WALL_ART, '35684': WALL_ART,
   '3893': { split: [['signs?', WALL_ART]] }, // Other Retail Store Ads (only when it is a sign)
   // Tobacco-adjacent (tins, ashtrays, lighters, cigar and cigarette collectibles): Poshmark prohibits tobacco, blank
-  '38053': null, '11677': null, '801': null, '133': null, '986': null, '44': null, '70993': null, '11673': null,
-  '594': null,
+  // 2026-10-19: empty ashtrays, boxes, tins and lighters list freely (Home > Accents > Decor / Home > Other); real tobacco does not.
+  '38053': { split: [['ashtrays?|boxes|box|tins?|cases?|cutters?|humidors?|trays?', DECOR], ['lighters?|zippo', OTHER_HOME]], fallback: null },
+  '11677': { split: [['ashtrays?|boxes|box|tins?|cases?|cutters?|humidors?', DECOR], ['lighters?|zippo', OTHER_HOME]], fallback: null },
+  '801': { split: [['ashtrays?|boxes|box|tins?|cases?|cutters?|humidors?|trays?', DECOR], ['lighters?|zippo', OTHER_HOME]], fallback: null },
+  '133': { split: [['ashtrays?|boxes|box|tins?|cases?|cutters?|humidors?|trays?', DECOR]], fallback: null },
+  '986': { split: [['ashtrays?|boxes|box|tins?|cases?|cutters?|humidors?|trays?', DECOR], ['lighters?|zippo', OTHER_HOME]], fallback: null },
+  '44': { split: [['signs?|ads?|advertis|tins?|boxes|box|trays?', DECOR]], fallback: null },
+  '70993': { split: [['lighters?|zippo', OTHER_HOME]], fallback: null },
+  '11673': { split: [['ashtrays?|boxes|box|tins?|cases?|cutters?|humidors?|trays?', DECOR]], fallback: null },
+  '594': DECOR, // Tobacciana ashtrays
   // Advertising memorabilia without a clear object
-  '35': null, '1333': null, '259256': null,
+  '35': WALL_ART, '1333': WALL_ART, '259256': WALL_ART,
   // Art and decor
   '551': PAINTING, // Paintings
   '41511': { split: [['title:posters?', POSTERS], ['title:prints?|lithographs?|giclee', PRINTS]] }, // Posters & Prints
@@ -228,10 +249,11 @@ export const POSHMARK_CURATED_BY_EBAY_ID: Record<string, PoshmarkCuratedEntry> =
   '100351': FISH_ACCESSORIES, // Pumps (Air)
   '100355': FISH_ACCESSORIES, // Air Stones
   // Garden, hardware, furniture, industrial: no Poshmark home
-  '139921': null, '178988': null, '178989': null, '20684': null, '260505': null, '151621': null, '180964': null,
-  '20542': null, '260941': null, '75670': null, '184148': null, '260831': null, '185258': null, '63900': null,
-  '48094': null, '48656': null, '109431': null, '12506': null, '104043': null, '177908': DECOR, '13716': null,
-  '88903': null, '11226': null, '1245': null, '38235': { split: [['masks?|plaques?|wall (art|decor|hangings?)', DECOR]], fallback: null },
+  '139921': OTHER_HOME, '178988': OTHER_HOME, '178989': OTHER_HOME, '20684': KITCHEN_TOOLS, '260505': OTHER_HOME, '151621': BBQ_TOOLS, '180964': OTHER_HOME,
+  '20542': OTHER_HOME, '260941': OTHER_HOME, '75670': OTHER_HOME, '184148': OTHER_HOME, '260831': OTHER_HOME, '185258': OTHER_HOME, '63900': OTHER_HOME,
+  '48094': OTHER_HOME, '48656': OTHER_ELEC, '109431': OTHER_HOME, '12506': WALL_ART, '104043': OTHER_HOME, '177908': DECOR, '13716': OTHER_HOME,
+  '88903': null, // Daggers: weapons stay blank
+  '11226': OTHER_HOME, '1245': LABELS, '38235': { split: [['masks?|plaques?|wall (art|decor|hangings?)', DECOR]], fallback: null },
   // Clothing with a department split
   '185708': TRACKSUIT, // Tracksuits & Sets
   '185084': TRACKSUIT, // Tracksuits & Sets (Clothing, Shoes & Accessories)
@@ -250,13 +272,22 @@ export const POSHMARK_RULES: PoshmarkRuleDef[] = [
   rule('collar-shirt-studs', CUFFLINKS, ['shirt studs?|collar (button|stays?)|collar buttons?|dress studs?']),
   rule('decor-masks-antlers-mats', DECOR, ['(porcelain|decorative|wall|ceramic) masks?|antlers?|counter mats?|bar mats?']),
   rule('toy-talking-banks', KIDS_FIGURES, ['talking bank|toy banks?|electronic banks?']),
+  rule('ashtrays-decor', DECOR, ['ash ?trays?']),
+  rule('homebrew-bar', L('Home', 'Dining', 'Bar Accessories'), ['wort chillers?|home ?brew(ing)?|beer brewing']),
+  rule('home-other-misc', OTHER_HOME, ['digital timers?|weekly timers?|expansion tanks?|mannequin (heads?|stands?)|clamp stands?|shop lights?|work lights?|vending machines?|privacy screens?|screen dividers?|folding screens?']),
   blank('tobacco-adjacent', ['tobacciana|cigarettes?|cigars?|cigarillos?|tobacco|ashtrays?|zippo|cigarette lighters?|butane lighters?|collectible lighters?|smoking pipes?|tobacco pipes?|pipe tobacco|hookahs?|vapes?|vaping|snuff|rolling papers?|humidors?|cigar (boxes|cutters)'],
     ['signs?|posters?|prints?|shirts?|tees?|hats?|caps?|hoodies?|jackets?|mugs?|books?|magazines?|dvds?|records?']),
   blank('weapons', ['firearms?|guns?|rifles?|pistols?|revolvers?|shotguns?|ammo|ammunition|bullets?|holsters?|daggers?|swords?|machetes?|switchblades?|pocket knife|pocket knives|folding kni(?:fe|ves)|hunting kni(?:fe|ves)|survival knives|tactical knives|combat knives|throwing knives|bayonets?|brass knuckles|crossbows?|bows and arrows?|airsoft|bb guns?|stun guns?|tasers?|pepper spray|rifle scopes?|gun (cases?|safes?)'],
     ['toy (guns?|swords?)|nerf|water guns?|glue guns?|heat guns?|spray guns?|staple guns?|caulk(ing)? guns?|hot glue|paintball|top gun|guns n roses|smoking gun|cap guns?|hair dryers?|steak knives|kitchen knives|knife blocks?|books?|dvds?|posters?|shirts?|tees?|figures?|figurines?|sword fish|swordfish|video games?|games?']),
 
+  // 2026-10-19: specific placements confirmed against live Poshmark listings, ahead of the catch-all Other rules.
+  rule('neogeo-cartridges', VIDEO_GAMES, ['neo ?geo|mvs', 'cartridges?|games?|cart'], ['marquees?|cabinets?']),
+  rule('microphones', COMPUTER_MICS, ['microphones?|mics?'], ['cables?|stands?|pop filter|clips?|holders?|boom|windscreens?|shock ?mounts?']),
+  rule('grills-bbq', BBQ_TOOLS, ['charcoal grills?|gas grills?|bbq grills?|barbecue grills?|grills?'], ['fire pits?|pits?']),
+  rule('baseball-bags', BACKPACKS, ['(baseball|softball|bat) (backpacks?|bags?)|cooler backpacks?|insulated backpacks?']),
+  rule('label-printers', LABELS, ['label printers?|label makers?|thermal label']),
   // Arcade boards, cartridges and marquees: no Poshmark home (and not a console game either).
-  blank('arcade-parts', ['neo ?geo|mvs|arcade (cartridges?|boards?|parts?|cabinets?|machines?)|marquees?|jamma'], ['letters?|lights?|signs?|tents?|shirts?|tees?|posters?|hoodies?']),
+  rule('arcade-parts', OTHER_HOME, ['neo ?geo|mvs|arcade (cartridges?|boards?|parts?|cabinets?|machines?)|marquees?|jamma'], ['letters?|lights?|signs?|tents?|shirts?|tees?|posters?|hoodies?']),
 
   // ===== 2. media ========================================================================================
   rule('media-vinyl', VINYL, ['vinyl records?|vinyl albums?|record albums?|lps?|12 inch (single|vinyl)|45 rpm|33 rpm|vinyl'],
@@ -297,10 +328,10 @@ export const POSHMARK_RULES: PoshmarkRuleDef[] = [
   rule('puzzles', { kids: L('Kids', 'Toys', 'Puzzles & Games'), any: HOME_PUZZLES }, ['jigsaw|puzzles?'], ['video games?|puzzle (box(?:es)?|cubes?|rings?)|rubiks?|3d wood|brain teasers?|crossword (books?)|magazines?|piece (bracelets?|necklaces?)|games? for|pc games?|dvds?']),
   rule('stamps-craft', L('Home', 'Design', 'Stamps'), ['rubber stamps?|craft stamps?|clear stamps?|stamp pads?|ink stamps?']),
   // Collectible postage stamps, coins and currency: no Poshmark home
-  blank('stamps-coins-currency', ['postage stamps?|stamp (collections?|albums?|lots?|sheets?)|first day covers?|philatel|coins?|numismatic|paper money|banknotes?|currency|silver dollars?|proof sets?|mint sets?|bullion|eisenhower|morgan dollars?|peace dollars?'],
+  rule('stamps-coins-currency', OTHER_HOME, ['postage stamps?|stamp (collections?|albums?|lots?|sheets?)|first day covers?|philatel|coins?|numismatic|paper money|banknotes?|currency|silver dollars?|proof sets?|mint sets?|bullion|eisenhower|morgan dollars?|peace dollars?'],
     ['coin (purses?|pouch(es)?|banks?|operated|laundry|batteries|cell|holders?|tubes?|storage|flips?|capsules?)|shirts?|tees?|necklaces?|bracelets?|earrings?|rings?|jewelry|pendants?|sports cards?|trading cards?']),
 
-  blank('coins-category', ['cat:coins and paper money'], ['coin (purses?|pouch(es)?|banks?|operated|laundry|batteries|cell|holders?|tubes?|storage|flips?|capsules?)|sports cards?|trading cards?|books?|shirts?']),
+  rule('coins-category', OTHER_HOME, ['cat:coins and paper money'], ['coin (purses?|pouch(es)?|banks?|operated|laundry|batteries|cell|holders?|tubes?|storage|flips?|capsules?)|sports cards?|trading cards?|books?|shirts?']),
 
   // ===== 5. books, comics, magazines =====================================================================
   // Comics: ALWAYS Coffee Table Books, the live-verified home on Poshmark (never a magazine or toy leaf).
@@ -313,9 +344,9 @@ export const POSHMARK_RULES: PoshmarkRuleDef[] = [
   rule('coffee-table-books', COFFEE_BOOKS, ['coffee table books?|art books?|photography books?|photo books?|picture books? for adults']),
   rule('art-books-by-title', COFFEE_BOOKS, ['books?|hardcover|hardback', 'beeple|artist|paintings?|sculpture|illustrations?|photography|everydays']),
   // General books (novels, textbooks, bibles): Poshmark has no books category, so a deliberate blank.
-  blank('general-books-cat', ['cat:books'],
+  rule('general-books-cat', OTHER_HOME, ['cat:books'],
     ['bookends?|book ends|bookshelf|bookcase|book bags?|book lights?|booklets?|notebooks?|coloring|cookbooks?|comics?|magazines?|posters?|shirts?|tees?|mugs?|totes?|dvds?|cds?|games?|magazines? and|music|movies?']),
-  blank('general-books', ['novels?|paperbacks?|hardcovers?|hardbacks?|textbooks?|first editions?|bibles?|encyclopedias?|audiobooks?'],
+  rule('general-books', OTHER_HOME, ['novels?|paperbacks?|hardcovers?|hardbacks?|textbooks?|first editions?|bibles?|encyclopedias?|audiobooks?'],
     ['bookends?|book ends|bookshelf|bookcase|book bags?|book lights?|booklets?|notebooks?|coloring|cookbooks?|comics?|magazines?|posters?|shirts?|tees?|mugs?|totes?|dvds?|cds?|games?']),
 
   // ===== 6. art, wall decor, home accents ================================================================
@@ -494,21 +525,21 @@ export const POSHMARK_RULES: PoshmarkRuleDef[] = [
   blank('small-appliances', ['blenders?|toasters?|toaster ovens?|stand mixers?|hand mixers?|kitchenaid|air fryers?|instant pots?|crock ?pots?|slow cookers?|pressure cookers?|rice cookers?|food processors?|waffle (makers?|irons?)|juicers?|microwaves?|bread makers?|deep fryers?|electric (kettles?|skillets?|grills?)|vacuums?|vacuum cleaners?|steam (mops?|cleaners?)|clothes irons?|steam irons?|travel irons?|air purifiers?|humidifiers?|dehumidifiers?|space heaters?|air conditioners?|washing machines?|dryers?|refrigerators?|dishwashers?|ovens?|stoves?|sewing machines?|coffee makers?|espresso (machines?|makers?)|keurig|nespresso|ice makers?|dehydrators?|sous vide'],
     [NOT_COLLECTIBLE, 'books?|cookbooks?|dvds?|covers?|bags?|filters?|parts?|accessor|miniature|toy|play|kids?|decor|vintage tins?|cases?|mitts?|liners?']),
   // Grills, smokers and fire pits are outdoor equipment (the BBQ leaf is tools only).
-  blank('outdoor-cooking', ['grills?|barbecues?|smokers?|fire pits?|patio heaters?|chimineas?'], [NOT_APPAREL, NOT_COLLECTIBLE, 'tools?|utensils?|tongs?|brush(es)?|spatulas?|mats?|covers?|baskets?|accessor|toys?|play|books?|cookbooks?|trays?|pans?|plates?|racks?|cleaners?|thermometers?|sets?|chips?|boxes']),
+  rule('outdoor-cooking', OTHER_HOME, ['grills?|barbecues?|smokers?|fire pits?|patio heaters?|chimineas?'], [NOT_APPAREL, NOT_COLLECTIBLE, 'tools?|utensils?|tongs?|brush(es)?|spatulas?|mats?|covers?|baskets?|accessor|toys?|play|books?|cookbooks?|trays?|pans?|plates?|racks?|cleaners?|thermometers?|sets?|chips?|boxes']),
   blank('consumables', ['alcohol|liquors?|wine bottles?|whiskey|whisky|vodka|bourbon|tequila|beer cans?|vitamins?|supplements?|prescriptions?|medications?|medicines?|candy|snacks?|pet food|dog food|cat food|e liquid|cbd|cannabis|marijuana|kratom'],
     ['glasses|decanters?|shirts?|tees?|posters?|signs?|books?|bottle openers?|decor|cookbooks?|stoppers?|racks?|labels?|boxes|tins?|jars?|dispensers?|holders?|dish(es)?|bowls?|plates?|trays?|containers?|candles?|scented|wax|soap|wine glass(es)?']),
-  blank('sports-gear', ['golf|baseball|softball|hockey|lacrosse|football|basketball|soccer|tennis|racquetball|badminton|volleyball|bowling|archery|fishing|hunting|camping|hiking|climbing|kayaks?|canoes?|paddles?|surfboards?|skateboards?|snowboards?|skis?|skates?|scooters?|bicycles?|bikes?|cycling|treadmills?|ellipticals?|dumbbells?|kettlebells?|barbells?|exercise|fitness|yoga|pilates|boxing|martial arts|karate|fencing|rowing|life jackets?|coolers?|tents?|sleeping bags?|backpacking|trekking|sporting goods|fan shop|sports mem|gloves? mitts?|catchers? mitts?|batting|bats?|rackets?|racquets?|paintball|disc golf|frisbees?|dart ?boards?|pool cues?|billiards?|ping pong|table tennis|helmets?|mouth ?guards?|shin guards?|knee pads?|elbow pads?|weight (benches|plates|sets)|resistance bands?|jump ropes?|punching bags?|swim (goggles?|fins?|caps?)|snorkels?|wetsuits?|fishing (rods?|reels?|lures?|tackle)|auto parts|car parts|motorcycle|tires?|hubcaps?'],
+  rule('sports-gear', OTHER_MEN, ['golf|baseball|softball|hockey|lacrosse|football|basketball|soccer|tennis|racquetball|badminton|volleyball|bowling|archery|fishing|hunting|camping|hiking|climbing|kayaks?|canoes?|paddles?|surfboards?|skateboards?|snowboards?|skis?|skates?|scooters?|bicycles?|bikes?|cycling|treadmills?|ellipticals?|dumbbells?|kettlebells?|barbells?|exercise|fitness|yoga|pilates|boxing|martial arts|karate|fencing|rowing|life jackets?|coolers?|tents?|sleeping bags?|backpacking|trekking|sporting goods|fan shop|sports mem|gloves? mitts?|catchers? mitts?|batting|bats?|rackets?|racquets?|paintball|disc golf|frisbees?|dart ?boards?|pool cues?|billiards?|ping pong|table tennis|helmets?|mouth ?guards?|shin guards?|knee pads?|elbow pads?|weight (benches|plates|sets)|resistance bands?|jump ropes?|punching bags?|swim (goggles?|fins?|caps?)|snorkels?|wetsuits?|fishing (rods?|reels?|lures?|tackle)|auto parts|car parts|motorcycle|tires?|hubcaps?'],
     [NOT_APPAREL, NOT_COLLECTIBLE, 'games?|toys?|puzzles?|books?|dvds?|cds?|records?|vinyl|stickers?|decals?|mugs?|signs?|prints?|lamps?|plush|ornaments?|candles?|clocks?|frames?|belts?|bags?|sunglasses|watch(?:es)?|glasses|wallets?|key ?chains?|tags?']),
-  blank('musical-instruments', ['guitars?|bass guitars?|ukuleles?|violins?|cellos?|violas?|banjos?|mandolins?|trumpets?|trombones?|saxophones?|clarinets?|harmonicas?|drums?|drum (sets?|sticks?|heads?)|cymbals?|pianos?|synthesizers?|synths?|amplifiers?|amps?|effects? pedals?|pedalboards?|guitar (pedals?|picks?|straps?|strings?|cables?|tuners?|cases?|stands?)|instrument cables?|microphones?|mic stands?|xlr|midi|audio interfaces?|mixers?|studio monitors?|pa speakers?|musical instruments?|tuners?|capos?|metronomes?|pickups?'],
+  rule('musical-instruments', OTHER_ELEC, ['guitars?|bass guitars?|ukuleles?|violins?|cellos?|violas?|banjos?|mandolins?|trumpets?|trombones?|saxophones?|clarinets?|harmonicas?|drums?|drum (sets?|sticks?|heads?)|cymbals?|pianos?|synthesizers?|synths?|amplifiers?|amps?|effects? pedals?|pedalboards?|guitar (pedals?|picks?|straps?|strings?|cables?|tuners?|cases?|stands?)|instrument cables?|microphones?|mic stands?|xlr|midi|audio interfaces?|mixers?|studio monitors?|pa speakers?|musical instruments?|tuners?|capos?|metronomes?|pickups?'],
     [NOT_APPAREL, NOT_COLLECTIBLE, 'ties?|games?|toys?|books?|dvds?|cds?|records?|vinyl|candles?|stickers?|decals?|signs?|lamps?|mugs?|clocks?|frames?|belts?|bags?|wallets?|key ?chains?|tags?|plush|boxes|music box(?:es)?|flutes? glasses|champagne']),
-  blank('musical-instruments-cat', ['cat:musical instruments and gear'], [NOT_APPAREL, NOT_COLLECTIBLE, 'games?|toys?|books?|dvds?|cds?|records?|vinyl|candles?|stickers?|decals?|signs?|lamps?|mugs?|clocks?|frames?']),
+  rule('musical-instruments-cat', OTHER_ELEC, ['cat:musical instruments and gear'], [NOT_APPAREL, NOT_COLLECTIBLE, 'games?|toys?|books?|dvds?|cds?|records?|vinyl|candles?|stickers?|decals?|signs?|lamps?|mugs?|clocks?|frames?']),
   // Industrial / lab / plumbing parts (eBay Business & Industrial) have no consumer home on Poshmark.
-  blank('industrial-parts', ['pipe fittings?|valves?|manifolds?|chromatography|power transformers?|pulleys?|block and tackle|hydraulics?|pneumatics?|lab (equipment|supplies|glassware)|test equipment|industrial (plumbing|supplies|electrical|automation|hvac|equipment)|pond and fountain pumps?|utility pumps?|sump pumps?|heat exchangers?|tankless water heaters?|push to connect|npt|npt[a-z]'],
+  rule('industrial-parts', OTHER_HOME, ['pipe fittings?|valves?|manifolds?|chromatography|power transformers?|pulleys?|block and tackle|hydraulics?|pneumatics?|lab (equipment|supplies|glassware)|test equipment|industrial (plumbing|supplies|electrical|automation|hvac|equipment)|pond and fountain pumps?|utility pumps?|sump pumps?|heat exchangers?|tankless water heaters?|push to connect|npt|npt[a-z]'],
     [NOT_APPAREL, NOT_COLLECTIBLE, 'games?|toys?|books?|dvds?|cds?|records?|vinyl|candles?|signs?|lamps?|mugs?|clocks?|frames?|decor']),
-  blank('garden-hardware-tools', ['grow (lights?|tents?|kits?)|hydroponics?|garden (hoses?|tools?|shears?|gloves?|carts?)|lawn (mowers?|sprinklers?)|sprinklers?|irrigation|hoses?|pressure washers?|chainsaws?|power tools?|drills?|saws?|hand tools?|wrenches|wrench sets?|screwdrivers?|hammers?|toolbox(?:es)?|tool (sets?|box(?:es)?|chests?)|door (knobs?|levers?|handles?|locks?)|cabinet (knobs?|pulls?|hardware)|faucets?|plumbing|water (filters?|heaters?)|light bulbs?|bulbs?|thermometers?|moisture meters?|ph meters?|soap (butters?|making)|carrier oils?|padlocks?|hinges?|fasteners?|screws?|bolts?|nuts and bolts|nails|lumber|building materials|home improvement'],
+  rule('garden-hardware-tools', OTHER_HOME, ['grow (lights?|tents?|kits?)|hydroponics?|garden (hoses?|tools?|shears?|gloves?|carts?)|lawn (mowers?|sprinklers?)|sprinklers?|irrigation|hoses?|pressure washers?|chainsaws?|power tools?|drills?|saws?|hand tools?|wrenches|wrench sets?|screwdrivers?|hammers?|toolbox(?:es)?|tool (sets?|box(?:es)?|chests?)|door (knobs?|levers?|handles?|locks?)|cabinet (knobs?|pulls?|hardware)|faucets?|plumbing|water (filters?|heaters?)|light bulbs?|bulbs?|thermometers?|moisture meters?|ph meters?|soap (butters?|making)|carrier oils?|padlocks?|hinges?|fasteners?|screws?|bolts?|nuts and bolts|nails|lumber|building materials|home improvement'],
     [NOT_APPAREL, NOT_COLLECTIBLE, 'games?|toys?|books?|dvds?|cds?|records?|vinyl|candles?|signs?|lamps?|mugs?|clocks?|frames?|belts?|bags?|wallets?|key ?chains?|tags?|plush|decor|fixtures?|lighting|ornaments?|hooks?|wall|display']),
   blank('furniture-cat', ['cat:furniture'], [NOT_APPAREL, NOT_COLLECTIBLE, 'lamps?|decor|candles?|vases?|frames?|baskets?|trays?|clocks?|mugs?|mirrors?|books?|games?|toys?']),
-  blank('industrial-cat', ['cat:business and industrial|home improvement'], ['lamps?|decor|candles?|vases?|frames?|baskets?|signs?|clocks?|mugs?']),
+  rule('industrial-cat', OTHER_HOME, ['cat:business and industrial|home improvement'], ['lamps?|decor|candles?|vases?|frames?|baskets?|signs?|clocks?|mugs?']),
   blank('furniture', ['furniture|sofas?|couch(es)?|loveseats?|sectionals?|recliners?|armchairs?|chairs?|stools?|bench(?:es)?|ottomans?|tables?|desks?|dressers?|nightstands?|bookcases?|bookshel(?:f|ves)|shelving units?|cabinets?|wardrobes?|armoires?|headboards?|bed frames?|bunk beds?|mattress(es)?|futons?|tv stands?|tv mounts?|entertainment centers?|clothing racks?|garment racks?|coat racks?|hat racks?|bar carts?|plant stands?|room dividers?|area rugs?|rugs?|carpets?'],
     [NOT_APPAREL, NOT_COLLECTIBLE, 'table (cloths?|linens?|runners?|lamps?|settings?|mats?|toppers?|clocks?|salt|tennis|saws?|games?|top|football)|chair (covers?|pads?|cushions?)|cushions?|covers?|coffee table books?|desk (organizers?|pads?|calendars?|lamps?|accessories|sets?)|rug pads?|bath rugs?|nesting|games?|toys?|dollhouse|miniature|books?|dvds?|cds?|records?|vinyl|candles?|signs?|lamps?|mugs?|clocks?|frames?|belts?|bags?|wallets?|key ?chains?|tags?|plush|decor|vases?|baskets?|trays?|boxes|racks? for|hangers?|hooks?|bookends?|paperweights?|shelves|display']),
 

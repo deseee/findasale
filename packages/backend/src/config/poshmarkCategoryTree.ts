@@ -22,8 +22,8 @@
  *    department: those item types have no true home on Poshmark.
  *  - Category level: complete for all 6 departments as listed by the public facets. NOT listed there, but present
  *    in the live sell-form picker according to earlier live walks recorded in extension/fas-poshmark.js: an "Other"
- *    row at department and category level (e.g. Men > Other, Home > Other). "Other" is deliberately NOT in this
- *    tree: the resolver never targets it (a deliberate blank beats a catch-all). Women/Men "Global & Traditional
+ *    row at department and category level (e.g. Men > Other, Home > Other). 2026-10-19: the "Other" rows (Women, Men, Kids, Home, Electronics) are now in
+ *    the tree because live listings of golf clubs, instruments, plumbing parts, coins etc. sit there. Women/Men "Global & Traditional
  *    Wear" (Kimonos, Sarees, Kilts ...) was not harvested: no FindA.Sale mapping targets it.
  *  - Sub-category level VERIFIED (read from the category's own page): all 13 Home categories; Electronics
  *    Cameras, Computers, Cell Phones, Car Audio, Wearables, Tablets, Video Games, Media, Networking, Headphones,
@@ -556,6 +556,11 @@ Electronics-Portable_Audio_&_Video-Portable_CD_Players|Electronics-Portable_Audi
 Electronics-Portable_Audio_&_Video-Portable_DVD_Players|Electronics-Portable_Audio_&_Video|Portable DVD Players
 Electronics-Portable_Audio_&_Video-Portable_Speakers|Electronics-Portable_Audio_&_Video|Portable Speakers
 Electronics-Portable_Audio_&_Video-Radios|Electronics-Portable_Audio_&_Video|Radios
+Women-Other|Women|Other
+Men-Other|Men|Other
+Kids-Other|Kids|Other
+Home-Other|Home|Other
+Electronics-Other|Electronics|Other
 `;
 
 /** Categories whose sub-categories were never read (see header): NOT valid mapping targets. */

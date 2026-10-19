@@ -187,6 +187,11 @@ export const VINTED_RULES: VintedRuleDef[] = [
   rule('crocks-food-storage', 3523, ['crocks?|salt cellars?'], ['crock ?pots?|slow cookers?']),
   rule('art-books', 2320, ['books?|hardcover|hardback', 'art|artist|painting|beeple|sculpture|illustration|drawings?']),
   rule('collar-shirt-studs', 1800, ['shirt studs?|collar (button|stays?)|collar buttons?|dress studs?']),
+  // 2026-10-19: live Vinted listings put electric valves under Electronics > Other devices (3013), window/sash locks under Hardware > Door knobs & handles (4044).
+  rule('electric-valves', 3013, ['solenoid valves?|electric valves?']),
+  rule('window-sash-locks', 4044, ['sash locks?|window locks?|keyed alike']),
+  rule('work-shop-lights', 4038, ['shop lights?|work lights?|fluorescent shop']),
+  rule('hose-nozzles', 4122, ['(spray|hose|irrigation|garden) nozzles?|nozzles? with .{0,20}mesh']),
   // Industrial / lab / plumbing parts (eBay Business & Industrial) have no consumer home on Vinted: deliberate blank, before any keyword rule can mis-file them.
   blank('industrial-equipment', ['cat:business and industrial|pipe fittings?|valves? and manifolds?|other valves|manifolds?|chromatography|power transformers?|pulleys?|block and tackle|hydraulics?|pneumatics?|lab (equipment|supplies|glassware)|test equipment|industrial (plumbing|supplies|electrical|automation|hvac|equipment)|tankless water heaters?|water heaters?|pond and fountain pumps?|utility pumps?|sump pumps?|heat exchangers?']),
   // Comics: ALWAYS Comics, manga & graphic novels (5425), never Magazines (S1063 regression).

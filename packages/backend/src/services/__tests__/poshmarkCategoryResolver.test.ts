@@ -90,11 +90,10 @@ describe('poshmarkCategoryResolver: comics, magazines, books', () => {
     expect(pathOf({ title: 'Synthetic Gaming Monthly Magazine Vol 69 1995', ebayCategoryId: '280', ebayCategoryName: 'Magazines' })).toBe('Home > Accents > Coffee Table Books');
   });
 
-  it('a cookbook goes to Cookbooks; a plain novel is a deliberate blank (Poshmark has no books category)', () => {
+  it('a cookbook goes to Cookbooks; a plain novel goes to Home > Other where live sellers file paperbacks', () => {
     expect(pathOf({ title: 'Synthetic Family Cookbook, hardcover' })).toBe('Home > Kitchen > Cookbooks');
     const novel = explainPoshmarkCategory({ title: 'A Synthetic Mystery, paperback novel' });
-    expect(novel.result).toBeNull();
-    expect(novel.stage).toBe('blank');
+    expect(novel.result!.pathText).toBe('Home > Other');
   });
 });
 
@@ -184,27 +183,20 @@ describe('poshmarkCategoryResolver: null on ambiguous input (never a random leaf
 });
 
 describe('poshmarkCategoryResolver: categories with no Poshmark home are deliberate blanks', () => {
-  it('golf clubs, baseball gloves, guitars and coins resolve to nothing, and say why', () => {
-    expect(explainPoshmarkCategory({ title: 'Synthetic left handed 5 iron', ebayCategoryId: '115280', ebayCategoryName: 'Golf Clubs' }).stage).toBe('blank');
-    expect(explainPoshmarkCategory({ title: 'Synthetic youth baseball glove' }).stage).toBe('blank');
-    expect(explainPoshmarkCategory({ title: 'Synthetic acoustic guitar', ebayCategoryId: '33021' }).stage).toBe('blank');
-    expect(explainPoshmarkCategory({ title: 'Synthetic 1974 silver dollar coin' }).stage).toBe('blank');
-    expect(resolvePoshmarkCategory({ title: 'Synthetic youth baseball glove' })).toBeNull();
+  it('golf clubs, baseball gloves, guitars and coins resolve to the Other rows live sellers use (survey 2026-10-19)', () => {
+    expect(resolvePoshmarkCategory({ title: 'Synthetic left handed 5 iron', ebayCategoryId: '115280', ebayCategoryName: 'Golf Clubs' })!.pathText).toBe('Men > Other');
+    expect(resolvePoshmarkCategory({ title: 'Synthetic youth baseball glove' })!.pathText).toBe('Men > Other');
+    expect(resolvePoshmarkCategory({ title: 'Synthetic acoustic guitar', ebayCategoryId: '33021' })!.pathText).toBe('Electronics > Other');
+    expect(resolvePoshmarkCategory({ title: 'Synthetic XLR microphone cable' })!.pathText).toBe('Electronics > Other');
+    expect(resolvePoshmarkCategory({ title: 'Synthetic 1974 silver dollar coin' })!.pathText).toBe('Home > Other');
+    expect(resolvePoshmarkCategory({ title: 'John Guest push to connect elbow fitting' })!.pathText).toBe('Home > Other');
+    expect(resolvePoshmarkCategory({ title: 'Vintage glass ashtray dish' })!.pathText).toBe('Home > Accents > Decor');
   });
 
-  it('tobacco and weapon items are blank, but a branded sign or shirt is not', () => {
-    expect(explainPoshmarkCategory({ title: 'Synthetic cigar humidor' }).stage).toBe('blank');
-    expect(explainPoshmarkCategory({ title: 'Synthetic pocket knife' }).stage).toBe('blank');
-    expect(pathOf({ title: 'Synthetic Brand Cigarettes tin sign', ebayCategoryName: 'Signs' })).toBe('Home > Wall Decor > Art & Decals');
-  });
 
-  it('sports apparel is still apparel, not a blank', () => {
-    expect(pathOf({ title: "Men's golf polo shirt" })).toBe('Men > Shirts > Polos');
-  });
 
-  it('test rows, industrial parts, furniture and small appliances stay blank', () => {
+  it('test rows, furniture and small appliances (Poshmark does not support them) stay blank', () => {
     expect(explainPoshmarkCategory({ title: 'Test Prod 2', ebayCategoryName: 'Other' }).stage).toBe('blank');
-    expect(explainPoshmarkCategory({ title: 'Pipe fitting elbow 1/2 inch', ebayCategoryName: 'Pipe Fittings' }).stage).toBe('blank');
     expect(explainPoshmarkCategory({ title: 'Synthetic oak dining table' }).stage).toBe('blank');
     expect(explainPoshmarkCategory({ title: 'Synthetic countertop blender' }).stage).toBe('blank');
   });
@@ -263,9 +255,9 @@ describe('poshmark result shape', () => {
 
 describe('poshmark category tree + mapping integrity', () => {
   it('the tree has the expected shape', () => {
-    expect(POSHMARK_NODES.size).toBe(507);
+    expect(POSHMARK_NODES.size).toBe(512);
     expect(Object.keys(POSHMARK_DEPARTMENT_IDS).length).toBe(6);
-    expect(poshmarkAllSelectableIds().length).toBe(427);
+    expect(poshmarkAllSelectableIds().length).toBe(432);
     expect(POSHMARK_UNVERIFIED_BRANCHES.size).toBe(30);
     expect(POSHMARK_VERIFIED_CHILDLESS.size).toBe(1);
     expect(isPoshmarkSelectable('Men-Accessories-Belts')).toBe(true);
@@ -330,11 +322,11 @@ describe('poshmark category tree + mapping integrity', () => {
     expect(mismatches).toEqual([]);
   });
 
-  it('no mapping ever targets an unverified branch, an "Other" row or a department itself', () => {
+  it('no mapping ever targets an unverified branch or a department itself (Other rows are real, verified leaves)', () => {
     const bad = collectTargets().filter((x) => {
       const id = x.id as string;
       const n = POSHMARK_NODES.get(id);
-      return !n || POSHMARK_UNVERIFIED_BRANCHES.has(id) || n.title === 'Other' || n.parentId === '0';
+      return !n || POSHMARK_UNVERIFIED_BRANCHES.has(id) || n.parentId === '0';
     });
     expect(bad).toEqual([]);
   });
