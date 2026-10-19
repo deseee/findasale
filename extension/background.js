@@ -69,10 +69,21 @@ async function refreshAccessToken() {
   }
 }
 
-// 2026-10-19: queue items are copied from FindA.Sale when a run is started and then sit in storage, so a weight, dimensions or description
-// saved afterwards never reached the run (the Jones sign stopped on "no confirmed weight" twice after the weight was saved). Each time a
-// posting tab asks for its current item, re-read that one item from FindA.Sale and overlay only the package and description fields.
-// Best-effort: any failure returns the stored item untouched. Price and title are deliberately NOT overlaid.
+// 2026-10-19: queue items are copied from FindA.Sale when a run is started and then sit in storage, so anything saved afterwards never
+// reached the run (the Jones sign stopped on "no confirmed weight" twice after the weight was saved; a John Guest fitting kept the Mercari
+// category computed before its rule was fixed). Each time a posting tab asks for its current item, re-read that one item from FindA.Sale
+// and overlay the fields below. Best-effort: any failure returns the stored item untouched.
+// Deliberately NOT overlaid: id, title, price, photoUrls and the price-derived best-offer amounts, because the content scripts match the
+// item on title/price while they work and a value that moves between two steps of one run would read as a mismatch.
+const FAS_FRESHEN_FIELDS = [
+  'packageWeightOz', 'aiPackageWeightOz', 'packageLengthIn', 'packageWidthIn', 'packageHeightIn', 'packageType',
+  'category', 'categoryBreadcrumb',
+  'vintedCategoryId', 'vintedCategoryPath', 'vintedCategorySource', 'poshmarkCategoryId', 'poshmarkCategoryPath', 'poshmarkCategorySource',
+  'mercariCategoryId', 'mercariCategoryPath', 'mercariCategorySource', 'grailedCategoryId', 'grailedCategoryPath', 'grailedCategorySource',
+  'craigslistCategoryId', 'craigslistCategoryPath', 'craigslistCategorySource',
+  'conditionRaw', 'conditionGrade', 'brand', 'size', 'color', 'material', 'shippingOverride',
+  'vintedDomesticShippingUsd', 'vintedShippingNote', 'localPickupOnly'
+];
 async function freshenQueueItem(item) {
   try {
     if (!item || !item.id) return item;
@@ -81,9 +92,13 @@ async function freshenQueueItem(item) {
     const fresh = list ? list.find((x) => x && x.id === item.id) : null;
     if (!fresh) return item;
     const out = Object.assign({}, item);
-    ['packageWeightOz', 'aiPackageWeightOz', 'packageLengthIn', 'packageWidthIn', 'packageHeightIn', 'packageType', 'description'].forEach((k) => {
+    FAS_FRESHEN_FIELDS.forEach((k) => {
       if (Object.prototype.hasOwnProperty.call(fresh, k)) out[k] = fresh[k];
     });
+    // description, quantity and kit fields come from the same helper the queue was built with, so a kit keeps its "Includes:" list and the
+    // quantity is the item's current stock (the raw description alone would drop the kit list).
+    if (self.FAS_KIT && typeof self.FAS_KIT.queueFields === 'function') Object.assign(out, self.FAS_KIT.queueFields(fresh));
+    else if (Object.prototype.hasOwnProperty.call(fresh, 'description')) out.description = fresh.description;
     return out;
   } catch (e) { return item; }
 }
@@ -3577,7 +3592,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           await chrome.storage.local.set({ fasQueue: [], fasIndex: 0 });
           sendResponse({ ok: true, item: null, index: 0, total: 0, autoPublish: fasAutoPublish });
         } else {
-          sendResponse({ ok: true, item: fasQueue[fasIndex] || null, index: fasIndex, total: fasQueue.length, autoPublish: fasAutoPublish });
+          sendResponse({ ok: true, item: await freshenQueueItem(fasQueue[fasIndex] || null), index: fasIndex, total: fasQueue.length, autoPublish: fasAutoPublish });
         }
       } else if (msg.type === 'advanceQueue') {
         const st = await chrome.storage.local.get(['fasQueue', 'fasIndex']);
@@ -3761,7 +3776,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === 'getGumtreeAuQueueItem') {
         const { fasGumtreeAuQueue = [], fasGumtreeAuIndex = 0 } =
           await chrome.storage.local.get(['fasGumtreeAuQueue', 'fasGumtreeAuIndex']);
-        sendResponse({ ok: true, item: fasGumtreeAuQueue[fasGumtreeAuIndex] || null, index: fasGumtreeAuIndex, total: fasGumtreeAuQueue.length });
+        sendResponse({ ok: true, item: await freshenQueueItem(fasGumtreeAuQueue[fasGumtreeAuIndex] || null), index: fasGumtreeAuIndex, total: fasGumtreeAuQueue.length });
       } else if (msg.type === 'advanceGumtreeAuQueue') {
         const st = await chrome.storage.local.get(['fasGumtreeAuQueue', 'fasGumtreeAuIndex']);
         const next = (st.fasGumtreeAuIndex || 0) + 1;
