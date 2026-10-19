@@ -454,3 +454,20 @@ describe('mercariCategoryResolver: singular and plural both match (dropped-singu
     expect(bad).toEqual([]);
   });
 });
+
+describe('mercariCategoryResolver: push-to-connect water fittings', () => {
+  it('files a John Guest push-fit fitting under Other Watering Equipment, not a business or auto category', () => {
+    const r = resolveMercariCategory({
+      title: 'John Guest PP0308WP Push-fit Union 90 Elbow, 1/4 OD Push To Connect 10 pack',
+      categoryBreadcrumb: 'Business & Industrial:Building Materials & Supplies:Industrial Plumbing & Fixtures:Pipe Fittings',
+    });
+    expect(r && r.id).toBe(2824);
+  });
+  it('still leaves an unrelated industrial pipe fitting blank', () => {
+    const r = resolveMercariCategory({
+      title: 'Brass NPT reducer coupling 2 inch',
+      categoryBreadcrumb: 'Business & Industrial:Building Materials & Supplies:Industrial Plumbing & Fixtures:Pipe Fittings',
+    });
+    expect(r).toBeNull();
+  });
+});

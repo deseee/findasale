@@ -181,6 +181,9 @@ export const MERCARI_CURATED_BY_EBAY_ID: Record<string, MercariCuratedEntry> = {
 export const MERCARI_RULES: MercariRuleDef[] = [
   // ===== 1. blanks ===========================================================================================
   blank('test-rows', ['title:do not publish|qa test|test item|test prod|test card']),
+  // 2026-10-19 (Patrick): push-to-connect water-line fittings (John Guest etc.) belong in Garden & Outdoor > Watering Equipment >
+  // Other Watering Equipment (2824); the Mercari search fallback had filed them under auto parts / business envelopes. Must stay ABOVE the blank below.
+  rule('push-fit-water-fittings', 2824, ['cat:pipe fittings?', 'title:push to connect|push fit|john guest']),
   // Industrial / lab / plumbing parts (eBay Business & Industrial) have no consumer home in the harvested Mercari groups.
   blank('industrial-equipment', ['cat:business and industrial|pipe fittings?|valves? and manifolds?|other valves|manifolds?|chromatography|power transformers?|pulleys?|block and tackle|hydraulics?|pneumatics?|lab (equipment|supplies|glassware)|test equipment|industrial (plumbing|supplies|electrical|automation|hvac|equipment)|tankless water heaters?|water heaters?|pond and fountain pumps?|utility pumps?|sump pumps?|heat exchangers?|moisture and ph meters?|trimming machines?']),
   // Mercari prohibits weapons; never file one.
