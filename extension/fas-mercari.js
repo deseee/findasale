@@ -1730,13 +1730,27 @@
     'Fair': '4',
     'Poor': '5',
   };
-  async function fillMercariCondition(conditionLabel) {
+  // 2026-10-19: Mercari re-skinned the Sell form. The five condition radios no longer carry name="sellCondition" or
+  // bare numeric ids; they are now <label data-testid="ConditionNew|ConditionLikeNew|ConditionGood|ConditionFair|ConditionPoor">
+  // wrapping a hidden <input type="radio" value="1".."5" name="_r_0_">. Live-read from Patrick's Mercari Sell page, which is why
+  // every run said "Condition was not found". Newest shape first, the old shape kept as a fallback in case Mercari serves either.
+  const MERCARI_CONDITION_TESTID = { 'New': 'ConditionNew', 'Like New': 'ConditionLikeNew', 'Good': 'ConditionGood', 'Fair': 'ConditionFair', 'Poor': 'ConditionPoor' };
+  function mercariConditionTargets(root, conditionLabel) {
     const id = MERCARI_CONDITION_RADIO_ID[conditionLabel];
-    const el = id ? await waitForSelector(() => document.querySelector('input[name="sellCondition"][id="' + id + '"]'), 5000) : null;
-    if (!el) return false;
-    await realClick(el);
+    const tid = MERCARI_CONDITION_TESTID[conditionLabel];
+    const label = tid ? root.querySelector('[data-testid="' + tid + '"]') : null;
+    let radio = label ? label.querySelector('input[type="radio"]') : null;
+    if (!radio && tid && id) radio = root.querySelector('[data-testid="' + tid + '"] input[type="radio"], input[type="radio"][value="' + id + '"][name]');
+    if (!radio && id) radio = root.querySelector('input[name="sellCondition"][id="' + id + '"]');
+    return radio ? { radio: radio, clickTarget: label || radio } : null;
+  }
+  async function fillMercariCondition(conditionLabel) {
+    const t = await waitForSelector(() => mercariConditionTargets(document, conditionLabel), 5000);
+    if (!t) return false;
+    await realClick(t.clickTarget);
     await sleep(200);
-    const stuck = el.checked === true;
+    let stuck = t.radio.checked === true;
+    if (!stuck && t.clickTarget !== t.radio) { await realClick(t.radio); await sleep(200); stuck = t.radio.checked === true; }
     if (!stuck) console.warn('[FAS Mercari] Condition "' + conditionLabel + '" -- clicked but the radio did not confirm checked (UNVERIFIED) -- please check before publishing.');
     return stuck;
   }
