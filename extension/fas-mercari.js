@@ -2197,9 +2197,19 @@
     if (!shoeboxDone) {
       const r2 = await answerShoeboxAndAdvance(4000);
       if (r2 === null) {
-        return 'Clicked the Shipping label field, but Mercari\'s "fits in a shoebox?" question never appeared (UNVERIFIED selector) -- either the opener click didn\'t register, or Mercari\'s own gating (it says "Add title and category to enable shipping") wasn\'t actually satisfied yet at the time this ran.';
+        // 1.0.34: Mercari sometimes opens straight on the carrier list ("Which label would you like to use?") without asking the weight or
+        // shoebox question (a card-holder listing stopped here with the carrier list on screen and the error "Please select a shipping
+        // carrier"). When the carrier list is already showing there is nothing to answer, so go on to pick the cheapest carrier below.
+        const carrierScreenShowing = !!document.querySelector('[data-testid="SelectCarrierSaveButton"]')
+          || qa('input[type="radio"]').some((r) => nearestPricedAncestor(r) != null)
+          || qa('[role="dialog"], [class*="odal"]').some((d) => /which label would you like to use/i.test(d.textContent || ''));
+        if (!carrierScreenShowing) {
+          return 'Clicked the Shipping label field, but Mercari\'s "fits in a shoebox?" question never appeared (UNVERIFIED selector) -- either the opener click didn\'t register, or Mercari\'s own gating (it says "Add title and category to enable shipping") wasn\'t actually satisfied yet at the time this ran.';
+        }
+        T.info('shipping_carrier_screen_first', 'Mercari opened on the carrier list without the weight or shoebox question; choosing the carrier directly', {});
+      } else if (!r2.ok) {
+        return r2.message;
       }
-      if (!r2.ok) return r2.message;
     }
 
     // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-11, P0, live-DOM-confirmed): live-tested the

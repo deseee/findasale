@@ -1180,8 +1180,9 @@ const RULES: EligibilityRule[] = [
       requirePackageData: true,
       // 2026-10-15 (Patrick: items under $2 show a "Not For Sale" tag): Poshmark's own announcement sets $0-$2 listings
       // to Not For Sale (minimum purchasable price $3); confirmed live on the closet (two $1 listings tagged, $3 not).
-      minPriceUsd: 3,
-      reasonLowPrice: 'Poshmark won\'t sell anything under $3 (it marks those Not For Sale), so low-priced items stay off it.',
+      // 2026-10-19 (Patrick): raised from Poshmark's own $3 floor to $5 -- the seller fee is a flat $2.95 under $15, so a $3 item nets $0.05.
+      minPriceUsd: 5,
+      reasonLowPrice: 'Poshmark takes a flat $2.95 on sales under $15, so items under $5 net almost nothing and stay off it.',
       reasonOversize: 'Too large for Poshmark\'s flat-rate shipping (over 30" on a side or 108" length plus girth) -- Poshmark ships everything on one prepaid label, so oversize items stay off it.',
       reasonNoData: 'No package weight or size is recorded for this item, so it can\'t be confirmed to fit Poshmark\'s 15lb prepaid-label limits. Add the package weight and size to list it there.',
     },
@@ -1192,6 +1193,13 @@ const RULES: EligibilityRule[] = [
     platform: 'MERCARI',
     maxWeightOz: 800, // 50lb -- stated identically on two official Mercari pages, each with an explicit "ship on your own beyond this" fallback (i.e. OUTSIDE Mercari's own label flow, which is what this extension automates). A conflicting "100lb" figure on one older page is flagged unreliable and not used.
     maxLongestSideIn: 34, // 34"x20" box ceiling, same two official pages.
+    // 2026-10-19 (Patrick, from Mercari's own Pricing panel): fee = 10% + a flat $0.84 ($1 -> $0.94, $2 -> $1.04,
+    // $3 -> $1.14), so a $1 item nets $0.06 and a $3 item nets $1.86 before shipping. Mercari allows the listing,
+    // so this is an economic floor, not a platform rule. Patrick set it at $3 (2026-10-19). New listings only.
+    newListingOnly: {
+      minPriceUsd: 3,
+      reasonLowPrice: 'Mercari charges 10% plus a flat 84 cents, so items under $3 net almost nothing and stay off it.',
+    },
     reason: 'Over Mercari\'s 50lb / 34"x20" shipping ceiling -- beyond this Mercari requires shipping outside its own label flow, which this extension can\'t drive.',
   },
 

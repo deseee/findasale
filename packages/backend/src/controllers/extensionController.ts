@@ -752,13 +752,13 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // marketplaceEligibilityRules.ts's own comment on EligibilityCheckItem for the full rationale).
     // 2026-10-17: every platform now builds its check object via buildListingEligibilityItem, the same
     // helper the auto-list queue and the takedown (compliance) gate use, so they cannot disagree.
-    // Poshmark opts into the new-listing-only gates (size/no-data, $ minimum); the others are unchanged.
+    // Poshmark and Mercari opt into the new-listing-only gates (Poshmark size/no-data + $5; Mercari $3 minimum); the others are unchanged.
     eligibility: {
       CRAIGSLIST: checkEligibility('CRAIGSLIST', buildListingEligibilityItem(it, { forNewListing: false })),
       GUMTREE_AU: checkEligibility('GUMTREE_AU', buildListingEligibilityItem(it, { forNewListing: false })),
       GRAILED: checkEligibility('GRAILED', buildListingEligibilityItem(it, { forNewListing: false })),
       POSHMARK: checkEligibility('POSHMARK', buildListingEligibilityItem(it, { forNewListing: true })),
-      MERCARI: checkEligibility('MERCARI', buildListingEligibilityItem(it, { forNewListing: false })),
+      MERCARI: checkEligibility('MERCARI', buildListingEligibilityItem(it, { forNewListing: true })),
       VINTED: checkEligibility('VINTED', buildListingEligibilityItem(it, { forNewListing: false })),
     },
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false, it.qrAssetReady)) : (it.photoUrls || []),
