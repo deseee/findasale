@@ -1935,7 +1935,23 @@
   // false/null/undefined; only explicitly-true flips to "Yes". The "Yes" branch is CODE-ONLY --
   // no live Mercari account to re-verify it in the browser this session, only the pre-existing
   // "No" branch and the FreeShippingYesButton/-NoButton testids themselves were live-confirmed.
+  // 1.0.31: Mercari's form can default to "Ship on your own" (radio name deliveryOptions, value SOYO),
+  // which hides the Shipping payer and Shipping label controls. Switch to "Prepaid label" (value MERCARI)
+  // when those controls are absent. Idempotent.
+  async function ensureMercariPrepaidLabel() {
+    try {
+      if (document.querySelector('[data-testid="ShippingPayerOption"]') || document.querySelector('input[data-testid="SelectShipping"]')) return;
+      const radio = qa('input[name="deliveryOptions"]').find((r) => String(r.value).toUpperCase() === 'MERCARI');
+      if (!radio || radio.checked) return;
+      await realClick(radio.closest('label') || radio);
+      await sleep(600);
+      if (!radio.checked) await realClick(radio);
+      await sleep(900);
+      T.info('prepaid_label_selected', 'Mercari had "Ship on your own" selected; switched to "Prepaid label" so the shipping controls appear', { nowChecked: !!radio.checked });
+    } catch (e) { /* best effort */ }
+  }
   async function fillMercariShippingPayer(item) {
+    await ensureMercariPrepaidLabel();
     const wantFree = !!(item && item.crosslisterFreeShipping === true);
     const opener = await waitForSelector(() => document.querySelector('[data-testid="ShippingPayerOption"]'), 5000);
     if (!opener) return false;
@@ -1978,6 +1994,7 @@
     if (trustedOunces == null) {
       return 'Mercari requires a shipping weight and FindA.Sale has no confirmed weight for this item (unconfirmed AI estimates are no longer auto-filled here) -- please enter the real weight on the item\'s FindA.Sale page and confirm it before publishing.';
     }
+    await ensureMercariPrepaidLabel();
     const opener = await waitForSelector(mercariShippingOpener, 5000);
     if (!opener) {
       return 'FindA.Sale couldn\'t find the Shipping label field automatically (UNVERIFIED selector).';

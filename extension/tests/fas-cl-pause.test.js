@@ -218,9 +218,9 @@ test('identity (untitled intermediate pages): a plain Continue after an earlier 
   const r3 = await pub.step(ctx(Object.assign({}, EDIT, { priceSet: true, identityOk: true })));
   assert.strictEqual(r3.code, 'posting_identity_unverified'); assert.deepStrictEqual(pub.clicks, []);
 });
-test('identity: the new failure code survives the diagnostics builder and the manifest/version is 1.0.30', () => {
+test('identity: the new failure code survives the diagnostics builder and the manifest/version is 1.0.31', () => {
   const d = Core.buildDiag({ platform: 'CRAIGSLIST', itemId: 'x', title: 'T', outcome: 'failed', code: 'posting_identity_unverified', reason: 'r', details: { blockedClick: 'publish' } }, { version: '1.0.24' });
   assert.strictEqual(d.code, 'posting_identity_unverified'); assert.strictEqual(d.v, '1.0.24');
-  assert.strictEqual(JSON.parse(read('manifest.json')).version, '1.0.30');
+  assert.strictEqual(JSON.parse(read('manifest.json')).version, '1.0.31');
   for (const f of ['background.js', 'config.js', 'fas-edit-core.js', 'fas-edit-engine.js', 'fas-cl-guard.js', 'tests/fas-cl-pause.test.js']) assert.ok(!fs.readFileSync(path.join(root, f)).includes(0), f + ' has NUL bytes');
 });
