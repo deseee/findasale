@@ -165,8 +165,8 @@ export const VINTED_CURATED_BY_EBAY_ID: Record<string, VintedCuratedEntry> = {
   '171485': 3728, // Tablets & eBook Readers
   '31388': 3075, // Digital Cameras
   // Clothing (department comes from the words, never guessed)
-  '185084': { women: 572, men: 582 }, // Tracksuits & Sets -> Activewear > Tracksuits
-  '185708': { women: 572, men: 582 }, // Tracksuits & Sets
+  '185084': { women: 572, men: 582, any: 582 }, // Tracksuits & Sets -> Activewear > Tracksuits
+  '185708': { women: 572, men: 582, any: 582 }, // Tracksuits & Sets
   '15687': { women: 221, girls: 1535, boys: 1662 }, // T-Shirts (men: no style stated on the eBay id, so the men's-tee rules pick the style leaf)
   '47346': { split: [['inline|roller', { women: 2650, men: 2682, girls: 2713, boys: 2744 }]] }, // Inline skates (leaf is the department word "Men")
   '137843': 1800, // Cufflinks -> Men > Accessories > Jewelry > Cufflinks
@@ -182,6 +182,11 @@ export const VINTED_CURATED_BY_EBAY_ID: Record<string, VintedCuratedEntry> = {
 export const VINTED_RULES: VintedRuleDef[] = [
   // ===== 1. test rows and media ==========================================================================
   blank('test-rows', ['title:do not publish|qa test|test item|test prod|test card']),
+  // 2026-10-19 (Patrick: empty only when it genuinely cannot be listed): consumer-home items that the audit found uncategorised.
+  rule('decor-masks-antlers-mats', 3829, ['(porcelain|decorative|wall|ceramic) masks?|antlers?|counter mats?|bar mats?']),
+  rule('crocks-food-storage', 3523, ['crocks?|salt cellars?'], ['crock ?pots?|slow cookers?']),
+  rule('art-books', 2320, ['books?|hardcover|hardback', 'art|artist|painting|beeple|sculpture|illustration|drawings?']),
+  rule('collar-shirt-studs', 1800, ['shirt studs?|collar (button|stays?)|collar buttons?|dress studs?']),
   // Industrial / lab / plumbing parts (eBay Business & Industrial) have no consumer home on Vinted: deliberate blank, before any keyword rule can mis-file them.
   blank('industrial-equipment', ['cat:business and industrial|pipe fittings?|valves? and manifolds?|other valves|manifolds?|chromatography|power transformers?|pulleys?|block and tackle|hydraulics?|pneumatics?|lab (equipment|supplies|glassware)|test equipment|industrial (plumbing|supplies|electrical|automation|hvac|equipment)|tankless water heaters?|water heaters?|pond and fountain pumps?|utility pumps?|sump pumps?|heat exchangers?']),
   // Comics: ALWAYS Comics, manga & graphic novels (5425), never Magazines (S1063 regression).
