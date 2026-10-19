@@ -1149,7 +1149,15 @@
     FT('step', 'Entering the description', 'The description tells buyers condition, size and pickup details.', { descLen: String(item.description || '').length });
     const body = q('#PostingBody') || q('textarea[name="PostingBody"]');
     if (!body) throw hardError('Details', 'Couldn\'t find the posting Description field.');
-    setInputValue(body, item.description || '');
+    // 2026-10-19: Craigslist rejects a posting with an empty description ("All postings require a description"),
+    // which looped the edit step. An item with no saved description gets a plain factual line built only from fields
+    // it already has (title + condition) -- nothing invented. Logged so the gap is visible.
+    let bodyText = String(item.description || '').trim();
+    if (!bodyText) {
+      bodyText = String(item.title || '').trim() + (item.condition ? '. Condition: ' + item.condition + '.' : '.');
+      FT('warn', 'description_empty_fallback', 'This item has no description in FindA.Sale, so its title and condition were used as the Craigslist description. Add a real description to improve the listing.');
+    }
+    setInputValue(body, bodyText);
     try { if (self.FAS_QTY) self.FAS_QTY.fillQuantity(item); } catch (e) { /* kits: best-effort Quantity field, never blocks */ }
 
     // BUG FIX (2026-08-31, live-reproduced -- Patrick stuck on "Please supply a value for the
