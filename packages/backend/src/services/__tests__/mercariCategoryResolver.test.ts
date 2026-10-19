@@ -484,3 +484,12 @@ describe('mercariCategoryResolver: push-to-connect water fittings', () => {
     expect(r).toBeNull();
   });
 });
+
+describe('John Guest push-fit fittings map by title regardless of the eBay category', () => {
+  it('lands in Other Watering Equipment even when the eBay category is a kitchen appliance', () => {
+    const title = 'John Guest PP450822 1/4" OD x 1/4" NPTF Female Connector Push To Connect 5 pack';
+    for (const c of [null, 'Business & Industrial', 'Home & Garden:Kitchen, Dining & Bar:Small Kitchen Appliances:Food Processors']) {
+      expect(resolveMercariCategory({ title, categoryBreadcrumb: c })!.pathText).toBe('Garden & Outdoor > Watering Equipment > Other Watering Equipment');
+    }
+  });
+});

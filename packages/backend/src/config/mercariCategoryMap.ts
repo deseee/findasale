@@ -215,7 +215,7 @@ export const MERCARI_RULES: MercariRuleDef[] = [
   rule('toy-banks', 1667, ['talking bank|toy banks?|electronic banks?']),
   // 2026-10-19 (Patrick): push-to-connect water-line fittings (John Guest etc.) belong in Garden & Outdoor > Watering Equipment >
   // Other Watering Equipment (2824); the Mercari search fallback had filed them under auto parts / business envelopes. Must stay ABOVE the blank below.
-  rule('push-fit-water-fittings', 2824, ['cat:pipe fittings?', 'title:push to connect|push fit|john guest']),
+  rule('push-fit-water-fittings', 2824, ['title:john guest|push to connect|push in fittings?|push fit|speedfit|quick connect (fittings?|couplings?|connectors?)'], ['title:usb|hdmi|phone|charger|cables?|terminals?|crimp|wire|wiring|plugs?|jacks?|solder|speakers?|antenna|ethernet|audio|bluetooth']),
   // Mercari prohibits weapons; never file one.
   blank('weapons', ['title:daggers?|swords?|bayonets?|machetes?|firearms?|handguns?|pistols?|revolvers?|rifles?|shotguns?|ammunition|ammo|switchblades?|brass knuckles|crossbows?|tasers?|stun guns?|pepper spray|knuckle dusters?'], ['water|toy|nerf|cap gun|bb|airsoft|paintball|glue|hot glue|staple|nail|grease|spray gun|heat gun|sword art|rifle (cases?|bags?|slings?)|bayonet mount']),
 

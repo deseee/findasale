@@ -296,9 +296,15 @@ export const POSHMARK_RULES: PoshmarkRuleDef[] = [
     ['valves?|solenoids?|vac|volts?|relays?|switch(es)?|sensors?|pumps?|motors?|fittings?|pipes?|hoses?|players?|recorders?|burners?|blank|recordable|cd r|cd rw|cases?|storage|wallets?|binders?|racks?|cleaners?|drives?|cables?|changers?|jewel|towers?|lens|repair|games?|twister|milton bradley|hasbro|parker brothers|cd roms?']),
   rule('media-dvd', DVDS, ['dvds?|dvd movies?|blu rays?|bluray|4k uhd|ultra hd blu ray|uhd blu ray'],
     ['players?|recorders?|drives?|burners?|blank|dvd r|dvd rw|cases?|storage|cleaners?|lens|cables?|adapters?|remotes?|combo|games?|racks?|towers?']),
-  // VHS, cassettes, laser discs, mini discs and 8-tracks have no Poshmark leaf (Media has only CDs, DVDs and Vinyl)
-  blank('media-legacy-formats', ['vhs|video tapes?|video cassettes?|laser ?discs?|mini ?discs?|8 track|cassette tapes?|audio cassettes?|mixtapes?|reel to reel'],
+  // 2026-10-19 live survey of Poshmark listings: VHS tapes and laser discs are filed under Electronics > Media > DVDs & Blu-ray Discs
+  // (or bare Media); audio cassettes under Electronics > Portable Audio & Video > Cassette Players; 8-tracks under Media > Vinyl Records.
+  rule('media-vhs-laserdisc', DVDS, ['vhs|video tapes?|video cassettes?|laser ?discs?'],
     ['players?|recorders?|decks?|vcrs?|cleaners?|rewinders?|blank|adapters?|walkman|boombox(?:es)?']),
+  rule('media-audio-cassettes', L('Electronics', 'Portable Audio & Video', 'Cassette Players'), ['cassette tapes?|audio cassettes?|cassettes?|mixtapes?'],
+    ['players?|recorders?|decks?|cleaners?|rewinders?|blank|adapters?|walkman|boombox(?:es)?|storage|cases?|holders?|racks?|towers?|vhs|video']),
+  rule('media-8-track', VINYL, ['8 track']),
+  rule('media-minidisc', CDS, ['mini ?discs?'], ['players?|recorders?|decks?|vcrs?|cleaners?|rewinders?|blank|adapters?|walkman|boombox(?:es)?']),
+  rule('media-reel-to-reel', OTHER_ELEC, ['reel to reel'], ['players?|recorders?|decks?|vcrs?|cleaners?|rewinders?|blank|adapters?|walkman|boombox(?:es)?']),
   rule('blank-discs', BLANK_MEDIA, ['blank (cds?|dvds?|discs?|disks?)|recordable (cds?|dvds?|discs?)|cd r|cd rw|dvd r|dvd rw|dvd plus r']),
   rule('media-cases', MEDIA_CASES, ['(cd|dvd|blu ray|media|disc) (cases?|storage|organizers?|binders?|wallets?|towers?|racks?)']),
 

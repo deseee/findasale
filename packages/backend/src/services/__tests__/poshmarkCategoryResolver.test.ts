@@ -183,6 +183,16 @@ describe('poshmarkCategoryResolver: null on ambiguous input (never a random leaf
 });
 
 describe('poshmarkCategoryResolver: categories with no Poshmark home are deliberate blanks', () => {
+  it('VHS, laser discs, cassettes, 8-tracks and mini discs have a real home (live survey 2026-10-19)', () => {
+    expect(pathOf({ title: 'Synthetic Disney VHS tape clamshell' })).toBe('Electronics > Media > DVDs & Blu-ray Discs');
+    expect(pathOf({ title: 'Synthetic laserdisc movie' })).toBe('Electronics > Media > DVDs & Blu-ray Discs');
+    expect(pathOf({ title: 'Synthetic country music cassette tape' })).toBe('Electronics > Portable Audio & Video > Cassette Players');
+    expect(pathOf({ title: 'Synthetic 8 track tape' })).toBe('Electronics > Media > Vinyl Records');
+    expect(pathOf({ title: 'Synthetic mini disc album' })).toBe('Electronics > Media > CDs');
+    expect(pathOf({ title: 'Synthetic cassette player walkman' })).toBe('Electronics > Portable Audio & Video > Cassette Players');
+    expect(pathOf({ title: 'Synthetic VCR player' })).not.toBe('Electronics > Media > DVDs & Blu-ray Discs');
+  });
+
   it('golf clubs, baseball gloves, guitars and coins resolve to the Other rows live sellers use (survey 2026-10-19)', () => {
     expect(resolvePoshmarkCategory({ title: 'Synthetic left handed 5 iron', ebayCategoryId: '115280', ebayCategoryName: 'Golf Clubs' })!.pathText).toBe('Men > Other');
     expect(resolvePoshmarkCategory({ title: 'Synthetic youth baseball glove' })!.pathText).toBe('Men > Other');
