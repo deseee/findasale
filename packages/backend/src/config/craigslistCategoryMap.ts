@@ -239,6 +239,8 @@ export const CRAIGSLIST_RULES: CraigslistRuleDef[] = [
   rule('veh-wheels-tires', 'wta', ['cat:wheels tires and parts|wheels and tires|tires|wheels|rims|hubcaps?|wheel covers?'], ['cat:bicycles?|bikes?|cycling|toys?|hobbies|sporting|lawn|garden|motorcycle|boat|trailer|rv|atv|aircraft']),
   rule('veh-boat-parts', 'bpa', ['cat:boat parts|marine parts|boat accessories|marine accessories|boat parts and accessories']),
   rule('veh-motorcycle-parts', 'mpa', ['cat:motorcycle parts|motorcycle accessories|motorcycle parts and accessories|motorcycle helmets?|motorcycle apparel'], ['cat:toys?|collectibles?']),
+  // 2026-10-19: car-stereo install kits (Metra etc.) had no candidate at all; they belong with auto parts.
+  rule('car-dash-kits', 'pta', ['dash kits?|double din|single din|din (kit|radio)|multi ?kit', 'cat:ebay motors|car|vehicle|honda|toyota|ford|chevy|chevrolet|dodge|nissan|gm']),
   rule('veh-auto-parts', 'pta', ['cat:car and truck parts|auto parts|automotive parts|truck parts|car parts|vehicle parts|car parts and accessories|car audio|car video|car stereos?|car electronics|automotive tools and supplies'], ['cat:toys?|collectibles?|die ?cast|models?']),
   rule('veh-aviation', 'ava', ['cat:aircraft|aviation|aircraft parts|aviation parts'], ['cat:memorabilia|collectibles?|toys?|models?|die ?cast|signs?|decor|apparel']),
   rule('veh-boats', 'boo', ['cat:boats|watercraft|jet skis?|personal watercraft'], ['cat:' + NOT_PART_WORDS + '|trailers?|kayaks?|paddle|inflatable|fishing|boat shoes']),

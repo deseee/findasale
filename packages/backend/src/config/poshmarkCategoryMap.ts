@@ -145,11 +145,13 @@ const TRACKSUIT: PoshmarkDeptMap = D(
   L('Men', 'Pants', 'Sweatpants & Joggers'),
   L('Kids', 'Matching Sets'),
 );
+TRACKSUIT.any = L('Men', 'Pants', 'Sweatpants & Joggers'); // 2026-10-19: unstated department falls back to the unisex Men's leaf instead of an empty category
 const TEE_SHORT: PoshmarkDeptMap = D(
   L('Women', 'Tops', 'Tees - Short Sleeve'),
   L('Men', 'Shirts', 'Tees - Short Sleeve'),
   L('Kids', 'Shirts & Tops', 'Tees - Short Sleeve'),
 );
+TEE_SHORT.any = L('Men', 'Shirts', 'Tees - Short Sleeve'); // 2026-10-19: same unisex fallback
 
 /** Shared exclusion alternations for the sports rules: they only stop apparel and collectibles being filed as gear. */
 const NOT_APPAREL = 'shirts?|jerseys?|caps?|hats?|hoodies?|jackets?|pants?|shorts?|socks?|shoes?|cleats?|costumes?|uniforms?|sweatshirts?|vests?|polos?|tees?';
@@ -228,8 +230,8 @@ export const POSHMARK_CURATED_BY_EBAY_ID: Record<string, PoshmarkCuratedEntry> =
   // Garden, hardware, furniture, industrial: no Poshmark home
   '139921': null, '178988': null, '178989': null, '20684': null, '260505': null, '151621': null, '180964': null,
   '20542': null, '260941': null, '75670': null, '184148': null, '260831': null, '185258': null, '63900': null,
-  '48094': null, '48656': null, '109431': null, '12506': null, '104043': null, '177908': null, '13716': null,
-  '88903': null, '11226': null, '1245': null, '38235': null,
+  '48094': null, '48656': null, '109431': null, '12506': null, '104043': null, '177908': DECOR, '13716': null,
+  '88903': null, '11226': null, '1245': null, '38235': { split: [['masks?|plaques?|wall (art|decor|hangings?)', DECOR]], fallback: null },
   // Clothing with a department split
   '185708': TRACKSUIT, // Tracksuits & Sets
   '185084': TRACKSUIT, // Tracksuits & Sets (Clothing, Shoes & Accessories)
@@ -243,6 +245,11 @@ export const POSHMARK_RULES: PoshmarkRuleDef[] = [
   // ===== 1. test rows, tobacco, weapons (blank before anything can mis-file them) =========================
   blank('test-rows', ['title:do not publish|qa test|test item|test prod|test card']),
   // Poshmark prohibits tobacco products. Signs, posters, prints and apparel that merely carry a brand are not tobacco.
+  // 2026-10-19 (Patrick: empty only when it genuinely cannot be listed): consumer items the audit found uncategorised.
+  rule('crocks-food-storage', FOOD_STORAGE, ['crocks?|salt cellars?'], ['crock ?pots?|slow cookers?']),
+  rule('collar-shirt-studs', CUFFLINKS, ['shirt studs?|collar (button|stays?)|collar buttons?|dress studs?']),
+  rule('decor-masks-antlers-mats', DECOR, ['(porcelain|decorative|wall|ceramic) masks?|antlers?|counter mats?|bar mats?']),
+  rule('toy-talking-banks', KIDS_FIGURES, ['talking bank|toy banks?|electronic banks?']),
   blank('tobacco-adjacent', ['tobacciana|cigarettes?|cigars?|cigarillos?|tobacco|ashtrays?|zippo|cigarette lighters?|butane lighters?|collectible lighters?|smoking pipes?|tobacco pipes?|pipe tobacco|hookahs?|vapes?|vaping|snuff|rolling papers?|humidors?|cigar (boxes|cutters)'],
     ['signs?|posters?|prints?|shirts?|tees?|hats?|caps?|hoodies?|jackets?|mugs?|books?|magazines?|dvds?|records?']),
   blank('weapons', ['firearms?|guns?|rifles?|pistols?|revolvers?|shotguns?|ammo|ammunition|bullets?|holsters?|daggers?|swords?|machetes?|switchblades?|pocket knife|pocket knives|folding kni(?:fe|ves)|hunting kni(?:fe|ves)|survival knives|tactical knives|combat knives|throwing knives|bayonets?|brass knuckles|crossbows?|bows and arrows?|airsoft|bb guns?|stun guns?|tasers?|pepper spray|rifle scopes?|gun (cases?|safes?)'],
@@ -304,6 +311,7 @@ export const POSHMARK_RULES: PoshmarkRuleDef[] = [
   rule('magazines', COFFEE_BOOKS, ['magazines?|periodicals?|nintendo power|game informer|national geographic|sports illustrated|rolling stone'], ['magazine (racks?|holders?|files?)|subscriptions?']),
   rule('cookbooks', COOKBOOKS, ['cookbooks?|cook books?|recipe books?']),
   rule('coffee-table-books', COFFEE_BOOKS, ['coffee table books?|art books?|photography books?|photo books?|picture books? for adults']),
+  rule('art-books-by-title', COFFEE_BOOKS, ['books?|hardcover|hardback', 'beeple|artist|paintings?|sculpture|illustrations?|photography|everydays']),
   // General books (novels, textbooks, bibles): Poshmark has no books category, so a deliberate blank.
   blank('general-books-cat', ['cat:books'],
     ['bookends?|book ends|bookshelf|bookcase|book bags?|book lights?|booklets?|notebooks?|coloring|cookbooks?|comics?|magazines?|posters?|shirts?|tees?|mugs?|totes?|dvds?|cds?|games?|magazines? and|music|movies?']),
@@ -428,8 +436,8 @@ export const POSHMARK_RULES: PoshmarkRuleDef[] = [
   rule('laptops', L('Electronics', 'Computers, Laptops & Parts', 'Laptops'), ['laptops?|notebook (computers?|pcs?)|macbook|chromebook|thinkpad|ultrabook'], ['bags?|cases?|sleeves?|stands?|chargers?|batteries|skins?|screens?|covers?|keyboards?|desks?|backpacks?|parts?|for parts|totes?|bundles?|decals?|stickers?|docks?|hinges?|cooling|cables?|adapters?|power (adapters?|suppl(?:y|ies))|journals?']),
   rule('game-keyboards', L('Electronics', 'Video Games & Consoles', 'Keyboards'), ['gaming keyboards?|mechanical gaming keyboards?|keypads? for gaming'], ['mice|mouse|combos?|bundles?']),
   rule('tablet-keyboards', L('Electronics', 'Tablets & Accessories', 'Tablet Keyboards'), ['tablet keyboards?|ipad keyboards?|keyboard (case|folio) (for )?(ipad|tablet)|(ipad|tablet) keyboard (case|folio)']),
-  // A keyboard-and-mouse bundle fits neither the Keyboards nor the Mice leaf: deliberate blank.
-  blank('keyboard-mouse-combo', ['keyboards?', 'mouse|mice'], ['pads?|traps?|mickey|minnie|plush|toys?|piano|midi|synth']),
+  // 2026-10-19: a keyboard-and-mouse bundle is still listable; the Mice leaf is the closest fit (was a deliberate blank).
+  rule('keyboard-mouse-combo', L('Electronics', 'Computers, Laptops & Parts', 'Mice'), ['keyboards?', 'mouse|mice'], ['pads?|traps?|mickey|minnie|plush|toys?|piano|midi|synth']),
   rule('computer-keyboards', L('Electronics', 'Computers, Laptops & Parts', 'Keyboards'), ['keyboards?|keypads?'], ['piano|midi|synth|synthesizers?|casio|yamaha|roland|korg|organs?|electronic keyboards?|musical|mouse|mice|stands?|covers?|bundles?|combos?|nord|arturia|akai|novation|studio|instruments?|trays?|wrist rests?|bluetooth ipad']),
   rule('computer-mice', L('Electronics', 'Computers, Laptops & Parts', 'Mice'), ['computer mouse|wireless mouse|gaming mouse|optical mouse|bluetooth mouse|trackballs?|mice'], ['mouse (pads?|traps?|ears?|hats?|costumes?)|mickey|minnie|plush|toys?|keyboards?|bundles?|combos?|traps?|rat']),
   rule('webcams', L('Electronics', 'Computers, Laptops & Parts', 'Webcams'), ['webcams?|web cams?']),

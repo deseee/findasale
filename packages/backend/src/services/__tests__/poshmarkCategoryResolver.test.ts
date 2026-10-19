@@ -51,11 +51,19 @@ describe('poshmarkCategoryResolver: tracksuits (department from explicit words o
     expect(x.result!.source).toBe('RULE');
   });
 
-  it('a tracksuit with NO stated department resolves to nothing (never a guess)', () => {
+  it('a tracksuit with NO stated department falls back to the unisex Men leaf (2026-10-19)', () => {
     const x = explainPoshmarkCategory({ title: 'Brandname Teal Tracksuit Set, Size M', ebayCategoryName: 'Tracksuits & Sets', ebayCategoryId: 185084 });
-    expect(x.result).toBeNull();
-    expect(x.reason).toBe('department-unknown');
-    expect(resolvePoshmarkCategory({ title: 'Nike tracksuit set' })).toBeNull();
+    expect(x.result!.pathText).toBe('Men > Pants > Sweatpants & Joggers');
+    expect(resolvePoshmarkCategory({ title: "Women's Nike tracksuit set" })!.pathText).toBe('Women > Pants & Jumpsuits > Track Pants & Joggers');
+  });
+});
+
+describe('poshmarkCategoryResolver: 2026-10-19 rescues', () => {
+  it('lists items that were uncategorised although Poshmark has a home for them', () => {
+    expect(resolvePoshmarkCategory({ title: 'Blue Star 3-Gallon Stoneware Crock' })!.pathText).toBe('Home > Kitchen > Food Storage');
+    expect(resolvePoshmarkCategory({ title: 'Vintage Pair Cream Enamel Shirt Studs' })!.pathText).toBe('Men > Accessories > Cuff Links');
+    expect(resolvePoshmarkCategory({ title: 'Porcelain Decorative Mask, 1981' })!.pathText).toBe('Home > Accents > Decor');
+    expect(resolvePoshmarkCategory({ title: 'Apple Magic Mouse 2 Wireless with Apple Wireless Keyboard' })!.pathText).toBe('Electronics > Computers, Laptops & Parts > Mice');
   });
 });
 
@@ -142,10 +150,9 @@ describe('poshmarkCategoryResolver: null on ambiguous input (never a random leaf
     expect(resolvePoshmarkCategory({ title: 'Mens and womens unisex hoodie' })).toBeNull();
   });
 
-  it('an eBay id that needs a department returns null without one, and a leaf with one', () => {
+  it('an eBay id that needs a department uses the unisex fallback without one, and the real leaf with one', () => {
     const none = explainPoshmarkCategory({ title: 'Graphic T-Shirt, Black Cotton', ebayCategoryId: '15687', ebayCategoryName: 'T-Shirts' });
-    expect(none.result).toBeNull();
-    expect(none.reason).toBe('department-unknown');
+    expect(none.result!.pathText).toBe('Men > Shirts > Tees - Short Sleeve');
     const men = resolvePoshmarkCategory({ title: "Men's Graphic T-Shirt, Black Cotton", ebayCategoryId: '15687', ebayCategoryName: 'T-Shirts' });
     expect(men!.pathText).toBe('Men > Shirts > Tees - Short Sleeve');
   });
