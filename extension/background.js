@@ -69,6 +69,25 @@ async function refreshAccessToken() {
   }
 }
 
+// 2026-10-19: queue items are copied from FindA.Sale when a run is started and then sit in storage, so a weight, dimensions or description
+// saved afterwards never reached the run (the Jones sign stopped on "no confirmed weight" twice after the weight was saved). Each time a
+// posting tab asks for its current item, re-read that one item from FindA.Sale and overlay only the package and description fields.
+// Best-effort: any failure returns the stored item untouched. Price and title are deliberately NOT overlaid.
+async function freshenQueueItem(item) {
+  try {
+    if (!item || !item.id) return item;
+    const r = await apiFetch('/extension/items');
+    const list = r && r.ok && r.data && Array.isArray(r.data.items) ? r.data.items : null;
+    const fresh = list ? list.find((x) => x && x.id === item.id) : null;
+    if (!fresh) return item;
+    const out = Object.assign({}, item);
+    ['packageWeightOz', 'aiPackageWeightOz', 'packageLengthIn', 'packageWidthIn', 'packageHeightIn', 'packageType', 'description'].forEach((k) => {
+      if (Object.prototype.hasOwnProperty.call(fresh, k)) out[k] = fresh[k];
+    });
+    return out;
+  } catch (e) { return item; }
+}
+
 async function apiFetch(path, opts = {}, _retried = false, _token = null) {
   let token = _token || await getToken();
   // (2026-08-09 fix, ADR-100 root-cause finding) The 1h accessToken is routinely already
@@ -3626,7 +3645,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } else {
           if (clVerdict === 'adopt') await chrome.storage.local.set({ fasCraigslistQueueTabId: sender.tab.id });
           if (fasCraigslistQueue[fasCraigslistIndex]) await chrome.storage.local.set({ fasCraigslistPostBeat: Date.now() });
-          sendResponse({ ok: true, item: fasCraigslistQueue[fasCraigslistIndex] || null, index: fasCraigslistIndex, total: fasCraigslistQueue.length, autoPublish: fasCraigslistAutoPublish });
+          sendResponse({ ok: true, item: await freshenQueueItem(fasCraigslistQueue[fasCraigslistIndex] || null), index: fasCraigslistIndex, total: fasCraigslistQueue.length, autoPublish: fasCraigslistAutoPublish });
         }
       } else if (msg.type === 'advanceCraigslistQueue') {
         // FIX (S-EXT-AUTOPUBLISH-DEDUP, 2026-08-29): compare-and-swap on msg.itemId -- see the
@@ -3787,7 +3806,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === 'getPoshmarkQueueItem') {
         const { fasPoshmarkQueue = [], fasPoshmarkIndex = 0, fasPoshmarkAutoPublish = true } =
           await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex', 'fasPoshmarkAutoPublish']);
-        sendResponse({ ok: true, item: fasPoshmarkQueue[fasPoshmarkIndex] || null, index: fasPoshmarkIndex, total: fasPoshmarkQueue.length, autoPublish: fasPoshmarkAutoPublish });
+        sendResponse({ ok: true, item: await freshenQueueItem(fasPoshmarkQueue[fasPoshmarkIndex] || null), index: fasPoshmarkIndex, total: fasPoshmarkQueue.length, autoPublish: fasPoshmarkAutoPublish });
       } else if (msg.type === 'recordPoshmarkRunNote') {
         // FEATURE 2026-08-22 (S-EXT-POSHMARK-RUN-SUMMARY, Patrick-directed): "if you have those
         // kinds of issues they should be given a default to get them published, reported at the
@@ -3858,7 +3877,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // as fas-vinted.js), kept in the response only for any older cached content-script build.
         const { fasMercariQueue = [], fasMercariIndex = 0, fasMercariAutoPublish = false } =
           await chrome.storage.local.get(['fasMercariQueue', 'fasMercariIndex', 'fasMercariAutoPublish']);
-        sendResponse({ ok: true, item: fasMercariQueue[fasMercariIndex] || null, index: fasMercariIndex, total: fasMercariQueue.length, autoPublish: fasMercariAutoPublish });
+        sendResponse({ ok: true, item: await freshenQueueItem(fasMercariQueue[fasMercariIndex] || null), index: fasMercariIndex, total: fasMercariQueue.length, autoPublish: fasMercariAutoPublish });
       } else if (msg.type === 'advanceMercariQueue') {
         // FIX (S-EXT-AUTOPUBLISH-DEDUP, 2026-08-29): same itemId compare-and-swap as
         // advanceCraigslistQueue above -- see its comment for the full rationale.
@@ -3977,7 +3996,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (!isOwnVintedTab) {
           sendResponse({ ok: true, item: null, index: fasVintedIndex, total: fasVintedQueue.length });
         } else {
-          sendResponse({ ok: true, item: fasVintedQueue[fasVintedIndex] || null, index: fasVintedIndex, total: fasVintedQueue.length });
+          sendResponse({ ok: true, item: await freshenQueueItem(fasVintedQueue[fasVintedIndex] || null), index: fasVintedIndex, total: fasVintedQueue.length });
         }
       } else if (msg.type === 'advanceVintedQueue') {
         // FIX 2026-10-11 (S-EXT-VINTED-REOPEN-RESUME-BUG): same shared ownership resolution as
@@ -4053,7 +4072,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === 'getGrailedQueueItem') {
         const { fasGrailedQueue = [], fasGrailedIndex = 0, fasGrailedAutoPublish = true } =
           await chrome.storage.local.get(['fasGrailedQueue', 'fasGrailedIndex', 'fasGrailedAutoPublish']);
-        sendResponse({ ok: true, item: fasGrailedQueue[fasGrailedIndex] || null, index: fasGrailedIndex, total: fasGrailedQueue.length, autoPublish: fasGrailedAutoPublish });
+        sendResponse({ ok: true, item: await freshenQueueItem(fasGrailedQueue[fasGrailedIndex] || null), index: fasGrailedIndex, total: fasGrailedQueue.length, autoPublish: fasGrailedAutoPublish });
       } else if (msg.type === 'reopenGrailedTab') {
         // BUG FIX 2026-08-19 (S-EXT-BATCH, P0): fas-grailed.js used to advance to the next queue
         // item via `location.href = LISTING_URL_HINT` -- a same-URL in-page reassignment (the
