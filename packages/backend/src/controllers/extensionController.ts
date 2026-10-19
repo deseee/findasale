@@ -12,7 +12,7 @@ import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility, buildListingEligibilityItem } from '../services/marketplaceEligibilityRules';
 import { resolveVintedCategory } from '../services/vintedCategoryResolver';
 import { resolvePoshmarkCategory } from '../services/poshmarkCategoryResolver';
-import { resolveMercariCategory } from '../services/mercariCategoryResolver';
+import { resolveMercariCategory, explainMercariCategory } from '../services/mercariCategoryResolver';
 import { resolveGrailedCategory } from '../services/grailedCategoryResolver';
 import { resolveCraigslistCategory } from '../services/craigslistCategoryResolver';
 import { suggestNativeShippingPrice, ShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // S-VINTED-SHIPPING-FALLBACK-PRICE: same buyer-facing shipping number FindA.Sale itself suggests (ShippingHardBlockError is the same class re-exported from ebayRateEstimateService)
@@ -215,6 +215,11 @@ export function marketplaceCategoryFields(it: {
   try {
     const r = resolveMercariCategory(input);
     if (r) { out.mercariCategoryId = r.id; out.mercariCategoryPath = r.pathText; out.mercariCategorySource = r.source; }
+    else if (typeof explainMercariCategory === 'function' && explainMercariCategory(input)?.stage === 'blank') {
+      // Deliberate blank (e.g. industrial pipe fittings have no consumer Mercari home): tell the extension NOT to guess
+      // with its own category search (it once filed a pipe fitting under Office > Business Envelopes).
+      out.mercariCategorySource = 'BLANK';
+    }
   } catch (e: any) {
     console.warn('[Mercari category] resolve failed for item', e?.message || e);
   }

@@ -816,7 +816,10 @@
     // when its last word is one of them). A rejected row is skipped, so the organizer picks (never a sibling leaf).
     const fasSing = (w) => (w.length > 3 && /s$/.test(w) && !/ss$/.test(w)) ? w.replace(/ies$/, 'y').replace(/s$/, '') : w;
     const fasClean = (t) => norm(t).replace(/[^a-z0-9' -]+/g, ' ').replace(/\s+/g, ' ').trim();
-    const productWords = new Set(wordize(fasClean((categoryText || '') + ' ' + ((item && item.title) || ''))).map(fasSing));
+    // 1.0.32: only the LEAF of the eBay category (not its whole colon breadcrumb) counts as product words. The root
+    // segment "Business & Industrial" let Mercari's "Office > Shipping Supplies > Business Envelopes" pass for a pipe fitting.
+    const fasLeafCategory = String(categoryText || '').split(/[:>]/).map((x) => x.trim()).filter(Boolean).pop() || '';
+    const productWords = new Set(wordize(fasClean(fasLeafCategory + ' ' + ((item && item.title) || ''))).map(fasSing));
     function rowNamesOurProduct(text) {
       if (productWords.size === 0) return true; // nothing to compare against: keep the old behaviour
       const segs = text.split('>').map((x) => x.trim()).filter(Boolean);
@@ -2502,6 +2505,10 @@
     // tiebreak) after the clean leaf name's own simplified variants are tried first.
     // 2026-10-05 (S-EXT-MERCARI-CATEGORY-MAP): item.mercariCategoryPath (when the backend sent one) is tried first inside
     // pickCategory; an item with no eBay category but a mapped path still gets a Category attempt.
+    if (item.mercariCategorySource === 'BLANK') {
+      // 1.0.32: FindA.Sale has no safe Mercari category for this kind of item; never let the search fallback guess one.
+      T.warn('category_left_blank', 'No Mercari category fits this item (' + String(item.category || item.title || '').slice(0, 80) + '), so the Category was left empty. Pick the closest one yourself before listing.', { ebayCategory: item.category || null });
+    } else
     await guardedFill('Category', item.category || item.mercariCategoryPath, (v) => pickCategory(v, item.categoryBreadcrumb, item), async () => {
       // 1.0.25 (S-EXT-MERCARI-CATEGORY-GUARD): read the Category control AFTER the full pickCategory (mapped attempt + search fallback)
       // and compare it with the category FindA.Sale expected. No mercariCategoryPath = nothing to compare = unchanged behaviour.
