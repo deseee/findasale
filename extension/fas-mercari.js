@@ -2207,6 +2207,21 @@
       return radios.length ? radios : null;
     }, 4000);
     if (!carrierRadios) {
+      // 1.0.30: an oversized package (e.g. an 84in sign) gets no prepaid carriers; Mercari offers only
+      // "Ship on your own" with a Save button. Select it (if not already) and Save.
+      const ownDlg = qa('[role="dialog"], [class*="odal"]').find((d) => /ship on your own/i.test(d.textContent || '') && !/\$\d/.test(d.textContent || ''));
+      if (ownDlg) {
+        const ownRadio = Array.from(ownDlg.querySelectorAll('input[type="radio"]')).find((r) => { let c = r, i = 0; while (c && i++ < 6) { if (/ship on your own/i.test(c.textContent || '')) return true; c = c.parentElement; } return false; });
+        if (ownRadio && !ownRadio.checked) { await realClick(ownRadio); await sleep(300); }
+        const ownSave = await waitForSelector(() => Array.from(ownDlg.querySelectorAll('button')).find((b) => norm(b.textContent) === 'save' && !b.disabled), 4000);
+        if (!ownSave) return 'Mercari offered only "Ship on your own" for this oversized package but its Save button stayed disabled (UNVERIFIED state).';
+        T.info('ship_on_your_own', 'Package too large for Mercari prepaid labels; selected "Ship on your own" and saved', { radioFound: !!ownRadio });
+        await realClick(ownSave);
+        await sleep(700);
+        const ownClosed = await waitForSelector(() => (document.body.contains(ownDlg) && /ship on your own/i.test(ownDlg.textContent || '') ? null : true), 4000);
+        if (!ownClosed) return 'Clicked Save on Mercari\'s "Ship on your own" screen but it never closed (UNVERIFIED confirmation).';
+        return true;
+      }
       return 'Mercari\'s shipping-label setup showed a carrier-selection screen FindA.Sale couldn\'t read (UNVERIFIED selector).';
     }
     let cheapest = null;
