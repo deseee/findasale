@@ -612,16 +612,44 @@
     }
     return out;
   }
+  // 2026-10-18 (1.0.25, S-EXT-MERCARI-CATEGORY-GUARD): the outcome of the most recent mapped attempt, kept so the
+  // Category step can report it (and so a wrong category can never be reported as "Category set").
+  // Root cause: pickCategory() fell through to its free-text search with the eBay text "Balls" and picked
+  // "Golf balls" for a signed golf HAT, and fillListing still logged "Category set".
+  let lastMappedCategoryAttempt = null;
+  // Pure decision (no DOM): given the item, the Category control text(s) shown after the WHOLE category step and
+  // the mapped attempt's outcome, return null when all is fine, else the problem details. Never fires when the
+  // item carries no mercariCategoryPath (behaviour unchanged for those items).
+  function fasMercariCategoryGuard(item, shownTexts, attempt) {
+    const parts = mercariMappedPathParts(item);
+    if (parts.length < 2) return null;
+    const leafN = norm(parts[parts.length - 1]);
+    const texts = (Array.isArray(shownTexts) ? shownTexts : [shownTexts]).map((t) => norm(t)).filter(Boolean);
+    if (texts.some((t) => t.indexOf(leafN) !== -1)) return null;
+    const a = attempt || {};
+    const reason = a.result ? (a.result + (a.why ? ': ' + a.why : '') + (a.error ? ': ' + a.error : '')) : 'the exact pick was never attempted';
+    return {
+      expectedPath: parts.join(' > '),
+      expectedLeaf: parts[parts.length - 1],
+      shown: texts[0] ? texts[0].slice(0, 120) : '(nothing)',
+      mappedResult: a.result || null,
+      mappedWhy: a.why || a.error || null,
+      mappedQuery: a.query || null,
+      reason: reason,
+    };
+  }
   async function pickMappedMercariCategory(item) {
     const parts = mercariMappedPathParts(item);
-    if (parts.length < 2) return false;
+    if (parts.length < 2) { lastMappedCategoryAttempt = { result: 'path-too-short', path: (item && item.mercariCategoryPath) || null }; return false; }
     const leaf = parts[parts.length - 1];
     const leafN = norm(leaf);
     const outcome = { id: item.mercariCategoryId || null, path: item.mercariCategoryPath, source: item.mercariCategorySource || null, result: 'unknown', query: null, at: Date.now() };
+    lastMappedCategoryAttempt = outcome;
     const persist = () => { try { chrome.storage.local.set({ fasMercariLastCategoryMap: outcome }); } catch (e) { /* best-effort diagnostic */ } };
     console.log('[FAS Mercari] Category mapped by FindA.Sale: id ' + outcome.id + ' (' + outcome.source + ') "' + item.mercariCategoryPath + '" -- searching the picker for "' + leaf + '".');
     const giveUp = async (result, why) => {
       outcome.result = result;
+      outcome.why = why;
       persist();
       console.warn('[FAS Mercari] Mapped category "' + leaf + '" not selected (' + why + ') -- falling back to the search logic.');
       await closeCategoryModal();
@@ -691,6 +719,7 @@
     } catch (e) {
       console.warn('[FAS Mercari] Mapped category attempt threw -- falling back to the search logic:', e && e.message);
       outcome.result = 'error';
+      outcome.error = String((e && e.message) || e).slice(0, 160);
       persist();
       try { await closeCategoryModal(); } catch (e2) { /* non-fatal */ }
       return false;
@@ -702,10 +731,12 @@
     // item.mercariCategoryPath = this block never runs). It runs even when categoryText is empty (the item may
     // have no eBay category but still resolve from its title). On any miss it returns false and everything
     // below runs exactly as before.
+    lastMappedCategoryAttempt = null;
     if (item && item.mercariCategoryPath) {
       try {
         if (await pickMappedMercariCategory(item)) return true;
       } catch (e) {
+        lastMappedCategoryAttempt = { result: 'error', error: String((e && e.message) || e).slice(0, 160) };
         console.warn('[FAS Mercari] Mapped category error, using the search logic instead:', e && e.message);
       }
       // When the call site passed the mapped path itself as the text (item had no eBay category), turn
@@ -2395,16 +2426,22 @@
     // real Sell page before each field and stops with an honest, specific message the instant it
     // isn't -- covers this exact bug's blast radius AND any future cause of the same symptom.
     let navigatedAwayFrom = null;
+    let categoryMismatch = null; // 1.0.25: set by the Category verify hook below; stops the run (see run())
     function stillOnSellPage() { return location.pathname.replace(/\/+$/, '') === '/sell'; }
-    async function guardedFill(label, value, fillFn) {
-      if (interstitialAt || navigatedAwayFrom) return false; // already stopped -- don't touch anything further
+    async function guardedFill(label, value, fillFn, verify) {
+      if (interstitialAt || navigatedAwayFrom || categoryMismatch) return false; // already stopped -- don't touch anything further
       if (!stillOnSellPage()) { navigatedAwayFrom = label; return false; }
       if (looksLikeInterstitial()) { interstitialAt = label; return false; }
       const hasVal = !(value === undefined || value === null || value === '');
       const nar = MERC_FIELD_NARR[label];
       if (hasVal && nar) T.step(nar[0], nar[1], { field: label });
       const ok = await tryFill(label, value, fillFn);
-      if (hasVal && ok) T.ok(label + ' set');
+      // 1.0.25: optional verify(ok) runs after the whole step; { ctx } is added to the step_ok line, { blocked } replaces the
+      // step_ok (the run is stopped by the caller). A throwing verify never breaks the fill.
+      let vres = null;
+      if (verify && stillOnSellPage() && !looksLikeInterstitial()) { try { vres = await verify(ok); } catch (e) { vres = null; } }
+      if (vres && vres.blocked) categoryMismatch = vres.blocked;
+      else if (hasVal && ok) T.ok(label + ' set', vres && vres.ctx ? vres.ctx : undefined);
       await humanPause(500, 1400);
       if (!stillOnSellPage()) { navigatedAwayFrom = label; return ok; }
       if (looksLikeInterstitial()) { interstitialAt = label; }
@@ -2419,7 +2456,18 @@
     // tiebreak) after the clean leaf name's own simplified variants are tried first.
     // 2026-10-05 (S-EXT-MERCARI-CATEGORY-MAP): item.mercariCategoryPath (when the backend sent one) is tried first inside
     // pickCategory; an item with no eBay category but a mapped path still gets a Category attempt.
-    await guardedFill('Category', item.category || item.mercariCategoryPath, (v) => pickCategory(v, item.categoryBreadcrumb, item));
+    await guardedFill('Category', item.category || item.mercariCategoryPath, (v) => pickCategory(v, item.categoryBreadcrumb, item), async () => {
+      // 1.0.25 (S-EXT-MERCARI-CATEGORY-GUARD): read the Category control AFTER the full pickCategory (mapped attempt + search fallback)
+      // and compare it with the category FindA.Sale expected. No mercariCategoryPath = nothing to compare = unchanged behaviour.
+      if (!item.mercariCategoryPath) return null;
+      await sleep(300);
+      const texts = mercariCategoryControlTexts(null);
+      const att = lastMappedCategoryAttempt || {};
+      const bad = fasMercariCategoryGuard(item, texts, att);
+      const ctx = { expected: String(item.mercariCategoryPath), shown: (texts[0] || '').slice(0, 120), mappedResult: att.result || null, mappedWhy: att.why || att.error || null, mappedQuery: att.query || null, mappedId: item.mercariCategoryId || null, fallbackSearchRan: !(att.result === 'selected' || att.result === 'selected-format-mismatch') };
+      return bad ? { blocked: Object.assign({ itemId: item.id, title: item.title, ebayCategory: item.category || null }, bad, { ctx: ctx }) } : { ctx: ctx };
+    });
+    if (categoryMismatch) return { photosOk, interstitialAt, navigatedAwayFrom, shippingLabelFailedReason: null, categoryMismatch };
     // 2026-08-18: brand/size/color now exist on Item and flow through getExtensionItems ->
     // popup.js's queue map. tryFill's own guard still skips silently on unset items;
     // category-type gating (apparel-only for size/color) is left to Mercari's own form,
@@ -2505,7 +2553,7 @@
       const spOk = await turnOffMercariSmartPricing();
       if (spOk === false) T.warn('smart_pricing_not_off', 'Could not confirm Smart Pricing is off; check the toggle next to Price'); else T.ok('Smart Pricing handled');
     }
-    return { photosOk, interstitialAt, navigatedAwayFrom, shippingLabelFailedReason };
+    return { photosOk, interstitialAt, navigatedAwayFrom, shippingLabelFailedReason, categoryMismatch };
   }
 
   // REMOVED 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH, per claude_docs/architecture/
@@ -2575,6 +2623,16 @@
       T.problem({ code: 'mercari_challenge_midfill', title: 'Mercari asked you to verify mid-listing', what: 'A verification or security screen appeared before the ' + fillResult.interstitialAt + ' field.', why: 'FindA.Sale never solves verifications; it stops and hands control back to you.', next: 'Complete the verification, then finish the remaining fields on this same draft by hand (earlier fields are already filled, do not start a new listing).', ctx: { field: fillResult.interstitialAt } });
       T.end('Stopped: verification before ' + fillResult.interstitialAt);
       overlayWarn('Mercari is showing a verification/security screen -- filling stopped before <b>' + escapeHtml(fillResult.interstitialAt) + '</b>. Please complete the verification yourself, then finish the remaining fields on this draft manually (fields before ' + escapeHtml(fillResult.interstitialAt) + ' were already filled -- do not start a new listing).' + button('fas-merc-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
+    // 1.0.25 (S-EXT-MERCARI-CATEGORY-GUARD): the Category control does not show the category FindA.Sale expected. Stop here so a
+    // wrong category (e.g. a golf hat under Golf balls) can never be left looking like a finished listing. Nothing extra is clicked.
+    if (fillResult.categoryMismatch) {
+      const cm = fillResult.categoryMismatch;
+      T.problem({ code: 'mercari_category_mismatch', title: 'Mercari category is not the one FindA.Sale picked', what: 'For "' + cm.title + '" (item ' + cm.itemId + ') FindA.Sale expected "' + cm.expectedPath + '" but the Mercari draft Category shows "' + cm.shown + '".', why: 'The exact category pick did not work (' + cm.reason + '), so Mercari ended up on a different category or none. FindA.Sale stopped instead of leaving this listing in the wrong category.', next: 'On this draft set Category to "' + cm.expectedPath + '" by hand, then finish the remaining fields and click Mercari\'s own List button. Nothing after Category was filled.', ctx: cm.ctx });
+      T.end('Stopped: Mercari category mismatch');
+      overlayWarn('Category mismatch for <b>' + escapeHtml(cm.title) + '</b>: FindA.Sale expected <b>' + escapeHtml(cm.expectedPath) + '</b> but Mercari shows <b>' + escapeHtml(cm.shown) + '</b> (' + escapeHtml(cm.reason) + '). Filling stopped before Brand. Please set the Category by hand on this draft, then finish the remaining fields.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();
       return;
     }
