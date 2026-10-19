@@ -500,8 +500,20 @@
   // bounce (e.g. a too-short body) reloads the same step; without this the script would re-fill +
   // re-continue forever. sessionStorage survives same-origin full-page navigations within the
   // posting flow, and is cleared once the flow reaches the images step (end of automation). ----
-  function attemptCount(step) { return Number(sessionStorage.getItem('fasCLAttempt_' + step) || '0'); }
-  function bumpAttempt(step) { sessionStorage.setItem('fasCLAttempt_' + step, String(attemptCount(step) + 1)); }
+  // 2026-10-19: a count only holds for 3 minutes and only for the extension version that wrote it. A tab left sitting on a bounced
+  // step (the empty-description loop) kept "tried twice" forever, so even after the fix shipped the guard stopped before trying.
+  // Stored as "count|timestamp|version"; the old bare number is treated as stale.
+  const ATTEMPT_TTL_MS = 3 * 60 * 1000;
+  function attemptVersion() { try { return chrome.runtime.getManifest().version; } catch (e) { return ''; } }
+  function attemptCount(step) {
+    try {
+      const parts = String(sessionStorage.getItem('fasCLAttempt_' + step) || '').split('|');
+      if (parts.length !== 3) return 0;
+      if (parts[2] !== attemptVersion() || (Date.now() - Number(parts[1])) > ATTEMPT_TTL_MS) return 0;
+      return Number(parts[0]) || 0;
+    } catch (e) { return 0; }
+  }
+  function bumpAttempt(step) { sessionStorage.setItem('fasCLAttempt_' + step, (attemptCount(step) + 1) + '|' + Date.now() + '|' + attemptVersion()); }
   function clearAttempts() { ['subarea', 'type', 'cat', 'geoverify', 'chooseArea', 'edit', 'preview'].forEach((s) => sessionStorage.removeItem('fasCLAttempt_' + s)); }
   // True (and shows a stop message) when this step has already been auto-submitted twice without
   // Craigslist advancing -- hand it to the human instead of looping.

@@ -807,6 +807,16 @@ function updateCount() {
 async function startQueue() {
   // Per-marketplace pause: never open a posting tab for a paused channel (background.js also refuses).
   if (isChannelPaused(currentChannel())) { updateCount(); return; }
+  // 2026-10-19: re-read the items from FindA.Sale right before building the queue. ITEMS is loaded when this window opens, so a
+  // weight, price or description saved on FindA.Sale afterwards was invisible to the run (Patrick saved the Jones sign's weight and
+  // Mercari still stopped for "no confirmed weight"). Selection is by item id and is untouched; a failed refresh keeps the loaded list.
+  try {
+    const fresh = await send({ type: 'getItems' });
+    if (fresh && fresh.ok && fresh.data && Array.isArray(fresh.data.items) && fresh.data.items.length) {
+      ITEMS = fresh.data.items;
+      if (fresh.data.organizer) ORGANIZER = fresh.data.organizer;
+    }
+  } catch (e) { /* keep the list already loaded */ }
   // Facebook Commerce Policy defense-in-depth: row() already disables the checkbox and
   // prunes `selected`, but re-filter here too in case of a stale selection (e.g. selection
   // made before an item's facebookRestricted flag was known). fas-content.js's own pre-submit
