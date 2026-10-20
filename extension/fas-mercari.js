@@ -1906,6 +1906,16 @@
     return false;
   }
 
+  // 1.0.38: Mercari lists "USPS First-Class Envelope" for anything light enough, without checking the item's shape. A rigid item
+  // (display slab, case, box) can't go in a flat envelope, so that row is only allowed when the item's real dimensions say it is flat:
+  // thickness <= 0.75in, and the other two sides within a standard flat envelope (12 x 9in). Unknown dimensions = not allowed.
+  function itemFitsFlatEnvelope(item) {
+    const dims = [item.packageLengthIn, item.packageWidthIn, item.packageHeightIn].map((v) => (v != null && v !== '' ? Number(v) : NaN));
+    if (dims.some((v) => !isFinite(v) || v <= 0)) return false;
+    dims.sort((a, b) => b - a);
+    return dims[2] <= 0.75 && dims[1] <= 9 && dims[0] <= 12;
+  }
+
   // Parses the first "$X.XX" dollar amount out of a block of text -- used to find each carrier
   // option's price so the cheapest can be selected as a safe, always-reversible-before-shipping
   // default (nothing is actually charged until the item ships; the organizer can still change the
@@ -2281,9 +2291,17 @@
     }
     let cheapest = null;
     let cheapestPrice = Infinity;
+    const envelopeOk = itemFitsFlatEnvelope(item);
+    let skippedEnvelope = 0;
     for (const r of carrierRadios) {
-      const price = firstDollarAmount(nearestPricedAncestor(r));
+      const rowText = nearestPricedAncestor(r);
+      if (!envelopeOk && /envelope/i.test(rowText || '')) { skippedEnvelope++; continue; }
+      const price = firstDollarAmount(rowText);
       if (price != null && price < cheapestPrice) { cheapestPrice = price; cheapest = r; }
+    }
+    if (skippedEnvelope) T.info('envelope_skipped', 'Skipped Mercari\'s First-Class Envelope option because the item is not flat enough for an envelope', { dims: { l: item.packageLengthIn, w: item.packageWidthIn, h: item.packageHeightIn } });
+    if (!cheapest && skippedEnvelope) {
+      return 'Mercari offered only an envelope carrier but this item is not flat enough to ship in an envelope -- choose the carrier by hand (or set its real dimensions on FindA.Sale).';
     }
     if (!cheapest) {
       return 'Mercari\'s shipping-label setup showed a carrier list but FindA.Sale couldn\'t parse any prices from it (UNVERIFIED).';
