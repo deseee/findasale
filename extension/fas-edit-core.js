@@ -270,6 +270,42 @@
     var t80 = poshmarkTitle(wanted);
     return t80 !== String(wanted == null ? '' : wanted) ? pickUnique(candidates, t80, 'equals') : r;
   }
+  // 2026-10-20: last resort for a Poshmark listing whose title was edited on FindA.Sale after it was posted (Celestion, banker's lamp,
+  // microphone cable were all live under an older title). Guarded: >= 4 shared words, >= 60% of the shorter title's words shared,
+  // every number in the shorter title present in the other, and no other closet card above 40% -- otherwise no match at all.
+  var FUZZY_STOP = { a: 1, an: 1, the: 1, and: 1, with: 1, for: 1, of: 1, in: 1, to: 1, by: 1, or: 1, on: 1 };
+  function titleWords(t) {
+    var seen = {}, out = [];
+    foldTitle(t).replace(/['’]/g, '').split(/[^a-z0-9]+/).forEach(function (w) {
+      if (!w || FUZZY_STOP[w] || (w.length < 2 && !/\d/.test(w)) || seen[w]) return;
+      seen[w] = 1; out.push(w);
+    });
+    return out;
+  }
+  function fuzzyTitleScore(a, b) {
+    var A = titleWords(a), B = titleWords(b);
+    if (!A.length || !B.length) return { shared: 0, ratio: 0, numsOk: false };
+    var small = A.length <= B.length ? A : B, big = A.length <= B.length ? B : A;
+    var inBig = {}; big.forEach(function (w) { inBig[w] = 1; });
+    var shared = small.filter(function (w) { return inBig[w]; }).length;
+    var numsOk = small.filter(function (w) { return /^\d+$/.test(w); }).every(function (w) { return inBig[w]; });
+    return { shared: shared, ratio: shared / small.length, numsOk: numsOk };
+  }
+  function pickFuzzyPoshmark(candidates, wanted) {
+    var scored = (candidates || []).map(function (c) {
+      var best = { shared: 0, ratio: 0, numsOk: false }, bestText = '';
+      (c.texts || []).forEach(function (t) {
+        if (!t || String(t).length < 12) return;
+        var sc = fuzzyTitleScore(t, wanted);
+        if (sc.ratio > best.ratio || (sc.ratio === best.ratio && sc.shared > best.shared)) { best = sc; bestText = String(t).replace(/\s+/g, ' ').trim(); }
+      });
+      return { key: c.key, sc: best, text: bestText, cand: c };
+    }).sort(function (x, y) { return y.sc.ratio - x.sc.ratio || y.sc.shared - x.sc.shared; });
+    var top = scored[0], second = scored[1];
+    if (!top || top.sc.shared < 4 || top.sc.ratio < 0.6 || !top.sc.numsOk) return { match: null, reason: 'none', count: 0 };
+    if (second && second.key !== top.key && second.sc.ratio > 0.4) return { match: null, reason: 'ambiguous', count: 2 };
+    return { match: top.cand, reason: 'fuzzy', count: 1, score: top.sc, matchedTitle: top.text };
+  }
   // candidates: [{ key, texts: [string] }] -> { match: candidate|null, reason: 'ok'|'none'|'ambiguous', count }
   function pickUnique(candidates, wanted, mode) {
     var fn = mode === 'contains' ? titleContained : titleEquals;
@@ -570,7 +606,7 @@
     normalizeEntry: normalizeEntry, normalizeTitleGroup: normalizeTitleGroup, resolveDuplicateTitleId: resolveDuplicateTitleId,
     copyStart: copyStart, copyAdvance: copyAdvance, copySummaryLine: copySummaryLine, isListingGone: isListingGone, hasWork: hasWork, wantsQuantity: wantsQuantity,
     wholeDollars: wholeDollars, formatPrice: formatPrice, parsePriceText: parsePriceText, pricesMatch: pricesMatch,
-    foldTitle: foldTitle, cleanCandidateTitle: cleanCandidateTitle, titleEquals: titleEquals, titleContained: titleContained, pickUnique: pickUnique, pickUniquePoshmark: pickUniquePoshmark, poshmarkTitle: poshmarkTitle,
+    foldTitle: foldTitle, cleanCandidateTitle: cleanCandidateTitle, titleEquals: titleEquals, titleContained: titleContained, pickUnique: pickUnique, pickUniquePoshmark: pickUniquePoshmark, pickFuzzyPoshmark: pickFuzzyPoshmark, fuzzyTitleScore: fuzzyTitleScore, poshmarkTitle: poshmarkTitle,
     extractIdFromUrl: extractIdFromUrl, startUrl: startUrl, craigslistPageUrl: craigslistPageUrl,
     isPoshmarkErrorPayload: isPoshmarkErrorPayload, unwrapPoshmarkPost: unwrapPoshmarkPost, poshmarkPriceVal: poshmarkPriceVal,
     buildPoshmarkUpdate: buildPoshmarkUpdate, poshmarkCollateralDiff: poshmarkCollateralDiff, poshmarkQuantity: poshmarkQuantity,

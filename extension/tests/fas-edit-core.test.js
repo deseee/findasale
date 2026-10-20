@@ -312,3 +312,23 @@ test('pickUniquePoshmark finds a listing Poshmark cut to 80 characters', () => {
   assert.equal(r.reason, 'ok'); assert.equal(r.match.key, 'a');
   assert.equal(C.pickUniquePoshmark([{ key: 'b', texts: ['Other thing entirely here'] }], full).reason, 'none');
 });
+
+test('isPoshmarkErrorPayload keeps the full detail when errorMessage is empty (Poshmark "suspicious" certify response)', () => {
+  const C = require('../fas-edit-core.js');
+  const r = C.isPoshmarkErrorPayload({ error: { statusCode: 400, errorType: 'PostValidationError', errorMessage: null, userMessage: 'We have detected that this item is suspicious.', params: { certify_action: true } } });
+  assert.ok(/suspicious/.test(r) && /certify_action/.test(r), r);
+});
+
+test('pickFuzzyPoshmark: finds a retitled listing, refuses weak or ambiguous matches', () => {
+  const C = require('../fas-edit-core.js');
+  const cards = [
+    { key: 'cel', texts: ['Celestion Vintage 30 G12 Guitar Speaker, 12-inch, 8 Ohm'] },
+    { key: 'bank', texts: ["Banker's lamp with green glass shade and brass base"] },
+    { key: 'xlr', texts: ['Professional Low Noise Microphone Cable 6 ft, XLR 3-Pin'] },
+  ];
+  assert.strictEqual(C.pickFuzzyPoshmark(cards, 'Celestion G12 Vintage 30 Guitar Speaker Cabinet Insert').match.key, 'cel');
+  assert.strictEqual(C.pickFuzzyPoshmark(cards, "Banker's Lamp, Brass Brass with Green Glass Shade").match.key, 'bank');
+  assert.strictEqual(C.pickFuzzyPoshmark(cards, 'Breit Professional Microphone Cable, XLR Male to Female').match, null);
+  assert.strictEqual(C.pickFuzzyPoshmark(cards, 'Celestion G12 Vintage 75 Guitar Speaker Cabinet Insert').match, null); // different model number
+  assert.strictEqual(C.pickFuzzyPoshmark([{ key: 'a', texts: ['Celestion Vintage 30 G12 Guitar Speaker, 12-inch'] }, { key: 'b', texts: ['Celestion Vintage 30 G12 Guitar Speaker, 12-inch 16 Ohm'] }], 'Celestion G12 Vintage 30 Guitar Speaker').reason, 'ambiguous');
+});

@@ -594,6 +594,21 @@
       return { el: distinct.length === 1 ? hits[0].el : null, matches: hits.length, distinct: distinct.length };
     };
   }
+  // 2026-10-19 (1.0.36): the picker's result list is scrollable, so a mapped row that sits further down (e.g. "Home > Other" among
+  // many "... > Other" rows) is not in the page yet. Scroll the nearest scrollable ancestor of a result row down by ~one screen.
+  function scrollMercariResultsDown(rows) {
+    try {
+      let el = rows && rows[0];
+      for (let i = 0; el && i < 8; i++, el = el.parentElement) {
+        if (el.scrollHeight > el.clientHeight + 8 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) {
+          const before = el.scrollTop;
+          el.scrollTop = before + Math.max(80, el.clientHeight * 0.9);
+          return el.scrollTop !== before;
+        }
+      }
+    } catch (e) { /* best effort */ }
+    return false;
+  }
   function mercariCategorySearchInput() {
     return document.querySelector('input[placeholder="Search category" i]')
       || qa('input[type="text"], input:not([type])').find((el) => {
@@ -678,9 +693,11 @@
         outcome.query = query;
         await sleep(700); // let Mercari's own search debounce/results settle
         row = await waitForSelector(() => {
-          last = chooser(qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li, button'));
+          const opts = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li, button');
+          last = chooser(opts);
+          if (!last.el && last.distinct === 0) scrollMercariResultsDown(opts.filter((o) => String(o.className || '').indexOf('CategoryDialog') !== -1 && String(o.textContent || '').indexOf('>') !== -1));
           return last.el;
-        }, 2400);
+        }, 6000);
         if (row) break;
       }
       if (!row) {
@@ -2271,14 +2288,30 @@
     if (!cheapest) {
       return 'Mercari\'s shipping-label setup showed a carrier list but FindA.Sale couldn\'t parse any prices from it (UNVERIFIED).';
     }
+    // 1.0.37: picking First-Class Envelope on a pricier item can raise a notice ("Max delivery protection is $20 ... Other options may offer
+    // more protection") with a "Got it" button that must be dismissed before Save works. Click it only when that notice is on screen.
+    const dismissProtectionNotice = async () => {
+      for (let i = 0; i < 3; i++) {
+        const box = qa('[role="dialog"], [class*="odal"], [class*="Dialog"]').find((d) => /max delivery protection|delivery protection is/i.test(d.textContent || ''));
+        if (!box) return false;
+        const ok = Array.from(box.querySelectorAll('button')).find((b) => norm(b.textContent) === 'got it');
+        if (!ok) return false;
+        T.info('delivery_protection_notice', 'Mercari showed its maximum-delivery-protection notice for the cheapest carrier; clicked "Got it"', {});
+        await realClick(ok);
+        await sleep(500);
+      }
+      return true;
+    };
     await realClick(cheapest);
     await sleep(250);
+    await dismissProtectionNotice();
     const saveBtn = await waitForSelector(() => document.querySelector('[data-testid="SelectCarrierSaveButton"]:not([disabled])') || qa('button').find((b) => norm(b.textContent) === 'save' && !b.disabled), 4000);
     if (!saveBtn) {
       return 'Mercari\'s shipping-label setup didn\'t enable its "Save" button after picking a carrier (UNVERIFIED state).';
     }
     await realClick(saveBtn);
     await sleep(500);
+    await dismissProtectionNotice();
 
     // Verify: Mercari's own placeholder label text on the opener NEVER updates to reflect a
     // completed shipping label -- confirmed live this session (same root cause as the pre-click

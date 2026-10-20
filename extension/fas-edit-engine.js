@@ -516,6 +516,18 @@
         window.scrollTo(0, document.body.scrollHeight);
         await sleep(1100);
       }
+      if (!found && !S.fuzzyTried) {
+        // Title may have been edited on FindA.Sale after posting: look again with just the first two words, then try the guarded near-match.
+        var base = location.pathname.replace(/\/+$/, '');
+        return go('https://poshmark.com' + base + '?query=' + encodeURIComponent(String(it.title).split(/\s+/).slice(0, 2).join(' ')), { phase: 'locate', fuzzyTried: true });
+      }
+      if (!found && S.fuzzyTried) {
+        var fz = C.pickFuzzyPoshmark(poshClosetCards(), it.title);
+        if (fz.match) {
+          found = fz.match.key;
+          tLog('warn', 'posh_fuzzy_match', 'No closet listing has this exact title; using the one unambiguous near match "' + String(fz.matchedTitle).slice(0, 80) + '" (' + fz.score.shared + ' shared words)', { id: found, shared: fz.score.shared, ratio: fz.score.ratio });
+        }
+      }
       if (!found) return fail('listing_not_found_in_closet', 'No closet card with this exact title', 'locate', '.tile-grid-redesign__title / a[href*="/listing/"]', {});
       return go('https://poshmark.com/edit-listing/' + found, { remoteId: found, phase: 'api', discovered: true });
     }
@@ -555,6 +567,12 @@
       var errP = rj && C.isPoshmarkErrorPayload(rj);
       if (res.status === 403 || res.status === 429) return blocked('http_' + res.status, 'POST post returned ' + res.status, 'api');
       tLog(res.ok && !errP ? 'info' : 'warn', 'posh_post_result', 'Poshmark answered the price save with HTTP ' + res.status + (errP ? ' (' + String(errP).slice(0, 400) + ')' : ''), { status: res.status });
+      // 2026-10-20: Poshmark answers some saves with HTTP 200 + PostValidationError { certify_action:true, userMessage:"We have detected that
+      // this item is suspicious. Please use our Single Listing Creation form..." } -- its automation check. Retrying (or driving the form) only
+      // feeds that flag, so stop the Poshmark run and back off; the price has to be changed by hand on Poshmark.
+      if (errP && /suspicious|certify_action|certify_reason/i.test(String(errP) + ' ' + rt)) {
+        return blocked('poshmark_flagged', 'Poshmark flagged the price save as suspicious and asked for its manual listing form, so Poshmark edits are paused. Change this price on Poshmark by hand.', 'api');
+      }
       if (!res.ok || errP) {
         // API refused: drive the form instead (documented fallback), then verify through an API re-GET.
         if (S.formFallback) return fail('api_post_failed', 'POST post: HTTP ' + res.status + ' ' + (errP || rt.slice(0, 100)), 'api', 'POST /vm-rest/posts/<id>', { apiTried: true, remoteId: id }, { diag: { note: 'posh_post_failed', keys: diagKeys, resp: C.redact(rj || rt.slice(0, 200)) } });
