@@ -1449,7 +1449,7 @@
         T.info('smart_pricing_absent', 'This Mercari form shows no Smart Pricing section, so there is nothing to turn off', {});
         return true;
       }
-      console.warn('[FAS Mercari] Smart Pricing toggle button not found (UNVERIFIED selector on this form) -- please confirm Smart Pricing is OFF manually before publishing. Buttons near it: ' + JSON.stringify(qa('button, [role="button"]').filter((b) => { let n = b.parentElement; for (let i = 0; i < 4 && n; i++, n = n.parentElement) { if (/smart pricing/i.test(n.textContent || '') && (n.textContent || '').length < 800) return true; } return false; }).slice(0, 6).map((b) => ({ text: (b.textContent || '').trim().slice(0, 40), testid: b.getAttribute('data-testid'), pressed: b.getAttribute('aria-pressed'), role: b.getAttribute('role'), aria: b.getAttribute('aria-label') }))));
+      console.warn('[FAS Mercari] Smart Pricing toggle button not found (UNVERIFIED selector on this form) -- please confirm Smart Pricing is OFF manually before publishing. Buttons near it: ' + JSON.stringify(qa('button, [role="button"]').filter((b) => { let n = b.parentElement; for (let i = 0; i < 4 && n; i++, n = n.parentElement) { if (/smart pricing/i.test(n.textContent || '') && (n.textContent || '').length < 800) return true; } return false; }).slice(0, 6).map((b) => ({ text: (b.textContent || '').trim().slice(0, 40), testid: b.getAttribute('data-testid'), pressed: b.ariaPressed, role: b.getAttribute('role'), aria: b.getAttribute('aria-label') }))));
       return false;
     }
     // 1.0.21: a plain btn.click() does NOT toggle this control (live-verified); the full pointer sequence does.

@@ -1072,6 +1072,18 @@ const FAS_EDIT_STATE_KEY = 'fasEditState';       // { items: { 'PLATFORM:itemId'
 const FAS_EDIT_LOG_KEY = 'fasEditLog';           // ring buffer for the popup
 const FAS_EDIT_DIAG_KEY = 'fasEditDiag';         // { PLATFORM: [records] }
 const FAS_EDIT_PENDING_KEY = 'fasEditPending';   // { PLATFORM: [raw backend entries] }
+// 1.0.42: when an edit run stops on something only the organizer can do (sign in, a verification check, Poshmark's suspicious flag), its tab
+// is left open and focused instead of being closed; this remembers it so the next run can close the stale one first.
+const FAS_EDIT_NEEDS_USER_CODES = ['login_required', 'captcha_or_verification', 'poshmark_flagged'];
+const FAS_EDIT_KEPT_TAB_KEY = 'fasEditKeptTab';
+async function fasEditCloseKeptTab() {
+  try {
+    const st = await chrome.storage.local.get([FAS_EDIT_KEPT_TAB_KEY]);
+    const id = st[FAS_EDIT_KEPT_TAB_KEY];
+    await chrome.storage.local.remove([FAS_EDIT_KEPT_TAB_KEY]);
+    if (typeof id === 'number') await new Promise((resolve) => chrome.tabs.remove(id, () => { void chrome.runtime.lastError; resolve(); }));
+  } catch (e) { /* best-effort */ }
+}
 const FAS_EDIT_RUN_KEY = 'fasEditRun';           // lock: { platform, tabId, prevTabId, startedAt }
 const FAS_EDIT_RUN_MAX_MS = 25 * 60 * 1000;
 const FAS_EDIT_ITEM_MAX_MS = 150 * 1000;
@@ -1544,6 +1556,7 @@ async function fasEditRunPlatform(platform, rawEntries) {
 
   const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const prevTabId = activeTabs && activeTabs[0] ? activeTabs[0].id : null;
+  await fasEditCloseKeptTab();
   const tab = await chrome.tabs.create({ url: 'about:blank', active: true });
   await chrome.storage.local.set({ [FAS_EDIT_RUN_KEY]: { platform: platform, tabId: tab.id, prevTabId: prevTabId, startedAt: Date.now() } });
   const failures = [];
@@ -1598,7 +1611,7 @@ async function fasEditRunPlatform(platform, rawEntries) {
         state.platformBackoff[platform] = { until: Date.now() + Core.backoffMs(cnt, Math.random()), count: cnt };
         stopped = res.code;
         fasT('warn', 'platform_backoff_set', platform + ' edits stopped for this run and backed off until ' + new Date(state.platformBackoff[platform].until).toISOString() + ' (' + res.code + ')', { platform: platform, flow: 'edit', ctx: { code: res.code, until: state.platformBackoff[platform].until, blocks: cnt, remaining: batch.length - i - 1 } });
-        await fasEditLogEntry('error', platform, entry, res.code, 'Run stopped: ' + res.reason + '. ' + Core.LABELS[platform] + ' will not be touched again until ' + new Date(state.platformBackoff[platform].until).toLocaleTimeString() + '. Details were sent automatically; nothing is needed from you.', { step: res.step, selector: res.selector });
+        await fasEditLogEntry('error', platform, entry, res.code, 'Run stopped: ' + res.reason + '. ' + Core.LABELS[platform] + ' will not be touched again until ' + new Date(state.platformBackoff[platform].until).toLocaleTimeString() + '. Details were sent automatically.' + (FAS_EDIT_NEEDS_USER_CODES.indexOf(res.code) !== -1 ? ' This one needs you: the tab was left open for it.' : ' Nothing is needed from you.'), { step: res.step, selector: res.selector });
         await fasEditAddDiag(platform, diagRecord);
         await fasEditForwardDiag(platform, diagRecord);
         failures.push({ platform: platform, title: entry.title, reason: res.code === 'login_required' ? 'signed out, sign in to ' + Core.LABELS[platform] : res.code });
@@ -1619,8 +1632,15 @@ async function fasEditRunPlatform(platform, rawEntries) {
   } finally {
     await fasEditSaveState(state);
     await chrome.storage.local.remove([FAS_EDIT_RUN_KEY]);
-    if (prevTabId != null) await new Promise((resolve) => chrome.tabs.update(prevTabId, { active: true }, () => { void chrome.runtime.lastError; resolve(); }));
-    await new Promise((resolve) => chrome.tabs.remove(tab.id, () => { void chrome.runtime.lastError; resolve(); }));
+    if (FAS_EDIT_NEEDS_USER_CODES.indexOf(stopped) !== -1) {
+      // Needs the organizer (sign in / verify / change it by hand): leave this tab open on the page, in front, and say so.
+      await chrome.storage.local.set({ [FAS_EDIT_KEPT_TAB_KEY]: tab.id });
+      await new Promise((resolve) => chrome.tabs.update(tab.id, { active: true }, () => { void chrome.runtime.lastError; resolve(); }));
+      try { chrome.notifications.create('fasEditNeedsYou', { type: 'basic', iconUrl: 'icon128.png', title: 'FindA.Sale needs you', message: stopped === 'login_required' ? 'Sign in to ' + (Core.LABELS[platform] || platform) + ' in the open tab; edits will resume on their own.' : stopped === 'poshmark_flagged' ? 'Poshmark flagged an automatic price save. The tab is left open; change that price on Poshmark by hand.' : 'The marketplace is asking for a verification check. Finish it in the open tab; edits resume on their own.', priority: 2 }); } catch (e) { /* best-effort */ }
+    } else {
+      if (prevTabId != null) await new Promise((resolve) => chrome.tabs.update(prevTabId, { active: true }, () => { void chrome.runtime.lastError; resolve(); }));
+      await new Promise((resolve) => chrome.tabs.remove(tab.id, () => { void chrome.runtime.lastError; resolve(); }));
+    }
     await chrome.storage.local.set({ fasEditLastRun: { at: Date.now(), platform: platform, applied: applied, failed: failed, stopped: stopped } });
     fasEditNotifyFailures(failures);
     fasT(failed || stopped ? 'warn' : 'info', 'platform_run_end', 'Finished ' + platform + ' edits: ' + applied + ' verified, ' + failed + ' failed' + (stopped ? ', stopped by ' + stopped : ''), { platform: platform, flow: 'edit', ctx: { applied: applied, failed: failed, stopped: stopped, items: batch.length } });
