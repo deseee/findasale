@@ -493,7 +493,7 @@
       await waitFor(function () { return qa('a[href*="/listing/"]').length > 0; }, 10000);
       var found = null;
       for (var sc = 0; sc < 7 && !found; sc++) {
-        var pick = C.pickUnique(poshClosetCards(), it.title, 'equals');
+        var pick = C.pickUniquePoshmark(poshClosetCards(), it.title);
         if (pick.match) {
           found = pick.match.key;
           // Safety (2026-10-16): the closet lazy-loads, so a lone match here may have an identical-title twin further down that has not
@@ -506,7 +506,7 @@
             prevN = nowN;
             window.scrollTo(0, document.body.scrollHeight);
             await sleep(1100);
-            var again = C.pickUnique(poshClosetCards(), it.title, 'equals');
+            var again = C.pickUniquePoshmark(poshClosetCards(), it.title);
             if (again.reason === 'ambiguous') return await poshAmbiguous(it);
           }
           tLog('info', 'posh_title_match', 'Exactly one Poshmark listing has this title; using its id', { id: found });
@@ -554,7 +554,7 @@
       var rt = await res.text(); var rj = null; try { rj = JSON.parse(rt); } catch (e) { /* maybe empty */ }
       var errP = rj && C.isPoshmarkErrorPayload(rj);
       if (res.status === 403 || res.status === 429) return blocked('http_' + res.status, 'POST post returned ' + res.status, 'api');
-      tLog(res.ok && !errP ? 'info' : 'warn', 'posh_post_result', 'Poshmark answered the price save with HTTP ' + res.status + (errP ? ' (' + String(errP).slice(0, 80) + ')' : ''), { status: res.status });
+      tLog(res.ok && !errP ? 'info' : 'warn', 'posh_post_result', 'Poshmark answered the price save with HTTP ' + res.status + (errP ? ' (' + String(errP).slice(0, 400) + ')' : ''), { status: res.status });
       if (!res.ok || errP) {
         // API refused: drive the form instead (documented fallback), then verify through an API re-GET.
         if (S.formFallback) return fail('api_post_failed', 'POST post: HTTP ' + res.status + ' ' + (errP || rt.slice(0, 100)), 'api', 'POST /vm-rest/posts/<id>', { apiTried: true, remoteId: id }, { diag: { note: 'posh_post_failed', keys: diagKeys, resp: C.redact(rj || rt.slice(0, 200)) } });

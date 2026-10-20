@@ -242,6 +242,9 @@
     var w = foldTitle(wanted).replace(/\s*\.{3,}\s*$/, '');
     if (!c || !w || w.length < MIN_TITLE) return false;
     if (c === w) return true;
+    // 2026-10-19: cleanCandidateTitle strips a trailing "$price ..." tail, which also eats real titles that contain a dollar
+    // amount ("1950-C $50 *Minneapolis* Federal Reserve Star Note" became "1950-c" and never matched). Also accept the un-stripped text.
+    if (foldTitle(candidateText).replace(/\s*\.{3,}\s*$/, '') === w) return true;
     if (w.length >= 75 && c.length >= 60 && w.length > c.length && w.indexOf(c) === 0 && /^[,;:]?\s+\S+$/.test(w.slice(c.length))) return true;
     return false;
   }
@@ -251,6 +254,21 @@
     var w = foldTitle(wanted);
     if (!w || w.length < MIN_TITLE) return false;
     return foldTitle(cardText).indexOf(w) !== -1;
+  }
+  // Poshmark cuts titles to 80 characters (word boundary when one falls in the last 15 chars) when FindA.Sale posts them; keep in step
+  // with truncatePoshmarkTitle in fas-poshmark.js.
+  function poshmarkTitle(title) {
+    var MAX = 80, t = String(title == null ? '' : title);
+    if (t.length <= MAX) return t;
+    var cut = t.slice(0, MAX), sp = cut.lastIndexOf(' ');
+    return (sp > MAX - 15 ? cut.slice(0, sp) : cut).replace(/\s+$/, '');
+  }
+  // Closet lookup: the full title first, then the 80-char title that Poshmark actually shows. Only tries the second when the first found nothing.
+  function pickUniquePoshmark(candidates, wanted) {
+    var r = pickUnique(candidates, wanted, 'equals');
+    if (r.reason !== 'none') return r;
+    var t80 = poshmarkTitle(wanted);
+    return t80 !== String(wanted == null ? '' : wanted) ? pickUnique(candidates, t80, 'equals') : r;
   }
   // candidates: [{ key, texts: [string] }] -> { match: candidate|null, reason: 'ok'|'none'|'ambiguous', count }
   function pickUnique(candidates, wanted, mode) {
@@ -306,7 +324,9 @@
     var e = json.error;
     if (e && typeof e === 'object') {
       var code = e.statusCode != null ? e.statusCode : (e.status != null ? e.status : '');
-      return 'poshmark_error:' + String(code) + ':' + String(e.errorType || e.type || '') + ':' + String(e.errorMessage || e.message || '').slice(0, 120);
+      var msg = String(e.errorMessage || e.message || '').slice(0, 120);
+      if (!msg) { try { var rest = {}; Object.keys(e).forEach(function (k) { if (k !== 'statusCode' && k !== 'status' && k !== 'errorType' && k !== 'type') rest[k] = e[k]; }); msg = JSON.stringify(rest).slice(0, 300); } catch (x) { /* keep empty */ } }
+      return 'poshmark_error:' + String(code) + ':' + String(e.errorType || e.type || '') + ':' + msg;
     }
     if (typeof e === 'string' && e) return 'poshmark_error:' + e.slice(0, 120);
     return null;
@@ -550,7 +570,7 @@
     normalizeEntry: normalizeEntry, normalizeTitleGroup: normalizeTitleGroup, resolveDuplicateTitleId: resolveDuplicateTitleId,
     copyStart: copyStart, copyAdvance: copyAdvance, copySummaryLine: copySummaryLine, isListingGone: isListingGone, hasWork: hasWork, wantsQuantity: wantsQuantity,
     wholeDollars: wholeDollars, formatPrice: formatPrice, parsePriceText: parsePriceText, pricesMatch: pricesMatch,
-    foldTitle: foldTitle, cleanCandidateTitle: cleanCandidateTitle, titleEquals: titleEquals, titleContained: titleContained, pickUnique: pickUnique,
+    foldTitle: foldTitle, cleanCandidateTitle: cleanCandidateTitle, titleEquals: titleEquals, titleContained: titleContained, pickUnique: pickUnique, pickUniquePoshmark: pickUniquePoshmark, poshmarkTitle: poshmarkTitle,
     extractIdFromUrl: extractIdFromUrl, startUrl: startUrl, craigslistPageUrl: craigslistPageUrl,
     isPoshmarkErrorPayload: isPoshmarkErrorPayload, unwrapPoshmarkPost: unwrapPoshmarkPost, poshmarkPriceVal: poshmarkPriceVal,
     buildPoshmarkUpdate: buildPoshmarkUpdate, poshmarkCollateralDiff: poshmarkCollateralDiff, poshmarkQuantity: poshmarkQuantity,

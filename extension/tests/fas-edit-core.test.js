@@ -298,3 +298,17 @@ test('copyAdvance: all copies edited is allOk; a gone listing is skipped not fai
   assert.deepStrictEqual(r.summary.untried, [B, D]);
   assert.strictEqual(r.summary.allOk, false);
 });
+
+// 2026-10-19: Poshmark closet lookups (real closet titles seen live).
+test('titleEquals keeps a title that contains a dollar amount', () => {
+  const C = require('../fas-edit-core.js');
+  assert.equal(C.titleEquals('1950-C $50 *Minneapolis* Federal Reserve Star Note', '1950-C $50 *Minneapolis* Federal Reserve Star Note'), true);
+});
+test('pickUniquePoshmark finds a listing Poshmark cut to 80 characters', () => {
+  const C = require('../fas-edit-core.js');
+  const posh = 'Titleist Pro 98 Plus Golf Hat, Signed by Professional Golfers Chi Chi Rodriguez';
+  const full = posh + ' Autographed Memorabilia Collectible';
+  const r = C.pickUniquePoshmark([{ key: 'a', texts: [posh] }, { key: 'b', texts: ['Other thing entirely here'] }], full);
+  assert.equal(r.reason, 'ok'); assert.equal(r.match.key, 'a');
+  assert.equal(C.pickUniquePoshmark([{ key: 'b', texts: ['Other thing entirely here'] }], full).reason, 'none');
+});

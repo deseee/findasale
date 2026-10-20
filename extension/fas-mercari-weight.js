@@ -118,7 +118,14 @@
     var waitMs = opts.waitMs != null ? opts.waitMs : 2000, step = opts.stepMs != null ? opts.stepMs : 100, retries = opts.retries != null ? opts.retries : 2;
     var get = typeof getBtn === 'function' ? getBtn : function () { return getBtn; };
     var live = function () { var b = null; try { b = get(); } catch (e) { b = null; } return b || null; };
-    var state = function () { var b = live(); return b ? b.getAttribute('aria-pressed') : null; };
+    var state = function () {
+      var b = live(); if (!b) return null;
+      var ap = b.getAttribute('aria-pressed');
+      if (ap != null) return ap;
+      // 2026-10-19: Mercari's Smart pricing toggle can show only the words ON / OFF (seen in a live problem report) with no aria-pressed.
+      var t = String(b.textContent || '').trim().toUpperCase();
+      return t === 'ON' ? 'true' : (t === 'OFF' ? 'false' : null);
+    };
     // Waits (up to waitMs) for the live button to exist; returns its state or null.
     var settle = async function () {
       var s = state(), waited = 0;

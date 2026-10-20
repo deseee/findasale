@@ -1414,8 +1414,16 @@
   async function turnOffMercariSmartPricing() {
     // 1.0.24: Mercari's React REPLACES this button node after the click (live-verified: the old node stays aria-pressed="true", isConnected=false;
     // a fresh query shows "false"). Never hold the node: setToggleOff gets a getter and re-queries on every poll and before every click.
-    const getBtn = () => document.querySelector('button[data-testid="SmartPricingButton"]');
-    const btn = await waitForSelector(getBtn, 5000);
+    // 2026-10-19: when the data-testid is missing, fall back to the button that reads exactly ON / OFF inside the "Smart pricing" block
+    // (the live problem report lists it as a bare "ON" button next to "Smart pricing...").
+    const getBtn = () => document.querySelector('button[data-testid="SmartPricingButton"]') || qa('button, [role="button"]').find((b) => {
+      const t = (b.textContent || '').trim().toUpperCase();
+      if (t !== 'ON' && t !== 'OFF') return false;
+      let n = b.parentElement;
+      for (let i = 0; i < 4 && n; i++, n = n.parentElement) { if (/smart pricing/i.test(n.textContent || '') && (n.textContent || '').length < 600) return true; }
+      return false;
+    }) || null;
+    const btn = await waitForSelector(getBtn, 8000);
     if (!btn) {
       console.warn('[FAS Mercari] Smart Pricing toggle button not found (UNVERIFIED selector on this form) -- please confirm Smart Pricing is OFF manually before publishing.');
       return false;

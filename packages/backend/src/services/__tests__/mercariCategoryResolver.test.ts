@@ -174,7 +174,7 @@ describe('mercariCategoryResolver: null on ambiguous or unharvested input (never
     expect(idOf({ title: 'Electric solenoid valve 120VAC plastic body' })).toBe(2824);
     expect(idOf({ title: 'Ace keyed alike sash lock satin nickel' })).toBe(2849);
     expect(idOf({ title: 'Metal halide grow lamp bulb 600W' })).toBe(71);
-    expect(idOf({ title: 'Mannequin head clamp stand cosmetology' })).toBe(71);
+    expect(idOf({ title: 'Mannequin head clamp stand display' })).toBe(71);
   });
 
   it('automotive headlight HID bulbs are not filed as grow lamps', () => {
@@ -491,5 +491,15 @@ describe('John Guest push-fit fittings map by title regardless of the eBay categ
     for (const c of [null, 'Business & Industrial', 'Home & Garden:Kitchen, Dining & Bar:Small Kitchen Appliances:Food Processors']) {
       expect(resolveMercariCategory({ title, categoryBreadcrumb: c })!.pathText).toBe('Garden & Outdoor > Watering Equipment > Other Watering Equipment');
     }
+  });
+});
+
+describe('mercariCategoryResolver: mannequin heads', () => {
+  it('leaves a cosmetology mannequin head unmapped so the picker search can land on Beauty', () => {
+    expect(resolveMercariCategory({ title: 'Mannequin Head Clamp Stand Black Cosmetology Hair Styling' })).toBeNull();
+  });
+  it('still files a plain display mannequin stand under Home > Other', () => {
+    const r = resolveMercariCategory({ title: 'Female mannequin stand for clothing display' });
+    expect(r && r.id).toBe(71);
   });
 });

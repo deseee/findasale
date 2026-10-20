@@ -197,7 +197,7 @@ export const MERCARI_RULES: MercariRuleDef[] = [
   rule('coin-tubes-supplies', 2608, ['coin (tubes?|holders?|albums?|folders?|capsules?|flips?|sleeves?|cases?|storage|boxes)|coin supplies|coin tubes?|penny tubes?']),
   rule('tobacco-advertising-sign', 1636, ['rolling papers?', 'signs?']),
   rule('solenoid-water-valve', 2824, ['solenoid valves?|electric valves?|irrigation valves?'], [NOT_MOTORS]),
-  rule('home-other-utility', 71, ['tankless|water heaters?|expansion tanks?|digital timers?|weekly timers?|glycerin|mannequin (heads?|stands?)|clamp stands?'], [NOT_MOTORS]),
+  rule('home-other-utility', 71, ['tankless|water heaters?|expansion tanks?|digital timers?|weekly timers?|glycerin|mannequin (heads?|stands?)|clamp stands?'], [NOT_MOTORS, 'cosmetology|hair styling|hairdressing|wigs?|salon']),
   rule('window-sash-lock', 2849, ['sash locks?|window locks?|keyed alike']),
   rule('privacy-screen-divider', 620, ['privacy screens?|room dividers?|screen dividers?|folding screens?']),
   rule('ashtrays', 1807, ['ash ?trays?'], ['cat:tobacciana|cigar']),

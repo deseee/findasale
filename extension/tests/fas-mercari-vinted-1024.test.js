@@ -67,7 +67,7 @@ test('late flip seen on the re-query right before the 2nd click: exactly 1 click
 });
 test('source pin: turnOffMercariSmartPricing passes a getter, not a held node, and fas-mercari.js holds no SmartPricingButton reference', () => {
   const src = read('fas-mercari.js');
-  const i = src.indexOf('async function turnOffMercariSmartPricing'); const seg = src.slice(i, i + 1400);
+  const i = src.indexOf('async function turnOffMercariSmartPricing'); const seg = src.slice(i, i + 2600);
   assert.ok(seg.indexOf('setToggleOff(getBtn,') !== -1);
   assert.ok(seg.indexOf("getAttribute('aria-pressed')") === -1);
   assert.strictEqual((src.match(/SmartPricingButton/g) || []).length, 2); // doc comment + getBtn selector (the DIAG line uses SmartPricingFloorPrice)
