@@ -60,7 +60,7 @@ router.post('/', contactLimiter, async (req: Request, res: Response) => {
       await emailService.emails.send({
         from: fromEmail,
         to: email,
-        subject: 'We received your message – FindA.Sale',
+        subject: 'We received your message. FindA.Sale',
         html: `
           <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
             <h2 style="color:#2563eb;">Thanks for reaching out, ${name}!</h2>

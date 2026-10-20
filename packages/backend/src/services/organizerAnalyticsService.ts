@@ -325,7 +325,7 @@ async function sendOrganizerDigestEmail(stats: OrganizerWeeklyStats): Promise<vo
     await emailService.emails.send({
       from: FROM_EMAIL,
       to: stats.organizerEmail,
-      subject: `Your Weekly Performance Summary – ${stats.totalItemsSold} items sold`,
+      subject: `Your Weekly Performance Summary: ${stats.totalItemsSold} items sold`,
       html,
       jobName: 'organizerAnalyticsService',
     });

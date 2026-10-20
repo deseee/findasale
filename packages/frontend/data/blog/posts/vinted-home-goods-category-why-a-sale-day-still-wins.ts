@@ -24,7 +24,7 @@ That's not a knock on Vinted. It's a genuinely useful tool for someone trying to
 
 Picture an organizer who decides to list a houseful of furniture and decor piece by piece instead of running a sale. Every item needs its own photos, its own description, its own price, its own back-and-forth with a buyer, its own shipping or local pickup logistics. Multiply that by the hundred-plus items a typical estate or moving sale moves through, and the time cost alone makes the one-at-a-time approach a non-starter for most of what's actually sitting in that house.
 
-Compare that to a sale day: items get cataloged once, in bulk, with whatever smart cataloging tool an organizer already prefers (and there are good ones out there now — fast photo-to-listing workflows are genuinely common in this space in a way they weren't a couple years ago). Then the whole sale goes up as one listing that buyers can browse all at once, show up for, and walk through. Discovery happens once, for the whole sale, instead of a hundred separate times for a hundred separate items.
+Compare that to a sale day: items get cataloged once, in bulk, with whatever smart cataloging tool an organizer already prefers (and there are good ones out there now: fast photo-to-listing workflows are genuinely common in this space in a way they weren't a couple years ago). Then the whole sale goes up as one listing that buyers can browse all at once, show up for, and walk through. Discovery happens once, for the whole sale, instead of a hundred separate times for a hundred separate items.
 
 ## Where buyers actually go looking
 

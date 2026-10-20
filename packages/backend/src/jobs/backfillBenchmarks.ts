@@ -127,7 +127,7 @@ async function backfillBatch(skip: number): Promise<{
           title: `${category} (auto-generated)`,
           category,
           status: 'AUTO_GENERATED',
-          content: '(AI-generated benchmark entry)',
+          content: '(Auto-generated benchmark entry)',
           benchmarks: {
             create: {
               condition,

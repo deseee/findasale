@@ -668,11 +668,11 @@ const WORST_CASE_ZONE: ZoneKey = 'z8';
 const ORIGIN_NOTE: Record<PresetOriginBasis, string | undefined> = {
   'sale-zip': undefined,
   'organizer-address-zip':
-    "Priced from the ZIP in your business address. If you ship from somewhere else, the real cost can differ \u2014 add the sale's address and this will use it.",
+    "Priced from the ZIP in your business address. If you ship from somewhere else, the real cost can differ. Add the sale's address and this will use it.",
   'organizer-latlng':
     'Priced from your profile location rather than a sale address, so treat this as a close estimate.',
   'worst-case-fallback':
-    "We don't know where you ship from yet, so this is priced to the most expensive part of the country \u2014 your real cost is likely lower. Add a sale with an address to get an exact number.",
+    "We don't know where you ship from yet, so this is priced to the most expensive part of the country. Your real cost is likely lower. Add a sale with an address to get an exact number.",
 };
 
 interface ResolvedPresetOrigin {
