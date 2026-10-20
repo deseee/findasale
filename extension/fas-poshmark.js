@@ -2713,6 +2713,12 @@
     // touching the form: advance the queue WITHOUT calling markListed (same "stays available for
     // other marketplaces" behavior as the already-listed skip path further below, which also omits
     // markListed), then continue to the next item.
+    // 1.0.39: Poshmark's guidelines prohibit pickup/meetups in place of shipping, so a pickup-only item is never filled. Guards a stale queue.
+    if (queued.item.localPickupOnly === true) {
+      try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- marked local pickup only, and Poshmark does not allow pickup in place of shipping. Nothing was filled.</div>');
+      return;
+    }
     const poshRestrictionReason = poshmarkRestrictionReason(queued.item.category, queued.item.title);
     if (poshRestrictionReason) {
       console.warn('[FAS Poshmark] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, poshRestrictionReason);

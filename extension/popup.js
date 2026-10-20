@@ -565,7 +565,10 @@ function ineligibleReason(it) {
 // marked local pickup only (payload `localPickupOnly`, the RAW organizer flag, not the weight-forced shippingOverride)
 // are kept out of these platforms' list/queue/count and surfaced in a note instead. Uppercase platform keys, same casing
 // as PLATFORM_ELIGIBILITY_KEY. Adding a platform later is a one-word change here; do not add one until verified.
-const PICKUP_INCOMPATIBLE_PLATFORMS = ['VINTED'];
+// 2026-10-20: Mercari and Poshmark added (Weber grill, marked local pickup only, was offered to Mercari). Poshmark's Community
+// Guidelines prohibit arranging pickup/meetups in place of shipping; Mercari's own listing flow this extension drives is shipping
+// labels only (its local pickup exists only in a few metros, not set up through this flow).
+const PICKUP_INCOMPATIBLE_PLATFORMS = ['VINTED', 'MERCARI', 'POSHMARK'];
 function isPickupOnlyBlockedOnChannel(it, channel) {
   return !!it && it.localPickupOnly === true &&
     PICKUP_INCOMPATIBLE_PLATFORMS.indexOf(String(channel || '').toUpperCase()) !== -1;

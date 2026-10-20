@@ -2943,6 +2943,14 @@
     try { queued = await chrome.runtime.sendMessage({ type: 'getMercariQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
     T.begin({ platform: 'MERCARI', flow: 'post', item: { id: queued.item.id, title: queued.item.title }, itemPos: (queued.index + 1) + ' of ' + queued.total });
+    // 1.0.39: pickup-only items cannot go through Mercari's shipping-label flow. The popup already keeps them out of the queue; this guards a stale queue.
+    if (queued.item.localPickupOnly === true) {
+      T.problem({ code: 'mercari_pickup_only', title: 'Skipped: local pickup only', what: 'This item is marked local pickup only.', why: 'The Mercari flow FindA.Sale drives is shipping labels only, so a pickup-only item cannot be sold there as intended.', next: 'Nothing was filled and the item was not marked as listed.' });
+      T.end('Skipped (local pickup only): ' + queued.item.title);
+      try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: queued.item.id }); } catch (e) {}
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- marked local pickup only, which Mercari\'s shipping flow cannot sell. Nothing was filled.</div>');
+      return;
+    }
     T.step('Checking the item is allowed on Mercari', 'Mercari bans some categories (weapons, alcohol, etc.); skipping up front protects your account.');
 
     // Prohibited Items check -- runs before the duplicate-listing check and before any DOM
