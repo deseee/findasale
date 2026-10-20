@@ -1442,7 +1442,14 @@
     }) || null;
     const btn = await waitForSelector(getBtn, 8000);
     if (!btn) {
-      console.warn('[FAS Mercari] Smart Pricing toggle button not found (UNVERIFIED selector on this form) -- please confirm Smart Pricing is OFF manually before publishing.');
+      // 1.0.41: if the form has no Smart pricing block at all (no heading or text anywhere), there is nothing to turn off -- report that
+      // plainly instead of the "could not confirm it is off" stop. If the block IS on the page but its button cannot be found, keep the warning.
+      const sectionPresent = qa('h1, h2, h3, h4, label, legend, p, span, div, button').some((e) => e.children.length < 3 && /smart pricing/i.test(e.textContent || '') && (e.textContent || '').length < 200);
+      if (!sectionPresent) {
+        T.info('smart_pricing_absent', 'This Mercari form shows no Smart Pricing section, so there is nothing to turn off', {});
+        return true;
+      }
+      console.warn('[FAS Mercari] Smart Pricing toggle button not found (UNVERIFIED selector on this form) -- please confirm Smart Pricing is OFF manually before publishing. Buttons near it: ' + JSON.stringify(qa('button, [role="button"]').filter((b) => { let n = b.parentElement; for (let i = 0; i < 4 && n; i++, n = n.parentElement) { if (/smart pricing/i.test(n.textContent || '') && (n.textContent || '').length < 800) return true; } return false; }).slice(0, 6).map((b) => ({ text: (b.textContent || '').trim().slice(0, 40), testid: b.getAttribute('data-testid'), pressed: b.getAttribute('aria-pressed'), role: b.getAttribute('role'), aria: b.getAttribute('aria-label') }))));
       return false;
     }
     // 1.0.21: a plain btn.click() does NOT toggle this control (live-verified); the full pointer sequence does.
@@ -2098,7 +2105,8 @@
       // fas-mercari-weight.js tries the normal write, a typed insert and a tracker reset, and reports which box refused.
       const wf = self.FAS_MERC_WEIGHT ? self.FAS_MERC_WEIGHT.fillWeightBoxes(lbEl, ozEl, totalOz, setNativeValue, document) : null;
       lastWeightFill = wf;
-      if (wf && !wf.ok) console.warn('[FAS Mercari] weight boxes: ' + wf.reason, wf);
+      // 1.0.41: the plain object used to log as "[object Object]"; spell out what was wanted and what each box actually held.
+      if (wf && !wf.ok) console.warn('[FAS Mercari] weight boxes: ' + wf.reason + ' ' + JSON.stringify({ totalOz: Number(totalOz), wantLbs: wf.lbs, wantOz: wf.oz, lbBoxValue: lbEl ? lbEl.value : null, ozBoxValue: ozEl ? ozEl.value : null, lbBoxFound: !!lbEl, ozBoxFound: !!ozEl, lb: wf.lb, ozBox: wf.ozBox, failed: wf.failed }));
       return true;
     }
 
