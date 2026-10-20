@@ -1,5 +1,6 @@
 * { box-sizing: border-box; }
-body { width: 380px; max-height: 600px; margin: 0; font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif; background: #14201a; color: #eef3ee; overflow-y: auto; display: flex; flex-direction: column; }
+html { --z: 1; }
+body { zoom: var(--z); width: 380px; max-height: calc(600px / var(--z)); margin: 0; font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif; background: #14201a; color: #eef3ee; overflow-y: auto; display: flex; flex-direction: column; }
 /* Every direct child except #list is fixed-height chrome (header, guildBar, status/controls,
    banners, footer) -- flex-shrink: 0 keeps all of it at its natural size so footer (Post to /
    Publish automatically / List button) is always visible without scrolling past it. #list is the
@@ -93,3 +94,10 @@ button.primary:disabled { background: #2a3a30; color: #6b7c72; cursor: default; 
 .editLog .row.error { color: #ffb3a7; }
 .editLog .row.warn { color: #ffcf7a; }
 .editLog .row.info { color: #b9d9c4; }
+
+/* 2026-10-20: A- / A+ in the header scale the whole popup (zoom set from popup.js, remembered between opens). */
+header { align-items: center; }
+.zoomBtns { margin-left: auto; display: flex; gap: 4px; }
+.zoomBtn { background: #1d2a22; color: #eef3ee; border: 1px solid #2f4337; border-radius: 4px; padding: 1px 7px; font: inherit; font-size: 12px; cursor: pointer; }
+.zoomBtn:hover { background: #26382d; }
+.zoomBtn:disabled { opacity: .4; cursor: default; }

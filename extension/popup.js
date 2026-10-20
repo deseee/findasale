@@ -175,6 +175,7 @@ async function load() {
   if (searchInput) searchInput.oninput = () => { searchQuery = searchInput.value.trim().toLowerCase(); render(); };
   $('hideListed').onchange = render;
   $('showAllItems').onchange = render;
+  $('showPickupOnly').onchange = render;
   $('listBtn').onclick = startQueue;
   $('channel').onchange = onChannelChange;
   // (2026-08-30, S-EXT-SELECT-ALL, Patrick-directed -- "should we have a select all items")
@@ -481,6 +482,8 @@ function onChannelChange() {
   // sense (and only shows) on a channel that actually has an eligibility rule.
   const showAllRow = $('showAllItemsRow');
   if (showAllRow) showAllRow.hidden = !PLATFORM_ELIGIBILITY_KEY[ch];
+  const showPickRow = $('showPickupOnlyRow');
+  if (showPickRow) showPickRow.hidden = PICKUP_INCOMPATIBLE_PLATFORMS.indexOf(String(ch || '').toUpperCase()) === -1;
   const eligNote = $('eligibilityNote');
   if (eligNote && !PLATFORM_ELIGIBILITY_KEY[ch]) eligNote.hidden = true;
   checkResumeableQueue(ch);
@@ -608,7 +611,12 @@ function render() {
     if (hideListed && currentListedFlag(it)) return;
     // S-VINTED-PICKUP-ONLY: never shown (not even under "Show all items" -- the platform cannot sell it as intended),
     // never selectable; also drop any stale selection carried over from another channel so the count stays honest.
-    if (isPickupOnlyBlockedOnCurrentChannel(it)) { selected.delete(it.id); hiddenPickupOnlyCount++; return; }
+    // 2026-10-20: "Show local pickup only items" reveals them (greyed out, never selectable) so the organizer can see what is being held back.
+    if (isPickupOnlyBlockedOnCurrentChannel(it)) {
+      selected.delete(it.id);
+      const showPick = $('showPickupOnly');
+      if (!(showPick && showPick.checked)) { hiddenPickupOnlyCount++; return; }
+    }
     // (2026-09-19, S-EXT-FB-COIN-HIDE) Facebook coin/currency items previously stayed visible
     // with a disabled checkbox + badge instead of being hidden like every other channel's
     // ineligible items -- fold facebookRestricted into the same default-hide filter.
@@ -638,7 +646,7 @@ function render() {
       const chName = channelName(currentChannel());
       pickupNote.hidden = false;
       pickupNote.textContent = hiddenPickupOnlyCount + ' item' + (hiddenPickupOnlyCount === 1 ? '' : 's') +
-        ' skipped for ' + chName + ': local pickup only. ' + chName + ' has no local pickup option (the buyer always pays for shipping), so these are not offered here.';
+        ' skipped for ' + chName + ': local pickup only. ' + chName + ' has no local pickup option (the buyer always pays for shipping), so these are not offered here. Check "Show local pickup only items" above to see them.';
     } else {
       pickupNote.hidden = true;
     }
@@ -680,7 +688,7 @@ function render() {
     const bySale = groups[saleTitle];
     Object.keys(bySale).forEach((cat) => {
       bySale[cat].forEach((it) => {
-        const blocked = currentChannel() === 'facebook' && it.facebookRestricted === true;
+        const blocked = (currentChannel() === 'facebook' && it.facebookRestricted === true) || isPickupOnlyBlockedOnCurrentChannel(it);
         if (!blocked) visibleSelectableIds.push(it.id);
       });
     });
@@ -707,7 +715,8 @@ function row(it) {
   // this only disables the checkbox / shows a badge on the FACEBOOK channel specifically; the
   // same item stays fully selectable on Craigslist/Gumtree AU. The backend's markItemListed is
   // still the authoritative reject -- this is UI guidance, not the real gate.
-  const fbBlocked = currentChannel() === 'facebook' && it.facebookRestricted === true;
+  const pickupBlocked = isPickupOnlyBlockedOnCurrentChannel(it);
+  const fbBlocked = (currentChannel() === 'facebook' && it.facebookRestricted === true) || pickupBlocked;
   // "Already posted?" manual mark -- covers the case where the organizer posted this item by
   // hand on the current channel (extension automation stalled, or they just did it themselves
   // directly on that marketplace). GENERALIZED 2026-08-30 (S-EXT-MARK-POSTED-PARITY,
@@ -737,10 +746,11 @@ function row(it) {
     (kit ? '<div class="p kitline" title="' + esc(kitSummary) + '">Includes: ' + (kitSummary ? esc(kitSummary) : '(no components listed)') + '</div>' : '') + '</div>' +
     (kit ? '<span class="badge badge-kit" title="Kit: ' + esc(kitSummary || 'bundle of items') + '">KIT</span>' : '') +
     (currentListedFlag(it) ? '<span class="badge">LISTED</span>' : '') +
-    (fbBlocked ? '<span class="badge badge-blocked" title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '">NOT ALLOWED ON FB</span>' : '') +
+    (pickupBlocked ? '<span class="badge badge-blocked" title="Marked local pickup only; ' + esc(channelName(currentChannel())) + ' cannot sell it as intended">PICKUP ONLY</span>' : '') +
+    (fbBlocked && !pickupBlocked ? '<span class="badge badge-blocked" title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '">NOT ALLOWED ON FB</span>' : '') +
     (ineligible ? '<span class="badge badge-blocked" title="' + esc(ineligibleReason(it)) + '">MAY NOT FIT</span>' : '') +
     (showMarkPosted ? '<button type="button" class="markPostedBtn" title="I already posted this item to ' + esc(channelName(currentChannel())) + ' myself, outside the extension">Already posted?</button>' : '') +
-    '<input type="checkbox" class="cb"' + (fbBlocked ? ' disabled title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '"' : '') + '>';
+    '<input type="checkbox" class="cb"' + (fbBlocked ? ' disabled title="' + esc(pickupBlocked ? 'Local pickup only' : (it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace')) + '"' : '') + '>';
   const cb = d.querySelector('.cb');
   if (fbBlocked) {
     // Make sure a coin/currency item can't sneak into the selected set (e.g. selected while on
@@ -1115,3 +1125,25 @@ chrome.storage.onChanged.addListener((changes, area) => {
 $('guildBar').onclick = () => chrome.tabs.create({ url: 'https://finda.sale/shopper/guild-primer' });
 
 load();
+
+// 2026-10-20: A- / A+ scale the whole popup (CSS zoom on <body> via --z). Chrome caps a popup at 800x600, so the body's max-height
+// shrinks as the zoom grows (see popup.css). The chosen step is remembered in localStorage; a failure there just means it resets.
+(function initPopupZoom() {
+  const STEPS = [0.85, 1, 1.15, 1.3, 1.5];
+  let idx = 1;
+  try { const s = Number(localStorage.getItem('fasPopupZoomIdx')); if (s >= 0 && s < STEPS.length && isFinite(s)) idx = s; } catch (e) {}
+  function apply() {
+    document.documentElement.style.setProperty('--z', String(STEPS[idx]));
+    const out = document.getElementById('zoomOut'), inn = document.getElementById('zoomIn');
+    if (out) out.disabled = idx === 0;
+    if (inn) inn.disabled = idx === STEPS.length - 1;
+    try { localStorage.setItem('fasPopupZoomIdx', String(idx)); } catch (e) {}
+  }
+  function wire() {
+    const out = document.getElementById('zoomOut'), inn = document.getElementById('zoomIn');
+    if (out) out.onclick = () => { if (idx > 0) { idx--; apply(); } };
+    if (inn) inn.onclick = () => { if (idx < STEPS.length - 1) { idx++; apply(); } };
+    apply();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+})();

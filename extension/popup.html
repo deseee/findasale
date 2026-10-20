@@ -2,7 +2,7 @@
 <html>
 <head><meta charset="utf-8"><link rel="stylesheet" href="popup.css"></head>
 <body>
-  <header><span class="brand">FindA<b>.</b>Sale</span> <span class="sub">Marketplace Autofill</span></header>
+  <header><span class="brand">FindA<b>.</b>Sale</span> <span class="sub">Marketplace Autofill</span><span class="zoomBtns"><button type="button" id="zoomOut" class="zoomBtn" title="Smaller text and spacing" aria-label="Smaller">A&minus;</button><button type="button" id="zoomIn" class="zoomBtn" title="Larger text and spacing" aria-label="Larger">A+</button></span></header>
   <div id="guildBar" class="guildBar" hidden title="Open the Explorer's Guild">
     <div class="guildBarRow">
       <span class="guildRank"><span id="guildEmoji">&#129521;</span> <span id="guildRankLabel">Initiate</span></span>
@@ -15,6 +15,7 @@
   <div id="fbUnavailableBanner" class="warnBanner" hidden></div>
   <div id="controls" class="controls" hidden>
     <label class="chk"><input type="checkbox" id="hideListed" checked> Hide items already listed</label>
+    <label class="chk" id="showPickupOnlyRow" hidden><input type="checkbox" id="showPickupOnly"> Show local pickup only items</label>
     <label class="chk" id="showAllItemsRow" hidden><input type="checkbox" id="showAllItems"> Show all items</label>
     <div class="count"><button type="button" id="selectAllBtn" class="linkbtn">Select all</button> &middot; <span id="selCount">0</span> selected</div>
   </div>
