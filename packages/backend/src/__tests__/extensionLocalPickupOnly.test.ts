@@ -104,16 +104,18 @@ const extensionPresent = fs.existsSync(popupPath);
     blocked = api.isPickupOnlyBlockedOnChannel;
   });
 
-  it('lists only VINTED (other platforms are unverified and must not be added yet)', () => {
-    expect(PICKUP_INCOMPATIBLE_PLATFORMS).toEqual(['VINTED']);
+  it('lists VINTED, MERCARI and POSHMARK (extension 1.0.39, 2026-10-20 -- other platforms are unverified and must not be added yet)', () => {
+    expect(PICKUP_INCOMPATIBLE_PLATFORMS).toEqual(['VINTED', 'MERCARI', 'POSHMARK']);
   });
 
-  it('blocks a localPickupOnly item on the vinted channel', () => {
+  it('blocks a localPickupOnly item on the vinted, mercari and poshmark channels', () => {
     expect(blocked({ id: 'a', localPickupOnly: true }, 'vinted')).toBe(true);
+    expect(blocked({ id: 'a', localPickupOnly: true }, 'mercari')).toBe(true);
+    expect(blocked({ id: 'a', localPickupOnly: true }, 'poshmark')).toBe(true);
   });
 
   it('never blocks a localPickupOnly item on any other platform', () => {
-    for (const ch of ['facebook', 'craigslist', 'gumtree_au', 'poshmark', 'mercari', 'grailed', '']) {
+    for (const ch of ['facebook', 'craigslist', 'gumtree_au', 'grailed', '']) {
       expect(blocked({ id: 'a', localPickupOnly: true }, ch)).toBe(false);
     }
   });
