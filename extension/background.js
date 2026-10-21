@@ -1481,6 +1481,22 @@ function fasClPriceEditsPausedNote(queued) {
 }
 
 // Works through every enqueued platform, one at a time. Safe to call repeatedly: only one pump runs.
+// 1.0.49: a price/stock edit run drives the same marketplace tabs as a posting queue, and the two navigated each other away
+// (a Poshmark post and a Poshmark price edit fighting over one tab). While a platform's posting queue is mid-run in a tab that
+// still exists, its edits wait (they stay queued) and the pump retries shortly.
+async function fasPostQueueActive(platform) {
+  const cfg = FAS_AUTOPUBLISH_QUEUE_KEYS[platform];
+  if (!cfg || platform === 'CRAIGSLIST') return false;
+  try {
+    const st = await chrome.storage.local.get([cfg.queue, cfg.index, cfg.tabId]);
+    const q = st[cfg.queue] || [];
+    if (!(q.length && (st[cfg.index] || 0) < q.length)) return false;
+    const tid = st[cfg.tabId];
+    if (tid == null) return false;
+    try { await chrome.tabs.get(tid); return true; } catch (e) { return false; }
+  } catch (e) { return false; }
+}
+
 async function fasEditPump() {
   if (fasEditPumping) return 'already_pumping';
   if (!(await fasEditRunLockFree())) return 'run_in_progress';
@@ -1510,6 +1526,12 @@ async function fasEditPump() {
           fasTOnce('cl_edit_wait', 10 * 60 * 1000, 'info', 'craigslist_busy', 'Craigslist price edits are waiting: ' + gate.reason + '. They run on their own when it finishes.', { platform: platform, flow: 'edit', ctx: { heldBy: gate.heldBy, queued: pending[platform].length } });
           continue;
         }
+      }
+      if (await fasPostQueueActive(platform)) {
+        clBusy.add(platform);
+        outcomes.push(platform + ':waiting_for_post_queue');
+        fasTOnce('edit_wait_post_' + platform, 10 * 60 * 1000, 'info', 'edit_waiting_for_post_queue', platform + ' price edits are waiting for the posting queue in its tab to finish. They stay queued and run afterwards.', { platform: platform, flow: 'edit', ctx: { queued: pending[platform].length } });
+        continue;
       }
       const entries = pending[platform];
       delete pending[platform];
