@@ -2951,6 +2951,19 @@
     try { queued = await chrome.runtime.sendMessage({ type: 'getMercariQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
     T.begin({ platform: 'MERCARI', flow: 'post', item: { id: queued.item.id, title: queued.item.title }, itemPos: (queued.index + 1) + ' of ' + queued.total });
+    // 1.0.44: Mercari caps a new seller account's active listings ("Currently you are limited to 100 listings. This will be increased as you
+    // complete more sales."). Once that notice is on the sell page nothing can be published, so stop here without filling, without marking the item
+    // listed, and without advancing the queue -- the item stays queued for when listings free up (a sale, or a removal).
+    {
+      const capTxt = (document.body && (document.body.innerText || '')) || '';
+      const capM = capTxt.match(/limited to (\d+) listings?/i);
+      if (capM) {
+        T.problem({ code: 'mercari_listing_limit', title: 'Mercari listing limit reached', what: 'Mercari says: "Currently you are limited to ' + capM[1] + ' listings. This will be increased as you complete more sales."', why: 'Your Mercari account is at its active-listing cap, so it will not accept another listing.', next: 'Nothing was filled and the item was not marked as listed. It stays in the queue; free up room on Mercari (a sale or a removal) and run it again.' });
+        T.end('Stopped: Mercari listing limit (' + capM[1] + ')');
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Mercari is at its ' + escapeHtml(capM[1]) + '-listing limit for your account, so <b>' + escapeHtml(queued.item.title) + '</b> was not filled. It stays queued; free up room on Mercari and run it again.</div>');
+        return;
+      }
+    }
     // 1.0.39: pickup-only items cannot go through Mercari's shipping-label flow. The popup already keeps them out of the queue; this guards a stale queue.
     if (queued.item.localPickupOnly === true) {
       T.problem({ code: 'mercari_pickup_only', title: 'Skipped: local pickup only', what: 'This item is marked local pickup only.', why: 'The Mercari flow FindA.Sale drives is shipping labels only, so a pickup-only item cannot be sold there as intended.', next: 'Nothing was filled and the item was not marked as listed.' });
