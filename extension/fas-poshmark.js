@@ -2272,6 +2272,23 @@
       if (verdict.published) { published = true; tOk('The listing is live in your closet, so it is treated as published'); }
     }
     if (!published) {
+      // 1.0.45: Poshmark's validator can pop "flagged your listing as a potential oversized item". That is a definite refusal, not an
+      // unknown outcome, so it is reported as such and the queue moves on instead of leaving the run stuck on an unrecognised modal.
+      let oversizedText = '';
+      try {
+        const dlg = Array.from(document.querySelectorAll('[role="dialog"], .modal, [class*="modal"]')).map((d) => (d.innerText || '')).find((t) => /potential oversized item|oversized item/i.test(t));
+        if (dlg) oversizedText = dlg.replace(/\s+/g, ' ').trim().slice(0, 240);
+      } catch (e) {}
+      if (oversizedText) {
+        clearPoshPublishAttemptState();
+        tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Moving on.', ctx: { dialog: oversizedText } });
+        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
+        overlayWarn('Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as an oversized item and refused it. Not marked listed; check the saved package size.' + button('fas-posh-close', 'Close', false));
+        closeBtnHandler();
+        return;
+      }
+    }
+    if (!published) {
       // Deliberately NOT clearing the publish-attempt marker here -- this is exactly the ambiguous
       // case the marker exists to protect against: we don't actually know whether the click went
       // through, so a future page load (e.g. this same tab bouncing afterward) must still see it.
