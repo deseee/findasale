@@ -535,7 +535,12 @@
 
     // ---- API apply + verify (one call; several awaits; no navigation expected) ----
     if (S.phase === 'posh_uiverify') return poshUiVerify(id, W, S);
-    if (S.phase === 'posh_verify_only') return poshVerify(id, W, it, S, null);
+    if (S.phase === 'posh_verify_only') {
+      // 1.0.43: after the form's Update click, a certify / suspicious / verification prompt on the page means Poshmark wants the person -- stop, keep the tab.
+      var flagTxt = textOf(qa('[role="dialog"], .modal, [class*="modal" i], [class*="error" i], [class*="toast" i]').filter(visible).slice(-3).map(function (e) { return e; })[0] || document.body).slice(0, 2000);
+      if (/suspicious|certify|single listing creation|verify (that )?you|are you a robot/i.test(flagTxt)) return blocked('poshmark_flagged', 'Poshmark showed a certify/verification prompt after the Update click, so the edit needs you. The tab is left open.', 'form');
+      return poshVerify(id, W, it, S, null);
+    }
     try {
       var csrf = await poshCsrf(id);
       if (!csrf) return fail('csrf_not_found', 'meta#csrftoken missing on /edit-listing/' + id, 'api', 'meta#csrftoken', { apiTried: true, remoteId: id });
@@ -571,7 +576,11 @@
       // this item is suspicious. Please use our Single Listing Creation form..." } -- its automation check. Retrying (or driving the form) only
       // feeds that flag, so stop the Poshmark run and back off; the price has to be changed by hand on Poshmark.
       if (errP && /suspicious|certify_action|certify_reason/i.test(String(errP) + ' ' + rt)) {
-        return blocked('poshmark_flagged', 'Poshmark flagged the price save as suspicious and asked for its manual listing form, so Poshmark edits are paused. Change this price on Poshmark by hand.', 'api');
+        // 1.0.43: Patrick's rule -- the extension does the edit, not him. Poshmark's own message points at its listing form, so the first time
+        // this happens for an item the edit goes through the normal Edit Listing form (the same path a person uses). If the form hits the
+        // same check again, or shows a certify/verification prompt, the run stops and the tab stays open (never clicks through a check).
+        if (!S.formFallback) return poshFormFallback(ctx, id, W, 'api_flagged:' + String(errP).slice(0, 60), diagKeys);
+        return blocked('poshmark_flagged', 'Poshmark flagged this price change even through its own edit form, so Poshmark edits are paused and the tab is left open.', 'api');
       }
       if (!res.ok || errP) {
         // API refused: drive the form instead (documented fallback), then verify through an API re-GET.
