@@ -3604,6 +3604,41 @@
     } finally { mercCapBusy = false; }
   }
 
+  // 1.0.47: self-healing id backfill. mercCapMaybeCapture only worked inside the 15 minute / same-tab window after "I posted",
+  // which almost never held, so none of the live Mercari listings had an id stored. Whenever the organizer's own listings page
+  // is open, match every visible card to the items FindA.Sale says are listed on Mercari WITHOUT an id, by exact folded title and
+  // only when exactly one item and one card agree, and report the id the same way the capture path does (set-once on the backend).
+  let mercReconBusy = false;
+  async function mercReconcileIds() {
+    if (mercReconBusy) return;
+    if (!/^\/mypage\/listings\/active\/?$/.test(location.pathname)) return;
+    mercReconBusy = true;
+    try {
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline && !document.querySelector('a[data-testid="ItemLink"]')) await sleep(250);
+      const cards = Array.from(document.querySelectorAll('a[data-testid="ItemLink"]')).map((a) => ({ id: mercRemItemIdFromHref(a.href), title: mercRemCleanCardText(a.textContent || '') })).filter((c) => c.id && c.title);
+      if (!cards.length) return;
+      const r = await chrome.runtime.sendMessage({ type: 'getItems' });
+      const items = r && r.ok && r.data && Array.isArray(r.data.items) ? r.data.items : [];
+      const need = items.filter((it) => it && it.marketplaceListedMercari === true && !(it.listingRefs && it.listingRefs.MERCARI));
+      if (!need.length) return;
+      const byTitle = new Map();
+      need.forEach((it) => { const k = mercRemNorm(it.title); byTitle.set(k, (byTitle.get(k) || []).concat(it)); });
+      const cardsByTitle = new Map();
+      cards.forEach((c) => { cardsByTitle.set(c.title, (cardsByTitle.get(c.title) || new Set()).add(c.id)); });
+      let done = 0;
+      for (const [title, list] of byTitle) {
+        const ids = cardsByTitle.get(title);
+        if (list.length !== 1 || !ids || ids.size !== 1) continue; // ambiguous or absent: never guessed
+        const resp = await mercCapReport(list[0].id, Array.from(ids)[0], 'listings_page_reconcile');
+        if (resp && resp.ok) done++;
+      }
+      if (done) T.info('mercari_ids_reconciled', 'Saved the Mercari listing id for ' + done + ' listing(s) from your listings page', { count: done });
+    } catch (e) {
+      console.warn('[FAS Mercari] id reconcile threw:', e && e.message);
+    } finally { mercReconBusy = false; }
+  }
+
   async function runMercariRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 ' + (window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.overlayLine(item, index, total) : 'removing item ' + (index + 1) + ' of ' + total) + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
     // S-EXT-MERCARI-DELETE-ON-EDIT-PAGE (2026-10-03): the actual delete happens on /sell/edit/<id>/.
@@ -3797,6 +3832,7 @@
     // filled a listing in the last 15 min AND this is (or looks like) the listings page -- never
     // awaited, so it can never block or delay the removal/fill flow below.
     mercCapMaybeCapture();
+    mercReconcileIds();
     const ranPricePush = await maybeRunMercariPricePush();
     if (ranPricePush) return;
     const ranRemoval = await maybeRunMercariRemoval();

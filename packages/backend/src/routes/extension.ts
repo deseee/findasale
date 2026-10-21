@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
 import { extensionBearerOnly } from '../middleware/extensionBearerOnly';
-import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform, setItemRemoteListingId, reportVintedSold, reportVintedBundleOrderItems, postExtensionLogs, getPausedMarketplaces, setPausedMarketplaces } from '../controllers/extensionController';
+import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform, setItemRemoteListingId, reportVintedSold, reportVintedBundleOrderItems, postExtensionLogs, getPausedMarketplaces, setPausedMarketplaces, getAutoQueueSettings, patchAutoQueueSettings } from '../controllers/extensionController';
 
 // Endpoints for the FindA.Sale Marketplace Autofill browser extension (ADR-084).
 // Auth is via Bearer token (the organizer's accessToken, read from the finda.sale
@@ -70,5 +70,9 @@ router.post('/logs', authenticate, requireOrganizer, requireTier('PRO'), postExt
 // Per-marketplace pause (2026-09-30): organizer-scoped read/replace of the paused platform list.
 router.get('/paused-marketplaces', authenticate, requireOrganizer, requireTier('PRO'), getPausedMarketplaces);
 router.put('/paused-marketplaces', authenticate, requireOrganizer, requireTier('PRO'), setPausedMarketplaces);
+
+// Auto queue opt-ins (2026-10-21): per-marketplace *AutoListEnabled flags read by GET /autolist-queue.
+router.get('/auto-queue-settings', authenticate, requireOrganizer, requireTier('PRO'), getAutoQueueSettings);
+router.patch('/auto-queue-settings', authenticate, requireOrganizer, requireTier('PRO'), patchAutoQueueSettings);
 
 export default router;

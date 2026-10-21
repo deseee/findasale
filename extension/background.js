@@ -2402,6 +2402,8 @@ chrome.runtime.onStartup.addListener(ensureRenewAlarm);
 // queue button themselves moments earlier.
 const FAS_AUTOLIST_QUEUE_ALARM = 'fasAutoListQueuePoll';
 const FAS_AUTOLIST_QUEUE_ALARM_PERIOD_MINUTES = 20;
+// Platforms with no local pickup option (mirrors popup.js PICKUP_INCOMPATIBLE_PLATFORMS minus Vinted, which has no auto queue).
+const FAS_AUTOLIST_PICKUP_BLOCKED = ['MERCARI', 'POSHMARK'];
 
 // One row per content-script-tier platform, matching this file's existing
 // FAS_AUTOPUBLISH_QUEUE_KEYS-style config-table pattern (see the top-of-file block above) so the
@@ -2449,7 +2451,12 @@ async function checkAutoListQueue() {
   const outcomes = [];
   const pausedForQueue = await fasGetPausedPlatforms();
   for (const platform of Object.keys(FAS_AUTOLIST_QUEUE_CFG)) {
-    const items = queues[platform];
+    let items = queues[platform];
+    // 2026-10-21: defense in depth for the server's pickup-only rule (popup.js PICKUP_INCOMPATIBLE_PLATFORMS):
+    // Mercari and Poshmark have no local pickup option, so a pickup-only item is never queued there.
+    if (Array.isArray(items) && FAS_AUTOLIST_PICKUP_BLOCKED.indexOf(platform) !== -1) {
+      items = items.filter((q) => !(q && q.localPickupOnly === true));
+    }
     // Per-marketplace pause: never fill a paused platform's posting queue.
     if (pausedForQueue.indexOf(platform) !== -1) { outcomes.push(platform + ':paused'); continue; }
     if (!Array.isArray(items) || !items.length) { outcomes.push(platform + ':empty'); continue; }
@@ -2474,6 +2481,13 @@ async function checkAutoListQueue() {
     if (cfg.autoPublish) writeObj[cfg.autoPublish] = st[cfg.autoPublish] !== false;
     if (cfg.setAt) writeObj[cfg.setAt] = Date.now();
     await chrome.storage.local.set(writeObj);
+    // 2026-10-21: remember what the auto queue loaded so the popup can say "N items queued" (cleared by the
+    // popup's own check once the run moves on: it only shows while index is 0 and the first item id matches).
+    try {
+      const prior = (await chrome.storage.local.get('fasAutoQueued')).fasAutoQueued || {};
+      prior[platform] = { count: items.length, firstId: items[0] && items[0].id, at: Date.now() };
+      await chrome.storage.local.set({ fasAutoQueued: prior });
+    } catch (e) { /* the notice is informational only */ }
     outcomes.push(platform + ':queued_' + items.length);
   }
   return outcomes.join(',') || 'no_platforms_configured';

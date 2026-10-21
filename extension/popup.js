@@ -504,11 +504,20 @@ async function checkResumeableQueue(channel) {
   if (!banner) return;
   const cfg = QUEUE_STORAGE_KEYS[channel];
   if (!cfg) { banner.hidden = true; return; }
-  const st = await chrome.storage.local.get([cfg.queue, cfg.index]);
+  const st = await chrome.storage.local.get([cfg.queue, cfg.index, 'fasAutoQueued']);
   const queue = st[cfg.queue] || [];
   const index = st[cfg.index] || 0;
   if (!queue.length || index >= queue.length) { banner.hidden = true; return; }
   banner.hidden = false;
+  // 2026-10-21: a queue the auto queue loaded and nobody has started yet gets its own notice.
+  const auto = (st.fasAutoQueued || {})[channel.toUpperCase()];
+  if (auto && index === 0 && queue[0] && auto.firstId === queue[0].id) {
+    banner.innerHTML = queue.length + ' item' + (queue.length === 1 ? '' : 's') + ' queued for ' + esc(cfg.label) +
+      ' by your auto queue. <button type="button" class="link" id="resumeQueueBtn">Open the ' + esc(cfg.label) + ' tab</button> to post.';
+    const abtn = document.getElementById('resumeQueueBtn');
+    if (abtn) abtn.onclick = () => { if (isChannelPaused(channel)) return; chrome.tabs.create({ url: CFG[cfg.postUrlKey] }); window.close(); };
+    return;
+  }
   banner.innerHTML = 'A ' + esc(cfg.label) + ' posting run is already in progress (item ' + (index + 1) + ' of ' + queue.length + ') &mdash; ' +
     '<button type="button" class="link" id="resumeQueueBtn">reopen that tab</button> instead of picking items again.';
   const btn = document.getElementById('resumeQueueBtn');

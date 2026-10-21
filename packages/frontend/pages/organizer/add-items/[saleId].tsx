@@ -73,6 +73,20 @@ import {
   needsInfoChipText,
   showRowGradePicker,
 } from '../../../lib/addItemsRow';
+import {
+  getCrosslistBlockers,
+  matchesCrosslistFilter,
+  countCrosslistBlockers,
+  CrosslistFilter,
+  WEIGHT_BADGE_TEXT,
+  WEIGHT_BADGE_TITLE,
+  DIMENSIONS_BADGE_TEXT,
+  DIMENSIONS_BADGE_TITLE,
+  PICKUP_BADGE_TEXT,
+  PICKUP_BADGE_TITLE,
+  DONT_LIST_BADGE_TEXT,
+  DONT_LIST_BADGE_TITLE,
+} from '../../../lib/crosslistBlockers';
 import BulkOperationErrorModal from '../../../components/BulkOperationErrorModal';
 import ReopenSaleDialog from '../../../components/ReopenSaleDialog'; // reopen-sale (2026-10-10): "Mark available again" for a cancelled marketplace sale
 import { canOfferReopen } from '../../../hooks/useReopenSale';
@@ -550,6 +564,8 @@ const AddItemsDetailPage = () => {
   // Default 'active' (2026-08-13, Patrick confirmed): hide sold items by default so they
   // don't clutter the add-items list; organizer can still switch to All or Sold via the tabs.
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'sold'>('active');
+  // Crosslist-blocker filter (2026-10-21): click a summary chip to show only items missing weight/dimensions or marked not for shipping.
+  const [crosslistFilter, setCrosslistFilter] = useState<CrosslistFilter | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [reopenTarget, setReopenTarget] = useState<{ id: string; title: string; lastSoldVia: string | null } | null>(null); // reopen-sale dialog
   const [deleteConfirmTitle, setDeleteConfirmTitle] = useState<string>('');
@@ -1040,6 +1056,9 @@ const AddItemsDetailPage = () => {
     } else if (statusFilter === 'active') {
       result = result.filter((it: any) => it?.status !== 'SOLD');
     }
+    if (crosslistFilter) {
+      result = result.filter((it: any) => matchesCrosslistFilter(getCrosslistBlockers(it), crosslistFilter));
+    }
     if (!q) return result;
     return result.filter((it: any) => {
       const title = (it?.title || '').toString().toLowerCase();
@@ -1049,7 +1068,13 @@ const AddItemsDetailPage = () => {
         : (it?.tags || '').toString().toLowerCase();
       return title.includes(q) || category.includes(q) || tags.includes(q);
     });
-  }, [items, itemSearch, statusFilter]);
+  }, [items, itemSearch, statusFilter, crosslistFilter]);
+
+  // Summary-strip counts (non-sold items only; sold items no longer need crosslisting).
+  const crosslistCounts = useMemo(
+    () => countCrosslistBlockers((items as any[]).filter((it: any) => it?.status !== 'SOLD')),
+    [items]
+  );
 
   // #403: Fetch existing bundles for this sale
   const { data: bundles = [], isLoading: bundlesLoading, refetch: refetchBundles } = useQuery({
@@ -3518,6 +3543,45 @@ const AddItemsDetailPage = () => {
                 </div>
               )}
 
+              {/* Crosslist-blocker summary strip (2026-10-21): counts of items that cannot go to some marketplaces; click to filter. */}
+              {items.length > 0 && (crosslistCounts.weight > 0 || crosslistCounts.dimensions > 0 || crosslistCounts.pickupOnly + crosslistCounts.dontList > 0 || crosslistFilter) && (
+                <div
+                  data-testid="add-items-crosslist-strip"
+                  className="px-4 py-2 bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 flex flex-wrap items-center gap-2 text-xs"
+                >
+                  <span className="font-medium text-warm-600 dark:text-warm-300">Crosslisting:</span>
+                  {([
+                    { key: 'weight' as const, count: crosslistCounts.weight, label: `${crosslistCounts.weight} missing weight`, title: 'Items with no package weight, or a weight that is only an estimate. Mercari needs a confirmed weight.' },
+                    { key: 'dimensions' as const, count: crosslistCounts.dimensions, label: `${crosslistCounts.dimensions} missing dimensions`, title: 'Items with no length, width or height. Poshmark and Mercari use dimensions for size checks.' },
+                    { key: 'notForShipping' as const, count: crosslistCounts.pickupOnly + crosslistCounts.dontList, label: `${crosslistCounts.pickupOnly + crosslistCounts.dontList} pickup-only or not for crosslisting`, title: 'Items marked local pickup only or do not list. They are not sent to Poshmark, Mercari or Vinted.' },
+                  ]).filter((c) => c.count > 0 || crosslistFilter === c.key).map((c) => (
+                    <button
+                      key={c.key}
+                      type="button"
+                      title={c.title}
+                      aria-pressed={crosslistFilter === c.key}
+                      onClick={() => setCrosslistFilter(crosslistFilter === c.key ? null : c.key)}
+                      className={`px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                        crosslistFilter === c.key
+                          ? 'bg-amber-600 border-amber-600 text-white'
+                          : 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/50'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                  {crosslistFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setCrosslistFilter(null)}
+                      className="px-2 py-1 text-warm-600 underline hover:text-warm-800 dark:text-warm-300 dark:hover:text-warm-100"
+                    >
+                      Clear filter
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Card-based expandable items list */}
               <div className="divide-y divide-warm-100 dark:divide-gray-700">
                 {getSortedItems(filteredItems).map((item: any) => {
@@ -3629,6 +3693,33 @@ const AddItemsDetailPage = () => {
                               <span className="truncate">{needsInfoChipText(item)}</span>
                             </button>
                           )}
+                          {/* Crosslist blockers (2026-10-21): missing shipping data or marked not for shipping. Display only. */}
+                          {item.status !== 'SOLD' && (() => {
+                            const b = getCrosslistBlockers(item);
+                            const badges: { text: string; title: string; tone: 'amber' | 'gray' }[] = [];
+                            if (b.weight) badges.push({ text: WEIGHT_BADGE_TEXT[b.weight], title: WEIGHT_BADGE_TITLE[b.weight], tone: 'amber' });
+                            if (b.noDimensions) badges.push({ text: DIMENSIONS_BADGE_TEXT, title: DIMENSIONS_BADGE_TITLE, tone: 'amber' });
+                            if (b.pickupOnly) badges.push({ text: PICKUP_BADGE_TEXT, title: PICKUP_BADGE_TITLE, tone: 'gray' });
+                            if (b.dontList) badges.push({ text: DONT_LIST_BADGE_TEXT, title: DONT_LIST_BADGE_TITLE, tone: 'gray' });
+                            if (badges.length === 0) return null;
+                            return (
+                              <div className="mt-1 flex flex-wrap gap-1" data-testid="add-items-crosslist-badges">
+                                {badges.map((bd) => (
+                                  <span
+                                    key={bd.text}
+                                    title={bd.title}
+                                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                                      bd.tone === 'amber'
+                                        ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200'
+                                        : 'border-warm-300 bg-warm-100 text-warm-700 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-200'
+                                    }`}
+                                  >
+                                    {bd.text}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                         {/* Status badge + delete stacked vertically */}
                         <div className="flex-shrink-0 flex flex-col items-center gap-1">

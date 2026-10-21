@@ -18,6 +18,7 @@ import { resolveCraigslistCategory } from '../services/craigslistCategoryResolve
 import { suggestNativeShippingPrice, ShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // S-VINTED-SHIPPING-FALLBACK-PRICE: same buyer-facing shipping number FindA.Sale itself suggests (ShippingHardBlockError is the same class re-exported from ebayRateEstimateService)
 import { loadListingExtras, listingExtraFields, organizerListableScope, stockRemainingOf } from '../services/itemKitListing'; // 2026-10-13: kits listable everywhere + the one stock number on every queue entry
 import { pickStoredRemoteRef, extractRemoteId, resolveListingRef, listingRefFields } from '../services/marketplaceListingRef'; // 2026-10-18: best remote id + URL on every sync queue entry
+import { AUTO_QUEUE_FLAG_SELECT, toAutoQueueSettings, parseAutoQueuePatch, isPickupOnlyBlockedForAutoQueue } from '../services/autoQueueSettings';
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
 
@@ -2903,6 +2904,8 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     const eligibilityItem = buildListingEligibilityItem(it, { forNewListing: true });
     for (const platform of enabledPlatforms) {
       if (isAlreadyListed(it.id, platform)) continue;
+      // 2026-10-21: same pickup-only rule the popup applies (Mercari and Poshmark have no local pickup option).
+      if (isPickupOnlyBlockedForAutoQueue(platform, isLocalPickupOnlyItem(it))) continue;
       // TOCTOU-safe: re-run fresh on every call, never cached -- a category/title edit between
       // polls is picked up automatically (per the handoff's section D).
       // S-SIZE-WEIGHT-CEILING-2026-09-27: weight/dimension fields included for every platform here
@@ -3225,4 +3228,27 @@ export const setPausedMarketplaces = async (req: AuthRequest, res: Response): Pr
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
   await prisma.organizer.update({ where: { id: organizer.id }, data: { pausedMarketplaces: paused } });
   res.json({ ok: true, paused, pausable: [...PAUSABLE_PLATFORMS] });
+};
+
+// GET /api/extension/auto-queue-settings -- the six per-marketplace auto queue opt-ins (Organizer.*AutoListEnabled)
+// that GET /extension/autolist-queue reads. Returns { ok, settings: { CRAIGSLIST: bool, ... } }.
+export const getAutoQueueSettings = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: AUTO_QUEUE_FLAG_SELECT as any });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+  res.json({ ok: true, settings: toAutoQueueSettings(organizer as any) });
+};
+
+// PATCH /api/extension/auto-queue-settings  body: { settings: { MERCARI: true, ... } } -- updates only the provided
+// platforms; values must be real booleans (400 otherwise). Organizer is resolved from the session, never the body.
+export const patchAutoQueueSettings = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  const parsed = parseAutoQueuePatch(req.body);
+  if (parsed.ok === false) { res.status(400).json({ message: parsed.message }); return; }
+  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+  const updated = await prisma.organizer.update({ where: { id: organizer.id }, data: parsed.data, select: AUTO_QUEUE_FLAG_SELECT as any });
+  res.json({ ok: true, settings: toAutoQueueSettings(updated as any) });
 };

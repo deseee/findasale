@@ -5107,6 +5107,8 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         packageLengthIn: true,
         packageWidthIn: true,
         packageHeightIn: true,
+        packageEstimateSource: true, // 2026-10-21: Add Items crosslist-blocker badges (same trust rule as getAutolistQueue)
+        packageConfirmedByOrganizer: true,
         ebayShippingOverride: true,
         ebayFulfillmentPolicyOverrideId: true,
         // eBay product identifiers — required for review page Brand/MPN/UPC inputs
