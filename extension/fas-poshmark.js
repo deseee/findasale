@@ -2736,6 +2736,25 @@
       overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- marked local pickup only, and Poshmark does not allow pickup in place of shipping. Nothing was filled.</div>');
       return;
     }
+    // 1.0.48: loop breaker. A tab that keeps reloading the same item (a form that never loads, a refused publish) used to refill it
+    // over and over; after 3 starts for one item within 15 minutes the item is skipped and the queue moves on.
+    try {
+      const loopKey = 'fasPoshFillStarts';
+      const nowMs = Date.now();
+      let starts = [];
+      try { starts = JSON.parse(sessionStorage.getItem(loopKey) || '[]'); } catch (e) { starts = []; }
+      starts = (Array.isArray(starts) ? starts : []).filter((x) => x && typeof x.id === 'string' && nowMs - x.at < 15 * 60 * 1000);
+      const seenCount = starts.filter((x) => x.id === queued.item.id).length;
+      if (seenCount >= 3) {
+        sessionStorage.setItem(loopKey, JSON.stringify(starts.filter((x) => x.id !== queued.item.id)));
+        tProblem({ code: 'poshmark_fill_loop', title: 'Skipped: Poshmark kept reloading this item', what: 'This item was started 3 times in 15 minutes without finishing, so it was skipped instead of looping.', why: 'The form did not load or Poshmark kept refusing it. Check the item on Poshmark yourself.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Moving on.', ctx: {} });
+        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> after 3 tries in 15 minutes. Not marked listed.</div>');
+        return;
+      }
+      starts.push({ id: queued.item.id, at: nowMs });
+      sessionStorage.setItem(loopKey, JSON.stringify(starts.slice(-20)));
+    } catch (e) { /* the breaker must never block a normal listing */ }
     const poshRestrictionReason = poshmarkRestrictionReason(queued.item.category, queued.item.title);
     if (poshRestrictionReason) {
       console.warn('[FAS Poshmark] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, poshRestrictionReason);

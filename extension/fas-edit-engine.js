@@ -740,8 +740,10 @@
         return fail('verify_mismatch', 'Edit page re-read shows price "' + price.value + '", wanted ' + C.formatPrice('MERCARI', W.price), 'verify', 'input#Price', {});
       }
       var diag = S.formSnap ? undefined : snapshot('merc_form');
+      var mercChanged = false;   // 1.0.48: nothing to save when the live price already equals the wanted one (Update stays disabled on an untouched form)
       if (W.price != null) {
         if (!C.pricesMatch('MERCARI', price.value, W.price)) {
+          mercChanged = true;
           var ok = await writeField(price, C.formatPrice('MERCARI', W.price));
           if (!ok && !C.pricesMatch('MERCARI', price.value, W.price)) return fail('price_value_did_not_stick', 'Price input kept "' + price.value + '"', 'form', 'input#Price', {});
         }
@@ -753,8 +755,9 @@
         }
         if (floor) {
           var fv = C.parsePriceText(floor.value);
-          if (fv != null && fv > C.wholeDollars(W.price)) await writeField(floor, String(Math.max(1, Math.floor(C.wholeDollars(W.price) * 0.9))));
+          if (fv != null && fv > C.wholeDollars(W.price)) { mercChanged = true; await writeField(floor, String(Math.max(1, Math.floor(C.wholeDollars(W.price) * 0.9)))); }
         }
+        if (!mercChanged) return done({ readBack: { price: price.value }, editUrl: S.editUrl || location.href, alreadyCurrent: true });
       }
       var lb = q('button[data-testid="ListButton"]');   // verified-in-DOM: "Update", type=submit. Deactivate/Delete are different testids and are never matched.
       var save = (lb && visible(lb) && !isDisabled(lb) && /^(update|save)/.test(btnLabel(lb))) ? lb : findButton(/^(save|save changes|update|update listing|done)$/);
