@@ -2189,6 +2189,19 @@
   // no longer blocks auto-publish (see run()'s call site below). Instead this records a note via
   // background.js's fasPoshmarkRunNotes list, and the LAST item in the run reads all of them back
   // and shows a roll-up instead of silently publishing N-1 guessed items with zero visibility.
+  // 1.0.59 (Patrick: "try it"): Poshmark's oversized / prohibited validator is undocumented, so the first refusal of an item is retried ONCE in
+  // the same tab with a shortened description (first sentence only) to learn whether the wording is the trigger. The marker lives in
+  // sessionStorage (this tab only). Whether the retry passed or was refused again is logged with the variant used so the result is evidence.
+  const POSH_FLAG_RETRY_KEY = 'fasPoshFlagRetry';
+  function poshFlagRetryState(item) {
+    try { const v = JSON.parse(sessionStorage.getItem(POSH_FLAG_RETRY_KEY) || 'null'); return v && item && v.id === item.id ? v : null; } catch (e) { return null; }
+  }
+  function poshShortDescription(item) {
+    const d = String(item && item.description != null ? item.description : '').replace(/\s+/g, ' ').trim();
+    const first = (d.split(/(?<=[.!?])\s+/)[0] || d).slice(0, 160).trim();
+    return first.length >= 20 ? first : String((item && item.title) || first);
+  }
+
   // 1.0.56 (Patrick): when Poshmark's validator flags a listing, do NOT silently move on. Tell the person plainly that they can
   // publish it themselves if they are sure it is allowed (Certify Listing is their own statement to Poshmark; FindA.Sale never clicks
   // it), or skip it and carry on with the queue so they can look at it later. If nobody answers for 10 minutes the queue moves on so an
@@ -2327,6 +2340,15 @@
       } catch (e) {}
       if (flagText) {
         clearPoshPublishAttemptState();
+        if (!poshFlagRetryState(item)) {
+          try { sessionStorage.setItem(POSH_FLAG_RETRY_KEY, JSON.stringify({ id: item.id, kind: flagKind, at: Date.now() })); } catch (e) {}
+          tInfo('flag_retry', 'Poshmark flagged this item as ' + flagKind + '; retrying once with a shorter description to see whether the wording is the trigger', { kind: flagKind, dialog: flagText, descLen: (item.description || '').length });
+          overlayInfo('Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + (flagKind === 'prohibited' ? 'possibly prohibited' : 'possibly oversized') + '. Trying once more with a shorter description...');
+          await humanPause(800, 1500);
+          await navigateToPoshmarkCreateListing();
+          return;
+        }
+        tInfo('flag_retry_failed', 'Poshmark flagged the item again even with the shorter description, so the wording is not the trigger', { kind: flagKind });
         if (flagKind === 'prohibited') {
           tProblem({ code: 'poshmark_prohibited_flag', title: 'Poshmark flagged this item as possibly prohibited', what: 'Poshmark showed "potential prohibited item" and asked the seller to certify the listing. It would not publish without that.', why: 'Its validator went by the category, title or brand. FindA.Sale never certifies a listing for you, because that is your statement to Poshmark.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         } else {
@@ -2339,6 +2361,7 @@
           tOk('You certified the listing on Poshmark and it went live');
         } else if (decision === 'skip') {
           tInfo('flag_skipped', 'Skipped the flagged item and moved on', { kind: flagKind });
+          try { sessionStorage.removeItem(POSH_FLAG_RETRY_KEY); } catch (e) {}
           await fasPoshAdvance(item.id);
           if ((index + 1) < total) {
             overlayInfo('Skipped <b>' + escapeHtml(item.title) + '</b>. Moving to the next item...');
@@ -2368,6 +2391,12 @@
     // click is done (a later click for a DIFFERENT item id will never match this marker anyway, but
     // clearing here keeps the marker's lifecycle honest -- "live only while genuinely ambiguous").
     clearPoshPublishAttemptState();
+    const retryWas = poshFlagRetryState(item);
+    if (retryWas) {
+      try { sessionStorage.removeItem(POSH_FLAG_RETRY_KEY); } catch (e) {}
+      tOk('Published after retrying with a shorter description (first try was flagged ' + retryWas.kind + '), so the wording was the trigger');
+      try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: 'Poshmark flagged the full description as ' + retryWas.kind + '; it published with the first sentence only. Consider adding more detail by hand.' }); } catch (e) {}
+    }
     tOk('Poshmark accepted the listing');
     tStep('Telling FindA.Sale', 'Recording that this item is now listed on Poshmark so it is not posted again');
     const postedRef = await fasPoshCaptureFromCloset(item, await fasListingRef('POSHMARK', 3000));
@@ -2542,6 +2571,7 @@
     // review and stopped. An item with no description now gets a plain, truthful fallback built from its own title and
     // condition, and a run note asks the organizer to add real detail.
     let poshDescription = String(item.description == null ? '' : item.description).trim();
+    if (poshFlagRetryState(item)) { poshDescription = poshShortDescription(item); tInfo('flag_retry_variant', 'Retry after a Poshmark flag: using the first sentence of the description only', { len: poshDescription.length }); }
     if (!poshDescription) {
       const cond = String(item.conditionRaw || '').trim();
       poshDescription = poshTitle + '.' + (cond ? ' Condition: ' + cond + '.' : '') + ' Please see the photos for details and message me with any questions.';

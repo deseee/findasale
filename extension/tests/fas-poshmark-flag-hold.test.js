@@ -52,3 +52,15 @@ test('getPoshmarkQueueItem also refuses edit pump / removal tabs and edit-listin
   const seg = bg.slice(i, i + 2600);
   assert.ok(/poshOnEditSurface/.test(seg) && /edit-listing/.test(seg) && /fasEditRun/.test(seg) && /fasPoshmarkRemovalTabId/.test(seg));
 });
+
+test('first flag retries once with a short description; second flag holds; a pass is logged as wording-was-the-trigger', () => {
+  assert.ok(/POSH_FLAG_RETRY_KEY/.test(src) && /function poshShortDescription/.test(src));
+  const i = src.indexOf("tInfo('flag_retry'");
+  assert.ok(i > 0);
+  const seg = src.slice(i, i + 900);
+  assert.ok(/navigateToPoshmarkCreateListing\(\)/.test(seg));
+  assert.ok(/flag_retry_failed/.test(src));
+  assert.ok(/if \(poshFlagRetryState\(item\)\) \{ poshDescription = poshShortDescription\(item\)/.test(src));
+  assert.ok(/Published after retrying with a shorter description/.test(src));
+  assert.ok(src.indexOf("tInfo('flag_retry'") < src.indexOf("code: 'poshmark_oversized'"));
+});
