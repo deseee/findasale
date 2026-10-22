@@ -2651,10 +2651,13 @@
       let starts = [];
       try { starts = JSON.parse(sessionStorage.getItem(loopKey) || '[]'); } catch (e) { starts = []; }
       starts = (Array.isArray(starts) ? starts : []).filter((x) => x && typeof x.id === 'string' && nowMs - x.at < 15 * 60 * 1000);
+      let navType = '';
+      try { const nv = performance.getEntriesByType('navigation')[0]; navType = nv ? nv.type : ''; } catch (e) { /* diagnostics only */ }
+      tInfo('form_open', 'Opening the form for this item (open #' + (starts.filter((x) => x.id === item.id).length + 1) + ', page load type: ' + (navType || 'unknown') + ')', { nav: navType, ref: String(document.referrer || '').replace(/\?.*$/, '').slice(0, 80), agesSec: starts.filter((x) => x.id === item.id).map((x) => Math.round((nowMs - x.at) / 1000)) });
       const seenCount = starts.filter((x) => x.id === item.id).length;
       if (seenCount >= 3) {
         sessionStorage.setItem(loopKey, JSON.stringify(starts.filter((x) => x.id !== item.id)));
-        tProblem({ code: 'poshmark_fill_loop', title: 'Skipped: Poshmark kept reloading this item', what: 'This item was started 3 times in 15 minutes without finishing, so it was skipped instead of looping.', why: 'The form did not load or Poshmark kept refusing it. Check the item on Poshmark yourself.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Moving on.', ctx: {} });
+        tProblem({ code: 'poshmark_fill_loop', title: 'Skipped: Poshmark kept reloading this item', what: 'This item was started 3 times in 15 minutes without finishing, so it was skipped instead of looping.', why: 'The form did not load or Poshmark kept refusing it. Check the item on Poshmark yourself.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Moving on.', ctx: { nav: navType, agesSec: starts.filter((x) => x.id === item.id).map((x) => Math.round((nowMs - x.at) / 1000)) } });
         try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
         overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(item.title) + '</b> after 3 tries in 15 minutes. Not marked listed.</div>');
         return;
