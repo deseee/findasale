@@ -2272,18 +2272,25 @@
       if (verdict.published) { published = true; tOk('The listing is live in your closet, so it is treated as published'); }
     }
     if (!published) {
-      // 1.0.45: Poshmark's validator can pop "flagged your listing as a potential oversized item". That is a definite refusal, not an
-      // unknown outcome, so it is reported as such and the queue moves on instead of leaving the run stuck on an unrecognised modal.
-      let oversizedText = '';
+      // 1.0.45/1.0.51: Poshmark's validator can pop "flagged your listing as a potential oversized item" or "... potential prohibited
+      // item ... certify this listing". Both are definite refusals, not unknown outcomes, so they are reported as such and the queue
+      // moves on instead of leaving the run stuck on an unrecognised modal. The prohibited-item one asks the SELLER to certify the
+      // listing; that is an attestation only the person can make, so it is never clicked.
+      let flagText = '';
+      let flagKind = '';
       try {
-        const dlg = Array.from(document.querySelectorAll('[role="dialog"], .modal, [class*="modal"]')).map((d) => (d.innerText || '')).find((t) => /potential oversized item|oversized item/i.test(t));
-        if (dlg) oversizedText = dlg.replace(/\s+/g, ' ').trim().slice(0, 240);
+        const dlg = Array.from(document.querySelectorAll('[role="dialog"], .modal, [class*="modal"]')).map((d) => (d.innerText || '')).find((t) => /potential (oversized|prohibited) item|certify this listing/i.test(t));
+        if (dlg) { flagText = dlg.replace(/\s+/g, ' ').trim().slice(0, 240); flagKind = /prohibited|certify/i.test(flagText) ? 'prohibited' : 'oversized'; }
       } catch (e) {}
-      if (oversizedText) {
+      if (flagText) {
         clearPoshPublishAttemptState();
-        tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Moving on.', ctx: { dialog: oversizedText } });
+        if (flagKind === 'prohibited') {
+          tProblem({ code: 'poshmark_prohibited_flag', title: 'Poshmark flagged this item as possibly prohibited', what: 'Poshmark showed "potential prohibited item" and asked the seller to certify the listing. It would not publish without that.', why: 'Its validator went by the category, title or brand. FindA.Sale never certifies a listing for you, because that is your statement to Poshmark.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you want it on Poshmark, list it by hand and certify it there. Moving on.', ctx: { dialog: flagText } });
+        } else {
+          tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Moving on.', ctx: { dialog: flagText } });
+        }
         try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
-        overlayWarn('Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as an oversized item and refused it. Not marked listed; check the saved package size.' + button('fas-posh-close', 'Close', false));
+        overlayWarn('Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + (flagKind === 'prohibited' ? 'a possibly prohibited item and asked for a certification. Not certified and not marked listed.' : 'an oversized item and refused it. Not marked listed; check the saved package size.') + button('fas-posh-close', 'Close', false));
         closeBtnHandler();
         return;
       }
