@@ -3896,7 +3896,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // edit pump opens. It used to fill the queued item into those (typing a title, description and price into another listing's edit
         // form) and each such start counted toward the 3-starts-in-15-minutes loop guard, which then skipped good items. Only the tab that
         // is actually driving the queue is handed the item.
-        const poshNotQueueTab = poshOnEditSurface || (fasPoshmarkQueueTabId != null && !!sender && !!sender.tab && sender.tab.id !== fasPoshmarkQueueTabId);
+        // 1.0.61: the strict 'must be the recorded queue tab' check from 1.0.57 is gone: a tab the organizer reopens by hand (popup "reopen that tab", the
+        // auto-queue notice, or Chrome's own reopen) is never the recorded id, so it was refused and the run could not resume. The edit-surface rule is what stops the bug.
+        const poshNotQueueTab = poshOnEditSurface;
         sendResponse({ ok: true, item: poshNotQueueTab ? null : await freshenQueueItem(fasPoshmarkQueue[fasPoshmarkIndex] || null), index: fasPoshmarkIndex, total: fasPoshmarkQueue.length, autoPublish: fasPoshmarkAutoPublish });
       } else if (msg.type === 'recordPoshmarkRunNote') {
         // FEATURE 2026-08-22 (S-EXT-POSHMARK-RUN-SUMMARY, Patrick-directed): "if you have those

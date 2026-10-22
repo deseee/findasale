@@ -35,10 +35,10 @@ test('background: flagOnly records the refusal and does not advance the queue in
   assert.ok(bg.indexOf('fasPoshFlagged: f', i) < j);
 });
 
-test('getPoshmarkQueueItem only hands the item to the tab driving the queue', () => {
+test('getPoshmarkQueueItem never refuses a hand-reopened tab, only edit surfaces', () => {
   const i = bg.indexOf("msg.type === 'getPoshmarkQueueItem'");
-  const seg = bg.slice(i, i + 1800);
-  assert.ok(/fasPoshmarkQueueTabId/.test(seg) && /poshNotQueueTab/.test(seg) && /sender\.tab\.id !== fasPoshmarkQueueTabId/.test(seg));
+  const seg = bg.slice(i, i + 3400);
+  assert.ok(/poshNotQueueTab = poshOnEditSurface;/.test(seg) && !/sender\.tab\.id !== fasPoshmarkQueueTabId/.test(seg));
 });
 
 test('the fill-loop skip does not carry the certify wording', () => {
