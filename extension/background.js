@@ -3883,9 +3883,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await chrome.storage.local.set({ fasPoshmarkQueueTabId: poshQueueTab && poshQueueTab.id != null ? poshQueueTab.id : null });
         sendResponse({ ok: true });
       } else if (msg.type === 'getPoshmarkQueueItem') {
-        const { fasPoshmarkQueue = [], fasPoshmarkIndex = 0, fasPoshmarkAutoPublish = true } =
-          await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex', 'fasPoshmarkAutoPublish']);
-        sendResponse({ ok: true, item: await freshenQueueItem(fasPoshmarkQueue[fasPoshmarkIndex] || null), index: fasPoshmarkIndex, total: fasPoshmarkQueue.length, autoPublish: fasPoshmarkAutoPublish });
+        const { fasPoshmarkQueue = [], fasPoshmarkIndex = 0, fasPoshmarkAutoPublish = true, fasPoshmarkQueueTabId = null } =
+          await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex', 'fasPoshmarkAutoPublish', 'fasPoshmarkQueueTabId']);
+        // 1.0.57: the post flow content script loads on EVERY poshmark.com tab, including the edit-listing and closet tabs the price/stock
+        // edit pump opens. It used to fill the queued item into those (typing a title, description and price into another listing's edit
+        // form) and each such start counted toward the 3-starts-in-15-minutes loop guard, which then skipped good items. Only the tab that
+        // is actually driving the queue is handed the item.
+        const poshNotQueueTab = fasPoshmarkQueueTabId != null && !!sender && !!sender.tab && sender.tab.id !== fasPoshmarkQueueTabId;
+        sendResponse({ ok: true, item: poshNotQueueTab ? null : await freshenQueueItem(fasPoshmarkQueue[fasPoshmarkIndex] || null), index: fasPoshmarkIndex, total: fasPoshmarkQueue.length, autoPublish: fasPoshmarkAutoPublish });
       } else if (msg.type === 'recordPoshmarkRunNote') {
         // FEATURE 2026-08-22 (S-EXT-POSHMARK-RUN-SUMMARY, Patrick-directed): "if you have those
         // kinds of issues they should be given a default to get them published, reported at the

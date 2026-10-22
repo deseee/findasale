@@ -34,3 +34,15 @@ test('background: flagOnly records the refusal and does not advance the queue in
   assert.ok(bg.slice(j, k).includes('sendResponse({ ok: true, flagOnly: true })'));
   assert.ok(bg.indexOf('fasPoshFlagged: f', i) < j);
 });
+
+test('getPoshmarkQueueItem only hands the item to the tab driving the queue', () => {
+  const i = bg.indexOf("msg.type === 'getPoshmarkQueueItem'");
+  const seg = bg.slice(i, i + 1800);
+  assert.ok(/fasPoshmarkQueueTabId/.test(seg) && /poshNotQueueTab/.test(seg) && /sender\.tab\.id !== fasPoshmarkQueueTabId/.test(seg));
+});
+
+test('the fill-loop skip does not carry the certify wording', () => {
+  const i = src.indexOf("code: 'poshmark_fill_loop'");
+  const seg = src.slice(i, i + 900);
+  assert.ok(!/Certify Listing/.test(seg));
+});
