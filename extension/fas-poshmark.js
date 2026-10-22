@@ -2189,6 +2189,41 @@
   // no longer blocks auto-publish (see run()'s call site below). Instead this records a note via
   // background.js's fasPoshmarkRunNotes list, and the LAST item in the run reads all of them back
   // and shows a roll-up instead of silently publishing N-1 guessed items with zero visibility.
+  // 1.0.56 (Patrick): when Poshmark's validator flags a listing, do NOT silently move on. Tell the person plainly that they can
+  // publish it themselves if they are sure it is allowed (Certify Listing is their own statement to Poshmark; FindA.Sale never clicks
+  // it), or skip it and carry on with the queue so they can look at it later. If nobody answers for 10 minutes the queue moves on so an
+  // unattended auto run is never stuck behind one flagged item. Resolves 'published' | 'skip' | 'close'.
+  async function holdForPoshmarkFlagDecision(item, flagKind, index, total) {
+    const more = (index + 1) < total;
+    const what = flagKind === 'prohibited' ? 'a possibly prohibited item' : 'a possibly oversized item';
+    let decision = '';
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#ffcf7a">Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + what + '.</div>' +
+      '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If you are sure this item is allowed on Poshmark, click <b>Certify Listing</b> in Poshmark\'s box to publish it. That is your own statement to Poshmark, so FindA.Sale never clicks it for you. Otherwise skip it.</div>' +
+      button('fas-posh-skip', more ? 'Skip this item and continue the queue' : 'Skip this item', true) + button('fas-posh-close', 'Stop here', false) +
+      '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (more ? 'If you do nothing, the queue moves on to the next item in 10 minutes. ' : '') + 'Item ' + (index + 1) + ' of ' + total + '</div>');
+    const skipBtn = document.getElementById('fas-posh-skip');
+    const closeBtn = document.getElementById('fas-posh-close');
+    if (skipBtn) skipBtn.onclick = () => { decision = 'skip'; };
+    if (closeBtn) closeBtn.onclick = () => { decision = 'close'; if (bar) bar.remove(); };
+    const deadline = Date.now() + 10 * 60 * 1000;
+    while (!decision && Date.now() < deadline) {
+      await sleep(1000);
+      if (decision) break;
+      if (!looksLikeSellForm()) {
+        // The form went away: either the person certified and Poshmark published, or they deleted the listing. The closet decides.
+        let live = false;
+        for (let a = 0; a < 3 && !live; a++) {
+          await sleep(3000);
+          let r = null;
+          try { r = await fasPoshClosetDupCheck(item); } catch (e) { r = null; }
+          if (r && r.state === 'dup') live = true;
+        }
+        decision = live ? 'published' : 'skip';
+      }
+    }
+    return decision || (more ? 'skip' : 'close');
+  }
+
   async function doPoshmarkAutoPublish(item, index, total, fillResult) {
     const photosOk = fillResult.photosOk;
     let publishBtn = findPoshmarkPublishButton();
@@ -2293,14 +2328,31 @@
       if (flagText) {
         clearPoshPublishAttemptState();
         if (flagKind === 'prohibited') {
-          tProblem({ code: 'poshmark_prohibited_flag', title: 'Poshmark flagged this item as possibly prohibited', what: 'Poshmark showed "potential prohibited item" and asked the seller to certify the listing. It would not publish without that.', why: 'Its validator went by the category, title or brand. FindA.Sale never certifies a listing for you, because that is your statement to Poshmark.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you want it on Poshmark, list it by hand and certify it there. Moving on.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
+          tProblem({ code: 'poshmark_prohibited_flag', title: 'Poshmark flagged this item as possibly prohibited', what: 'Poshmark showed "potential prohibited item" and asked the seller to certify the listing. It would not publish without that.', why: 'Its validator went by the category, title or brand. FindA.Sale never certifies a listing for you, because that is your statement to Poshmark.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         } else {
-          tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Moving on.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
+          tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         }
-        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id, flagged: flagKind }); } catch (e) {}
-        overlayWarn('Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + (flagKind === 'prohibited' ? 'a possibly prohibited item and asked for a certification. Not certified and not marked listed.' : 'an oversized item and refused it. Not marked listed; check the saved package size.') + button('fas-posh-close', 'Close', false));
-        closeBtnHandler();
-        return;
+        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id, flagged: flagKind, flagOnly: true }); } catch (e) {}
+        const decision = await holdForPoshmarkFlagDecision(item, flagKind, index, total);
+        if (decision === 'published') {
+          published = true;
+          tOk('You certified the listing on Poshmark and it went live');
+        } else if (decision === 'skip') {
+          tInfo('flag_skipped', 'Skipped the flagged item and moved on', { kind: flagKind });
+          await fasPoshAdvance(item.id);
+          if ((index + 1) < total) {
+            overlayInfo('Skipped <b>' + escapeHtml(item.title) + '</b>. Moving to the next item...');
+            await humanPause(600, 1200);
+            await navigateToPoshmarkCreateListing();
+          } else {
+            clearPoshNavRetryState();
+            overlayInfo('Skipped <b>' + escapeHtml(item.title) + '</b>. That was the last item in the queue.' + button('fas-posh-close', 'Close', false));
+            closeBtnHandler();
+          }
+          return;
+        } else {
+          return;
+        }
       }
     }
     if (!published) {
@@ -2672,7 +2724,7 @@
       const seenCount = starts.filter((x) => x.id === item.id).length;
       if (seenCount >= 3) {
         sessionStorage.setItem(loopKey, JSON.stringify(starts.filter((x) => x.id !== item.id)));
-        tProblem({ code: 'poshmark_fill_loop', title: 'Skipped: Poshmark kept reloading this item', what: 'This item was started 3 times in 15 minutes without finishing, so it was skipped instead of looping.', why: 'The form did not load or Poshmark kept refusing it. Check the item on Poshmark yourself.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Moving on.', ctx: { nav: navType, agesSec: starts.filter((x) => x.id === item.id).map((x) => Math.round((nowMs - x.at) / 1000)) } });
+        tProblem({ code: 'poshmark_fill_loop', title: 'Skipped: Poshmark kept reloading this item', what: 'This item was started 3 times in 15 minutes without finishing, so it was skipped instead of looping.', why: 'The form did not load or Poshmark kept refusing it. Check the item on Poshmark yourself.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues.', ctx: { nav: navType, agesSec: starts.filter((x) => x.id === item.id).map((x) => Math.round((nowMs - x.at) / 1000)) } });
         try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
         overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(item.title) + '</b> after 3 tries in 15 minutes. Not marked listed.</div>');
         return;

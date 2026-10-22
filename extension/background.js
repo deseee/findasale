@@ -3914,6 +3914,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             }
           } catch (e) { /* best-effort */ }
         }
+        if (msg.flagOnly === true) {
+          // 1.0.56: only record the refusal; the page holds for the person's decision and advances later.
+          sendResponse({ ok: true, flagOnly: true });
+        } else {
         const st = await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex']);
         const queue = st.fasPoshmarkQueue || [];
         const curIndex = st.fasPoshmarkIndex || 0;
@@ -3942,6 +3946,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             // shows a suggestion-only pace hint instead (fasRecordPostTime + showPaceHint).
           }
           sendResponse({ ok: true, item, index: next, total: queue.length });
+        }
         }
       } else if (msg.type === 'setMercariQueue') {
         // 2026-08-18 dispatch (fas-mercari.js): same queue-storage shape as
