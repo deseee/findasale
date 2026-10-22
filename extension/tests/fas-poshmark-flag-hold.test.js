@@ -46,3 +46,9 @@ test('the fill-loop skip does not carry the certify wording', () => {
   const seg = src.slice(i, i + 900);
   assert.ok(!/Certify Listing/.test(seg));
 });
+
+test('getPoshmarkQueueItem also refuses edit pump / removal tabs and edit-listing pages', () => {
+  const i = bg.indexOf("msg.type === 'getPoshmarkQueueItem'");
+  const seg = bg.slice(i, i + 2600);
+  assert.ok(/poshOnEditSurface/.test(seg) && /edit-listing/.test(seg) && /fasEditRun/.test(seg) && /fasPoshmarkRemovalTabId/.test(seg));
+});

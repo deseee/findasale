@@ -3885,11 +3885,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === 'getPoshmarkQueueItem') {
         const { fasPoshmarkQueue = [], fasPoshmarkIndex = 0, fasPoshmarkAutoPublish = true, fasPoshmarkQueueTabId = null } =
           await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex', 'fasPoshmarkAutoPublish', 'fasPoshmarkQueueTabId']);
+        // 1.0.58: the auto queue never records a queue tab id, so the tab check below cannot catch it. Also refuse the item to the tab the
+        // price/stock edit pump (or a removal run) is driving and to any /edit-listing/ page: posting never happens on an edit form.
+        const poshEditRun = (await chrome.storage.local.get(['fasEditRun', 'fasPoshmarkRemovalTabId']));
+        const poshSenderTabId = sender && sender.tab ? sender.tab.id : null;
+        const poshSenderUrl = (sender && sender.tab && sender.tab.url) || '';
+        const poshOnEditSurface = /\/edit-listing\//.test(poshSenderUrl) ||
+          (poshSenderTabId != null && ((poshEditRun.fasEditRun && poshEditRun.fasEditRun.tabId === poshSenderTabId) || poshEditRun.fasPoshmarkRemovalTabId === poshSenderTabId));
         // 1.0.57: the post flow content script loads on EVERY poshmark.com tab, including the edit-listing and closet tabs the price/stock
         // edit pump opens. It used to fill the queued item into those (typing a title, description and price into another listing's edit
         // form) and each such start counted toward the 3-starts-in-15-minutes loop guard, which then skipped good items. Only the tab that
         // is actually driving the queue is handed the item.
-        const poshNotQueueTab = fasPoshmarkQueueTabId != null && !!sender && !!sender.tab && sender.tab.id !== fasPoshmarkQueueTabId;
+        const poshNotQueueTab = poshOnEditSurface || (fasPoshmarkQueueTabId != null && !!sender && !!sender.tab && sender.tab.id !== fasPoshmarkQueueTabId);
         sendResponse({ ok: true, item: poshNotQueueTab ? null : await freshenQueueItem(fasPoshmarkQueue[fasPoshmarkIndex] || null), index: fasPoshmarkIndex, total: fasPoshmarkQueue.length, autoPublish: fasPoshmarkAutoPublish });
       } else if (msg.type === 'recordPoshmarkRunNote') {
         // FEATURE 2026-08-22 (S-EXT-POSHMARK-RUN-SUMMARY, Patrick-directed): "if you have those
