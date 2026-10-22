@@ -11,3 +11,8 @@ test('Poshmark prohibited-item certify modal is reported, never certified, and t
   assert.ok(src.indexOf('poshmark_prohibited_flag') < src.indexOf("code: 'publish_unconfirmed'"));
   assert.ok(!/findPoshmarkVisibleButtonByText\('certify/.test(src));
 });
+test('flag kind is classified on the full dialog text, from the smallest matching element', () => {
+  assert.ok(!/\/prohibited\|certify\/i\.test\(flagText\)/.test(src));
+  assert.ok(/\.sort\(\(a, b\) => a\.length - b\.length\)\[0\]/.test(src));
+  assert.ok(/potential prohibited item\|prohibited items\? policy\|certify this listing/.test(src));
+});

@@ -2279,8 +2279,14 @@
       let flagText = '';
       let flagKind = '';
       try {
-        const dlg = Array.from(document.querySelectorAll('[role="dialog"], .modal, [class*="modal"]')).map((d) => (d.innerText || '')).find((t) => /potential (oversized|prohibited) item|certify this listing/i.test(t));
-        if (dlg) { flagText = dlg.replace(/\s+/g, ' ').trim().slice(0, 240); flagKind = /prohibited|certify/i.test(flagText) ? 'prohibited' : 'oversized'; }
+        // 1.0.52: take the SMALLEST matching element (a "modal"-classed page wrapper also matches and starts with unrelated page text), and
+        // classify on its full text BEFORE trimming, so a long wrapper can never push the word "prohibited" past the cut.
+        const dlg = Array.from(document.querySelectorAll('[role="dialog"], .modal, [class*="modal"]')).map((d) => (d.innerText || '').replace(/\s+/g, ' ').trim()).filter((t) => /potential (oversized|prohibited) item|certify this listing/i.test(t)).sort((a, b) => a.length - b.length)[0];
+        if (dlg) {
+          flagKind = /potential prohibited item|prohibited items? policy|certify this listing/i.test(dlg) ? 'prohibited' : 'oversized';
+          const at = dlg.search(/problem detected|whoops|potential (oversized|prohibited) item/i);
+          flagText = dlg.slice(at > 0 ? at : 0).slice(0, 240);
+        }
       } catch (e) {}
       if (flagText) {
         clearPoshPublishAttemptState();
@@ -2289,7 +2295,7 @@
         } else {
           tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Moving on.', ctx: { dialog: flagText } });
         }
-        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
+        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id, flagged: flagKind }); } catch (e) {}
         overlayWarn('Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + (flagKind === 'prohibited' ? 'a possibly prohibited item and asked for a certification. Not certified and not marked listed.' : 'an oversized item and refused it. Not marked listed; check the saved package size.') + button('fas-posh-close', 'Close', false));
         closeBtnHandler();
         return;

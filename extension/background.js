@@ -2479,6 +2479,14 @@ async function checkAutoListQueue() {
     if (Array.isArray(items) && FAS_AUTOLIST_PICKUP_BLOCKED.indexOf(platform) !== -1) {
       items = items.filter((q) => !(q && q.localPickupOnly === true));
     }
+    // 1.0.53: items Poshmark's validator already refused (oversized / prohibited) within the last 30 days are not re-offered.
+    if (platform === 'POSHMARK' && Array.isArray(items) && items.length) {
+      try {
+        const flagged = (await chrome.storage.local.get('fasPoshFlagged')).fasPoshFlagged || {};
+        const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
+        items = items.filter((q) => !(q && flagged[q.id] && flagged[q.id].at > cutoff));
+      } catch (e) { /* filter is best-effort */ }
+    }
     // Per-marketplace pause: never fill a paused platform's posting queue.
     if (pausedForQueue.indexOf(platform) !== -1) { outcomes.push(platform + ':paused'); continue; }
     if (!Array.isArray(items) || !items.length) { outcomes.push(platform + ':empty'); continue; }
@@ -3895,6 +3903,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === 'advancePoshmarkQueue') {
         // FIX (S-EXT-AUTOPUBLISH-DEDUP, 2026-08-29): same itemId compare-and-swap as
         // advanceCraigslistQueue above -- see its comment for the full rationale.
+        // 1.0.53: when Poshmark's own validator refused the item (oversized / prohibited), remember it so the auto queue stops
+        // re-offering the same item every cycle. Only a sender in this extension with a known kind can set it.
+        if (msg.flagged === 'oversized' || msg.flagged === 'prohibited') {
+          try {
+            if (msg.itemId != null && typeof msg.itemId === 'string') {
+              const f = (await chrome.storage.local.get('fasPoshFlagged')).fasPoshFlagged || {};
+              f[msg.itemId] = { kind: msg.flagged, at: Date.now() };
+              await chrome.storage.local.set({ fasPoshFlagged: f });
+            }
+          } catch (e) { /* best-effort */ }
+        }
         const st = await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex']);
         const queue = st.fasPoshmarkQueue || [];
         const curIndex = st.fasPoshmarkIndex || 0;
