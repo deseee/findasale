@@ -61,6 +61,6 @@ test('first flag retries once with a short description; second flag holds; a pas
   assert.ok(/navigateToPoshmarkCreateListing\(\)/.test(seg));
   assert.ok(/flag_retry_failed/.test(src));
   assert.ok(/if \(poshFlagRetryState\(item\)\) \{ poshDescription = poshShortDescription\(item\)/.test(src));
-  assert.ok(/Published after retrying with a shorter description/.test(src));
+  assert.ok(/Published after retrying/.test(src) && /with only the first photo/.test(src) && /flag_retry_photos/.test(src));
   assert.ok(src.indexOf("tInfo('flag_retry'") < src.indexOf("code: 'poshmark_oversized'"));
 });

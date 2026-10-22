@@ -2340,15 +2340,23 @@
       } catch (e) {}
       if (flagText) {
         clearPoshPublishAttemptState();
-        if (!poshFlagRetryState(item)) {
-          try { sessionStorage.setItem(POSH_FLAG_RETRY_KEY, JSON.stringify({ id: item.id, kind: flagKind, at: Date.now() })); } catch (e) {}
-          tInfo('flag_retry', 'Poshmark flagged this item as ' + flagKind + '; retrying once with a shorter description to see whether the wording is the trigger', { kind: flagKind, dialog: flagText, descLen: (item.description || '').length });
-          overlayInfo('Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + (flagKind === 'prohibited' ? 'possibly prohibited' : 'possibly oversized') + '. Trying once more with a shorter description...');
+        // Retry ladder (1.0.60): stage 1 = first sentence of the description only (skipped when the description is already that short);
+        // stage 2 = the first photo only. One change at a time so a pass says which factor the validator reacted to.
+        const rs = poshFlagRetryState(item);
+        const photoCount = Array.isArray(item.photoUrls) ? item.photoUrls.length : 0;
+        const descChanges = poshShortDescription(item) !== String(item.description == null ? '' : item.description).replace(/\s+/g, ' ').trim();
+        let nextStage = 0;
+        if (!rs) nextStage = descChanges ? 1 : (photoCount > 1 ? 2 : 0);
+        else if (rs.stage === 1 && photoCount > 1) nextStage = 2;
+        if (nextStage) {
+          try { sessionStorage.setItem(POSH_FLAG_RETRY_KEY, JSON.stringify({ id: item.id, kind: flagKind, stage: nextStage, at: Date.now() })); } catch (e) {}
+          tInfo('flag_retry', 'Poshmark flagged this item as ' + flagKind + '; retry ' + nextStage + ' of 2 with ' + (nextStage === 1 ? 'a shorter description' : 'only the first photo') + ' to learn what the validator reacts to', { kind: flagKind, stage: nextStage, dialog: flagText, descLen: (item.description || '').length, photos: photoCount });
+          overlayInfo('Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + (flagKind === 'prohibited' ? 'possibly prohibited' : 'possibly oversized') + '. Trying once more with ' + (nextStage === 1 ? 'a shorter description' : 'just the first photo') + '...');
           await humanPause(800, 1500);
           await navigateToPoshmarkCreateListing();
           return;
         }
-        tInfo('flag_retry_failed', 'Poshmark flagged the item again even with the shorter description, so the wording is not the trigger', { kind: flagKind });
+        tInfo('flag_retry_failed', 'Poshmark flagged the item again after every variant (shorter description' + (photoCount > 1 ? ', single photo' : '') + '), so neither the wording nor the photo count is the trigger', { kind: flagKind, stage: rs ? rs.stage : 0 });
         if (flagKind === 'prohibited') {
           tProblem({ code: 'poshmark_prohibited_flag', title: 'Poshmark flagged this item as possibly prohibited', what: 'Poshmark showed "potential prohibited item" and asked the seller to certify the listing. It would not publish without that.', why: 'Its validator went by the category, title or brand. FindA.Sale never certifies a listing for you, because that is your statement to Poshmark.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         } else {
@@ -2394,8 +2402,9 @@
     const retryWas = poshFlagRetryState(item);
     if (retryWas) {
       try { sessionStorage.removeItem(POSH_FLAG_RETRY_KEY); } catch (e) {}
-      tOk('Published after retrying with a shorter description (first try was flagged ' + retryWas.kind + '), so the wording was the trigger');
-      try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: 'Poshmark flagged the full description as ' + retryWas.kind + '; it published with the first sentence only. Consider adding more detail by hand.' }); } catch (e) {}
+      const passedWhat = retryWas.stage === 2 ? 'with only the first photo' : 'with a shorter description';
+      tOk('Published after retrying ' + passedWhat + ' (first try was flagged ' + retryWas.kind + '), so that is what the validator reacted to', { stage: retryWas.stage || 1 });
+      try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: 'Poshmark flagged the full listing as ' + retryWas.kind + '; it published ' + passedWhat + '. Add the rest by hand if you want it.' }); } catch (e) {}
     }
     tOk('Poshmark accepted the listing');
     tStep('Telling FindA.Sale', 'Recording that this item is now listed on Poshmark so it is not posted again');
@@ -2691,7 +2700,10 @@
     if (await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v))) tOk('Condition set');
     await humanPause(400, 800);
     tStep('Photos', 'Uploading the item photos (Poshmark needs at least one before it will publish)', { count: (item.photoUrls || []).length });
-    const photosOk = await injectPhotos(item.photoUrls);
+    const poshRetryNow = poshFlagRetryState(item);
+    const poshPhotoList = (poshRetryNow && poshRetryNow.stage === 2) ? (item.photoUrls || []).slice(0, 1) : item.photoUrls;
+    if (poshRetryNow && poshRetryNow.stage === 2) tInfo('flag_retry_photos', 'Retry after a Poshmark flag: attaching only the first photo', { of: (item.photoUrls || []).length });
+    const photosOk = await injectPhotos(poshPhotoList);
     if (photosOk) tOk('Photos attached'); else tWarn('photos_not_attached', 'Photos may not have attached; check the form', { count: (item.photoUrls || []).length });
     // BUG FIX 2026-08-31 (Patrick live report, 3rd distinct Price-empty item after the polling fix
     // above in fillPoshmarkPrice() -- Saturn telescope tab, extension confirmed freshly reloaded so
