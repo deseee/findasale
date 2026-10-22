@@ -14,5 +14,5 @@ test('Poshmark prohibited-item certify modal is reported, never certified, and t
 test('flag kind is classified on the full dialog text, from the smallest matching element', () => {
   assert.ok(!/\/prohibited\|certify\/i\.test\(flagText\)/.test(src));
   assert.ok(/\.sort\(\(a, b\) => a\.length - b\.length\)\[0\]/.test(src));
-  assert.ok(/potential prohibited item\|prohibited items\? policy\|certify this listing/.test(src));
+  assert.ok(/flagged your listing as a potential \(oversized\|prohibited\) item/.test(src));
 });

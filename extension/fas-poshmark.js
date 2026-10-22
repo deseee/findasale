@@ -2283,7 +2283,9 @@
         // classify on its full text BEFORE trimming, so a long wrapper can never push the word "prohibited" past the cut.
         const dlg = Array.from(document.querySelectorAll('[role="dialog"], .modal, [class*="modal"]')).map((d) => (d.innerText || '').replace(/\s+/g, ' ').trim()).filter((t) => /potential (oversized|prohibited) item|certify this listing/i.test(t)).sort((a, b) => a.length - b.length)[0];
         if (dlg) {
-          flagKind = /potential prohibited item|prohibited items? policy|certify this listing/i.test(dlg) ? 'prohibited' : 'oversized';
+          // 1.0.54: classify on the headline phrase only. Both dialogs carry a Certify button and mention the Prohibited Items Policy.
+          const head = dlg.match(/flagged your listing as a potential (oversized|prohibited) item/i);
+          flagKind = head ? head[1].toLowerCase() : (/potential prohibited item/i.test(dlg) ? 'prohibited' : 'oversized');
           const at = dlg.search(/problem detected|whoops|potential (oversized|prohibited) item/i);
           flagText = dlg.slice(at > 0 ? at : 0).slice(0, 240);
         }
