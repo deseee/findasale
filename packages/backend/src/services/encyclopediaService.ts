@@ -134,6 +134,11 @@ export async function listEntries(
 
 /**
  * Get a single Encyclopedia entry by slug.
+ *
+ * Visibility matches listEntries/matchEntry: only PUBLISHED entries are returned
+ * publicly. The one exception is the entry's own author, who can still see their
+ * own unpublished submission (e.g. PENDING_REVIEW). AUTO_GENERATED stubs have no
+ * author, so they are never exposed through this path.
  */
 export async function getEntryBySlug(slug: string, userId?: string): Promise<any> {
   const entry = await prisma.encyclopediaEntry.findUnique({
@@ -147,6 +152,11 @@ export async function getEntryBySlug(slug: string, userId?: string): Promise<any
 
   if (!entry) {
     return null; // Controller checks for null and returns 404
+  }
+
+  const isOwnEntry = !!userId && entry.authorId === userId;
+  if (entry.status !== 'PUBLISHED' && !isOwnEntry) {
+    return null; // Unpublished entries 404 for everyone but their author
   }
 
   return entry;

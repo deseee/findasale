@@ -90,7 +90,7 @@ export const generateNudges = (state: UserState): Nudge[] => {
   if (!state.huntPassActive) {
     nudges.push({
       type: 'HUNT_PASS_TEASE',
-      message: 'Unlock Hunt Pass to earn points faster and unlock exclusive deals.',
+      message: 'Hunt Pass gives you 1.5x XP on every action and a look at flash deals before they go live.',
       priority: 5,
     });
   }

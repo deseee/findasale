@@ -10,7 +10,7 @@ export const postAF: BlogPost = {
   excerpt: "A flat monthly subscription bills the same whether a sale makes $500 or $15,000, and the organizer still pays card processing separately. Here's what that actually costs over a season.",
   body: `## A flat bill, no matter what the sale brings in
 
-Most cataloging software built for estate sales, auctions, and consignment shops prices itself the same way: pick a monthly tier, pay that amount, and get a cap on how many items you can list that month. The caps make some sense — bigger sales process more inventory. But the price of the tier itself doesn't move with how the sale actually performs.
+Most cataloging software built for estate sales, auctions, and consignment shops prices itself the same way: pick a monthly tier, pay that amount, and get a cap on how many items you can list that month. The caps make some sense, since bigger sales process more inventory. But the price of the tier itself doesn't move with how the sale actually performs.
 
 Take EstiMint, one of the more established photo-to-listing cataloging tools in this space, as a concrete example. Its current pricing page lists:
 
@@ -36,7 +36,7 @@ Compare that to a fee that scales with the sale itself. A commission tied to wha
 
 FindA.Sale's fee is built around that second model. It scales with the sale instead of charging a flat calendar-month fee untethered to how much actually sold, and card processing is built into that one number instead of showing up later as a separate line. There's no monthly software bill to justify regardless of how a given weekend goes, and no listing cap to check before deciding whether this month's sale even fits the plan already being paid for.
 
-That matters most for organizers whose sales vary in size from one month to the next: a modest garage sale this weekend, a full estate liquidation the next. A flat subscription asks the same question every month no matter which one it is. A fee tied to the sale answers itself.
+That matters most for organizers whose sales vary in size from one month to the next: a modest garage sale this weekend, a full estate sale the next. A flat subscription asks the same question every month no matter which one it is. A fee tied to the sale answers itself.
 
 ## The question actually worth asking
 

@@ -205,7 +205,7 @@ export default function SubscriptionPage() {
                     Ready to Scale?
                   </h3>
                   <p className="text-amber-800 dark:text-amber-200 mb-6">
-                    Upgrade to PRO ($29/month) and unlock powerful tools for running multiple sales.
+                    Upgrade to PRO ($29/month) to run 3 sales at once, get 2,000 auto tags a month, and pay lower fees on every sale.
                   </p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -552,7 +552,7 @@ export default function SubscriptionPage() {
                   Ready to Scale?
                 </h3>
                 <p className="text-amber-800 dark:text-amber-200 mb-6">
-                  Upgrade to PRO ($29/month) and unlock powerful tools for running multiple sales.
+                  Upgrade to PRO ($29/month) to run 3 sales at once, get 2,000 auto tags a month, and pay lower fees on every sale.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

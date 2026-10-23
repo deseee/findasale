@@ -692,10 +692,10 @@ const PricingPage = () => {
 
               <div>
                 <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
-                  * What do you mean Unlimited? *
+                  What does Unlimited* mean?
                 </h3>
                 <p className="text-warm-700 dark:text-warm-300">
-                   While we truly mean unlimited we do employ practical platform abuse prevention mechanisms, time based rate limits and queues, soft data storage caps, post-sale data archival, etc. You and your team members won't hit these limits with normal use.
+                  We mean unlimited. We do use practical abuse prevention, such as time-based rate limits and queues, soft data storage caps, and post-sale data archiving. You and your team members won't hit these limits with normal use.
                 </p>
               </div>
 

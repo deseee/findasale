@@ -121,7 +121,7 @@ function LootLegendPage() {
                 Try Hunt Pass FREE for 7 days
               </p>
               <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
-                Unlock priority holds, bonus XP, and exclusive loot.
+                Get 1.5x XP on every action, early access to Rare and Legendary items, and extra monthly coupon slots.
               </p>
               <button
                 onClick={handleTrialActivate}

@@ -21,8 +21,8 @@ const FEATURES: Feature[] = [
   },
   {
     name: 'Item uploads per sale',
-    simple: '200',
-    pro: '500',
+    simple: 'Unlimited',
+    pro: 'Unlimited',
     teams: 'Unlimited*',
   },
   {
@@ -308,15 +308,17 @@ const FeatureCheck: React.FC<{ included: boolean | string }> = ({ included }) =>
     return <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{included}</span>;
   }
 
+  // Explicit width/height attributes plus flex-shrink-0 keep the icon from collapsing to zero
+  // width in a squeezed flex cell; dark:text-sage-300 keeps the mark readable on gray-800/900 rows.
   return included ? (
-    <span className="text-sage-600 dark:text-sage-400">
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+    <span className="inline-flex text-sage-600 dark:text-sage-300" role="img" aria-label="Included">
+      <svg className="w-5 h-5 flex-shrink-0" width="20" height="20" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
       </svg>
     </span>
   ) : (
-    <span className="text-gray-400 dark:text-gray-500">
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+    <span className="inline-flex text-gray-400 dark:text-gray-400" role="img" aria-label="Not included">
+      <svg className="w-5 h-5 flex-shrink-0" width="20" height="20" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
         <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
       </svg>
     </span>
@@ -334,20 +336,20 @@ const TierComparisonTable: React.FC<TierComparisonTableProps> = ({ currentTier =
         {/* Header */}
         <thead>
           <tr className="border-b border-gray-200 dark:border-gray-700">
-            <th className="text-left py-4 px-4 font-semibold text-gray-900 dark:text-gray-100 min-w-48">Feature</th>
-            <th className="text-center py-4 px-4">
+            <th className="text-left py-4 px-2 sm:px-4 font-semibold text-gray-900 dark:text-gray-100 min-w-[8rem] sm:min-w-48">Feature</th>
+            <th className="text-center py-4 px-2 sm:px-4">
               <div className="space-y-1">
                 <p className="font-semibold text-gray-900 dark:text-gray-100">SIMPLE</p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Free</p>
               </div>
             </th>
-            <th className="text-center py-4 px-4">
+            <th className="text-center py-4 px-2 sm:px-4">
               <div className="space-y-1">
                 <p className="font-semibold text-gray-900 dark:text-gray-100">PRO</p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">$29/mo</p>
               </div>
             </th>
-            <th className="text-center py-4 px-4">
+            <th className="text-center py-4 px-2 sm:px-4">
               <div className="space-y-1">
                 <p className="font-semibold text-gray-900 dark:text-gray-100">TEAMS</p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">$79/mo</p>
@@ -363,18 +365,18 @@ const TierComparisonTable: React.FC<TierComparisonTableProps> = ({ currentTier =
               key={index}
               className={`border-b border-gray-100 dark:border-gray-700 ${index % 2 === 1 ? 'bg-gray-50 dark:bg-gray-900' : 'bg-white dark:bg-gray-800'}`}
             >
-              <td className="py-4 px-4 text-sm text-gray-700 dark:text-gray-300 font-medium">{feature.name}</td>
-              <td className="py-4 px-4">
+              <td className="py-4 px-2 sm:px-4 text-sm text-gray-700 dark:text-gray-300 font-medium">{feature.name}</td>
+              <td className="py-4 px-2 sm:px-4">
                 <div className="flex items-center justify-center">
                   <FeatureCheck included={feature.simple} />
                 </div>
               </td>
-              <td className="py-4 px-4">
+              <td className="py-4 px-2 sm:px-4">
                 <div className="flex items-center justify-center">
                   <FeatureCheck included={feature.pro} />
                 </div>
               </td>
-              <td className="py-4 px-4">
+              <td className="py-4 px-2 sm:px-4">
                 <div className="flex items-center justify-center">
                   <FeatureCheck included={feature.teams} />
                 </div>
