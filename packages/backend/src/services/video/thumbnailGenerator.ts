@@ -159,7 +159,9 @@ export async function generateThumbnail(input: ThumbnailInput): Promise<Thumbnai
 
   const bannerSvgBuffer = Buffer.from(buildBannerSvg(headlineText));
 
-  const composites: sharp.OverlayOptions[] = [
+  // sharp 0.35 ships separate ESM/CJS typings; derive the overlay type from composite() so it
+  // resolves under either (the sharp.OverlayOptions namespace path is not visible to this build).
+  const composites: Parameters<ReturnType<typeof sharp>['composite']>[0] = [
     { input: bannerSvgBuffer, top: CANVAS_HEIGHT - BANNER_HEIGHT, left: 0 },
   ];
 
