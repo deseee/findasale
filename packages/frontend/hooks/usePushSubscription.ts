@@ -44,7 +44,19 @@ export const usePushSubscription = () => {
 
         // Check existing subscription first
         const existing = await registration.pushManager.getSubscription();
-        if (existing) return; // Already subscribed
+        if (existing) {
+          // A subscription made under an older VAPID key can no longer receive pushes
+          // (keys were rotated 2026-10-23). Keep it only if it matches the current key.
+          const current = urlBase64ToUint8Array(publicKey);
+          const raw = existing.options?.applicationServerKey;
+          const existingKey = raw ? new Uint8Array(raw) : null;
+          const sameKey =
+            !!existingKey &&
+            existingKey.length === current.length &&
+            existingKey.every((b, i) => b === current[i]);
+          if (sameKey) return; // Already subscribed with the current key
+          await existing.unsubscribe();
+        }
 
         // Request permission if not already granted
         if (Notification.permission === 'denied') return;
