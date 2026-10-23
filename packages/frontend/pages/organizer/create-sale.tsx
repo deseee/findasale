@@ -2502,6 +2502,8 @@ function ProModal({ c, saleId, onClose }: { c: typeof LIGHT; saleId: string; onC
 const CreateSalePage: React.FC = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  // 2026-10-23: one automatic verification-link resend per page visit on EMAIL_NOT_VERIFIED.
+  const verificationResentRef = useRef(false);
   const { canAccess } = useOrganizerTier();
   const { showToast } = useToast();
   const isDark = useIsDark();
@@ -2934,7 +2936,24 @@ const CreateSalePage: React.FC = () => {
       // ADR vendor-booth-sale-onboarding-gate (2026-09-25): belt-and-suspenders for a stale
       // tab that bypassed Step1's frontend gate (e.g. lost its claimed booth between load and
       // publish). Reuses the same onboarding messaging the Step1 panel shows.
-      if (
+      if (err.response?.status === 403 && err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        // 2026-10-23: this used to fall through to the generic toast ("Check your inbox for a
+        // verification link") with no way to get a new link. Organizers whose first link had
+        // expired, or who never saw it, were stuck. Send a fresh link right away (the backend
+        // rate-limits this endpoint to 3/hour), once per page visit.
+        if (!verificationResentRef.current && user?.email) {
+          verificationResentRef.current = true;
+          try {
+            await api.post('/auth/resend-verification', { email: user.email });
+            showToast(`Please verify your email first. We just sent a new verification link to ${user.email}. Check your inbox and spam folder.`, 'error');
+          } catch {
+            verificationResentRef.current = false;
+            showToast(err.response.data.message || 'Please verify your email address before creating a sale.', 'error');
+          }
+        } else {
+          showToast(`Please verify your email first. We sent a verification link to ${user?.email ?? 'your email'}. Check your inbox and spam folder.`, 'error');
+        }
+      } else if (
         err.response?.status === 403 &&
         (err.response?.data?.error === 'NO_VENDOR_BOOTH' || err.response?.data?.error === 'INVALID_VENDOR_BOOTH')
       ) {

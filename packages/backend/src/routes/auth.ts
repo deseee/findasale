@@ -187,7 +187,7 @@ router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res
       return res.json(genericResponse);
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale'; // same fallback as registration (authController.ts)
     const newToken = crypto.randomBytes(32).toString('hex');
     // 2026-08-08 (shipped-batch verification, roadmap #606 fix): also refresh
     // emailVerificationTokenExpiry to +24h from now, same as registration does
@@ -203,7 +203,11 @@ router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res
     const verifyUrl = `${frontendUrl}/verify-email?token=${newToken}`;
     const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
-    if (user.emailVerificationToken) {
+    // 2026-10-23: this used to be wrapped in `if (user.emailVerificationToken)`, checked against the
+    // user row read BEFORE the update above. An unverified account whose token was null (never issued,
+    // or cleared) got a fresh token written to the DB but never received an email. The token was just
+    // written above, so always send.
+    {
       try {
         // 2026-09-29: not awaited, so response time does not reveal whether the address has an unverified account.
         void Promise.resolve(transactionalEmailService.emails.send({

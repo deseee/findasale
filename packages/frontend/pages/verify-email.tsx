@@ -1,12 +1,28 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import api from '../lib/api';
+import { useAuth } from '../components/AuthContext';
 
 export default function VerifyEmail() {
   const router = useRouter();
   const { token } = router.query;
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Verifying your email...');
+  // 2026-10-23: an expired link used to dead-end at "Back to Login". If the organizer is signed in
+  // and still unverified, let them get a fresh link right here.
+  const { user } = useAuth();
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const canResend = !!user?.email && user?.emailVerified === false;
+  const handleResend = async () => {
+    if (!user?.email || resendState === 'sending' || resendState === 'sent') return;
+    setResendState('sending');
+    try {
+      await api.post('/auth/resend-verification', { email: user.email });
+      setResendState('sent');
+    } catch {
+      setResendState('error');
+    }
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -56,6 +72,23 @@ export default function VerifyEmail() {
             <div className="text-red-600 text-5xl mb-4">&#10005;</div>
             <p className="text-slate-700 text-lg font-medium mb-2">Verification Failed</p>
             <p className="text-slate-600 mb-6">{message}</p>
+            {canResend && (
+              <div className="mb-4">
+                <button
+                  onClick={handleResend}
+                  disabled={resendState === 'sending' || resendState === 'sent'}
+                  className="inline-block bg-amber-600 text-white px-6 py-2 rounded font-medium hover:bg-amber-700 transition disabled:opacity-60"
+                >
+                  {resendState === 'sending' ? 'Sending...' : resendState === 'sent' ? 'New link sent' : 'Send me a new link'}
+                </button>
+                {resendState === 'sent' && (
+                  <p className="text-slate-600 text-sm mt-3">We sent a new link to <strong>{user?.email}</strong>. Check your inbox and spam folder.</p>
+                )}
+                {resendState === 'error' && (
+                  <p className="text-red-600 text-sm mt-3">Could not send a new link. Please try again in a few minutes.</p>
+                )}
+              </div>
+            )}
             <button
               onClick={() => router.push('/login')}
               className="inline-block bg-amber-600 text-white px-6 py-2 rounded font-medium hover:bg-amber-700 transition"

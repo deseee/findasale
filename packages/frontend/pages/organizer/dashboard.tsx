@@ -102,6 +102,21 @@ const OrganizerDashboard = () => {
   const queryClient = useQueryClient();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  // 2026-10-23: the verification banner had no way to request a new link (the only resend
+  // button lived inside the dismissable OnboardingWizard), so an organizer whose link expired was stuck.
+  const [verifyResendState, setVerifyResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const handleResendVerificationFromBanner = async () => {
+    if (!user?.email || verifyResendState !== 'idle') return;
+    setVerifyResendState('sending');
+    try {
+      await api.post('/auth/resend-verification', { email: user.email });
+      setVerifyResendState('sent');
+      showToast(`New verification link sent to ${user.email}. Check your inbox and spam folder.`, 'success');
+    } catch (error: any) {
+      setVerifyResendState('idle');
+      showToast(error?.response?.data?.message || 'Could not send a new link. Please try again in a few minutes.', 'error');
+    }
+  };
   const { tier: orgTier, isSimple, isTeams, canAccess, isLapsed, inDunning, entitlementEndsAt } = useOrganizerTier();
   const { data: existingWorkspace, isLoading: workspaceLoading } = useMyWorkspace();
   // Which sale (if any) the FirstSaleNudge card is featuring, so the Next Action Zone does not repeat it.
@@ -835,6 +850,18 @@ const OrganizerDashboard = () => {
                 </p>
                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
                   We sent a verification link to <strong>{user.email}</strong>. Verify your email to publish sales and use your full account.
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                  Can&apos;t find it? Check your spam folder, or{' '}
+                  <button
+                    type="button"
+                    onClick={handleResendVerificationFromBanner}
+                    disabled={verifyResendState !== 'idle'}
+                    className="font-semibold underline hover:no-underline disabled:opacity-60 disabled:no-underline"
+                  >
+                    {verifyResendState === 'sending' ? 'sending...' : verifyResendState === 'sent' ? 'new link sent' : 'send a new link'}
+                  </button>
+                  .
                 </p>
               </div>
             </div>
