@@ -70,7 +70,7 @@ const PublishWithoutItemsDialog: React.FC<PublishWithoutItemsDialogProps> = ({
             type="button"
             onClick={onPublish}
             disabled={isBusy}
-            className={`${btnBase} bg-amber-600 hover:bg-amber-700 text-white`}
+            className={`${btnBase} bg-amber-700 hover:bg-amber-800 text-white`}
           >
             {busy === 'publish' ? 'Publishing…' : 'Publish, then add items'}
           </button>

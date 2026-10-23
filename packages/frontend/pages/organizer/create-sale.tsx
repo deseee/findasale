@@ -60,8 +60,8 @@ const LIGHT = {
   text: '#1A1814',
   textDim: 'rgba(26,24,20,0.62)',
   textFaint: 'rgba(26,24,20,0.4)',
-  accent: '#C8552B',
-  accentSoft: 'rgba(200,85,43,0.10)',
+  accent: '#B34A22', // darkened from #C8552B 2026-10-23: accentInk on accent was 4.1:1, now 5.05:1 (WCAG AA)
+  accentSoft: 'rgba(179,74,34,0.10)',
   accentInk: '#FBF8F2',
   success: '#3F7A4B',
   warn: '#A87420',
