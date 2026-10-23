@@ -40,6 +40,20 @@ const DEFAULT_MAX_ITEMS_PER_RUN = 150;
 const ID_LIST_CAP = 50;
 const NO_COUNT_MARKETS_NOTE = 'These listings can\'t take a stock count automatically';
 
+/**
+ * FINDASALE-NODEJS-96 (2026-10-23): the check pass READS each market's live count. eBay's Inventory API intermittently
+ * answers those reads with HTTP 500 errorId 25001 ("A system error has occurred"): Railway logs for 21 runs on 10-22/23
+ * showed 0 drift and 0 still-drifting every run, but 49 read failures spread over 44 different items, almost all
+ * failing once and reading fine on the next pass. Each such run raised a Sentry warning and could send the organizer
+ * "We could not update the stock count" although nothing was updated or wrong. A 5xx/429 on a check-pass read is
+ * now recorded as skipped (retried on the next rotation); only when the SAME item+market fails that way
+ * TRANSIENT_STREAK_TO_REPORT checks in a row is it reported as failed. Non-transient failures (expired token, 4xx)
+ * are reported immediately, as before.
+ */
+const TRANSIENT_READ_FAILURE_RE = /\(HTTP (5\d\d|429)\)/;
+const TRANSIENT_STREAK_TO_REPORT = 3;
+const transientStreaks = new Map<string, number>();
+
 export interface ReconcileRepaired {
   itemId: string;
   title: string;
@@ -205,6 +219,7 @@ export const realReconcileDeps: ReconcileDeps = {
 const cursors = new Map<string, string>();
 export function resetReconcileCursors(): void {
   cursors.clear();
+  transientStreaks.clear();
 }
 
 function maxItemsPerRun(): number {
@@ -248,8 +263,23 @@ async function reconcileOneItem(candidate: ReconcileCandidate, report: Inventory
   }
 
   for (const o of check.outcomes) {
-    if (o.status === 'failed') report.failed.push({ itemId: candidate.id, title: candidate.title, market: o.market, status: o.status, detail: o.detail });
-    else if (o.status === 'skipped') report.skipped.push({ itemId: candidate.id, title: candidate.title, market: o.market, status: o.status, detail: o.detail });
+    const streakKey = `${candidate.id}:${o.market}`;
+    if (o.status === 'failed') {
+      if (TRANSIENT_READ_FAILURE_RE.test(o.detail ?? '')) {
+        const streak = (transientStreaks.get(streakKey) ?? 0) + 1;
+        transientStreaks.set(streakKey, streak);
+        if (streak < TRANSIENT_STREAK_TO_REPORT) {
+          report.skipped.push({ itemId: candidate.id, title: candidate.title, market: o.market, status: 'skipped', detail: `temporary market error, will retry: ${o.detail}` });
+          continue;
+        }
+      } else {
+        transientStreaks.delete(streakKey);
+      }
+      report.failed.push({ itemId: candidate.id, title: candidate.title, market: o.market, status: o.status, detail: o.detail });
+    } else {
+      transientStreaks.delete(streakKey);
+      if (o.status === 'skipped') report.skipped.push({ itemId: candidate.id, title: candidate.title, market: o.market, status: o.status, detail: o.detail });
+    }
   }
 
   if (driftOutcomes.length === 0 || dryRun) return;

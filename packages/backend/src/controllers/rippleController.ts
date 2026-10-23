@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AuthRequest } from '../middleware/auth';
 import { recordRipple, getRippleSummary, getRippleTrend } from '../services/rippleService';
 import { prisma } from '../lib/prisma';
+import { detectCrawler } from '../middleware/crawlerAnalytics';
 
 // Validation schema for recording a ripple
 const recordRippleSchema = z.object({
@@ -19,6 +20,12 @@ const recordRippleSchema = z.object({
  */
 export const createRipple = async (req: Request | AuthRequest, res: Response) => {
   try {
+    // FINDASALE-NODEJS-7V (2026-10-23): rendering crawlers (ExaSearchBot, meta-webindexer) execute the sale page's
+    // client JS and POST a VIEW ripple per page, inflating organizer engagement numbers and spending DB writes.
+    // A known crawler is not a shopper: acknowledge and record nothing.
+    if (detectCrawler((req.headers['user-agent'] as string) || '') !== null) {
+      return res.status(200).json({ message: 'Ignored (crawler)', saleId: req.params.saleId });
+    }
     const { saleId } = req.params;
     const result = recordRippleSchema.safeParse(req.body);
 

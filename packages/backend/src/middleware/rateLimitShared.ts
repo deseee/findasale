@@ -28,40 +28,80 @@ let redisRateLimitClient: RedisClientType | null = null;
 // Deduped health flag so we emit exactly ONE Sentry event per drop (and one per
 // recovery), not one per failed request. Sentry FINDASALE-NODEJS-4G (2026-07-02).
 let redisRateLimitHealthy = true;
+// FINDASALE-NODEJS-81 (2026-10-23): every one of the issue's events had a different release and fired a few
+// seconds after process start (latest: app_start 20:46:14, event 20:46:22). The node-redis default 5s
+// connectTimeout expires while the event loop is still busy booting the app, the FIRST 'error' of the boot
+// connect was treated as a "connection lost" drop, and the client then connected fine moments later (Railway
+// logs show "[Redis] Connected to real Redis" + "Redis-backed limiter store active" on every deploy). Two
+// changes: (1) a longer connect timeout + explicit keepalive/backoff, (2) a drop is only reported to Sentry
+// once the client HAS been ready at least once AND it is still not ready after REDIS_DROP_ALERT_GRACE_MS, so
+// boot-time connects and sub-minute reconnects stay console-only. A real, sustained outage still alerts once.
+const REDIS_DROP_ALERT_GRACE_MS = 60 * 1000;
+let redisRateLimitEverReady = false;
+let redisDropAlertTimer: ReturnType<typeof setTimeout> | null = null;
+let redisDropAlertSent = false;
 if (process.env.REDIS_URL) {
   try {
-    redisRateLimitClient = createClient({ url: process.env.REDIS_URL });
+    redisRateLimitClient = createClient({
+      url: process.env.REDIS_URL,
+      socket: {
+        connectTimeout: 15000,
+        keepAlive: 5000,
+        reconnectStrategy: (retries: number) => Math.min(250 * (retries + 1), 5000),
+      },
+    });
     redisRateLimitClient.on('error', (err) => {
       // Do NOT null the client here — node-redis auto-reconnects; nulling our
       // reference permanently defeats recovery, leaving the limiter dead until a
       // process restart. The store closure guards on isReady instead.
-      console.error('[rateLimit] Redis error:', err);
-      // Deduped alert: only the first error in a drop fires Sentry (check-then-set is
-      // synchronous, no await between, so no interleave). Subsequent errors log only.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!redisRateLimitEverReady) {
+        // Still on the boot-time connect: limiters already use per-instance memory until ready. Not a drop.
+        console.warn('[rateLimit] Redis not ready yet (boot connect, will retry):', msg);
+        return;
+      }
+      console.error('[rateLimit] Redis error:', msg);
       if (redisRateLimitHealthy) {
         redisRateLimitHealthy = false;
-        try {
-          Sentry.captureMessage(
-            `[rateLimit] Redis connection lost — rate limiting failing open to in-memory (${err instanceof Error ? err.message : String(err)})`,
-            'error'
-          );
-        } catch (_sentryErr) {
-          // Sentry not ready — continue
+        // Deduped, delayed alert: only if Redis is still down after the grace period.
+        if (!redisDropAlertTimer) {
+          redisDropAlertTimer = setTimeout(() => {
+            redisDropAlertTimer = null;
+            if (redisRateLimitHealthy || redisRateLimitClient?.isReady) return;
+            redisDropAlertSent = true;
+            try {
+              Sentry.captureMessage(
+                `[rateLimit] Redis connection lost — rate limiting failing open to in-memory (${msg})`,
+                'error'
+              );
+            } catch (_sentryErr) {
+              // Sentry not ready — continue
+            }
+          }, REDIS_DROP_ALERT_GRACE_MS);
+          (redisDropAlertTimer as any)?.unref?.();
         }
       }
     });
-    // Recovery alert: fire once when the client becomes ready again after a drop.
+    // Recovery: log always; Sentry 'info' only when a drop alert was actually sent.
     redisRateLimitClient.on('ready', () => {
+      redisRateLimitEverReady = true;
       if (!redisRateLimitHealthy) {
         redisRateLimitHealthy = true;
+        if (redisDropAlertTimer) {
+          clearTimeout(redisDropAlertTimer);
+          redisDropAlertTimer = null;
+        }
         console.log('[rateLimit] Redis reconnected — distributed limiting restored');
-        try {
-          Sentry.captureMessage(
-            '[rateLimit] Redis reconnected — distributed limiting restored',
-            'info'
-          );
-        } catch (_sentryErr) {
-          // Sentry not ready — continue
+        if (redisDropAlertSent) {
+          redisDropAlertSent = false;
+          try {
+            Sentry.captureMessage(
+              '[rateLimit] Redis reconnected — distributed limiting restored',
+              'info'
+            );
+          } catch (_sentryErr) {
+            // Sentry not ready — continue
+          }
         }
       }
     });
@@ -347,12 +387,22 @@ const BURST_ALERT_THRESHOLD = 50;
 const BURST_ALERT_WINDOW_MS = 60 * 1000;
 const BURST_ALERT_COOLDOWN_MS = 10 * 60 * 1000;
 const BURST_ALERT_MAX_SNAPSHOT = 10;
+// FINDASALE-NODEJS-7V (2026-10-23): every recent event was ONE crawler fleet (Exa's renderer from 2-3 AWS
+// us-west-1 IPs, first as "ExaSearchBot", since 10-23 with a plain Chrome 145 UA) being throttled exactly as
+// designed. A few IPs over budget is the limiter working, not an incident. The alert exists to catch a limit
+// that is hurting real users, so it now fires only when the burst is spread across many client IPs (e.g. the
+// 2026-09-23 Vercel SSR egress-pool case) or when a VERIFIED logged-in session was rejected. A concentrated
+// scraper burst is logged to the console only (each 429 is already logged by the limiter's handler).
+const BURST_ALERT_MIN_DISTINCT_IPS = 5;
+const BURST_ALERT_MAX_TRACKED_IPS = 200;
 
 export const createBurstAlerter = (limiterName: string) => {
   let windowStart = Date.now();
   let count = 0;
   let cooldownUntil = 0;
   let recent: string[] = [];
+  let ips = new Set<string>();
+  let authedRejections = 0;
 
   return (req: express.Request): void => {
     const now = Date.now();
@@ -360,16 +410,25 @@ export const createBurstAlerter = (limiterName: string) => {
       windowStart = now;
       count = 0;
       recent = [];
+      ips = new Set<string>();
+      authedRejections = 0;
     }
     count += 1;
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
+    if (ips.size < BURST_ALERT_MAX_TRACKED_IPS) ips.add(ip);
+    if (getVerifiedSessionUserId(req)) authedRejections += 1;
     if (recent.length < BURST_ALERT_MAX_SNAPSHOT) {
-      const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
       const ua = (req.headers['user-agent'] as string) || '';
       recent.push(`${ip} ua="${ua}"`);
     }
     if (count > BURST_ALERT_THRESHOLD && now >= cooldownUntil) {
       cooldownUntil = now + BURST_ALERT_COOLDOWN_MS;
-      const msg = `[rateLimit] Sustained 429 burst on ${limiterName}: ${count} rejections in the last ${Math.round(BURST_ALERT_WINDOW_MS / 1000)}s. Recent offenders: ${recent.join(', ') || 'none captured'}`;
+      const msg = `[rateLimit] Sustained 429 burst on ${limiterName}: ${count} rejections in the last ${Math.round(BURST_ALERT_WINDOW_MS / 1000)}s from ${ips.size} IP(s), ${authedRejections} signed-in. Recent offenders: ${recent.join(', ') || 'none captured'}`;
+      if (ips.size < BURST_ALERT_MIN_DISTINCT_IPS && authedRejections === 0) {
+        // Concentrated anonymous burst (one scraper/crawler fleet): the limiter is doing its job.
+        console.warn(`${msg} [not alerted: concentrated anonymous burst]`);
+        return;
+      }
       console.error(msg);
       try {
         Sentry.captureMessage(msg, 'error');

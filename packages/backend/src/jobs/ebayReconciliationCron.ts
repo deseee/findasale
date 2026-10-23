@@ -28,11 +28,40 @@ import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken } from '../services/ebayHttp';
 import { createNotification } from '../lib/notificationService';
 import { fetchLiveEbayListings, fetchEbayListingStatus, itemIdFromFasSku } from '../services/ebayLiveListingsService';
+import { redisGetValue, redisSetValue } from '../middleware/rateLimitShared';
 
 const GETITEM_CAP_PER_ORGANIZER = 30; // bound the extra read-only eBay calls per organizer per night
 const ID_LIST_CAP = 50; // ids stored per bucket in the log line
 const ALERT_DEDUPE_DAYS = 3;
 const ALERT_TYPE = 'ebay_reconciliation_drift';
+// FINDASALE-NODEJS-90 (2026-10-23): the same single discrepancy (organizer cmnxueoas0005tfv8brnc0kky, eBay listing
+// 136153761631, SKU "2025-07-14-09 C0 G1" -- not a FAS- SKU, so a listing made on eBay directly and never imported)
+// raised an identical Sentry warning every night. The detector is right; repeating it nightly is noise. Sentry now
+// fires only when an organizer's discrepancy SET changes (new/removed ids in any bucket). The fingerprint is kept in
+// Redis (falls back to this process's memory), so an unchanged known gap stays in the logs and the deduped in-app
+// notification, but does not re-alert in Sentry.
+const SENTRY_FP_TTL_SECONDS = 8 * 24 * 60 * 60;
+const lastSentryFingerprint = new Map<string, string>();
+
+export function discrepancyFingerprint(r: EbayReconciliationResult): string {
+  const sorted = (xs: string[]) => [...xs].sort().join(',');
+  return [
+    `noItem:${sorted(r.liveNoItem.map((x) => x.ebayListingId))}`,
+    `sold:${sorted(r.liveButSold)}`,
+    `multi:${sorted(r.liveMultiItem.map((x) => `${x.ebayListingId}=${[...x.itemIds].sort().join('+')}`))}`,
+    `nonLive:${sorted(r.availableNonLive)}`,
+    `ended:${sorted(r.endedStillLinked)}`,
+  ].join('|');
+}
+
+async function discrepancyChanged(r: EbayReconciliationResult): Promise<boolean> {
+  const fp = discrepancyFingerprint(r);
+  const key = `ebay-reconcile:fp:${r.organizerId}`;
+  const previous = (await redisGetValue(key)) ?? lastSentryFingerprint.get(r.organizerId) ?? null;
+  lastSentryFingerprint.set(r.organizerId, fp);
+  await redisSetValue(key, fp, SENTRY_FP_TTL_SECONDS);
+  return previous !== fp;
+}
 
 export interface EbayReconciliationResult {
   organizerId: string;
@@ -138,11 +167,15 @@ function hasRealDiscrepancy(r: EbayReconciliationResult): boolean {
 }
 
 async function alertIfDiscrepancy(r: EbayReconciliationResult): Promise<void> {
-  if (!hasRealDiscrepancy(r)) return;
+  if (!hasRealDiscrepancy(r)) {
+    await discrepancyChanged(r); // record the clean state so a later recurrence of the same gap alerts again
+    return;
+  }
 
-  Sentry.captureMessage(`eBay reconciliation discrepancy for organizer ${r.organizerId}`, {
+  if (await discrepancyChanged(r)) Sentry.captureMessage(`eBay reconciliation discrepancy for organizer ${r.organizerId}`, {
     level: 'warning',
     extra: {
+      liveNoItemIds: r.liveNoItem.slice(0, 10),
       organizerId: r.organizerId,
       drift: r.drift,
       liveNoItem: r.liveNoItem.length,

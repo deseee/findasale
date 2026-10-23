@@ -32,6 +32,7 @@ interface World {
   manual: Record<string, string[]>; // itemId -> markets that cannot take a count
   failPush: Set<string>; // itemId whose repair push does nothing (drift persists)
   failedMarkets: Record<string, string>; // itemId -> market that always reports 'failed'
+  failedDetail?: Record<string, string>; // itemId -> detail of that failure (default 'token expired')
   throwFor: Set<string>;
   checkCalls: string[];
   repairCalls: string[];
@@ -55,7 +56,7 @@ function installSyncFake(w: World) {
       }
     }
     for (const market of w.manual[itemId] || []) outcomes.push({ market, status: 'manual', expected: inStock });
-    if (w.failedMarkets[itemId]) outcomes.push({ market: w.failedMarkets[itemId], status: 'failed', expected: inStock, detail: 'token expired' });
+    if (w.failedMarkets[itemId]) outcomes.push({ market: w.failedMarkets[itemId], status: 'failed', expected: inStock, detail: w.failedDetail?.[itemId] ?? 'token expired' });
     return { itemId, inStock, outcomes };
   });
 }
@@ -269,6 +270,29 @@ describe('runInventoryReconcile', () => {
     const { deps, alerts } = makeDeps({ orgA: [{ id: 'i1', title: 'Vase' }] });
     const r = await runInventoryReconcile({}, deps);
     expect(r.failed).toEqual([{ itemId: 'i1', title: 'Vase', market: 'etsy', status: 'failed', detail: 'token expired' }]);
+    expect(alerts).toHaveLength(1);
+  });
+
+  it('treats a transient eBay 5xx read as skipped until it repeats on 3 consecutive checks (FINDASALE-NODEJS-96)', async () => {
+    const w = newWorld();
+    w.inStock['i1'] = 1;
+    w.failedMarkets['i1'] = 'ebay';
+    w.failedDetail = { i1: 'eBay did not return the inventory item (HTTP 500) {"errors":[{"errorId":25001}]}' };
+    installSyncFake(w);
+    const { deps, alerts } = makeDeps({ orgA: [{ id: 'i1', title: 'Lock' }] });
+
+    const r1 = await runInventoryReconcile({}, deps);
+    expect(r1.failed).toEqual([]);
+    expect(r1.skipped.map((x) => x.itemId)).toEqual(['i1']);
+    expect(Sentry.captureMessage).not.toHaveBeenCalled();
+    expect(alerts).toHaveLength(0);
+
+    const r2 = await runInventoryReconcile({}, deps);
+    expect(r2.failed).toEqual([]);
+
+    const r3 = await runInventoryReconcile({}, deps);
+    expect(r3.failed.map((x) => x.itemId)).toEqual(['i1']);
+    expect(Sentry.captureMessage).toHaveBeenCalledTimes(1);
     expect(alerts).toHaveLength(1);
   });
 
