@@ -87,7 +87,7 @@
     "resend": "^3.2.0",
     "robots-parser": "^3.0.1",
     "sanitize-html": "^2.17.2",
-    "sharp": "^0.33.5",
+    "sharp": "^0.35.5",
     "socket.io": "^4.8.3",
     "square": "^45.1.0",
     "stripe": "^14.4.0",
