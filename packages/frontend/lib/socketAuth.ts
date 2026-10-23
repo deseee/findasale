@@ -7,6 +7,7 @@
  * rate limit, sent to Sentry, so a broken token route is never silent again.
  */
 import * as Sentry from '@sentry/nextjs';
+import type { Socket } from 'socket.io-client';
 
 // Report each kind of failure once per page load: socket.io-client calls socketAuth on every reconnect, so an
 // unthrottled report would flood Sentry while the backend is down.
@@ -56,3 +57,16 @@ export async function fetchSocketToken(): Promise<string | undefined> {
 export const socketAuth = (cb: (data: { token?: string }) => void): void => {
   fetchSocketToken().then((token) => cb(token ? { token } : {}));
 };
+
+/**
+ * 2026-10-23: the backend force-disconnects a user's sockets when their sessions or plan change (suspension, role or
+ * tier change, password change). socket.io-client never auto-reconnects after a server-side disconnect, so without
+ * this the page would silently stop receiving POS payment requests, cart shares and status updates until reload.
+ * Reconnecting re-runs socketAuth, so a revoked user comes back anonymous and everyone else gets a fresh token.
+ * Rooms do not survive a reconnect; callers that join rooms already re-join on 'connect'.
+ */
+export function reconnectAfterServerDrop(socket: Socket): void {
+  socket.on('disconnect', (reason) => {
+    if (reason === 'io server disconnect') socket.connect();
+  });
+}

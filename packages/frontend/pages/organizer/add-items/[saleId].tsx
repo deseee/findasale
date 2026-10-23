@@ -48,6 +48,7 @@ import Skeleton from '../../../components/Skeleton';
 import RapidCapture from '../../../components/RapidCapture';
 import PreviewModal from '../../../components/camera/PreviewModal';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import VerifyEmailToPublishBanner from '../../../components/VerifyEmailToPublishBanner'; // 2026-10-23: verify to publish, add items freely
 import { useUploadQueue } from '../../../hooks/useUploadQueue';
 import { useVoiceInput } from '../../../hooks/useVoiceInput';
 import BulkConfirmModal from '../../../components/BulkConfirmModal';
@@ -1373,7 +1374,7 @@ const AddItemsDetailPage = () => {
       // Feature #75: Handle tier limit exceeded with upgrade CTA
       if (error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
         const limit = error.response?.data?.limit || 200;
-        message = `Item limit reached (${limit} items max for your tier). Upgrade to PRO for 500 items per sale.`;
+        message = `Item limit reached (${limit} items max for your tier).`;
         showToast(message, 'error');
         // Could optionally navigate to pricing: router.push('/organizer/pricing');
       } else {
@@ -2573,6 +2574,7 @@ const AddItemsDetailPage = () => {
 
       <main className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
         <div className="max-w-6xl mx-auto px-4">
+          <VerifyEmailToPublishBanner className="mb-4" />
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
             <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-1">
               Add Items
@@ -3503,7 +3505,7 @@ const AddItemsDetailPage = () => {
                       }}
                       className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
                         sortBy === option
-                          ? 'bg-amber-500 text-white'
+                          ? 'bg-amber-600 text-white'
                           : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-700 hover:bg-warm-100 dark:hover:bg-gray-700'
                       }`}
                     >

@@ -47,6 +47,21 @@ export interface SaleHubInfo {
   eventName?: string;
 }
 
+/** A CONFIRMED vendor on the public hub page: booth number and name only (ADR-014 Amendment A). */
+export interface HubVendor {
+  boothNumber: string;
+  vendorName: string;
+}
+
+/** The hub's published FLEA_MARKET sale; inventory is browsed on that sale's page. */
+export interface HubLinkedSale {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  isOngoing: boolean;
+}
+
 export interface SaleHubDetail extends SaleHubInfo {
   description?: string;
   // Venue details (2026-09-25) -- shown on the public mall page.
@@ -54,6 +69,9 @@ export interface SaleHubDetail extends SaleHubInfo {
   phone?: string;
   contactEmail?: string;
   hoursText?: string;
+  // Roadmap #40a (2026-10-23): additive fields from GET /api/hubs/:slug. Optional so older responses still type-check.
+  vendors?: HubVendor[];
+  sale?: HubLinkedSale | null;
 }
 
 export interface NearbyHubsResponse {

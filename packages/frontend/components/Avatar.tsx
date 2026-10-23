@@ -30,7 +30,7 @@ interface AvatarProps {
   size?: number;
 
   /**
-   * Optional background color class (default: 'bg-amber-500 dark:bg-amber-600')
+   * Optional background color class (default: 'bg-amber-600')
    */
   bgColor?: string;
 
@@ -76,7 +76,7 @@ const Avatar: React.FC<AvatarProps> = ({
   email,
   huntPassActive = false,
   size = 32,
-  bgColor = 'bg-amber-500 dark:bg-amber-600',
+  bgColor = 'bg-amber-600',
   textColor = 'text-white',
   className = '',
   title,

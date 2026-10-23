@@ -44,7 +44,7 @@ const StampCard: React.FC<{ slot: PassportSlot }> = ({ slot }) => {
         aria-label={`${slot.name} stamp, earned`}
       >
         {slot.unseen && (
-          <span className="absolute -top-2 -right-2 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+          <span className="absolute -top-2 -right-2 rounded-full bg-amber-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
             New
           </span>
         )}

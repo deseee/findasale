@@ -13,6 +13,7 @@ import { checkRegistrationLimit, recordRegistration } from '../lib/registrationR
 import { issueChallenge, verifyChallenge } from '../lib/registrationChallenge';
 import { recordRegistration as recordFraudRegistration } from '../lib/fraudDetectionService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { EMAIL_VERIFICATION_TTL_MS, reportVerificationSendFailure } from '../utils/emailVerificationSend'; // 2026-10-23
 import { AuthRequest } from '../middleware/auth';
 import { escapeHtml } from '../utils/htmlEscape';
 import { isSameOriginRedirect, checkAdultDob, passwordProblem, normalizeEmailInput, stripSensitiveUserFields, hashOpaqueToken, tokenLookupCandidates } from '../utils/authSecurity';
@@ -240,7 +241,7 @@ export const register = async (req: Request, res: Response) => {
           deviceFingerprint: hashedFingerprint,
           emailVerified: false, // New accounts must verify email
           emailVerificationToken, // Store token for verification link
-          emailVerificationTokenExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000), // P0-3: Token expires 24h from now
+          emailVerificationTokenExpiry: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS), // 2026-10-23: 7 days (was 24h)
           ageVerifiedAt: new Date(), // P0-L1: COPPA compliance — age verified at registration
         }
       });
@@ -394,25 +395,27 @@ export const register = async (req: Request, res: Response) => {
     // Security: Send email verification link (non-blocking)
     if (user.emailVerificationToken) {
       try {
-        const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
         const verifyLink = `${process.env.FRONTEND_URL || 'https://finda.sale'}/verify-email?token=${rawEmailVerificationToken}`;
 
-        await transactionalEmailService.emails.send({
-          from: fromEmail,
+        // 2026-10-23: Resend transactional rail from its verified default sender (noreply@finda.sale). The old
+        // From fallback was find@outreach.finda.sale, a domain Resend does not have verified. A send that does
+        // not go out (rail not configured, address blocked, Resend error) is reported to Sentry, not just logged.
+        const sendResult = await transactionalEmailService.emails.send({
           to: user.email,
           subject: 'Verify Your FindA.Sale Email Address',
           html: `
             <p>Hi ${escapeHtml(user.name || 'there')},</p>
             <p>Welcome to FindA.Sale! To complete your account setup, please verify your email address by clicking the link below:</p>
             <p><a href="${verifyLink}" style="display: inline-block; padding: 10px 20px; background-color: #b45309; color: white; text-decoration: none; border-radius: 4px;">Verify Email Address</a></p>
-            <p>This link will expire in 24 hours.</p>
+            <p>This link will expire in 7 days. You can set up your sale and add items before you verify; verifying lets you publish.</p>
             <p>If you didn't create this account, you can ignore this email.</p>
             <p>The FindA.Sale Team</p>
           `,
         });
+        if (!sendResult?.sent) reportVerificationSendFailure('register', user.id, sendResult?.reason ?? 'no result');
       } catch (emailError) {
-        // Non-blocking: log error but don't fail registration
-        console.error('[emailVerification] Failed to send verification email:', emailError);
+        // Non-blocking: report but don't fail registration
+        reportVerificationSendFailure('register', user.id, emailError);
       }
     }
 
@@ -1272,7 +1275,7 @@ export const verifyEmail = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Invalid or expired verification token' });
     }
 
-    // P0-3: Enforce token expiry — reject tokens older than 24 hours
+    // P0-3: Enforce token expiry (links last 7 days since 2026-10-23, utils/emailVerificationSend.ts)
     if (user.emailVerificationTokenExpiry && user.emailVerificationTokenExpiry < new Date()) {
       return res.status(400).json({ error: 'VERIFICATION_TOKEN_EXPIRED', message: 'Verification link has expired. Please request a new one.' });
     }
@@ -1301,7 +1304,7 @@ export const verifyEmail = async (req: Request, res: Response) => {
     }
 
     res.status(200).json({
-      message: 'Email verified successfully! You can now create sales.',
+      message: 'Email verified successfully! You can now publish your sales.',
       verified: true
     });
   } catch (error) {

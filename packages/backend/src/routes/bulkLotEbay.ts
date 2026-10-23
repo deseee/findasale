@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authenticate, requireOrganizer } from '../middleware/auth';
+import { requirePublishVerified } from '../lib/publishGate'; // 2026-10-23: verify email to publish
 import { bulkLotEbayHandlers } from '../controllers/bulkLotEbayController';
 
 const router = Router();
@@ -33,8 +34,8 @@ export const bulkLotEbayWriteLimiter = limited(60 * 1000, 20, keyByUser);
 
 router.get('/status', bulkLotEbayPublicLimiter, bulkLotEbayHandlers.status);
 router.get('/item/:itemId', authenticate, requireOrganizer, bulkLotEbayReadLimiter, bulkLotEbayHandlers.getOne);
-router.put('/item/:itemId', authenticate, requireOrganizer, bulkLotEbayWriteLimiter, bulkLotEbayHandlers.save);
-router.post('/item/:itemId/list', authenticate, requireOrganizer, bulkLotEbayWriteLimiter, bulkLotEbayHandlers.list);
-router.post('/item/:itemId/sync', authenticate, requireOrganizer, bulkLotEbayWriteLimiter, bulkLotEbayHandlers.sync);
+router.put('/item/:itemId', authenticate, requireOrganizer, requirePublishVerified, bulkLotEbayWriteLimiter, bulkLotEbayHandlers.save);
+router.post('/item/:itemId/list', authenticate, requireOrganizer, requirePublishVerified, bulkLotEbayWriteLimiter, bulkLotEbayHandlers.list);
+router.post('/item/:itemId/sync', authenticate, requireOrganizer, requirePublishVerified, bulkLotEbayWriteLimiter, bulkLotEbayHandlers.sync);
 
 export default router;

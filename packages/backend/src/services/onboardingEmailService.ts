@@ -6,9 +6,11 @@
  * 5b: Day 2 — "Quick question" (if no sale created)
  * 5c: Day 7 — "One last nudge" (if no sale created)
  *
- * Plus two one-time activation nudges, sent by organizerOnboardingDripJob.ts:
+ * Plus three one-time activation nudges, sent by organizerOnboardingDripJob.ts on the TRANSACTIONAL
+ * (Resend) rail since 2026-10-23 (the Gmail rail is cold-outreach only, see lib/transactionalEmailService.ts):
  * - sendEmptySaleNudge: a published sale with no shopper-visible items yet.
  * - sendDraftReadyNudge: a draft sale that already has items but was never published.
+ * - sendStaleDatesNudge: a draft or live sale whose dates have passed with nothing sold ("pick new dates").
  *
  * All use the FindA.Sale design system (Session 4).
  * Sender: "The FindA.Sale Team" — never a personal name.
@@ -23,6 +25,7 @@ import {
   EMAIL_TOKENS as T,
 } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from './suppressionService';
 
 const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
@@ -229,8 +232,15 @@ export async function sendOnboardingEmail5c(organizer: {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Activation nudges (one per sale, sent by organizerOnboardingDripJob.ts)
+// Activation nudges (one per sale per state, sent by organizerOnboardingDripJob.ts)
+// Transactional (Resend) rail, sender "The FindA.Sale Team" at support@ so replies reach a person.
+// Each returns what happened so the job can log it: 'sent', 'suppressed' (opted out, bounced or
+// blocked: logged so it is never retried) or 'failed' (not logged, so the next daily run retries).
 // ─────────────────────────────────────────────────────────────────
+
+const ACTIVATION_FROM = process.env.ACTIVATION_NUDGE_FROM_EMAIL || 'The FindA.Sale Team <support@finda.sale>';
+
+export type NudgeOutcome = 'sent' | 'suppressed' | 'failed';
 
 function escapeHtml(value: string): string {
   return value
@@ -249,20 +259,53 @@ export type SaleNudgeRecipient = {
   saleTitle: string;
 };
 
+async function sendActivationEmail(
+  organizer: SaleNudgeRecipient,
+  label: string,
+  build: (unsubUrl: string) => { subject: string; html: string }
+): Promise<NudgeOutcome> {
+  if (await suppressionService.isSuppressed(organizer.email)) {
+    console.log(`[onboarding] ${label} skipped, suppressed recipient (user ${organizer.userId})`);
+    return 'suppressed';
+  }
+  const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+  const { webUrl: unsubUrl } = await buildUnsubscribeLinks(organizer.userId, 'all');
+  const { subject, html } = build(unsubUrl);
+  try {
+    const result = await transactionalEmailService.emails.send({
+      from: ACTIVATION_FROM,
+      to: organizer.email,
+      subject,
+      html,
+      // RFC 8058 one-click unsubscribe, same shape as the other Resend-rail lifecycle mail.
+      headers: {
+        'List-Unsubscribe': `<${unsubUrl}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    });
+    if (result.sent) {
+      console.log(`[onboarding] ${label} sent (user ${organizer.userId}, sale ${organizer.saleId})`);
+      return 'sent';
+    }
+    if (result.reason === 'not_configured') return 'failed';
+    console.log(`[onboarding] ${label} not sent (${result.reason}) for user ${organizer.userId}`);
+    return 'suppressed';
+  } catch (err) {
+    console.error(`[onboarding] Failed to send ${label} for user ${organizer.userId}:`, err);
+    return 'failed';
+  }
+}
+
 /**
  * "Your sale is live but has no items yet." One call to action: add items.
- * Sent once per sale for a PUBLISHED sale with zero shopper-visible items.
+ * Sent once per sale for a PUBLISHED, not yet over sale with zero shopper-visible items.
  */
-export async function sendEmptySaleNudge(organizer: SaleNudgeRecipient): Promise<void> {
-  if (await suppressionService.isSuppressed(organizer.email)) {
-    console.log('[onboarding] Skipped suppressed recipient:', organizer.email);
-    return;
-  }
+export async function sendEmptySaleNudge(organizer: SaleNudgeRecipient): Promise<NudgeOutcome> {
   const firstName = escapeHtml(organizer.firstName || 'there');
   const title = escapeHtml(organizer.saleTitle || 'Your sale');
   const addItemsUrl = `${FRONTEND_URL}/organizer/add-items/${encodeURIComponent(organizer.saleId)}`;
-
-  const content = `
+  return sendActivationEmail(organizer, 'empty-sale nudge', (unsubUrl) => {
+    const content = `
     ${buildHero({ title: `Your sale is live, ${firstName}. Now add your items.`, sub: `<strong>${title}</strong> is on the map, but it has no items yet. Shoppers who open it see an empty page.` })}
     <tr><td style="padding:8px 28px 4px; font-size:14.5px; color:${T.ink}; line-height:1.55;">
       Snap a photo of each thing you&rsquo;re selling and we&rsquo;ll help fill in the title and price. Even a handful of items gives people a reason to stop by.
@@ -270,75 +313,92 @@ export async function sendEmptySaleNudge(organizer: SaleNudgeRecipient): Promise
     ${buildSpacer(16)}
     ${buildCTARow('Add items to your sale →', addItemsUrl)}
   `;
-
-  const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
-  const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(organizer.userId, 'all');
-
-  const html = baseWrapper({
-    preheader: 'Your sale is live but has no items yet. Add a few so shoppers have something to browse.',
-    content,
-    unsubLabel: 'Pause onboarding emails',
-    unsubUrl,
+    return {
+      subject: 'Your sale is live, but it has no items yet',
+      html: baseWrapper({
+        preheader: 'Your sale is live but has no items yet. Add a few so shoppers have something to browse.',
+        content,
+        unsubLabel: 'Pause onboarding emails',
+        unsubUrl,
+      }),
+    };
   });
-
-  try {
-    await emailService.emails.send({
-      from:    FROM_EMAIL,
-      to:      organizer.email,
-      subject: `Your sale is live, but it has no items yet`,
-      html,
-      listUnsubscribe: listUnsubscribeHeader,
-    });
-    console.log(`[onboarding] Empty-sale nudge sent to ${organizer.email} (sale ${organizer.saleId})`);
-  } catch (err) {
-    console.error(`[onboarding] Failed to send empty-sale nudge to ${organizer.email}:`, err);
-  }
 }
 
 /**
  * "Your items are ready, publish your sale." One call to action: publish.
- * Sent once per sale for a DRAFT sale that has items, from an organizer who has never published.
+ * Sent once per sale for a DRAFT, not yet over sale that has items.
  */
-export async function sendDraftReadyNudge(organizer: SaleNudgeRecipient & { itemCount: number }): Promise<void> {
-  if (await suppressionService.isSuppressed(organizer.email)) {
-    console.log('[onboarding] Skipped suppressed recipient:', organizer.email);
-    return;
-  }
+export async function sendDraftReadyNudge(organizer: SaleNudgeRecipient & { itemCount: number }): Promise<NudgeOutcome> {
   const firstName = escapeHtml(organizer.firstName || 'there');
   const title = escapeHtml(organizer.saleTitle || 'Your sale');
   const count = Math.max(0, Math.floor(organizer.itemCount || 0));
   const itemsPhrase = count === 1 ? '1 item' : `${count} items`;
   const publishUrl = `${FRONTEND_URL}/organizer/edit-sale/${encodeURIComponent(organizer.saleId)}?publish=1`;
-
-  const content = `
+  return sendActivationEmail(organizer, 'draft-ready nudge', (unsubUrl) => {
+    const content = `
     ${buildHero({ title: `Your items are ready, ${firstName}. Publish your sale.`, sub: `<strong>${title}</strong> has ${itemsPhrase}, but the sale is still a draft, so shoppers can&rsquo;t see it yet.` })}
     <tr><td style="padding:8px 28px 4px; font-size:14.5px; color:${T.ink}; line-height:1.55;">
-      Publishing puts your sale on the map and makes your items visible to people nearby. You can keep adding and editing items after it&rsquo;s live.
+      Publishing puts your sale on the map, and your ready items go live with it. You can keep adding and editing items after it&rsquo;s live.
     </td></tr>
     ${buildSpacer(16)}
     ${buildCTARow('Publish your sale →', publishUrl)}
   `;
-
-  const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
-  const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(organizer.userId, 'all');
-
-  const html = baseWrapper({
-    preheader: 'Your items are ready. Publish your sale so shoppers can see them.',
-    content,
-    unsubLabel: 'Pause onboarding emails',
-    unsubUrl,
+    return {
+      subject: 'Your items are ready. Publish your sale?',
+      html: baseWrapper({
+        preheader: 'Your items are ready. Publish your sale so shoppers can see them.',
+        content,
+        unsubLabel: 'Pause onboarding emails',
+        unsubUrl,
+      }),
+    };
   });
+}
 
-  try {
-    await emailService.emails.send({
-      from:    FROM_EMAIL,
-      to:      organizer.email,
-      subject: `Your items are ready. Publish your sale?`,
-      html,
-      listUnsubscribe: listUnsubscribeHeader,
-    });
-    console.log(`[onboarding] Draft-ready nudge sent to ${organizer.email} (sale ${organizer.saleId})`);
-  } catch (err) {
-    console.error(`[onboarding] Failed to send draft-ready nudge to ${organizer.email}:`, err);
+/**
+ * "Your sale's dates have passed. Pick new dates." One call to action: the one-click re-date prompt on
+ * edit-sale (?redate=1 suggests next weekend, same length and hours). Sent once per sale for a DRAFT or
+ * PUBLISHED sale whose end date has passed with nothing sold.
+ */
+export async function sendStaleDatesNudge(
+  organizer: SaleNudgeRecipient & { itemCount: number; saleStatus: string }
+): Promise<NudgeOutcome> {
+  const firstName = escapeHtml(organizer.firstName || 'there');
+  const title = escapeHtml(organizer.saleTitle || 'Your sale');
+  const count = Math.max(0, Math.floor(organizer.itemCount || 0));
+  const itemsPhrase = count === 1 ? '1 item' : `${count} items`;
+  const redateUrl = `${FRONTEND_URL}/organizer/edit-sale/${encodeURIComponent(organizer.saleId)}?redate=1`;
+  const isDraft = organizer.saleStatus === 'DRAFT';
+  let subject: string;
+  let body: string;
+  if (count > 0) {
+    subject = `Your ${itemsPhrase} ${count === 1 ? 'is' : 'are'} saved. Pick new dates for your sale`;
+    body = `Your ${itemsPhrase} ${count === 1 ? 'is' : 'are'} still saved. Pick new dates in one tap, then publish so shoppers can find ${count === 1 ? 'it' : 'them'}.`;
+  } else if (isDraft) {
+    subject = 'Your sale draft needs new dates';
+    body = 'Pick new dates in one tap, add a few items, and publish when you&rsquo;re ready.';
+  } else {
+    subject = 'Your sale dates have passed. Pick new ones?';
+    body = 'Pick new dates in one tap and add a few items, so shoppers have a reason to stop by.';
   }
+  return sendActivationEmail(organizer, 'stale-dates nudge', (unsubUrl) => {
+    const content = `
+    ${buildHero({ title: `Pick new dates, ${firstName}`, sub: `The dates for <strong>${title}</strong> have passed, so shoppers can&rsquo;t find it right now.` })}
+    <tr><td style="padding:8px 28px 4px; font-size:14.5px; color:${T.ink}; line-height:1.55;">
+      ${body} We&rsquo;ll suggest next weekend, keeping the same hours and length. You can change them before you save.
+    </td></tr>
+    ${buildSpacer(16)}
+    ${buildCTARow('Pick new dates →', redateUrl)}
+  `;
+    return {
+      subject,
+      html: baseWrapper({
+        preheader: 'Your sale dates have passed. Pick new dates in one tap.',
+        content,
+        unsubLabel: 'Pause onboarding emails',
+        unsubUrl,
+      }),
+    };
+  });
 }

@@ -55,7 +55,8 @@ function mockRes() {
   res.json = jest.fn().mockReturnValue(res);
   return res;
 }
-const req = (extra: Record<string, unknown> = {}) => ({ user: { id: 'u1' }, query: {}, params: {}, body: {}, ...extra }) as any;
+// 2026-10-23: emailVerified, so the verify-to-publish guard on the extension queues (lib/publishGate.ts) lets the queue through.
+const req = (extra: Record<string, unknown> = {}) => ({ user: { id: 'u1', emailVerified: true }, query: {}, params: {}, body: {}, ...extra }) as any;
 
 // What each item.findMany call returns, by the shape of its where clause.
 let mainItems: any[] = [];
@@ -151,6 +152,25 @@ describe('GET pending-updates: quantity drift (Facebook)', () => {
     const res = mockRes();
     await getPendingUpdates(req(), res);
     expect(res.json.mock.calls[0][0].items).toEqual([]);
+  });
+
+  it('2026-10-23: an account that cannot publish (unverified, not admin) gets an empty queue', async () => {
+    mainItems = [{ id: 'kit1', title: 'Kit', price: 20, marketplaceListedPrice: 20, stockTotal: 3, stockSold: 0 }];
+    jobRows = [post('kit1', 5)];
+    // Honor the guard clause the way Postgres would: id IN () matches nothing.
+    mockPrisma.item.findMany.mockImplementationOnce(async (args: any) => (JSON.stringify(args?.where?.AND ?? []).includes('"in":[]') ? [] : mainItems));
+    const res = mockRes();
+    await getPendingUpdates(req({ user: { id: 'u1', emailVerified: false, role: 'ORGANIZER', roles: ['ORGANIZER'] } }), res);
+    expect(mockPrisma.item.findMany.mock.calls[0][0].where.AND).toEqual(expect.arrayContaining([{ id: { in: [] } }]));
+    expect(res.json.mock.calls[0][0].items).toEqual([]);
+  });
+
+  it('2026-10-23: a verified account has no empty-id guard clause; an unverified admin is not blocked either', async () => {
+    await getPendingUpdates(req(), mockRes());
+    expect(JSON.stringify(mockPrisma.item.findMany.mock.calls[0][0].where.AND)).not.toContain('"in":[]');
+    mockPrisma.item.findMany.mockClear();
+    await getPendingUpdates(req({ user: { id: 'u1', emailVerified: false, role: 'ADMIN', roles: ['ADMIN'] } }), mockRes());
+    expect(JSON.stringify(mockPrisma.item.findMany.mock.calls[0][0].where.AND)).not.toContain('"in":[]');
   });
 
   it('scope includes the organizer\'s saleless kits, and a legacy DONT_LIST never hides a kit', async () => {
@@ -296,6 +316,15 @@ describe('source pins for the wide builders (comments stripped)', () => {
       expect(b).toContain('...listingExtraFields(listingExtras.get(it.id), { keepDescription: false })');
       expect(b).toContain('organizerListableScope(organizer.id)');
       expect(b).toContain("{ listingType: 'KIT' }");
+    }
+  });
+
+  it('2026-10-23: getExtensionItems and getAutolistQueue list nothing for an account that cannot publish', () => {
+    for (const name of ['getExtensionItems', 'getAutolistQueue']) {
+      const b = body(name);
+      expect(b).toContain('const ownerCanPublish = await actorCanPublish(req.user);');
+      expect(b).toContain('AND: [{ OR: organizerListableScope(organizer.id) }, ...(ownerCanPublish ? [] : [{ id: { in: [] as string[] } }])]');
+      expect(b.indexOf('const ownerCanPublish')).toBeLessThan(b.indexOf('prisma.item.findMany'));
     }
   });
 

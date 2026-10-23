@@ -32,7 +32,7 @@ const SaleFloorMap: React.FC<SaleFloorMapProps> = ({ items, onRoomClick }) => {
 
   return (
     <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
-      <div className="text-xs uppercase tracking-widest mb-1" style={{ fontFamily: 'ui-monospace, monospace', color: '#C8552B', letterSpacing: '0.1em' }}>
+      <div className="text-xs uppercase tracking-widest mb-1 text-[#B34A22] dark:text-[#E97C4D]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>
         Floor Guide
       </div>
       <h2 style={{ fontFamily: '"Inter Tight", "Inter", sans-serif', fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', margin: '0 0 14px', color: 'inherit' }}>
@@ -53,8 +53,8 @@ const SaleFloorMap: React.FC<SaleFloorMapProps> = ({ items, onRoomClick }) => {
                 {capitalize(room)}
               </span>
               <span
-                className="shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full"
-                style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}
+                className="shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full text-[#B34A22] dark:text-[#E97C4D]"
+                style={{ background: 'rgba(200,85,43,0.10)' }}
               >
                 {count}
               </span>

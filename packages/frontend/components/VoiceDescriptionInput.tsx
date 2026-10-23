@@ -315,7 +315,7 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
               : recordingState === 'listening'
                 ? 'bg-red-500 text-white animate-pulse'
                 : recordingState === 'processing'
-                  ? 'bg-amber-500 text-white'
+                  ? 'bg-amber-600 text-white'
                   : 'bg-gray-200 text-gray-600 hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
           }`}
           aria-label={

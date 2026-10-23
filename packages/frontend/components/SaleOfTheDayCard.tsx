@@ -62,7 +62,7 @@ const SaleOfTheDayCard: React.FC = () => {
     return (
       <div className="mb-6 rounded-xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-800 overflow-hidden">
         {/* Amber banner */}
-        <div className="bg-amber-500 dark:bg-amber-700 px-4 py-2 flex items-center gap-2">
+        <div className="bg-amber-600 dark:bg-amber-700 px-4 py-2 flex items-center gap-2">
           <span className="text-base">🌟</span>
           <Skeleton className="h-4 w-32 bg-amber-300/50" />
         </div>
@@ -95,7 +95,7 @@ const SaleOfTheDayCard: React.FC = () => {
   return (
     <div className="mb-6 rounded-xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
       {/* Amber accent banner */}
-      <div className="bg-amber-500 dark:bg-amber-700 px-4 py-2 flex items-center gap-2">
+      <div className="bg-amber-600 dark:bg-amber-700 px-4 py-2 flex items-center gap-2">
         <span className="text-base" role="img" aria-label="star">🌟</span>
         <span className="text-sm font-semibold text-white tracking-wide uppercase">
           Sale of the Day
@@ -145,7 +145,7 @@ const SaleOfTheDayCard: React.FC = () => {
             </div>
 
             <div className="mt-4">
-              <span className="inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500 text-white text-sm font-semibold transition-colors">
+              <span className="inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white text-sm font-semibold transition-colors">
                 Shop Now →
               </span>
             </div>

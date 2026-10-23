@@ -84,9 +84,12 @@ describe('Poshmark $5 minimum price (new listings only)', () => {
     expect(gate(4).eligible).toBe(false);
     expect(gate(1).reason).toMatch(/under \$5/i);
   });
-  it('allows $5 and up, and a price that rounds to $5 (the extension rounds to whole dollars)', () => {
+  it('allows exactly $5 and up; anything under $5 is blocked, with no rounding (2026-10-23: $4.99 used to round up and pass)', () => {
     expect(gate(5).eligible).toBe(true);
-    expect(gate(4.6).eligible).toBe(true);
+    expect(gate(5.0).eligible).toBe(true);
+    expect(gate(5.01).eligible).toBe(true);
+    expect(gate(4.99).eligible).toBe(false);
+    expect(gate(4.6).eligible).toBe(false);
     expect(gate(4.4).eligible).toBe(false);
     expect(gate(25).eligible).toBe(true);
   });

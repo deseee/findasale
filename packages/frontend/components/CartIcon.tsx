@@ -72,7 +72,7 @@ const CartIcon: React.FC = () => {
 
       {/* Combined count badge: only show if > 0 */}
       {combinedCount > 0 && (
-        <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white dark:text-white transform translate-x-0 translate-y-0 bg-amber-500 rounded-full">
+        <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white dark:text-white transform translate-x-0 translate-y-0 bg-amber-600 rounded-full">
           {combinedCount > 99 ? '99+' : combinedCount}
         </span>
       )}

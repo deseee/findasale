@@ -129,6 +129,7 @@ describe('analyzeItemTags: SSRF guard on the stored photo URL', () => {
   const req = () => ({ user: { id: 'ou1', roles: ['ORGANIZER'] }, params: { id: 'item_1' } } as any);
   const itemWith = (photoUrl: string) => ({
     id: 'item_1',
+    saleId: 'sale_1',
     photoUrls: [photoUrl],
     tags: [],
     userEditedFields: [],
@@ -169,7 +170,7 @@ describe('analyzeItemTags: SSRF guard on the stored photo URL', () => {
     expect(opts.maxRedirects).toBe(0);
     expect(opts.responseType).toBe('arraybuffer');
     expect(mockAnalyze).toHaveBeenCalledTimes(1);
-    expect(mockIncrement).toHaveBeenCalledWith('org_1', 2);
+    expect(mockIncrement).toHaveBeenCalledWith('org_1', 2, 'sale_1');
     expect(res.json).toHaveBeenCalledWith({ suggestedTags: ['lamp', 'brass'] });
   });
 

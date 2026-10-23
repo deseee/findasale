@@ -522,8 +522,12 @@ export async function enableBulkLot(db: BulkLotDb, ctx: OrganizerCtx, itemId: st
   return toOrganizerBulkLotView(updated);
 }
 
-/** Creates a new lot item directly in a sale the caller owns (the caller has already verified sale ownership). */
-export async function createBulkLotItem(db: BulkLotDb, ctx: OrganizerCtx & { saleId: string }, rawInput: unknown): Promise<OrganizerBulkLotView> {
+/**
+ * Creates a new lot item directly in a sale the caller owns (the caller has already verified sale ownership).
+ * 2026-10-23: PUBLISHED only when ctx.canPublish is true (the account has a verified email or is an admin,
+ * lib/publishGate.ts); otherwise it is saved as a DRAFT (fail closed when the caller does not say).
+ */
+export async function createBulkLotItem(db: BulkLotDb, ctx: OrganizerCtx & { saleId: string; canPublish?: boolean }, rawInput: unknown): Promise<OrganizerBulkLotView> {
   const input = parseCreateLotItem(rawInput);
   const cents = pricePerThousandCentsFromDollars(input.pricePerThousand) as number;
   const created = await db.item.create({
@@ -537,7 +541,7 @@ export async function createBulkLotItem(db: BulkLotDb, ctx: OrganizerCtx & { sal
       category: CARD_ITEM_CATEGORY,
       condition: 'USED',
       status: 'AVAILABLE',
-      draftStatus: 'PUBLISHED',
+      draftStatus: ctx.canPublish === true ? 'PUBLISHED' : 'DRAFT', // 2026-10-23: verify email to publish
       embedding: [],
       photoUrls: [],
       listingType: 'FIXED',

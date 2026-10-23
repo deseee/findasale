@@ -48,8 +48,10 @@ const LineQueuePage = () => {
   const { id: saleId } = router.query as { id: string };
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
-  const { canAccess } = useOrganizerTier();
-  const canUseLine = canAccess('PRO');
+  const { tierLoading } = useOrganizerTier();
+  // The server decides per sale: PRO/TEAMS, or a SIMPLE organizer's own sale with the paid $9.99 upgrade
+  // (backend lib/saleProFeatures.ts). A 403 TIER_REQUIRED from the status endpoint shows the upgrade card.
+  const [planLocked, setPlanLocked] = useState(false);
 
   const [entries, setEntries] = useState<LineEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,10 +62,10 @@ const LineQueuePage = () => {
   const hasLoadedOnce = useRef(false);
 
   const loadStatus = useCallback(async () => {
-    if (!saleId) return;
-    // The line endpoints are PRO and above. Below PRO the upgrade card shows instead, so do not
-    // poll an endpoint that would only answer 403.
-    if (!canUseLine) {
+    if (!saleId || tierLoading) return;
+    // Once the server has said this sale's plan does not include the line, stop polling an endpoint that
+    // would only answer 403 again.
+    if (planLocked) {
       setIsLoading(false);
       return;
     }
@@ -73,7 +75,11 @@ const LineQueuePage = () => {
       setLoadError(null);
       setLastSyncedAt(new Date());
       hasLoadedOnce.current = true;
-    } catch {
+    } catch (err: any) {
+      if (err?.response?.status === 403 && err?.response?.data?.code === 'TIER_REQUIRED') {
+        setPlanLocked(true);
+        return;
+      }
       // Only surface the error on first-load failure.
       // Subsequent poll failures stay silent; staleness indicator handles them.
       if (!hasLoadedOnce.current) {
@@ -82,7 +88,7 @@ const LineQueuePage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [saleId, canUseLine]);
+  }, [saleId, tierLoading, planLocked]);
 
   useEffect(() => {
     loadStatus();
@@ -137,9 +143,10 @@ const LineQueuePage = () => {
       </Head>
 
       <TierGate
+        unlocked={!planLocked}
         requiredTier="PRO"
         featureName="Line Queue"
-        description="Manage a virtual line at your sale and text shoppers when it is their turn. The line queue is included with PRO and TEAMS because every text message has a real cost."
+        description="Manage a virtual line at your sale and text shoppers when it is their turn. The line queue is included with PRO and TEAMS, or with the optional $9.99 upgrade for a single sale, because every text message has a real cost."
       >
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 pt-6 pb-24">

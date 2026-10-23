@@ -64,6 +64,7 @@ import { recordAndCheckBankFingerprints } from '../services/connectAccountGuard'
 import { repriceNativeShippingForDestination, ShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-110 Track 1: real destination-ZIP shipping repricing at checkout time
 import { notifyVendorBoothSaleRefunded } from '../services/vendorBoothSaleNotificationService'; // tell the vendor their booth sale was refunded
 import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // P1 (2026-08-17): charge.failed left the shopper's Checkout Session OPEN and payable
+import { dropUserSockets } from '../lib/dropUserSockets'; // 2026-10-23 (security): drop live sockets when sessions are revoked
 
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
@@ -1955,8 +1956,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   data: {
                     suspendedAt: new Date(),
                     suspendReason: 'SERIAL_CHARGEBACKS',
+                    // 2026-10-23 (security): revoke existing sessions, matching every other suspend path.
+                    tokenVersion: { increment: 1 },
                   },
                 });
+                await dropUserSockets(purchase.user.id, 'stripe-chargeback-suspend');
                 console.warn(
                   `[stripe] Buyer suspended after chargeback #${updatedUser.chargebackCount}: user=${purchase.user.id}`
                 );
@@ -2265,6 +2269,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           tokenVersion: organizer.tokenVersion + 1, // Invalidate stale JWT tier claims
         }
       });
+      await dropUserSockets(organizer.user?.id ?? organizer.userId, 'stripe-subscription-deleted'); // 2026-10-23: tier changed
 
       // Also process tier lapse in UserRoleSubscription (Feature #75)
       const roleSubscription = await prisma.userRoleSubscription.findFirst({
@@ -2379,6 +2384,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             tokenVersion: organizer.tokenVersion + 1, // Invalidate stale JWTs
           }
         });
+        await dropUserSockets(organizer.userId, 'stripe-subscription-resumed'); // 2026-10-23: tier changed
 
         // Award XP if upgrading to PRO (resumption path)
         if (oldTier !== 'PRO' && newTier === 'PRO') {
@@ -2436,6 +2442,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
             tokenVersion: organizer.tokenVersion + 1,
           }
         });
+        // 2026-10-23: drop live sockets only on a real tier change. This branch also runs on every same-tier renewal
+        // sync, and cutting an organizer's POS socket once a month buys nothing.
+        if (oldTier !== newTier) await dropUserSockets(organizer.userId, 'stripe-subscription-tier-change');
 
         // Award XP if upgrading to PRO (normal update path)
         if (oldTier !== 'PRO' && newTier === 'PRO') {

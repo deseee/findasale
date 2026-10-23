@@ -615,6 +615,16 @@ const AdminDashboard = () => {
             </div>
           )}
 
+          {/* 2026-10-23: organizer activation nudges (email log + dry run of the next daily run) */}
+          <div className="mb-8 -mt-4 text-right">
+            <Link
+              href="/admin/activation-nudges"
+              className="inline-flex items-center gap-1 min-h-[44px] text-sm font-medium text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-200"
+            >
+              Organizer activation nudges →
+            </Link>
+          </div>
+
           {/* Data Integrity */}
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-8 border-l-4 border-emerald-500">
             <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Data Integrity</h3>

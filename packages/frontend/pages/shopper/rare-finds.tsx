@@ -167,7 +167,7 @@ const RareFindsPage = () => {
               onClick={() => { setRarity('LEGENDARY'); setPage(0); }}
               className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
                 rarity === 'LEGENDARY'
-                  ? 'bg-yellow-600 text-white'
+                  ? 'bg-yellow-700 text-white'
                   : 'bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 border border-warm-200 dark:border-gray-700 hover:border-yellow-300'
               }`}
             >

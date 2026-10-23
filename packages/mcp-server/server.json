@@ -1,0 +1,25 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "sale.finda/findasale",
+  "title": "FindA.Sale",
+  "description": "Find yard sales, garage sales, auctions, flea markets and resale shops, and search items for sale.",
+  "version": "2.0.0",
+  "websiteUrl": "https://finda.sale",
+  "icons": [
+    {
+      "src": "https://finda.sale/icons/icon-192x192.png",
+      "mimeType": "image/png",
+      "sizes": ["192x192"]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.finda.sale/mcp"
+    },
+    {
+      "type": "sse",
+      "url": "https://mcp.finda.sale/sse"
+    }
+  ]
+}

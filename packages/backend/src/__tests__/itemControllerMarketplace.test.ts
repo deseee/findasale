@@ -8,6 +8,7 @@
 
 const mockPrisma: any = {
   item: { findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn(), create: jest.fn() },
+  user: { findUnique: jest.fn() }, // 2026-10-23: verify-to-publish lookup (lib/publishGate.ts)
   itemCard: { findUnique: jest.fn(), findMany: jest.fn() },
   organizer: { findUnique: jest.fn(), findFirst: jest.fn() },
   organizerWorkspace: { findFirst: jest.fn() },
@@ -131,7 +132,7 @@ function makeRes() {
 
 const OWNER_USER = 'u1';
 const OTHER_USER = 'u2';
-const asUser = (id: string, roles: string[] = ['ORGANIZER']) => ({ id, roles, organizer: { id: `org_of_${id}` } });
+const asUser = (id: string, roles: string[] = ['ORGANIZER']) => ({ id, roles, emailVerified: true, organizer: { id: `org_of_${id}` } });
 const flush = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
 
 const saleOrganizer = (over: Record<string, unknown> = {}) => ({
@@ -172,6 +173,7 @@ beforeEach(() => {
   }
   mockNotify.mockReset().mockResolvedValue(undefined);
   mockCommit.mockReset().mockResolvedValue({ id: 'i1', status: 'SOLD' });
+  mockPrisma.user.findUnique.mockResolvedValue({ emailVerified: true, role: 'ORGANIZER', roles: ['ORGANIZER'] });
   mockPhotoLimit.mockReset().mockResolvedValue({ isOverLimit: false, limit: 10 });
   mockSpendXp.mockReset().mockResolvedValue(true);
   mockGetSpendableXp.mockReset().mockResolvedValue(1000);

@@ -30,7 +30,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { io as socketIO } from 'socket.io-client';
-import { socketAuth } from '../../lib/socketAuth';
+import { socketAuth, reconnectAfterServerDrop } from '../../lib/socketAuth';
 import WebsiteEmbedTab from '../../components/WebsiteEmbedTab';
 import DiscogsListingCheck from '../../components/DiscogsListingCheck'; // ADR-132 dry-run listing check
 import EtsyConnectPanel from '../../components/etsy/EtsyConnectPanel'; // ADR-135 Etsy connector tab
@@ -648,6 +648,7 @@ const OrganizerSettingsPage = () => {
       transports: ['websocket'],
       upgrade: false,
     });
+    reconnectAfterServerDrop(socket);
     socket.on('EBAY_ENRICH_COMPLETE', (data: { message: string }) => {
       showToast(data.message, 'success');
     });
@@ -979,19 +980,19 @@ const OrganizerSettingsPage = () => {
               </div>
 
               {/* Off-Platform Sales (Bring-Your-Own-Rails) -- 2026-09-06.
-                  Lives on Subscription rather than Payments: this is a FindA.Sale platform
-                  fee billed through the same non-Connect Stripe billing client that runs
-                  SIMPLE/PRO/TEAMS, not a payout/Connect setting. */}
+                  Lives on Subscription rather than Payments: it is an account-level feature
+                  toggle, not a payout/Connect setting. Patrick 2026-10-23: FindA.Sale never
+                  charges organizers for sales made off-platform, so recording them is free. */}
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Off-Platform Sales</h2>
                   <Tooltip content="Mark an item sold when a shopper pays you directly (cash, Venmo, your own card reader) instead of through FindA.Sale checkout." position="right" />
                 </div>
                 <p className="text-warm-600 dark:text-gray-400 mb-4">
-                  Sometimes a shopper pays you directly instead of through FindA.Sale: cash at the sale, Venmo, your own card reader. Off-Platform Sales lets you mark that item sold in FindA.Sale anyway, so your inventory stays accurate. FindA.Sale never sees or processes that payment; instead, we bill you a separate flat fee for items marked sold this way.
+                  Sometimes a shopper pays you directly instead of through FindA.Sale: cash at the sale, Venmo, your own card reader. Off-Platform Sales lets you mark that item sold in FindA.Sale anyway, so your inventory stays accurate. FindA.Sale never sees or processes that payment, and never charges you for sales recorded this way.
                 </p>
                 <p className="text-sm text-warm-500 dark:text-gray-500 mb-4">
-                  Pricing details coming soon. We&apos;ll show the fee here before it applies to any sale.
+                  Recording off-platform sales is free. There is no fee for items you mark sold this way.
                 </p>
                 {offPlatformUsageLoading ? (
                   <div className="h-10 w-48 bg-warm-100 dark:bg-gray-700 rounded-lg animate-pulse" />
@@ -1003,7 +1004,7 @@ const OrganizerSettingsPage = () => {
                     Off-Platform Sales is on
                     {offPlatformUsage.itemCount > 0 && (
                       <span className="text-sm font-normal text-warm-600 dark:text-gray-400">
-                        &middot; {offPlatformUsage.itemCount} item{offPlatformUsage.itemCount !== 1 ? 's' : ''} this period
+                        &middot; {offPlatformUsage.itemCount} item{offPlatformUsage.itemCount !== 1 ? 's' : ''} this month
                       </span>
                     )}
                   </div>

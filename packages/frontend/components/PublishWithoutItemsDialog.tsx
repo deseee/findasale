@@ -7,6 +7,7 @@
  */
 import React, { useEffect, useRef } from 'react';
 import AccessibleModal from './AccessibleModal';
+import { VerifyEmailResendButton } from './VerifyEmailToPublishBanner';
 
 interface PublishWithoutItemsDialogProps {
   isOpen: boolean;
@@ -16,6 +17,8 @@ interface PublishWithoutItemsDialogProps {
   busy?: 'publish' | 'draft' | null;
   /** Shown under the secondary button (create-sale only). */
   addItemsFirstHelper?: string;
+  /** 2026-10-23: the organizer's email is not verified yet, so publishing will save a draft instead. */
+  needsVerification?: boolean;
 }
 
 const TITLE_ID = 'publish-without-items-title';
@@ -28,6 +31,7 @@ const PublishWithoutItemsDialog: React.FC<PublishWithoutItemsDialogProps> = ({
   onCancel,
   busy = null,
   addItemsFirstHelper,
+  needsVerification = false,
 }) => {
   const primaryRef = useRef<HTMLButtonElement>(null);
 
@@ -63,6 +67,14 @@ const PublishWithoutItemsDialog: React.FC<PublishWithoutItemsDialogProps> = ({
           Your sale page will show the dates and place, but there won&apos;t be anything for shoppers to browse yet.
           You can add items right after you publish.
         </p>
+        {needsVerification && (
+          <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3">
+            <p className="text-sm text-amber-900 dark:text-amber-100">
+              Your email isn&apos;t verified yet, so your sale will be saved as a draft. Verify your email to publish it.
+            </p>
+            <VerifyEmailResendButton className="mt-2 w-full sm:w-auto" />
+          </div>
+        )}
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start">
           <button

@@ -1,6 +1,7 @@
 import { SubscriptionTier } from '@prisma/client';
 import { prisma } from './prisma';
 import { createNotification } from './notificationService';
+import { dropUserSockets } from './dropUserSockets';
 
 /**
  * One-time "auto-markdown cycles paused" notice (2026-09-29, Patrick D1), sent when an organizer
@@ -112,10 +113,13 @@ export async function syncTier(
     });
 
     // Increment tokenVersion to invalidate stale tier JWTs
-    await prisma.organizer.update({
+    const bumped = await prisma.organizer.update({
       where: { id: organizerId },
       data: { tokenVersion: { increment: 1 } },
+      select: { userId: true },
     });
+    // 2026-10-23 (security): drop live sockets on a real tier change only (this also runs on every renewal webhook).
+    if (previousTier !== tier) await dropUserSockets(bumped?.userId, 'sync-tier');
 
     console.log(`[syncTier] Updated organizer ${organizerId} to tier ${tier} with status ${subscriptionStatus} and incremented tokenVersion`);
 

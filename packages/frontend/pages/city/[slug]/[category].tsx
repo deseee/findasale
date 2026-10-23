@@ -266,7 +266,7 @@ export default function CityCategoryPage({
                     href={`/city/${citySlug}/${catSlug}`}
                     className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                       isActive
-                        ? 'bg-amber-500 border-amber-500 text-white font-medium'
+                        ? 'bg-amber-600 border-amber-600 text-white font-medium'
                         : 'border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 hover:border-amber-500 hover:text-amber-600'
                     }`}
                     aria-current={isActive ? 'page' : undefined}
@@ -427,7 +427,7 @@ export default function CityCategoryPage({
             </p>
             <Link
               href="/register"
-              className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
+              className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
             >
               List your sales free
             </Link>

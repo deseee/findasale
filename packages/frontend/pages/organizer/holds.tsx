@@ -71,7 +71,7 @@ type SettlementChoice = 'AUTO' | 'RECORD' | 'POS_CART' | 'CHECKOUT_LINK' | 'HOLD
 // knows what will actually happen before committing.
 const SETTLEMENT_HELP: Record<SettlementChoice, string> = {
   AUTO: 'We pick the method that fits this sale.',
-  RECORD: 'Records a cash or in-person sale. You keep the cash; your commission is added to your fee balance and comes out of your next payout.',
+  RECORD: 'Records a cash or in-person sale. You keep the cash; your commission is added to your fee balance and collected from your next card sale on FindA.Sale.',
   POS_CART: 'Adds the items to your POS cart so you can finish at checkout.',
   CHECKOUT_LINK: 'Creates a payment link you can show or send to the shopper.',
   HOLD_INVOICE:
@@ -123,7 +123,7 @@ const OrganizerHoldsPage = () => {
   // Commission rate for the cash-sale confirmation copy. Read from auth context (no extra
   // request) and resolved through lib/platformFees so PRO/TEAMS see 8%, not a hardcoded 10%.
   // A cash sale settled here is money FindA.Sale never touches, so the commission on it is
-  // billed against the organizer's next payout instead — the organizer has to be told that
+  // collected from the organizer's next card sale on FindA.Sale instead — the organizer has to be told that
   // BEFORE they confirm, not discover it when a payout arrives smaller than expected.
   const { tier: organizerTier } = useOrganizerTier();
   const commissionRate = getPlatformFeeRate(organizerTier);
@@ -306,7 +306,7 @@ const OrganizerHoldsPage = () => {
       } else if (data.settlementMode === 'RECORD') {
         // Report the commission the SERVER actually accrued (data.platformFee) and the running
         // balance it now sits in, not a client-side recomputation — those are the numbers the
-        // organizer's next payout will be reduced by.
+        // organizer's next card sale on FindA.Sale will collect (cashFeeService.applyCashDebtToAppFee).
         const fee = typeof data.platformFee === 'number' ? data.platformFee : null;
         const balance = typeof data.cashFeeBalance === 'number' ? data.cashFeeBalance : null;
         const base = `${count} item${count === 1 ? '' : 's'} marked sold and cleared from your holds.`;
@@ -314,7 +314,7 @@ const OrganizerHoldsPage = () => {
           fee && fee > 0
             ? `${base} $${fee.toFixed(2)} commission added to your fee balance${
                 balance != null ? ` (now $${balance.toFixed(2)})` : ''
-              }. It comes out of your next payout.`
+              }. It is collected from your next card sale on FindA.Sale.`
             : base,
           'success'
         );
@@ -458,7 +458,7 @@ const OrganizerHoldsPage = () => {
       case 'RECORD':
         return {
           title: 'Record a cash sale?',
-          message: `This marks ${count} item${plural} sold and records a cash sale of ${money}. You keep the ${money} in cash. Your ${commissionLabel} commission on it (${commissionMoney(total)}) is added to your fee balance and comes out of your next payout. Your stock goes down, the shopper is notified, and it cannot be undone from this page.`,
+          message: `This marks ${count} item${plural} sold and records a cash sale of ${money}. You keep the ${money} in cash. Your ${commissionLabel} commission on it (${commissionMoney(total)}) is added to your fee balance and collected from your next card sale on FindA.Sale. Your stock goes down, the shopper is notified, and it cannot be undone from this page.`,
           confirmLabel: 'Record cash sale',
           variant: 'danger' as const,
         };
@@ -479,7 +479,7 @@ const OrganizerHoldsPage = () => {
       default:
         return {
           title: `Mark ${count} item${plural} sold?`,
-          message: `We settle ${count} item${plural} (${money}) the way that fits this sale. If that is a cash sale it is recorded right away, your stock goes down, your ${commissionLabel} commission (${commissionMoney(total)}) is billed against your next payout, and it cannot be undone from this page.`,
+          message: `We settle ${count} item${plural} (${money}) the way that fits this sale. If that is a cash sale it is recorded right away, your stock goes down, your ${commissionLabel} commission (${commissionMoney(total)}) is added to your fee balance and collected from your next card sale on FindA.Sale, and it cannot be undone from this page.`,
           confirmLabel: 'Mark Sold',
           variant: 'danger' as const,
         };

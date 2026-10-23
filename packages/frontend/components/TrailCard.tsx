@@ -45,7 +45,7 @@ const TrailCard: React.FC<TrailCardProps> = ({ trail, userCompleted = false }) =
 
           {/* Featured badge */}
           {trail.isFeatured && (
-            <div className="absolute top-2 right-2 bg-yellow-500 text-white px-2.5 py-1 rounded-full text-xs font-semibold shadow-md">
+            <div className="absolute top-2 right-2 bg-yellow-700 text-white px-2.5 py-1 rounded-full text-xs font-semibold shadow-md">
               ⭐ Featured
             </div>
           )}

@@ -834,7 +834,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded-full transition-all whitespace-nowrap ${
                   mode === m
                     ? m === 'rapidfire'
-                      ? 'bg-amber-500 text-white'
+                      ? 'bg-amber-600 text-white'
                       : 'bg-white text-black'
                     : 'text-white/50 hover:text-white/75'
                 }`}
@@ -939,7 +939,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 }}
                 className={`w-10 h-10 rounded-full flex flex-col items-center justify-center transition-all text-base flex-shrink-0 relative ${
                   flashMode !== 'off' ? 'bg-white text-black' : 'bg-white/10 text-white/60'
-                } ${flashMode === 'torch' ? 'bg-amber-500 text-white' : ''}`}
+                } ${flashMode === 'torch' ? 'bg-amber-600 text-white' : ''}`}
                 aria-label="Flash"
                 title={flashMode === 'off' ? 'Flash off' : flashMode === 'on' ? 'Flash on' : flashMode === 'auto' ? 'Flash auto' : 'Torch on'}
               >
@@ -1432,7 +1432,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   {qualityOverlay.tier === 2 && (
                     <>
                       {/* Soft amber banner at bottom */}
-                      <div className="absolute bottom-0 left-0 right-0 bg-amber-500/90 text-white p-4 rounded-t-2xl">
+                      <div className="absolute bottom-0 left-0 right-0 bg-amber-600/90 text-white p-4 rounded-t-2xl">
                         <p className="text-sm font-medium mb-3">
                           Lighting is soft. We'll still try to identify the item.
                         </p>
@@ -1526,7 +1526,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               >
                 ✕
               </button>
-              <div className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${isRapidfire ? 'bg-amber-500 text-white' : 'bg-white text-black'}`}>
+              <div className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${isRapidfire ? 'bg-amber-600 text-white' : 'bg-white text-black'}`}>
                 {isRapidfire ? '⚡' : '📷'}
               </div>
             </div>
@@ -1746,7 +1746,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                         }}
                         className={`absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold text-white transition-all z-10 shadow-md ${
                           isAddingTo
-                            ? 'bg-amber-500'
+                            ? 'bg-amber-600'
                             : 'bg-black/70 border border-white/60 hover:bg-black/90'
                         }`}
                         aria-label={isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
@@ -1983,7 +1983,7 @@ const VoiceTagButtonThumbnail: React.FC<VoiceTagButtonThumbnailProps> = ({
           recordingState === 'listening'
             ? 'bg-red-500 animate-pulse'
             : recordingState === 'processing'
-            ? 'bg-amber-500'
+            ? 'bg-amber-600'
             : 'bg-blue-600 hover:bg-blue-700'
         }`}
         aria-label={recordingState === 'listening' ? 'Stop recording' : 'Record description'}

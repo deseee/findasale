@@ -22,6 +22,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { actorCanPublish } from '../lib/publishGate'; // 2026-10-23: a new lot is PUBLISHED only for accounts that may publish
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
 import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy'; // 2026-10-13: public lot lists never show early-access items
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth';
@@ -201,7 +202,7 @@ export function createBulkLotHandlers(deps: BulkLotControllerDeps) {
         const sale = saleId ? await deps.db.sale.findUnique({ where: { id: saleId }, select: { id: true, organizerId: true } }) : null;
         if (!sale) return fail(res, 404, 'Sale not found.', 'SALE_NOT_FOUND');
         if (sale.organizerId !== organizerId) return fail(res, 403, 'That sale does not belong to your account.', 'NOT_YOUR_SALE');
-        const lot = await createBulkLotItem(deps.db, { organizerId, saleId: sale.id }, req.body);
+        const lot = await createBulkLotItem(deps.db, { organizerId, saleId: sale.id, canPublish: await actorCanPublish(req.user) }, req.body);
         await keepOutOfMarkdown(lot.itemId);
         return ok(res, lot, 201);
       } catch (err) {

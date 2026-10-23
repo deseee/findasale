@@ -344,7 +344,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
         <div className="flex items-center gap-2">
           <span>Filters</span>
           {activeFilterCount > 0 && (
-            <span className="inline-flex items-center justify-center w-5 h-5 bg-amber-500 text-white text-xs rounded-full font-bold">
+            <span className="inline-flex items-center justify-center w-5 h-5 bg-amber-600 text-white text-xs rounded-full font-bold">
               {activeFilterCount}
             </span>
           )}

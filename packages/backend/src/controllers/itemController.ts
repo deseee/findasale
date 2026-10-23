@@ -7,6 +7,7 @@ import { actualDiscountPct, loadStickerContext, resolveStickerPct } from '../uti
 import { v2 as cloudinary } from 'cloudinary';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ItemRarity } from '@prisma/client';
+import { canPublish, userCanPublish, emailNotVerifiedBody, EMAIL_NOT_VERIFIED_CODE, EMAIL_NOT_VERIFIED_PUBLISH_MESSAGE } from '../lib/publishGate'; // 2026-10-23: verify to publish
 import axios from 'axios';
 import { isSafeFetchUrl, SAFE_FETCH_AXIOS_OPTIONS } from '../utils/safeFetchUrl'; // SSRF guard for stored photoUrls
 import { classifyPackageSurchargeTrigger } from '../services/ebayRateEstimateService'; // ADR-103 Phase 5: persisted margin-risk flag
@@ -69,6 +70,7 @@ import { parseLatitude, parseLongitude, parseAccuracyMeters, buildQrScanLockKey 
 import { IMPORT_FIELD_KEYS, IMPORT_MAX_ROWS, buildImportItem, detectImportColumnMapping, importPhotoCapForTier, RawImportRow, ImportRowContext } from '../services/itemCsvImport'; // 2026-09-29: one shared, hardened row validator for bulk-import + legacy import-items
 import { CARD_PUBLIC_SELECT, CARD_EDIT_SELECT, parseCardInput, buildCardCreateData, buildCardNestedUpsert, isCardValidationError, cardValidationBody } from '../services/cardRecordService'; // ADR-134 #640 (B2): card record, the only ItemCard writer
 import { organizerEditStamp, organizerEditStampAlways } from '../utils/organizerEdit'; // 2026-10-04: Item.lastEditedAt, stamped only by organizer request handlers
+import { effectiveTierForSale } from '../lib/saleProFeatures'; // 2026-10-23: one shared rule for the $9.99 a-la-carte sale upgrade
 import { resolveItemOwnerOrganizer } from '../utils/itemOwner'; // 2026-10-04 (B1): default-deny owner resolution for sale items and inventory items (saleId null)
 import { getPinnedCardCategory, isPinnedCardCategoryId, standardEnvelopePriceCrossing } from '../config/cardEbayCategories'; // ADR-134 5.4 (W4): pinned eBay category for a card record (pure module, no env or network)
 import { normalizeCondition, normalizeGrade, type ConditionGrade } from '../utils/conditionMapping'; // 2026-10-04 (U4): one condition vocabulary; coerces legacy values, never 400s on them
@@ -542,7 +544,8 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
     const { items: itemsToCreate, errors: rowErrors, warnings } = collectImportRows(rowsToProcess, columnMap, {
       saleId,
       organizerId: sale.organizerId,
-      maxPhotos: importPhotoCapForTier(sale.organizer.subscriptionTier),
+      // Ownership was verified above (sale.organizer.userId), so the paid $9.99 upgrade's 10-photo cap applies here.
+      maxPhotos: importPhotoCapForTier(effectiveTierForSale(sale, { id: sale.organizerId, subscriptionTier: sale.organizer.subscriptionTier })),
       requirePrice: false,
     });
 
@@ -680,7 +683,8 @@ export const bulkImportCSV = async (req: AuthRequest, res: Response) => {
     const { items: itemsToCreate, errors, warnings } = collectImportRows(rowsToProcess, columnMap, {
       saleId,
       organizerId: sale.organizerId,
-      maxPhotos: importPhotoCapForTier(sale.organizer.subscriptionTier),
+      // Ownership was verified above (sale.organizer.userId), so the paid $9.99 upgrade's 10-photo cap applies here.
+      maxPhotos: importPhotoCapForTier(effectiveTierForSale(sale, { id: sale.organizerId, subscriptionTier: sale.organizer.subscriptionTier })),
       requirePrice: true,
     });
 
@@ -1097,7 +1101,9 @@ export const getItemById = async (req: Request, res: Response) => {
     };
 
     // Organizer who owns the sale can always access their items (e.g. to edit/un-hide them)
-    let isOwner = authReq.user?.id === item.sale?.organizer?.userId;
+    // 2026-10-23: require a signed-in viewer. For an item with no sale both sides were undefined, so an anonymous viewer
+    // counted as the owner and every visibility gate below was skipped (drafts and saleless kits were public).
+    let isOwner = !!authReq.user?.id && authReq.user.id === item.sale?.organizer?.userId;
 
     // For inventory items (saleId=null), check ownership via denormalized organizerId field
     // (sale join returns null for these items, so the sale-path isOwner check fails)
@@ -1121,6 +1127,12 @@ export const getItemById = async (req: Request, res: Response) => {
     }
     // A soft-deleted sale's items are gone for everyone but the owner and admin (same as GET /sales/:id).
     if (!isOwner && !isAdmin && (item.sale as any)?.deletedAt) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    // 2026-10-23: an item with no sale (inventory, kit, eBay import) has no sale status to gate it, so for everyone but
+    // the owner and admin it is visible only once it is explicitly PUBLISHED (an unverified account's items stay drafts,
+    // lib/publishGate.ts).
+    if (!isOwner && !isAdmin && !item.saleId && item.draftStatus !== 'PUBLISHED') {
       return res.status(404).json({ message: 'Item not found' });
     }
 
@@ -1925,7 +1937,9 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         embedding: [],
         // Phase 1A: regular item creation is a deliberate organizer action — publish immediately
         // (Only Rapidfire/uploadRapidfire creates DRAFT items intentionally)
-        draftStatus: 'PUBLISHED',
+        // 2026-10-23: an organizer whose email is not verified yet saves it as a DRAFT instead (verify to
+        // publish, lib/publishGate.ts); it goes live with the sale once they verify and publish.
+        draftStatus: canPublish(req.user) ? 'PUBLISHED' : 'DRAFT',
         // ADR-134 #640 (B2): card record created in the same nested write (atomic with the Item).
         // Built by cardRecordService from a whitelisted, strictly validated object; the request body is never spread.
         ...(cardCreateBase ? { card: { create: { ...cardCreateBase, organizerId: sale.organizerId ?? null } } } : {}),
@@ -2204,6 +2218,12 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
     // Sale-derived organizer when present, else the inventory organizer: id/tier/lat/lng for the code below.
     const ownerOrganizer = ownerOrganizerRow;
+
+    // 2026-10-23: publishing through the generic update needs a verified email too (lib/publishGate.ts).
+    // Checked before anything is written.
+    if (draftStatus === 'PUBLISHED' && item.draftStatus !== 'PUBLISHED' && !canPublish(req.user)) {
+      return res.status(403).json(emailNotVerifiedBody());
+    }
 
     // ADR-136 Addendum B (#659): a bulk lot keeps its card count, status, listing type and fixed-price shape whatever this
     // form sends (the card count changes only through POST /api/bulk-lots/item/:id/adjust so every change is recorded).
@@ -3245,14 +3265,13 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
  * Bring-Your-Own-Rails (BYOR, 2026-09-06). Organizer marks a plain AVAILABLE item sold using
  * their own payment method outside FindA.Sale entirely (their own Stripe/Square/Venmo/cash).
  * FindA.Sale never sees or touches the real transaction -- zero Stripe calls anywhere in this
- * function. Records an OffPlatformSale row for later flat-fee billing.
+ * function. Records an OffPlatformSale row so stock, sold state, crosslist removal and the
+ * organizer's off-platform sales log stay accurate.
  *
- * Scope note (2026-09-06 dispatch): this builds steps 1-4 of the architect's build order only
- * (schema, this endpoint, opt-in/consent, read endpoints). byorFeeCalculator.ts,
- * byorInvoicingCron.ts, and the billingController.ts invoice-webhook extension (step 5) are a
- * separate, later dispatch pending Patrick's fee-amount decision -- PlatformInvoice rows are
- * never created by this code path. See claude_docs/feature-notes/
- * bring-your-own-rails-architecture-and-scoping-2026-09-06.md.
+ * No fee applies: FindA.Sale never charges organizers for sales made off-platform (Patrick
+ * 2026-10-23). The fee/invoicing step originally planned for this feature (byorFeeCalculator.ts,
+ * byorInvoicingCron.ts) will not be built, and PlatformInvoice rows are never created by this
+ * code path.
  *
  * v1 restriction (findasale-dev scoping correction #6, 2026-09-06): commitItemSale() and
  * itemStockService.sellItemUnits()/stockSold are two entirely separate mechanisms --
@@ -3327,7 +3346,7 @@ export const markItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
     const organizer = item.sale.organizer;
     if (!organizer.offPlatformSalesEnabled) {
       return res.status(403).json({
-        message: 'Off-platform sales are not enabled for this account. Enable it in Billing settings first.',
+        message: 'Off-platform sales are not turned on for this account. Turn them on under Settings > Subscription first.',
       });
     }
 
@@ -3344,7 +3363,7 @@ export const markItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
     });
     if (!roleSubscription?.consentRecord?.offPlatformSalesConsentedAt) {
       return res.status(403).json({
-        message: 'Off-platform sales consent has not been recorded for this account. Enable it in Billing settings first.',
+        message: 'Off-platform sales have not been turned on for this account yet. Turn them on under Settings > Subscription first.',
       });
     }
 
@@ -3514,10 +3533,9 @@ export const markItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
  *   -- an item sold via Stripe checkout, POS, eBay, etc. has a different lastSoldVia
  *   value (or a real Purchase row) and this endpoint refuses it outright, directing
  *   the organizer to the real refund flow instead.
- * - Only fires when the OffPlatformSale row has NOT yet been invoiced (invoiceId is
- *   null) -- billing/invoicing isn't built yet so this is always true today, but the
- *   guard is here now so a future invoiced sale can't be silently un-billed by this
- *   endpoint once byorFeeCalculator.ts ships.
+ * - Refuses a row that carries an invoiceId. Off-platform sales are never charged (Patrick
+ *   2026-10-23) and nothing sets invoiceId, so this never fires today; it is kept only as a
+ *   defensive guard on the legacy column.
  * - Reverts Item.status to AVAILABLE and clears lastSoldVia, and DELETES the
  *   OffPlatformSale row (safe -- nothing references it yet) so the organizer's own
  *   off-platform-sales log and this-period usage count both correct themselves
@@ -3576,7 +3594,7 @@ export const undoItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
 
     if (offPlatformSale?.invoiceId) {
       return res.status(409).json({
-        message: 'This sale has already been included in a bill and cannot be undone here. Contact support.',
+        message: 'This off-platform sale cannot be undone here. Contact support.',
       });
     }
 
@@ -4413,7 +4431,8 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
     // Security: AI Tags Quota Enforcement (P0)
     const organizerId = owner.id;
     const tier = owner.subscriptionTier || 'SIMPLE';
-    const quotaStatus = await checkAiTagQuota(organizerId, tier);
+    // item.saleId: a paid $9.99 a-la-carte sale also has its own 500 auto tags (lib/saleProFeatures.ts).
+    const quotaStatus = await checkAiTagQuota(organizerId, tier, item.saleId);
 
     if (quotaStatus.exceeded) {
       return res.status(429).json({
@@ -4452,7 +4471,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
         if (aiResult?.tags) {
           suggestedTags = aiResult.tags;
           // Increment quota counter after successful analysis
-          await incrementAiTagCount(organizerId, suggestedTags.length);
+          await incrementAiTagCount(organizerId, suggestedTags.length, item.saleId);
         }
       } catch (err: any) {
         console.warn(`[cloudAI/analyze] error for item "${id}": ${err.message} — returning empty tags`);
@@ -4503,11 +4522,9 @@ export const addItemPhoto = async (req: AuthRequest, res: Response) => {
 
     // Feature #75: Check photo limit before adding. The tier comes from the resolved owner organizer, so sale items
     // and inventory items (no sale) are both handled without a separate sale lookup.
-    // Determine tier: use PRO tier limits for ala carte sales even if organizer is SIMPLE
-    let effectiveTier = owner.subscriptionTier;
-    if (item.sale?.purchaseModel === 'ALA_CARTE') {
-      effectiveTier = 'PRO';
-    }
+    // Determine tier: the paid $9.99 a-la-carte upgrade lifts SIMPLE to PRO photo limits on THAT sale only, and never
+    // lowers a PRO/TEAMS tier (shared rule: lib/saleProFeatures.ts).
+    const effectiveTier = effectiveTierForSale(item.sale, owner);
 
     const photoLimit = await checkItemOverPhotoLimit(id, effectiveTier);
     if (photoLimit.isOverLimit) {
@@ -4687,20 +4704,41 @@ export type PublishItemInput = {
   optimisticLockVersion?: number;
 };
 export type PublishItemResult =
-  | { ok: true; item: any; dryRun?: false }
+  | { ok: true; item: any; dryRun?: false; runSideEffects?: () => void }
   | { ok: true; dryRun: true; item?: undefined }
   | { ok: false; status: number; message: string; code?: string };
+
+export type PublishItemOptions = {
+  dryRun?: boolean;
+  /**
+   * 2026-10-23 (publish a sale with its ready items): run the item reads and the publish write on this
+   * transaction client, so the sale publish and every item publish commit or roll back together
+   * (saleController.updateSaleStatus).
+   */
+  // Typed loosely: lib/prisma exports an extended client whose transaction client type differs from
+  // Prisma.TransactionClient. Pass the `tx` argument of prisma.$transaction(async (tx) => ...).
+  tx?: unknown;
+  /**
+   * Do not fire the post-publish side effects (webhooks, auto-fanout, eBay comps, marketplace enqueue,
+   * cache invalidation) here. They are returned as result.runSideEffects for the caller to run once the
+   * transaction has committed, so nothing outside the database fires for a publish that rolls back.
+   */
+  deferSideEffects?: boolean;
+  /** The caller already applied the email verification gate (lib/publishGate.ts) to the acting user. */
+  verifiedByCaller?: boolean;
+};
 
 export async function publishItemForUser(
   user: { id: string; organizerId?: string | null },
   itemId: string,
   input: PublishItemInput = {},
-  opts: { dryRun?: boolean } = {}
+  opts: PublishItemOptions = {}
 ): Promise<PublishItemResult> {
     const { title, price, category, condition, optimisticLockVersion } = input;
+    const db = (opts.tx ?? prisma) as typeof prisma;
 
     // Fetch current item state
-    const item = await prisma.item.findUnique({
+    const item = await db.item.findUnique({
       where: { id: itemId },
       select: {
         id: true,
@@ -4730,6 +4768,12 @@ export async function publishItemForUser(
     const owner = await resolveItemOwnerOrganizer(item, user.id);
     if (!owner) {
       return { ok: false, status: 403, message: item.saleId ? 'Access denied. Not your sale.' : 'Access denied. Not your item.' };
+    }
+
+    // Email verification is required to publish (2026-10-23, lib/publishGate.ts). Covers single publish, bulk
+    // publish and its dry run. Runs after the ownership check so it never reveals anything about other items.
+    if (!opts.verifiedByCaller && !(await userCanPublish(user.id))) {
+      return { ok: false, status: 403, message: EMAIL_NOT_VERIFIED_PUBLISH_MESSAGE, code: EMAIL_NOT_VERIFIED_CODE };
     }
 
     // B2 blocker: reject if already published or in an unexpected state
@@ -4789,13 +4833,13 @@ export async function publishItemForUser(
     }
     if (publishEditedFields.length > 0) {
       // Fetch current userEditedFields to merge (item was re-fetched above as fullItem — but we need userEditedFields)
-      const existingEdited = (await prisma.item.findUnique({ where: { id: itemId }, select: { userEditedFields: true } }))?.userEditedFields ?? [];
+      const existingEdited = (await db.item.findUnique({ where: { id: itemId }, select: { userEditedFields: true } }))?.userEditedFields ?? [];
       updateData.userEditedFields = Array.from(new Set([...existingEdited, ...publishEditedFields]));
     }
 
     // Hunt Pass Feature: Set 6-hour early access embargo for LEGENDARY items
     // Fetch full item to check rarity
-    const fullItem = await prisma.item.findUnique({
+    const fullItem = await db.item.findUnique({
       where: { id: itemId },
       select: { rarity: true, createdAt: true }
     });
@@ -4822,7 +4866,7 @@ export async function publishItemForUser(
     }
 
     // Update item with new state
-    const updatedItem = await prisma.item.update({
+    const updatedItem = await db.item.update({
       where: { id: itemId },
       data: { ...updateData, ...organizerEditStampAlways() },
       select: {
@@ -4843,47 +4887,56 @@ export async function publishItemForUser(
       }
     });
 
-    // Fire webhooks for published item (X1: Zapier integration)
-    fireWebhooks(user.id, 'item.published', {
-      itemId: updatedItem.id,
-      saleId: updatedItem.saleId,
-      title: updatedItem.title,
-      status: updatedItem.draftStatus
-    }).catch(err => console.error('Webhook fire error:', err));
+    // Post-publish side effects. Deferred when the caller publishes inside a transaction (opts.deferSideEffects),
+    // so they only ever fire for a publish that actually committed.
+    const runSideEffects = () => {
+      // Fire webhooks for published item (X1: Zapier integration)
+      fireWebhooks(user.id, 'item.published', {
+        itemId: updatedItem.id,
+        saleId: updatedItem.saleId,
+        title: updatedItem.title,
+        status: updatedItem.draftStatus
+      }).catch(err => console.error('Webhook fire error:', err));
 
-    // ADR-DRAFT approve-to-autolist-fanout (Architect Handoff 2026-09-17, section B): fire the
-    // API-tier (Discogs/Reverb) auto-fanout dispatcher, non-blocking, same style as fireWebhooks
-    // above. Deliberately NOT hooked into the generic item-update endpoint's draftStatus write
-    // path (~line 1777) -- under-triggering is safer than over-triggering for a feature with
-    // restricted-item safety implications; that is a deliberate scoping choice, not an oversight.
-    // Re-fetches the full Item row (dispatchApiTierAutoFanout's signature takes the full Prisma
-    // `Item` type, and this endpoint's own `updatedItem` select above is intentionally narrow --
-    // never widened just to satisfy this call) and uses the item's own denormalized
-    // `organizerId` (Item.organizerId, kept in sync with sale.organizerId) as the dispatcher's
-    // `organizerId` argument -- NOT req.user.id/userId, which is what the connectors underneath
-    // (createDiscogsListing/createReverbListing) actually key their MarketplaceAccount lookups on.
-    prisma.item.findUnique({ where: { id: updatedItem.id } })
-      .then((fullItem) => {
-        if (fullItem?.organizerId) {
-          dispatchApiTierAutoFanout(fullItem.organizerId, fullItem).catch((err) =>
-            console.error('Auto-fanout dispatch error:', err)
-          );
-        }
-      })
-      .catch((err) => console.error('Auto-fanout item refetch error:', err));
+      // ADR-DRAFT approve-to-autolist-fanout (Architect Handoff 2026-09-17, section B): fire the
+      // API-tier (Discogs/Reverb) auto-fanout dispatcher, non-blocking, same style as fireWebhooks
+      // above. Deliberately NOT hooked into the generic item-update endpoint's draftStatus write
+      // path (~line 1777) -- under-triggering is safer than over-triggering for a feature with
+      // restricted-item safety implications; that is a deliberate scoping choice, not an oversight.
+      // Re-fetches the full Item row (dispatchApiTierAutoFanout's signature takes the full Prisma
+      // `Item` type, and this endpoint's own `updatedItem` select above is intentionally narrow --
+      // never widened just to satisfy this call) and uses the item's own denormalized
+      // `organizerId` (Item.organizerId, kept in sync with sale.organizerId) as the dispatcher's
+      // `organizerId` argument -- NOT req.user.id/userId, which is what the connectors underneath
+      // (createDiscogsListing/createReverbListing) actually key their MarketplaceAccount lookups on.
+      prisma.item.findUnique({ where: { id: updatedItem.id } })
+        .then((fullItem) => {
+          if (fullItem?.organizerId) {
+            dispatchApiTierAutoFanout(fullItem.organizerId, fullItem).catch((err) =>
+              console.error('Auto-fanout dispatch error:', err)
+            );
+          }
+        })
+        .catch((err) => console.error('Auto-fanout item refetch error:', err));
 
-    // ADR-069 Phase 2: Queue async eBay comps fetch (non-blocking)
-    enqueueFetchEbayComps(updatedItem.id);
+      // ADR-069 Phase 2: Queue async eBay comps fetch (non-blocking)
+      enqueueFetchEbayComps(updatedItem.id);
 
-    // ADR-083: Queue Marketplace auto-post job if the organizer opted in (non-blocking)
-    enqueueMarketplacePostJob(updatedItem.id).catch((err) => console.warn('Marketplace poster enqueue error:', err));
+      // ADR-083: Queue Marketplace auto-post job if the organizer opted in (non-blocking)
+      enqueueMarketplacePostJob(updatedItem.id).catch((err) => console.warn('Marketplace poster enqueue error:', err));
 
-    // P2-3: Invalidate command center cache after item publish (status change)
-    if (user.organizerId) {
-      invalidateCommandCenterCache(user.organizerId).catch((err) =>
-        console.warn('Failed to invalidate command center cache:', err)
-      );
+      // P2-3: Invalidate command center cache after item publish (status change)
+      if (user.organizerId) {
+        invalidateCommandCenterCache(user.organizerId).catch((err) =>
+          console.warn('Failed to invalidate command center cache:', err)
+        );
+      }
+    };
+
+    if (opts.deferSideEffects) {
+      return { ok: true, item: updatedItem, runSideEffects };
     }
+    runSideEffects();
 
     return { ok: true, item: updatedItem };
 }

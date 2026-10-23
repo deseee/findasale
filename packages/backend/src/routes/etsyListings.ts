@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
+import { requirePublishVerified } from '../lib/publishGate'; // 2026-10-23: verify email to publish
 import { itemEndpointLimiter, paymentLimiter } from '../middleware/rateLimiter';
 import {
   etsyKillSwitch,
@@ -41,7 +42,7 @@ router.post('/items/:id/draft', etsyKillSwitch, authenticate, requireOrganizer, 
 router.get('/items/:id/listing', etsyKillSwitch, authenticate, requireOrganizer, itemEndpointLimiter, getEtsyListingEndpoint);
 
 // Publish: requires { confirm: true }. Etsy charges its listing fee when the listing goes live.
-router.post('/items/:id/publish', etsyKillSwitch, authenticate, requireOrganizer, paymentLimiter, publishEtsyListingEndpoint);
+router.post('/items/:id/publish', etsyKillSwitch, authenticate, requireOrganizer, requirePublishVerified, paymentLimiter, publishEtsyListingEndpoint);
 
 // End a live listing or discard a draft.
 router.delete('/items/:id/listing', etsyKillSwitch, authenticate, requireOrganizer, paymentLimiter, endEtsyListingEndpoint);

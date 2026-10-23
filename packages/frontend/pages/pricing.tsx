@@ -45,7 +45,7 @@ const TIERS: PricingTier[] = [
     stripePrice: null,
     features: [
       'Photo to listing: snap, confirm, publish',
-      'Up to 200 items per sale, 5 photos each',
+      'Unlimited items per sale, 5 photos each',
       '100 auto tags per month',
       '1 active sale at a time',
       'QR codes for every item and sale',
@@ -66,7 +66,7 @@ const TIERS: PricingTier[] = [
     stripePrice: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || 'price_1TDUQsLTUdEUnHOTzG6cVDwu',
     features: [
       'Everything in Simple, plus:',
-      '3 concurrent sales, 500 items each',
+      '3 concurrent sales, unlimited items each',
       '10 photos per item, 2,000 auto tags/month',
       'Smart Pricing: market value estimates',
       'Virtual Queue: manage sale entry',
@@ -85,7 +85,7 @@ const TIERS: PricingTier[] = [
     name: 'TEAMS',
     price: 79,
     period: 'per month',
-    description: 'For organizers who need unlimited items and teams running sales at multiple locations.',
+    description: 'For organizers who need unlimited sales and teams running sales at multiple locations.',
     featured: false,
     stripePrice: process.env.NEXT_PUBLIC_STRIPE_TEAMS_PRICE_ID || 'price_1TDUQtLTUdEUnHOTCEoNL6oz',
     features: [
@@ -392,7 +392,7 @@ const PricingPage = () => {
                 >
                   {/* Featured badge */}
                   {tier.featured && (
-                    <div className="absolute top-0 right-0 bg-amber-500 text-white px-4 py-1 text-sm font-semibold rounded-bl-lg">
+                    <div className="absolute top-0 right-0 bg-amber-600 text-white px-4 py-1 text-sm font-semibold rounded-bl-lg">
                       Most Popular
                     </div>
                   )}
@@ -485,7 +485,7 @@ const PricingPage = () => {
                         isCurrentTier
                           ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed'
                           : tier.featured
-                            ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                            ? 'bg-amber-600 hover:bg-amber-700 text-white'
                             : 'bg-warm-200 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-300 dark:hover:bg-gray-600'
                       }`}
                     >
@@ -522,17 +522,17 @@ const PricingPage = () => {
                 Just one big sale? Upgrade for $9.99.
               </h2>
               <p className="text-lg text-warm-700 dark:text-warm-300 mb-6">
-                Unlock PRO-level capacity for a single sale. No subscription needed.
+                Get 10 photos per item, 500 auto tags, the Flip Report and the Virtual Queue for a single sale. No subscription needed.
               </p>
 
               {/* Features for à la carte */}
               <div className="grid md:grid-cols-2 gap-4 mb-8">
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                   <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
-                    500 items, 10 photos each
+                    Unlimited items, 10 photos each
                   </p>
                   <p className="text-xs text-warm-600 dark:text-warm-300">
-                    5x the items, 2x the photos vs. the free plan.
+                    Twice the photos of the free plan, on that sale.
                   </p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
@@ -540,7 +540,7 @@ const PricingPage = () => {
                     500 auto tags
                   </p>
                   <p className="text-xs text-warm-600 dark:text-warm-300">
-                    Every item gets tagged. Descriptions fill themselves.
+                    For that sale's items, on top of your 100 a month. Descriptions fill themselves.
                   </p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
@@ -548,7 +548,7 @@ const PricingPage = () => {
                     Flip Report included
                   </p>
                   <p className="text-xs text-warm-600 dark:text-warm-300">
-                    See exactly what sold, what didn't, and your earnings.
+                    See exactly what sold, what didn't, and your earnings for that sale.
                   </p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
@@ -556,7 +556,7 @@ const PricingPage = () => {
                     Virtual Queue
                   </p>
                   <p className="text-xs text-warm-600 dark:text-warm-300">
-                    We handle the early birds, you handle the sale
+                    Manage early birds and long lines at that sale.
                   </p>
                 </div>
               </div>
@@ -675,7 +675,7 @@ const PricingPage = () => {
                   How do fees work?
                 </h3>
                 <p className="text-warm-700 dark:text-warm-300">
-                  When you sell an item for $100 online, the platform fee is $9.50 on SIMPLE ({formatInclusiveFeeRate('SIMPLE', 'ONLINE')}) and $7.50 on PRO and TEAMS ({formatInclusiveFeeRate('PRO', 'ONLINE')}). In person it is {formatInclusiveFeeRate('SIMPLE', 'IN_PERSON')} on SIMPLE and {formatInclusiveFeeRate('PRO', 'IN_PERSON')} on PRO and TEAMS. Card processing is included, so there is no separate processing charge, and there is a {MINIMUM_TRANSACTION_FEE_LABEL} minimum per transaction.
+                  When you sell an item for $100 online, the platform fee is $9.50 on SIMPLE ({formatInclusiveFeeRate('SIMPLE', 'ONLINE')}) and $7.50 on PRO and TEAMS ({formatInclusiveFeeRate('PRO', 'ONLINE')}). In person it is {formatInclusiveFeeRate('SIMPLE', 'IN_PERSON')} on SIMPLE and {formatInclusiveFeeRate('PRO', 'IN_PERSON')} on PRO and TEAMS. Card processing is included, so there is no separate processing charge, and there is a {MINIMUM_TRANSACTION_FEE_LABEL} minimum per card transaction. Sales paid on the FindA.Sale website or rung up on the FindA.Sale POS, including cash, Venmo, and Zelle, carry the platform fee. Sales made outside FindA.Sale carry no fee, even if you mark the item sold here to keep your inventory accurate.
                   <br /><br />
                   Auctions add a second fee that the winning bidder pays, not you: a flat 5% buyer&apos;s premium on top of the winning bid, set by FindA.Sale. It is not something you configure, and your platform fee is unchanged either way. A ${AUCTION_EX.bid} winning bid at the SIMPLE online rate charges the buyer ${AUCTION_EX.buyerTotal.toFixed(2)}, your fee is ${AUCTION_EX.fee.toFixed(2)}, and you receive ${AUCTION_EX.net.toFixed(2)}. If you would rather your winner paid exactly their bid, turn on &ldquo;Cover the buyer&apos;s premium&rdquo; on the sale: the buyer is charged ${AUCTION_EX.bid} and the 5% comes out of your payout, so you receive ${AUCTION_EX.netIfCovered.toFixed(2)}.
                 </p>

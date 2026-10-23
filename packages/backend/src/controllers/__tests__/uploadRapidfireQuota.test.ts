@@ -79,7 +79,7 @@ describe('uploadRapidfire quota awareness', () => {
     expect(body.itemId).toBe('item1');
     expect(body.aiQuota).toEqual({ exceeded: false, remaining: 97, limit: 100 });
     expect(body.code).toBeUndefined();
-    expect(mockCheckAiTagQuota).toHaveBeenCalledWith('org1', 'SIMPLE');
+    expect(mockCheckAiTagQuota).toHaveBeenCalledWith('org1', 'SIMPLE', 's1');
   });
 
   it('still creates the draft when the quota is exhausted, and says so', async () => {
@@ -106,7 +106,7 @@ describe('uploadRapidfire quota awareness', () => {
       id: 's1', organizerId: 'org1', organizer: { id: 'org1', userId: 'u1', subscriptionTier: 'PRO' },
     });
     await uploadRapidfire(mkReq({ id: 'u1', roles: ['ORGANIZER'], subscriptionLapsed: true }), mkRes());
-    expect(mockCheckAiTagQuota).toHaveBeenCalledWith('org1', 'PRO');
+    expect(mockCheckAiTagQuota).toHaveBeenCalledWith('org1', 'PRO', 's1');
   });
 
   it('does not block capture when the quota lookup fails', async () => {

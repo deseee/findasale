@@ -344,7 +344,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'What\'s the difference between SIMPLE, PRO, and TEAMS?',
     answer: (
       <>
-        SIMPLE is free. You get everything you need to run a single sale with up to 200 items. PRO ($29/month) unlocks bulk operations, analytics, export tools, and more.
+        SIMPLE is free. You get everything you need to run a single sale with unlimited items, and from your second sale you can add an optional $9.99 upgrade to one sale for 10 photos per item, 500 auto tags, the Flip Report and the Virtual Queue. PRO ($29/month) unlocks bulk operations, analytics, export tools, and more.
         TEAMS ($79/month) adds multi-user workspaces with roles and permissions and the Command Center for organizations that run sales together.
       </>
     ),
@@ -377,9 +377,9 @@ const organizerFAQs: FAQItem[] = [
     answer: (
       <>
         FindA.Sale charges one inclusive platform fee on every completed purchase, regardless of sale
-        type (fixed-price or auction). Card processing is included, so there is no separate processing
+        type (fixed-price or auction). Sales paid on the FindA.Sale website or rung up on the FindA.Sale POS, including cash, Venmo, and Zelle, carry the platform fee. Sales made outside FindA.Sale carry no fee, even if you mark the item sold here to keep your inventory accurate. Card processing is included, so there is no separate processing
         charge. SIMPLE pays {FEE_SIMPLE}. PRO and TEAMS pay {FEE_PRO}. There is a{' '}
-        {MINIMUM_TRANSACTION_FEE_LABEL} minimum per transaction. Upgrading your plan also unlocks tools
+        {MINIMUM_TRANSACTION_FEE_LABEL} minimum per card transaction. Upgrading your plan also unlocks tools
         like bulk operations, discount rules, and staff accounts.
         <br /><br />
         Auctions add a second, separate fee that the <em>winning bidder</em> pays, not you: a{' '}

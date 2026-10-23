@@ -515,7 +515,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
             {uploadPhotosMutation.isError || batchAnalyzeMutation.isError ? (
               <button
                 onClick={(e) => { e.stopPropagation(); handleAnalyzePhotos(); }}
-                className="px-8 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg"
+                className="px-8 py-3 bg-yellow-700 hover:bg-yellow-800 text-white font-bold rounded-lg"
               >
                 Retry Upload
               </button>

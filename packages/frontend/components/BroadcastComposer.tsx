@@ -162,7 +162,7 @@ const EmailPreview = ({
       <div className="rounded-xl border border-warm-200 dark:border-gray-700 overflow-hidden shadow-md">
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 bg-[#F4EFE7] dark:bg-[#19202F] border-b border-warm-200 dark:border-gray-700">
-          <div className="w-9 h-9 rounded-full bg-[#C8552B] dark:bg-[#E97C4D] text-white flex items-center justify-center font-semibold text-sm flex-shrink-0">
+          <div className="w-9 h-9 rounded-full bg-[#B34A22] text-white flex items-center justify-center font-semibold text-sm flex-shrink-0">
             {initials}
           </div>
           <div className="flex-1 min-w-0">
@@ -194,18 +194,18 @@ const EmailPreview = ({
                 [cover]
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-mono text-[10px] uppercase tracking-widest text-[#C8552B] mb-1">
+                <p className="font-mono text-[10px] uppercase tracking-widest text-[#B34A22] dark:text-[#E97C4D] mb-1">
                   {attachedSale.saleType?.replace('_', ' ') ?? 'Sale'}
                 </p>
                 <p className="font-display text-sm font-semibold leading-snug">{attachedSale.title}</p>
                 <p className="text-xs text-[#1A1814]/60 mt-0.5 truncate">{attachedSale.address}</p>
-                <p className="mt-2 text-xs font-semibold text-[#C8552B]">See the listing →</p>
+                <p className="mt-2 text-xs font-semibold text-[#B34A22] dark:text-[#E97C4D]">See the listing →</p>
               </div>
             </div>
           )}
 
           {attachedLink && (
-            <div className="mt-3 px-3 py-2 rounded-lg bg-[#C8552B]/8 text-[#C8552B] text-sm flex items-center gap-2">
+            <div className="mt-3 px-3 py-2 rounded-lg bg-[#C8552B]/8 text-[#B34A22] dark:text-[#E97C4D] text-sm flex items-center gap-2">
               <Icon name="web" size={13} />
               {attachedLink}
             </div>
@@ -239,7 +239,7 @@ const PushPreview = ({ subject, body }: { subject: string; body: string }) => (
         className="rounded-2xl p-3 flex gap-2.5"
         style={{ background: 'rgba(255,255,255,0.18)' }}
       >
-        <div className="w-9 h-9 rounded-lg flex-shrink-0 bg-[#C8552B] text-white flex items-center justify-center font-semibold text-sm">
+        <div className="w-9 h-9 rounded-lg flex-shrink-0 bg-[#B34A22] text-white flex items-center justify-center font-semibold text-sm">
           FS
         </div>
         <div className="flex-1 min-w-0">

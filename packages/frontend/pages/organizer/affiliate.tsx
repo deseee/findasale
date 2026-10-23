@@ -102,6 +102,8 @@ const AffiliateOrganizer = () => {
   }
 
   const hasCode = !!codeData?.referralCode;
+  // Referral credit ships behind a server feature flag that defaults OFF: promise nothing until the server says it is on.
+  const creditOn = earnings?.referralCreditEnabled === true;
   const totalReferrals = referralsData?.pagination.total || 0;
   const pageStart = currentOffset + 1;
   const pageEnd = Math.min(currentOffset + 25, referralsData?.pagination.total || 0);
@@ -186,7 +188,9 @@ const AffiliateOrganizer = () => {
                 </div>
 
                 <p className="text-sm text-warm-600 dark:text-warm-400">
-                  When another organizer signs up with your link and completes their first paid sale, you earn a commission.
+                  {creditOn
+                    ? 'When another organizer signs up with your link, you earn subscription credit on the card sales they make in their first year: a share of the FindA.Sale fee on each sale. Credit is applied automatically to your next PRO or TEAMS renewal.'
+                    : 'Referral rewards are not active yet. Organizers who sign up with your link are recorded as your referrals and listed below.'}
                 </p>
               </div>
             ) : (
@@ -205,8 +209,8 @@ const AffiliateOrganizer = () => {
             )}
           </div>
 
-          {/* Section 2: Earnings Summary */}
-          {hasCode && (
+          {/* Section 2: Earnings Summary (only while the referral credit feature flag is on) */}
+          {hasCode && creditOn && (
             <>
               {earningsLoading ? (
                 <p className="text-warm-600 dark:text-warm-400 mb-8">Loading earnings summary...</p>
@@ -216,7 +220,7 @@ const AffiliateOrganizer = () => {
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-sm font-medium text-warm-600 dark:text-warm-400">Total Earned</p>
+                        <p className="text-sm font-medium text-warm-600 dark:text-warm-400">Credit Earned</p>
                         <p className="text-3xl font-bold text-green-700 dark:text-green-400 mt-2">
                           ${(earnings.totalEarned / 100).toFixed(2)}
                         </p>
@@ -224,15 +228,15 @@ const AffiliateOrganizer = () => {
                       <span className="text-4xl">💰</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-500 mt-3">
-                      From paid referrals
+                      Subscription credit from your referrals
                     </p>
                   </div>
 
-                  {/* Unpaid Balance */}
+                  {/* Credit available now (roadmap #661: rewards are subscription credit, not cash) */}
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-sm font-medium text-warm-600 dark:text-warm-400">Unpaid Balance</p>
+                        <p className="text-sm font-medium text-warm-600 dark:text-warm-400">Credit Available</p>
                         <p className="text-3xl font-bold text-yellow-700 dark:text-yellow-400 mt-2">
                           ${(earnings.unpaidBalance / 100).toFixed(2)}
                         </p>
@@ -240,7 +244,7 @@ const AffiliateOrganizer = () => {
                       <span className="text-4xl">⏳</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-500 mt-3">
-                      Qualified, awaiting payout
+                      Applied automatically to your next PRO or TEAMS renewal. New credit is usable 7 days after the sale.
                     </p>
                   </div>
 
@@ -265,7 +269,7 @@ const AffiliateOrganizer = () => {
                   <EmptyState
                     icon="🌱"
                     heading="No referrals yet"
-                    subtext="Share your link to start earning. When another organizer signs up and completes their first paid sale, you'll see earnings here."
+                    subtext="Share your link to start earning. When an organizer you referred makes a card sale, you'll see your credit here."
                   />
                 </div>
               )}
@@ -319,7 +323,7 @@ const AffiliateOrganizer = () => {
                             Status
                           </th>
                           <th className="text-right px-6 py-3 text-xs font-semibold text-warm-700 dark:text-warm-300 uppercase tracking-wide">
-                            Amount
+                            {creditOn ? 'Credit' : 'Amount'}
                           </th>
                           <th className="text-left px-6 py-3 text-xs font-semibold text-warm-700 dark:text-warm-300 uppercase tracking-wide">
                             Date

@@ -145,7 +145,7 @@ const VoiceTagButton: React.FC<VoiceTagButtonProps> = ({
             : recordingState === 'listening'
               ? 'bg-red-500 text-white animate-pulse'
               : recordingState === 'processing'
-                ? 'bg-amber-500 text-white'
+                ? 'bg-amber-600 text-white'
                 : 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700'
         } ${className}`}
         aria-label={

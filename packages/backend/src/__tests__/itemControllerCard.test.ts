@@ -16,6 +16,8 @@ const mockPrisma: any = {
   itemCard: { findUnique: jest.fn() },
   sale: { findUnique: jest.fn() },
   organizer: { findUnique: jest.fn() },
+  // 2026-10-23: verify-to-publish lookup (lib/publishGate.ts userCanPublish); not reset between tests.
+  user: { findUnique: jest.fn(async () => ({ emailVerified: true, role: 'ORGANIZER', roles: ['ORGANIZER'] })) },
 };
 
 jest.mock('../index', () => ({ prisma: mockPrisma }));
@@ -78,7 +80,7 @@ function makeRes() {
   return res;
 }
 
-const organizerUser = { id: 'u1', roles: ['ORGANIZER'], organizer: { id: 'org1' } };
+const organizerUser = { id: 'u1', roles: ['ORGANIZER'], emailVerified: true, organizer: { id: 'org1' } };
 
 function baseItem(over: Record<string, unknown> = {}): any {
   return {
@@ -257,6 +259,18 @@ describe('createItem with a card', () => {
     expect(mockPrisma.item.create.mock.calls[0][0].data).not.toHaveProperty('card');
     expect(mockPrisma.itemCard.findUnique).not.toHaveBeenCalled();
     expect(res.body).not.toHaveProperty('card');
+  });
+
+  it('2026-10-23: a verified organizer creates the item published; an unverified one saves it as a draft (verify to publish)', async () => {
+    mockPrisma.sale.findUnique.mockResolvedValue({ id: 's1', organizerId: 'org1', organizer: { userId: 'u1' } });
+    mockPrisma.organizer.findUnique.mockResolvedValue({ id: 'org1', subscriptionTier: 'PRO' });
+    mockPrisma.item.create.mockResolvedValue({ id: 'new3', title: 'Lamp' });
+    await createItem({ user: organizerUser, body: { ...baseBody, title: 'Lamp' }, files: undefined }, makeRes());
+    expect(mockPrisma.item.create.mock.calls[0][0].data.draftStatus).toBe('PUBLISHED');
+    const res = makeRes();
+    await createItem({ user: { ...organizerUser, emailVerified: false }, body: { ...baseBody, title: 'Lamp' }, files: undefined }, res);
+    expect(res.statusCode).toBe(201);
+    expect(mockPrisma.item.create.mock.calls[1][0].data.draftStatus).toBe('DRAFT');
   });
 });
 

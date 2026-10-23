@@ -66,7 +66,8 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
     // Quota enforcement (P0) — same allowance as upload-time Smart tagging.
     const organizerId = item.sale.organizer.id;
     const tier = (item.sale.organizer.subscriptionTier || 'SIMPLE') as SubscriptionTier;
-    const quotaStatus = await checkAiTagQuota(organizerId, tier);
+    // item.saleId: a paid $9.99 a-la-carte sale also has its own 500 auto tags (lib/saleProFeatures.ts).
+    const quotaStatus = await checkAiTagQuota(organizerId, tier, item.saleId);
     if (quotaStatus.exceeded) {
       return res.status(429).json({
         code: 'AI_QUOTA_EXCEEDED',
@@ -129,7 +130,7 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
 
     // Count this re-run against the monthly allowance (best-effort; never fail the response).
     try {
-      await incrementAiTagCount(organizerId, 1);
+      await incrementAiTagCount(organizerId, 1, item.saleId);
     } catch (err: any) {
       console.warn('[Reanalyze] quota increment failed (non-fatal):', err?.message || err);
     }

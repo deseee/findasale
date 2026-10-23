@@ -218,7 +218,7 @@ const SaleTypeBadge: React.FC<SaleTypeBadgeProps> = ({
         <span
           style={{
             marginLeft: 2,
-            color: theme === 'dark' ? '#E97C4D' : '#C8552B',
+            color: theme === 'dark' ? '#E97C4D' : '#B34A22',
             display: 'inline-flex',
           }}
           title="Benefit / Charity Sale"
@@ -244,7 +244,7 @@ export const CharityHeartBadge: React.FC<{ size?: number }> = ({ size = 32 }) =>
       width: size,
       height: size,
       borderRadius: '50%',
-      background: '#C8552B',
+      background: '#B34A22',
       color: '#FBF8F2',
       display: 'flex',
       alignItems: 'center',

@@ -5,6 +5,11 @@
  */
 var mockPrisma: any;
 var mockSend: jest.Mock;
+var mockSentry: { captureMessage: jest.Mock; captureException: jest.Mock };
+jest.mock('@sentry/node', () => {
+  mockSentry = { captureMessage: jest.fn(), captureException: jest.fn() };
+  return { __esModule: true, ...mockSentry };
+});
 jest.mock('../index', () => {
   mockPrisma = {
     user: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
@@ -182,5 +187,48 @@ describe('POST /auth/resend-verification stores only a hash', () => {
     const html = mockSend.mock.calls[0][0].html as string;
     const raw = /verify-email\?token=([0-9a-f]+)/.exec(html)![1];
     expect(hashOpaqueToken(raw)).toBe(stored);
+  });
+
+  it('2026-10-23: the response does not wait for the token write, and no email goes out until the token is saved', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'a@b.co', emailVerified: false, emailVerificationToken: null });
+    let finishWrite: (v?: unknown) => void = () => undefined;
+    mockPrisma.user.update.mockReturnValueOnce(new Promise((r) => { finishWrite = r; }));
+    const res = await post('/auth/resend-verification', { email: 'a@b.co' });
+    expect(res.status).toBe(200);
+    expect(res.json.message).toMatch(/If that email exists/);
+    expect(mockPrisma.user.update).toHaveBeenCalledTimes(1);
+    expect(mockSend).not.toHaveBeenCalled();
+    finishWrite({});
+    await new Promise((r) => setImmediate(r));
+    expect(mockSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('2026-10-23: a failed token write sends no email, still answers with the generic response, and reaches Sentry', async () => {
+    mockSentry.captureMessage.mockClear();
+    mockSentry.captureException.mockClear();
+    mockPrisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'a@b.co', emailVerified: false, emailVerificationToken: null });
+    mockPrisma.user.update.mockRejectedValueOnce(new Error('db down'));
+    const res = await post('/auth/resend-verification', { email: 'a@b.co' });
+    expect(res.status).toBe(200);
+    expect(res.json.message).toMatch(/If that email exists/);
+    await new Promise((r) => setImmediate(r));
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(mockSentry.captureMessage.mock.calls.length + mockSentry.captureException.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it('2026-10-23: the new link lasts 7 days, uses the Resend default sender, and a failed send reaches Sentry', async () => {
+    mockSentry.captureMessage.mockClear();
+    mockSend.mockResolvedValue({ sent: false, reason: 'suppressed' });
+    mockPrisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'a@b.co', emailVerified: false, emailVerificationToken: null });
+    const before = Date.now();
+    const res = await post('/auth/resend-verification', { email: 'a@b.co' });
+    expect(res.status).toBe(200);
+    const expiry = mockPrisma.user.update.mock.calls[mockPrisma.user.update.mock.calls.length - 1][0].data.emailVerificationTokenExpiry as Date;
+    expect(expiry.getTime() - before).toBeGreaterThan(6.9 * 24 * 60 * 60 * 1000);
+    const mail = mockSend.mock.calls[mockSend.mock.calls.length - 1][0];
+    expect(mail.from).toBeUndefined();
+    expect(mail.html).toContain('7 days');
+    await new Promise((r) => setImmediate(r));
+    expect(mockSentry.captureMessage).toHaveBeenCalledTimes(1);
   });
 });

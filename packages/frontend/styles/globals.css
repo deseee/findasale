@@ -9,6 +9,7 @@
      backgrounds it would drop to ~3.4:1, so lighten it in dark mode. Explicit dark:text-* utilities
      still win (same specificity, emitted later). */
   .dark .text-amber-600 { color: #FB923C; }
+  .dark .hover\:text-amber-600:hover { color: #FB923C; }
 
   html {
     font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;

@@ -2824,7 +2824,9 @@
     'taser', 'stun gun', 'self defense',
     'narcotic', 'drug', 'prescription', 'alcohol', 'liquor', 'wine', 'beer', 'tobacco',
     'cigarette', 'cigar', 'vape', 'e-cigarette', 'cbd', 'supplement', 'vitamin', 'food',
-    'gold', 'silver', 'platinum', 'precious metal', 'bullion', 'loose gem', 'loose diamond',
+    // 1.0.63: bare 'gold'/'silver'/'platinum'/'precious metal'/'bullion' moved to MERCARI_PRECIOUS_METAL_* below
+    // (bullion contexts only), mirroring marketplaceEligibilityRules.ts's MERCARI precious metals rule.
+    'loose gem', 'loose diamond',
     'unset diamond', 'gemstone', 'cryptocurrency', 'crypto', 'gift card', 'prepaid card',
     'counterfeit', 'replica', 'taxidermy', 'ivory', 'adult', 'pornographic', 'sex toy',
     'fetish', 'lottery ticket', 'pull tab', 'raffle',
@@ -2934,9 +2936,31 @@
     }
     return re.test(fasKwNorm(haystack));
   }
+  // 1.0.63 (2026-10-23): Mercari bans "precious metals, including gold, silver, and platinum sold in any medium" (bars,
+  // coins, rounds, scrap), not gold or silver colored goods or jewelry. Verbatim mirror of the backend MERCARI precious
+  // metals rule (marketplaceEligibilityRules.ts); its own exclude list, checked separately from the one above.
+  const MERCARI_PRECIOUS_METAL_KEYWORDS = [
+    'bullion', 'precious metal', 'bars rounds',
+    'gold bar', 'silver bar', 'platinum bar', 'palladium bar',
+    'gold coin', 'silver coin', 'platinum coin', 'palladium coin',
+    'gold ingot', 'silver ingot', 'platinum ingot',
+    'gold nugget', 'gold grain', 'silver grain', 'silver shot', 'gold dust', 'gold flake',
+    'scrap gold', 'gold scrap', 'scrap silver', 'silver scrap', 'sterling scrap', 'dental gold',
+    'troy oz', 'troy ounce', '999 fine', 'fine silver', 'fine gold', 'krugerrand',
+  ];
+  const MERCARI_PRECIOUS_METAL_EXCLUDE = [
+    'bar stool', 'barstool', 'bar cart', 'bar set', 'bar tool', 'bar sign', 'bar mirror', 'bar glass',
+    'plated', 'gold tone', 'goldtone', 'silver tone', 'silvertone', 'gold leaf', 'gold filled',
+    'coin purse', 'coin bank', 'coin holder', 'coin album', 'coin tube', 'coin folder', 'coin sorter',
+    'necklace', 'pendant', 'bracelet', 'earring', 'jewelry', 'jewellery', 'charm', 'cufflink', 'money clip',
+    'keychain', 'key chain', 'chocolate', 'pirate', 'toy', 'plastic', 'costume', 'movie prop', 'stage prop',
+  ];
   function mercariRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
+    if (!MERCARI_PRECIOUS_METAL_EXCLUDE.some((kw) => haystack.indexOf(kw) !== -1) && MERCARI_PRECIOUS_METAL_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
+      return 'Mercari does not allow selling precious metals such as gold, silver or platinum bullion, coins or scrap (Prohibited Items policy).';
+    }
     if (MERCARI_PROHIBITED_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) return null;
     if (MERCARI_PROHIBITED_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return "This category isn't allowed on Mercari (Prohibited Items policy).";

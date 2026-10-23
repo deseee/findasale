@@ -2,8 +2,13 @@
  * Kits: POST /api/kits/convert/:itemId (turn an ordinary item into a kit in place). No network, no real database.
  */
 const mockTx: Record<string, any> = {};
+// 2026-10-23: createKit reads the account's verify-to-publish state (lib/publishGate.ts userCanPublish).
+const mockUserFindUnique = jest.fn();
 jest.mock('../lib/prisma', () => ({
-  prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn(mockTx) },
+  prisma: {
+    $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn(mockTx),
+    user: { findUnique: (...args: unknown[]) => mockUserFindUnique(...args) },
+  },
 }));
 
 import * as fs from 'fs';
@@ -161,6 +166,41 @@ describe('createKit', () => {
     const data = mockTx.item.create.mock.calls[0][0].data;
     expect(data).toMatchObject({ listingType: 'KIT', stockTotal: 1, excludeFromMarkdown: true });
     expect(data).not.toHaveProperty('ebayShippingOverride');
+  });
+});
+
+describe('createKit publish state (2026-10-23, verify to publish)', () => {
+  const run = async (userId?: string) => {
+    setup();
+    mockTx.sale = { findUnique: jest.fn() };
+    mockTx.item.create = jest.fn().mockResolvedValue({ id: 'k9' });
+    mockTx.item.findUnique.mockResolvedValue({
+      id: 'k9', title: 'T', description: null, price: 5, saleId: null, status: 'AVAILABLE', stockSold: 0, stockTotal: 1, kitComponents: [],
+    });
+    await createKit('o1', { title: 'Kit', price: 5, components: parts }, userId);
+    return mockTx.item.create.mock.calls[0][0].data.draftStatus;
+  };
+  beforeEach(() => mockUserFindUnique.mockReset());
+  it('a verified account gets a PUBLISHED kit', async () => {
+    mockUserFindUnique.mockResolvedValue({ emailVerified: true, role: 'ORGANIZER', roles: ['ORGANIZER'] });
+    expect(await run('u1')).toBe('PUBLISHED');
+    expect(mockUserFindUnique.mock.calls[0][0].where).toEqual({ id: 'u1' });
+  });
+  it('an unverified account gets a DRAFT kit (kept out of the marketplace queues)', async () => {
+    mockUserFindUnique.mockResolvedValue({ emailVerified: false, role: 'ORGANIZER', roles: ['ORGANIZER'] });
+    expect(await run('u1')).toBe('DRAFT');
+  });
+  it('an unverified admin may publish', async () => {
+    mockUserFindUnique.mockResolvedValue({ emailVerified: false, role: 'ADMIN', roles: ['ADMIN'] });
+    expect(await run('u1')).toBe('PUBLISHED');
+  });
+  it('no account given: DRAFT, nothing looked up (fail closed)', async () => {
+    expect(await run(undefined)).toBe('DRAFT');
+    expect(mockUserFindUnique).not.toHaveBeenCalled();
+  });
+  it('the controller passes the signed-in account to createKit', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../controllers/itemKitController.ts'), 'utf-8');
+    expect(src).toContain('createKit(organizerId, req.body, req.user?.id)');
   });
 });
 

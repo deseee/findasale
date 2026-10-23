@@ -1651,7 +1651,7 @@ const ReviewPage = () => {
     COMMON:    { bg: 'rgba(20,18,14,0.05)',   fg: 'rgba(26,24,20,0.62)',  darkBg: 'rgba(245,245,240,0.08)', darkFg: '#D0D0CC' },
     UNCOMMON:  { bg: 'rgba(63,122,75,0.10)',  fg: '#3F7A4B',              darkBg: 'rgba(63,122,75,0.20)',   darkFg: '#6BCF7F' },
     RARE:      { bg: 'rgba(58,110,180,0.12)', fg: '#3A6EB4',              darkBg: 'rgba(58,110,180,0.22)',  darkFg: '#7EB0F0' },
-    LEGENDARY: { bg: 'rgba(200,85,43,0.10)',  fg: '#C8552B',              darkBg: 'rgba(200,85,43,0.18)',   darkFg: '#E8775A' },
+    LEGENDARY: { bg: 'rgba(200,85,43,0.10)',  fg: '#B34A22',              darkBg: 'rgba(200,85,43,0.18)',   darkFg: '#E8775A' },
   };
 
   const conditionOptions = [
@@ -1700,7 +1700,7 @@ const ReviewPage = () => {
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-2xl border border-black/10 dark:border-[#3A3A3C] shadow-2xl overflow-hidden">
             <div className="p-7">
-              <p className="text-[10px] font-mono tracking-widest uppercase text-[#C8552B] mb-2">Confirm publish</p>
+              <p className="text-[10px] font-mono tracking-widest uppercase text-[#B34A22] dark:text-[#E97C4D] mb-2">Confirm publish</p>
               <h2 className="text-xl font-semibold tracking-tight text-[#1A1814] dark:text-[#F5F5F0] mb-2">
                 Publish items to this sale?
               </h2>
@@ -1728,7 +1728,7 @@ const ReviewPage = () => {
               </button>
               <button
                 onClick={handleApproveAll}
-                className="px-4 py-2 rounded-lg bg-[#C8552B] text-white text-sm font-semibold hover:bg-[#b04825] transition-colors"
+                className="px-4 py-2 rounded-lg bg-[#B34A22] text-white text-sm font-semibold hover:bg-[#9A3F1C] transition-colors"
               >
                 Publish priced items
               </button>
@@ -1827,7 +1827,7 @@ const ReviewPage = () => {
                   href={`/sales/${saleId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3 py-2 text-sm text-[#C8552B] hover:underline transition-colors"
+                  className="px-3 py-2 text-sm text-[#B34A22] dark:text-[#E97C4D] hover:underline transition-colors"
                 >
                   View live sale →
                 </Link>
@@ -1883,8 +1883,8 @@ const ReviewPage = () => {
                 {/* Left: count + progress */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className="hidden sm:flex w-8 h-8 rounded-lg items-center justify-center flex-shrink-0"
-                    style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}
+                    className="hidden sm:flex w-8 h-8 rounded-lg items-center justify-center flex-shrink-0 text-[#B34A22] dark:text-[#E97C4D]"
+                    style={{ background: 'rgba(200,85,43,0.10)' }}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
@@ -1924,7 +1924,7 @@ const ReviewPage = () => {
                   </Link>
                   <button
                     onClick={() => setShowApproveAllModal(true)}
-                    className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#C8552B] text-white text-xs font-semibold hover:bg-[#b04825] transition-colors"
+                    className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#B34A22] text-white text-xs font-semibold hover:bg-[#9A3F1C] transition-colors"
                   >
                     Approve all
                   </button>
@@ -1958,7 +1958,7 @@ const ReviewPage = () => {
                         aria-expanded={bulkMode === 'price'}
                         className={`flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
                           bulkMode === 'price'
-                            ? 'border-[#C8552B] text-[#C8552B] bg-[#C8552B]/5'
+                            ? 'border-[#C8552B] text-[#B34A22] dark:text-[#E97C4D] bg-[#C8552B]/5'
                             : 'border-black/18 dark:border-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C]'
                         }`}
                       >
@@ -1971,7 +1971,7 @@ const ReviewPage = () => {
                         aria-expanded={bulkMode === 'category'}
                         className={`flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
                           bulkMode === 'category'
-                            ? 'border-[#C8552B] text-[#C8552B] bg-[#C8552B]/5'
+                            ? 'border-[#C8552B] text-[#B34A22] dark:text-[#E97C4D] bg-[#C8552B]/5'
                             : 'border-black/18 dark:border-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C]'
                         }`}
                       >
@@ -2010,7 +2010,7 @@ const ReviewPage = () => {
                         <button
                           type="submit"
                           disabled={bulkPriceValue === null || bulkBusy}
-                          className="px-3 py-2 rounded-lg bg-[#C8552B] text-white text-xs font-semibold hover:bg-[#b04825] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="px-3 py-2 rounded-lg bg-[#B34A22] text-white text-xs font-semibold hover:bg-[#9A3F1C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           {bulkUpdateMutation.isPending ? 'Applying…' : bulkPriceButtonText(bulkPriceValue, selectedCount)}
                         </button>
@@ -2049,7 +2049,7 @@ const ReviewPage = () => {
                           type="button"
                           onClick={runBulkCategory}
                           disabled={!bulkCategoryPick || bulkBusy}
-                          className="px-3 py-2 rounded-lg bg-[#C8552B] text-white text-xs font-semibold hover:bg-[#b04825] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="px-3 py-2 rounded-lg bg-[#B34A22] text-white text-xs font-semibold hover:bg-[#9A3F1C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           {bulkCategoryBusy ? 'Applying…' : bulkCategoryButtonText(selectedCount)}
                         </button>
@@ -2101,7 +2101,7 @@ const ReviewPage = () => {
                 <div className="flex gap-3 justify-center">
                   <Link
                     href={`/sales/${saleId}`}
-                    className="px-4 py-2 rounded-lg bg-[#C8552B] text-white text-sm font-semibold hover:bg-[#b04825] transition-colors"
+                    className="px-4 py-2 rounded-lg bg-[#B34A22] text-white text-sm font-semibold hover:bg-[#9A3F1C] transition-colors"
                   >
                     View sale →
                   </Link>
@@ -2122,7 +2122,7 @@ const ReviewPage = () => {
               <p className="text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-4">No items in this sale yet.</p>
               <Link
                 href={`/organizer/add-items/${saleId}`}
-                className="text-sm text-[#C8552B] font-medium hover:underline"
+                className="text-sm text-[#B34A22] dark:text-[#E97C4D] font-medium hover:underline"
               >
                 ← Add items
               </Link>
@@ -2177,8 +2177,8 @@ const ReviewPage = () => {
                             Select
                           </label>
                         <span
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono tracking-widest uppercase"
-                          style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono tracking-widest uppercase text-[#B34A22] dark:text-[#E97C4D]"
+                          style={{ background: 'rgba(200,85,43,0.10)' }}
                         >
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                             <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
@@ -2226,7 +2226,7 @@ const ReviewPage = () => {
                             onClick={() => requestReanalyze(item, { forceGrounding: true })}
                             disabled={reanalyzingIds.has(item.id) || item.photoUrls.length === 0}
                             title={item.photoUrls.length === 0 ? 'Add a photo to identify precisely' : 'Look up this item\u2019s exact identity from its photos and markings'}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#C8552B]/30 dark:border-[#C8552B]/40 text-[11px] font-medium text-[#C8552B] dark:text-[#E08A5F] hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#C8552B]/30 dark:border-[#C8552B]/40 text-[11px] font-medium text-[#B34A22] dark:text-[#E08A5F] hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             aria-label="Identify item precisely"
                           >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -2313,7 +2313,7 @@ const ReviewPage = () => {
                           {/* Title */}
                           <div>
                             <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
-                              Title <span className="text-[#C8552B]">· Smart</span>
+                              Title <span className="text-[#B34A22] dark:text-[#E97C4D]">· Smart</span>
                             </label>
                             <input
                               type="text"
@@ -2345,7 +2345,7 @@ const ReviewPage = () => {
                             </div>
                             <div>
                               <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
-                                Condition <span className="text-[#C8552B]">· Smart</span>
+                                Condition <span className="text-[#B34A22] dark:text-[#E97C4D]">· Smart</span>
                               </label>
                               {/* Segmented control */}
                               <div className="inline-flex w-full bg-[rgba(20,18,14,0.05)] dark:bg-[#1C1C1E] p-0.5 rounded-lg border border-black/10 dark:border-[#3A3A3C]">
@@ -2371,7 +2371,7 @@ const ReviewPage = () => {
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                               <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
-                                Brand <span className="text-[#C8552B]">· eBay</span>
+                                Brand <span className="text-[#B34A22] dark:text-[#E97C4D]">· eBay</span>
                               </label>
                               <input
                                 type="text"
@@ -2427,14 +2427,14 @@ const ReviewPage = () => {
                           {/* Tags row */}
                           <div>
                             <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1.5">
-                              Search tags <span className="text-[#C8552B]">· Smart</span>
+                              Search tags <span className="text-[#B34A22] dark:text-[#E97C4D]">· Smart</span>
                             </label>
                             <div className="flex flex-wrap gap-1.5">
                               {currentTags.map(tag => (
                                 <span
                                   key={tag}
-                                  className="inline-flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full text-[11px] font-mono"
-                                  style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}
+                                  className="inline-flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full text-[11px] font-mono text-[#B34A22] dark:text-[#E97C4D]"
+                                  style={{ background: 'rgba(200,85,43,0.10)' }}
                                 >
                                   {tag}
                                   <button
@@ -2469,7 +2469,7 @@ const ReviewPage = () => {
                           {/* Rarity picker */}
                           <div>
                             <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1.5">
-                              Rarity <span className="text-[#C8552B]">· Smart</span>
+                              Rarity <span className="text-[#B34A22] dark:text-[#E97C4D]">· Smart</span>
                             </label>
                             <div className="flex gap-1.5">
                               {(['COMMON', 'UNCOMMON', 'RARE', 'LEGENDARY'] as const).map(r => {
@@ -2600,7 +2600,7 @@ const ReviewPage = () => {
                               type="button"
                               onClick={() => handleApproveItem(item)}
                               disabled={updateItemMutation.isPending}
-                              className="w-full py-2.5 rounded-lg bg-[#C8552B] text-white text-sm font-semibold hover:bg-[#b04825] disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                              className="w-full py-2.5 rounded-lg bg-[#B34A22] text-white text-sm font-semibold hover:bg-[#9A3F1C] disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
                             >
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M5 12l4 4 10-10" />
@@ -2808,7 +2808,7 @@ const ReviewPage = () => {
                                   <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-1 block">
                                     Condition Grade
                                     {item.suggestedConditionGrade && (
-                                      <span className="ml-2 text-[#C8552B] font-normal">Auto-suggests: {item.suggestedConditionGrade}</span>
+                                      <span className="ml-2 text-[#B34A22] dark:text-[#E97C4D] font-normal">Auto-suggests: {item.suggestedConditionGrade}</span>
                                     )}
                                   </label>
                                   <div className="flex gap-2">
@@ -2817,7 +2817,7 @@ const ReviewPage = () => {
                                         key={opt.value}
                                         type="button"
                                         onClick={() => handleConditionGradeChange(item, opt.value)}
-                                        className={`flex-1 min-h-[44px] py-1.5 px-1 text-xs font-bold rounded-lg border transition-colors ${current === opt.value ? 'bg-[#C8552B] text-white border-[#C8552B]' : 'bg-white dark:bg-[#3A3A3C] text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] border-black/18 dark:border-[#3A3A3C] hover:border-[#C8552B]'}`}
+                                        className={`flex-1 min-h-[44px] py-1.5 px-1 text-xs font-bold rounded-lg border transition-colors ${current === opt.value ? 'bg-[#B34A22] text-white border-[#B34A22]' : 'bg-white dark:bg-[#3A3A3C] text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] border-black/18 dark:border-[#3A3A3C] hover:border-[#C8552B]'}`}
                                         title={opt.title}
                                       >
                                         {opt.label}

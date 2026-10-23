@@ -69,7 +69,7 @@ import { useCart } from '../context/CartContext';
 import CartDrawer from './CartDrawer';
 import CartIcon from './CartIcon';
 import { io } from 'socket.io-client';
-import { socketAuth } from '../lib/socketAuth';
+import { socketAuth, reconnectAfterServerDrop } from '../lib/socketAuth';
 import { useToast } from './ToastContext';
 import api from '../lib/api';
 
@@ -181,6 +181,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       transports: ['websocket'],
       upgrade: false,
     });
+    reconnectAfterServerDrop(socket);
     socket.emit('join', `user:${user.id}`);
     socket.on('CART_SHARE_REQUEST', async (data: { saleId: string; saleName?: string }) => {
       // Auto-share current cart if it matches the requested sale

@@ -190,6 +190,20 @@ describe('1. getItemById: staff without any special permission see the address a
     expect((await run(item({}, { deletedAt: new Date() }), SHOPPER)).statusCode).toBe(404);
     expect((await run(item({}, { deletedAt: new Date() }), OWNER)).statusCode).toBe(200);
   });
+  it('2026-10-23: an item with no sale is public only once PUBLISHED (an unverified account\'s kit or import stays a draft)', async () => {
+    mockPrisma.organizer.findFirst.mockImplementation(async ({ where }: any) =>
+      where.id === 'org_owner' && where.userId === 'owner_user' ? { id: 'org_owner' } : null);
+    const saleless = (over: Record<string, any> = {}) => item({ saleId: null, sale: null, listingType: 'KIT', ...over });
+    for (const draftStatus of ['DRAFT', 'PENDING_REVIEW']) {
+      expect((await run(saleless({ draftStatus }))).statusCode).toBe(404);
+      expect((await run(saleless({ draftStatus }), SHOPPER)).statusCode).toBe(404);
+      expect((await run(saleless({ draftStatus }), OWNER)).statusCode).toBe(200);
+      expect((await run(saleless({ draftStatus }), ADMIN)).statusCode).toBe(200);
+    }
+    expect((await run(saleless({ draftStatus: 'PUBLISHED' }))).statusCode).toBe(200);
+    // An anonymous viewer is never the owner of a saleless item (undefined === undefined used to count as ownership).
+    expect((await run(saleless({ draftStatus: 'DRAFT', isActive: false }))).statusCode).toBe(404);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------

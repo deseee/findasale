@@ -1,7 +1,10 @@
 name: Pipeline — Sync Lead Tiers
 on:
-  schedule:
-    - cron: '0 4 * * 0'
+  # Weekly schedule (was cron '0 4 * * 0', Sundays 04:00 UTC) DISABLED 2026-10-23 by Patrick's decision.
+  # This job uploads scraped directory emails to MailerLite groups (mailerliteService.ts sync-lead-tier-groups).
+  # ADR-139 (claude_docs/architecture/ADR-139-organizer-recruitment-channel.md): scraped/directory contacts have
+  # no consent, and bulk-mail providers require active opt-in, so only leads with consentAt set may be mailed.
+  # Code is kept; manual runs remain possible via workflow_dispatch. Do not re-add the schedule without a new decision.
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}

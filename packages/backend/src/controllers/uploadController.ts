@@ -554,7 +554,8 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
     // job re-checks before spending anything.
     let aiQuota: { exceeded: boolean; remaining: number | null; limit: number | null } | undefined;
     try {
-      const q = await checkAiTagQuota(sale.organizer.id, resolveTier(sale.organizer.subscriptionTier));
+      // sale.id: a paid $9.99 a-la-carte sale also has its own 500 auto tags (lib/saleProFeatures.ts).
+      const q = await checkAiTagQuota(sale.organizer.id, resolveTier(sale.organizer.subscriptionTier), sale.id);
       aiQuota = {
         exceeded: q.exceeded,
         remaining: Number.isFinite(q.remaining) ? q.remaining : null,

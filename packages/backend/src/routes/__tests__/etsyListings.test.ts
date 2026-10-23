@@ -45,6 +45,7 @@ import router from '../etsyListings';
 import { authenticate, requireOrganizer } from '../../middleware/auth';
 import { itemEndpointLimiter, paymentLimiter } from '../../middleware/rateLimiter';
 import { etsyKillSwitch } from '../../controllers/etsyConnectController';
+import { requirePublishVerified } from '../../lib/publishGate';
 
 const ROUTES: Array<{ method: string; path: string; limiter: 'item' | 'payment' }> = [
   { method: 'GET', path: '/api/etsy/items/item_1/eligibility', limiter: 'item' },
@@ -63,7 +64,8 @@ const PATTERNS = [
   'DELETE /api/etsy/items/:id/listing',
 ];
 
-const ORGANIZER = { id: 'user_1', roles: ['ORGANIZER'] };
+const ORGANIZER = { id: 'user_1', roles: ['ORGANIZER'], emailVerified: true };
+const UNVERIFIED_ORGANIZER = { id: 'user_2', roles: ['ORGANIZER'], emailVerified: false };
 const SHOPPER = { id: 'user_9', roles: ['USER'] };
 
 async function call(method: string, path: string, user?: any, body: any = {}) {
@@ -118,7 +120,15 @@ describe('router stack', () => {
 
   it('runs the kill switch, authenticate, requireOrganizer, then the right limiter, then the handler, on every route', () => {
     for (const layer of layers) {
-      const handles = layer.route.stack.map((s: any) => s.handle);
+      let handles = layer.route.stack.map((s: any) => s.handle);
+      // 2026-10-23: publish (the listing goes live on Etsy) also needs a verified email, checked before the limiter.
+      const isPublish = layer.route.path === '/items/:id/publish';
+      if (isPublish) {
+        expect(handles[3]).toBe(requirePublishVerified);
+        handles = handles.filter((h: unknown) => h !== requirePublishVerified);
+      } else {
+        expect(handles).not.toContain(requirePublishVerified);
+      }
       expect(handles).toHaveLength(5);
       expect(handles[0]).toBe(etsyKillSwitch);
       expect(handles[1]).toBe(authenticate);
@@ -128,6 +138,17 @@ describe('router stack', () => {
       expect(handles[3]).toBe(isRead ? itemEndpointLimiter : paymentLimiter);
       expect(typeof handles[4]).toBe('function');
     }
+  });
+
+  it('2026-10-23: an unverified organizer cannot publish (403 EMAIL_NOT_VERIFIED, limiter untouched) but can still end a listing', async () => {
+    process.env.ETSY_CONNECTOR_ENABLED = 'true';
+    const res = await call('POST', '/api/etsy/items/item_1/publish', UNVERIFIED_ORGANIZER, { confirm: true });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('EMAIL_NOT_VERIFIED');
+    expect(mockLimiterHits.payment).toBe(0);
+    const end = await call('DELETE', '/api/etsy/items/item_1/listing', UNVERIFIED_ORGANIZER);
+    expect(end.body?.code).not.toBe('EMAIL_NOT_VERIFIED');
+    expect(mockLimiterHits.payment).toBe(1);
   });
 
   it('exposes exactly the six documented routes', () => {

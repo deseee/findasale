@@ -52,22 +52,22 @@ const StarRating: React.FC<StarRatingProps> = ({
                 <>
                   <defs>
                     <linearGradient id={`half-${i}`} x1="0" x2="1" y1="0" y2="0">
-                      <stop offset="50%" stopColor="#F97316" />
+                      <stop offset="50%" stopColor="#C2410C" />
                       <stop offset="50%" stopColor="#D4C4A8" />
                     </linearGradient>
                   </defs>
                   <path
                     d="M12 2l2.928 6.057L22 9.24l-5 4.956 1.18 6.996L12 18.02l-6.18 3.172L7 15.196 2 10.24l7.072-1.183z"
                     fill={`url(#half-${i})`}
-                    stroke="#F97316"
+                    stroke="#C2410C"
                     strokeWidth="1"
                   />
                 </>
               ) : (
                 <path
                   d="M12 2l2.928 6.057L22 9.24l-5 4.956 1.18 6.996L12 18.02l-6.18 3.172L7 15.196 2 10.24l7.072-1.183z"
-                  fill={filled ? '#F97316' : '#D4C4A8'}
-                  stroke={filled ? '#F97316' : '#B8A88A'}
+                  fill={filled ? '#C2410C' : '#D4C4A8'}
+                  stroke={filled ? '#C2410C' : '#B8A88A'}
                   strokeWidth="1"
                 />
               )}

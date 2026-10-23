@@ -9,7 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
-import { socketAuth } from '../lib/socketAuth';
+import { socketAuth, reconnectAfterServerDrop } from '../lib/socketAuth';
 import { useAuth } from './AuthContext';
 import api from '../lib/api';
 
@@ -83,6 +83,7 @@ export function PosPaymentRequestAlert() {
       reconnectionDelayMax: 5000,
       reconnectionAttempts: 10,
     });
+    reconnectAfterServerDrop(socketRef.current);
 
     socketRef.current.on('POS_PAYMENT_REQUEST', showRequest);
 

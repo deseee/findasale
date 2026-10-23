@@ -1835,7 +1835,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                         onClick={() => requestReanalyzeItem(true)}
                         disabled={reanalyzing}
                         title="Look up this item's exact identity from its photos and markings"
-                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[#C8552B] dark:text-[#E08A5F] border border-[#C8552B]/30 dark:border-[#C8552B]/40 rounded-md hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[#B34A22] dark:text-[#E08A5F] border border-[#C8552B]/30 dark:border-[#C8552B]/40 rounded-md hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         Identify precisely
                       </button>

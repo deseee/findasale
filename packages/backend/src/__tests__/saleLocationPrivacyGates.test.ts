@@ -13,7 +13,7 @@ jest.mock('../lib/prisma', () => {
     user: { findUnique: jest.fn() },
     organizer: { findUnique: jest.fn() },
     sale: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn(), update: jest.fn() },
-    item: { count: jest.fn(), groupBy: jest.fn() },
+    item: { count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn(async () => []) },
     workspaceMember: { findFirst: jest.fn() },
   };
   return { prisma: mockPrisma };
@@ -195,7 +195,8 @@ describe('updateSaleStatus: empty-sale publish gate', () => {
   const organizerReq = (body: any) => ({
     params: { id: 's1' },
     body,
-    user: { id: 'owner_user', role: 'ORGANIZER', roles: ['ORGANIZER'] },
+    // 2026-10-23: publishing needs a verified email (lib/publishGate.ts).
+    user: { id: 'owner_user', role: 'ORGANIZER', roles: ['ORGANIZER'], emailVerified: true },
   }) as any;
 
   beforeEach(() => {

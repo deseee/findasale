@@ -318,7 +318,7 @@ describe('parity with extensionController.getExtensionItems (marketplaceListed* 
 
     let body: any;
     const res: any = { status: () => res, json: (b: any) => { body = b; return res; } };
-    await getExtensionItems({ user: { id: 'u1' } } as any, res);
+    await getExtensionItems({ user: { id: 'u1', emailVerified: true } } as any, res);
     expect(body?.items).toHaveLength(7);
 
     const serviceListed = listedExtensionPlatformsByItemId(jobs);

@@ -315,7 +315,7 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
                         <circle cx="28" cy="28" r="22" stroke="#3f3f46" strokeWidth="5" />
                         <circle
                           cx="28" cy="28" r="22"
-                          stroke="#f97316"
+                          stroke="#C2410C"
                           strokeWidth="5"
                           strokeLinecap="round"
                           strokeDasharray="138"
@@ -492,7 +492,7 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
                       });
                       window.location.href = `/register?claim=${organizer.id}`;
                     }}
-                    className="w-full bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white text-base font-bold py-3.5 rounded-xl transition-colors mb-2"
+                    className="w-full bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-base font-bold py-3.5 rounded-xl transition-colors mb-2"
                   >
                     Claim This Profile. It&apos;s Free
                   </button>
@@ -712,7 +712,7 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
           </div>
           <Link
             href={`/register?claim=${organizer.id}`}
-            className="bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors flex-shrink-0"
+            className="bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors flex-shrink-0"
             onClick={() => track('claim_profile_click', {
               organizerId: organizer.id,
               source: (router.query.ref as string) || 'direct',

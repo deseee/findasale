@@ -8,8 +8,10 @@ export { MAX_APP_FEE_SHARE_OF_CARD_LEG, cardLegFeeFits, MIN_CARD_SALE_CENTS };
  * ── CASH / OFF-PLATFORM COMMISSION ACCRUAL ───────────────────────────────────────────────
  *
  * FindA.Sale charges the organizer commission (inclusive rate: SIMPLE 8% in person / 9.5% online, PRO+TEAMS 6% / 7.5% -- see
- * utils/feeCalculator.ts, the source of truth) on EVERY sale, including sales the platform's
- * Stripe account never touches. On a card sale Stripe collects that commission for us as
+ * utils/feeCalculator.ts, the source of truth) on every sale made THROUGH FindA.Sale: paid on the
+ * website or rung up on the FindA.Sale POS, including cash/Venmo/Zelle tenders the platform never
+ * touches. Items marked sold off-platform (Bring-Your-Own-Rails / OffPlatformSale) carry NO fee at
+ * all (Patrick 2026-10-23) and never reach this file. On a card sale Stripe collects that commission for us as
  * `application_fee_amount`. On a CASH / in-person sale the organizer physically pockets the
  * whole amount, so there is nothing for Stripe to take a cut of -- the commission instead
  * accrues to `Organizer.cashFeeBalance` and is netted out of their next Stripe payout

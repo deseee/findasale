@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { createNotification } from '../lib/notificationService';
+import { dropUserSockets } from '../lib/dropUserSockets';
 
 /**
  * Feature #106-#109: Anti-Abuse System — Fraud Detection & Tracking Services
@@ -122,6 +123,7 @@ export async function recordChargebackIncident(
             tokenVersion: { increment: 1 },
           },
         });
+        await dropUserSockets(organizer.userId, 'serial-chargeback-suspend'); // 2026-10-23 (security)
 
         // Notify + email the organizer via the shared notification service (matches every
         // other suspend path in the codebase) -- an in-app-only notification isn't reliable

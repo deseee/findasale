@@ -1,320 +1,304 @@
 /**
- * FindA.Sale MCP Server — Phase 1 MVP
+ * FindA.Sale MCP Server
  *
- * Express HTTP server with MCP SSE transport.
- * Exposes 10 tools for AI agents to search sales and items.
+ * Public, read-only, unauthenticated MCP server for sale and item discovery.
  *
  * Endpoints:
- * - GET  /health        → Server health check
- * - GET  /sse           → MCP SSE connection
- * - POST /messages      → MCP tool call handler
+ * - POST /mcp                         Streamable HTTP (MCP 2026-07-28, stateless; 2025 clients served statelessly too)
+ * - GET  /sse + POST /messages?sessionId=…   Legacy HTTP+SSE transport (deprecated; kept for existing clients)
+ * - POST /messages (no sessionId)     Sessionless JSON-RPC shim (initialize, tools/list, tools/call, ping) kept from v1
+ * - GET  /mcp/server-card             MCP Server Card (application/mcp-server-card+json)
+ * - GET  /.well-known/ai-catalog.json AI Catalog linking the Server Card
+ * - GET  /.well-known/mcp.json        Informal manifest
+ * - GET  /health                      Health check (Railway)
  */
 
 import 'dotenv/config';
-import express, { Request, Response, NextFunction } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
+import { createMcpHandler } from '@modelcontextprotocol/server';
+import { toNodeHandler } from '@modelcontextprotocol/node';
+import { SSEServerTransport } from '@modelcontextprotocol/server-legacy/sse';
+
+import { createFindASaleServer, parseShimArgs, runTool, SERVER_NAME, SERVER_VERSION, SERVER_INSTRUCTIONS, SERVER_TITLE, toolListForShim } from './server';
+import { TOOLS } from './tools';
 import { rateLimiter } from './lib/rateLimiter';
-
-import { searchSalesTool } from './tools/searchSales';
-import { getSaleTool } from './tools/getSale';
-import { searchItemsTool } from './tools/searchItems';
-import { getItemTool } from './tools/getItem';
-import { listCitiesTool } from './tools/listCities';
-import { listSaleTypesTool } from './tools/listSaleTypes';
-import { listCategoriesTool } from './tools/listCategories';
-import { getTrendingSalesTool } from './tools/getTrendingSales';
-import { getSalesStartingSoonTool } from './tools/getSalesStartingSoon';
-import { findItemForSaleTool } from './tools/findItemForSale';
-
-import {
-  handleSearchSales,
-  handleGetSale,
-  handleSearchItems,
-  handleGetItem,
-  handleListCities,
-  handleListSaleTypes,
-  handleListCategories,
-  handleGetTrendingSales,
-  handleGetSalesStartingSoon,
-  handleFindItemForSale,
-} from './handlers';
-import { MCPToolDefinition } from './types';
-
-// ──────────────────────────────────────────────────────────────
-// Configuration
-// ──────────────────────────────────────────────────────────────
+import { requestContext, RequestContext } from './lib/requestContext';
+import { aiCatalog, mcpManifest, serverCard } from './lib/discovery';
+import { cacheSize } from './lib/cache';
 
 const PORT = parseInt(process.env.PORT || '3003', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Tool registry
-const TOOLS: Record<string, { definition: MCPToolDefinition; handler: Function }> = {
-  search_sales: { definition: searchSalesTool, handler: handleSearchSales },
-  get_sale: { definition: getSaleTool, handler: handleGetSale },
-  search_items: { definition: searchItemsTool, handler: handleSearchItems },
-  get_item: { definition: getItemTool, handler: handleGetItem },
-  list_cities: { definition: listCitiesTool, handler: handleListCities },
-  list_sale_types: { definition: listSaleTypesTool, handler: handleListSaleTypes },
-  list_categories: { definition: listCategoriesTool, handler: handleListCategories },
-  get_trending_sales: { definition: getTrendingSalesTool, handler: handleGetTrendingSales },
-  get_sales_starting_soon: { definition: getSalesStartingSoonTool, handler: handleGetSalesStartingSoon },
-  find_item_for_sale: { definition: findItemForSaleTool, handler: handleFindItemForSale },
-};
-
-// ──────────────────────────────────────────────────────────────
-// Express Setup
-// ──────────────────────────────────────────────────────────────
+const MAX_SSE_SESSIONS = 300;
+const MAX_SSE_SESSIONS_PER_IP = 10;
+const SSE_KEEPALIVE_MS = 25_000;
+const SSE_MAX_SESSION_MS = 60 * 60 * 1000;
 
 const app = express();
+// Railway terminates TLS at one proxy hop; trust it so req.ip is the real client.
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(
+  cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    exposedHeaders: ['Mcp-Session-Id', 'Mcp-Protocol-Version', 'Retry-After'],
+    maxAge: 86400,
+  })
+);
 
-// Logging middleware
-app.use((req: Request, _res: Response, next: NextFunction) => {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.path}`);
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  if (req.path !== '/health') console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} ip=${req.ip}`);
   next();
 });
 
+function clientIp(req: Request): string {
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
+
+/** Per-IP request budget for every MCP endpoint. */
+function httpRateLimit(req: Request, res: Response, next: NextFunction): void {
+  const retryAfter = rateLimiter.checkHttp(clientIp(req));
+  if (retryAfter === null) return next();
+  res.setHeader('Retry-After', String(retryAfter));
+  res.status(429).json({
+    jsonrpc: '2.0',
+    error: { code: -32000, message: `Too many requests. Try again in ${retryAfter} seconds.` },
+    id: null,
+  });
+}
+
+function withContext(req: Request, transport: RequestContext['transport'], fn: () => Promise<void>): Promise<void> {
+  return requestContext.run({ clientIp: clientIp(req), transport }, fn);
+}
+
+const jsonBody = express.json({ limit: '256kb' });
+
 // ──────────────────────────────────────────────────────────────
-// Health Check
+// Health and discovery
 // ──────────────────────────────────────────────────────────────
+
+let activeSseSessions = 0;
 
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
+    version: SERVER_VERSION,
     uptime: process.uptime(),
-    tools: Object.keys(TOOLS).length,
+    tools: TOOLS.length,
+    sseSessions: activeSseSessions,
+    cacheEntries: cacheSize(),
     environment: NODE_ENV,
   });
 });
 
-// ──────────────────────────────────────────────────────────────
-// MCP SSE Transport
-// ──────────────────────────────────────────────────────────────
-
-interface MCPMessage {
-  jsonrpc: string;
-  method?: string;
-  params?: any;
-  id?: string | number;
-}
-
-interface SSEConnection {
-  res: Response;
-  requestId: number;
-}
-
-const sseConnections = new Map<string, SSEConnection>();
-let connectionCounter = 0;
-
-/**
- * GET /sse — MCP SSE Connection Handler
- * Client opens a persistent SSE connection to receive messages
- */
-app.get('/sse', (req: Request, res: Response) => {
-  const clientId = `client-${Date.now()}-${Math.random()}`;
-  const requestId = ++connectionCounter;
-
-  console.log(`[SSE] Client ${clientId} connected (request ${requestId})`);
-
-  // Set SSE headers
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+function sendDiscovery(res: Response, body: unknown, contentType = 'application/json'): void {
+  res.setHeader('Cache-Control', 'public, max-age=3600');
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.type(contentType).send(JSON.stringify(body, null, 2));
+}
 
-  // Store connection
-  sseConnections.set(clientId, { res, requestId });
+app.get(['/mcp/server-card', '/.well-known/mcp/server-card.json'], httpRateLimit, (_req, res) =>
+  sendDiscovery(res, serverCard(), 'application/mcp-server-card+json')
+);
+app.get('/.well-known/ai-catalog.json', httpRateLimit, (_req, res) => sendDiscovery(res, aiCatalog(), 'application/ai-catalog+json'));
+app.get('/.well-known/mcp.json', httpRateLimit, (_req, res) => sendDiscovery(res, mcpManifest()));
 
-  // Send init message
-  res.write(`data: ${JSON.stringify({ jsonrpc: '2.0', method: 'initialize' })}\n\n`);
-
-  // Cleanup on disconnect
-  req.on('close', () => {
-    console.log(`[SSE] Client ${clientId} disconnected`);
-    sseConnections.delete(clientId);
-    res.end();
-  });
-
-  req.on('error', (err) => {
-    console.error(`[SSE] Client ${clientId} error:`, err.message);
-    sseConnections.delete(clientId);
+app.get('/', (_req: Request, res: Response) => {
+  res.json({
+    name: SERVER_TITLE,
+    registryName: SERVER_NAME,
+    version: SERVER_VERSION,
+    mcp: { streamableHttp: '/mcp', sse: '/sse' },
+    serverCard: '/mcp/server-card',
+    docs: 'https://finda.sale/llms.txt',
   });
 });
 
-/**
- * POST /messages — MCP Tool Call Handler
- * Client sends tool invocation request; we process and broadcast response
- */
-app.post('/messages', async (req: Request, res: Response) => {
+// ──────────────────────────────────────────────────────────────
+// Streamable HTTP (/mcp), stateless
+// ──────────────────────────────────────────────────────────────
+
+const mcpHandler = createMcpHandler(() => createFindASaleServer(), {
+  onerror: (err) => console.error('[MCP] handler error:', err.message),
+});
+const mcpNodeHandler = toNodeHandler(mcpHandler);
+
+app.all('/mcp', httpRateLimit, jsonBody, async (req: Request, res: Response) => {
+  await withContext(req, 'streamable-http', async () => {
+    try {
+      await mcpNodeHandler(req, res, req.body);
+    } catch (err: any) {
+      console.error('[MCP] /mcp failed:', err?.message ?? err);
+      if (!res.headersSent) {
+        res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null });
+      }
+    }
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Legacy HTTP+SSE (/sse + /messages?sessionId=…)
+// ──────────────────────────────────────────────────────────────
+
+const sseSessions = new Map<string, { transport: SSEServerTransport; ip: string }>();
+const sseCountByIp = new Map<string, number>();
+
+app.get('/sse', httpRateLimit, async (req: Request, res: Response) => {
+  const ip = clientIp(req);
+  if (activeSseSessions >= MAX_SSE_SESSIONS || (sseCountByIp.get(ip) ?? 0) >= MAX_SSE_SESSIONS_PER_IP) {
+    res.setHeader('Retry-After', '30');
+    res.status(429).json({ error: 'Too many open SSE sessions. Use the Streamable HTTP endpoint at /mcp.' });
+    return;
+  }
+
+  const transport = new SSEServerTransport('/messages', res);
+  const server = createFindASaleServer();
+  const sessionId = transport.sessionId;
+  sseSessions.set(sessionId, { transport, ip });
+  sseCountByIp.set(ip, (sseCountByIp.get(ip) ?? 0) + 1);
+  activeSseSessions++;
+
+  // Comment frames keep proxies from closing an idle stream.
+  const keepAlive = setInterval(() => {
+    if (!res.writableEnded) res.write(': keepalive\n\n');
+  }, SSE_KEEPALIVE_MS);
+  const maxAge = setTimeout(() => void transport.close(), SSE_MAX_SESSION_MS);
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    clearInterval(keepAlive);
+    clearTimeout(maxAge);
+    sseSessions.delete(sessionId);
+    const n = (sseCountByIp.get(ip) ?? 1) - 1;
+    if (n <= 0) sseCountByIp.delete(ip);
+    else sseCountByIp.set(ip, n);
+    activeSseSessions = Math.max(0, activeSseSessions - 1);
+    void server.close().catch(() => undefined);
+  };
+  transport.onclose = cleanup;
+  res.on('close', cleanup);
+
   try {
-    const message: MCPMessage = req.body;
-    const clientIp = req.ip || '0.0.0.0';
-
-    // Validate request
-    if (!message.jsonrpc || message.jsonrpc !== '2.0') {
-      return res.status(400).json({
-        jsonrpc: '2.0',
-        error: { code: -32600, message: 'Invalid Request' },
-        id: message.id,
-      });
-    }
-
-    // Handle tool call
-    if (message.method === 'tools/call') {
-      const { name, arguments: toolArgs } = message.params || {};
-      const id = message.id;
-
-      if (!name) {
-        return res.status(400).json({
-          jsonrpc: '2.0',
-          error: { code: -32602, message: 'Missing tool name' },
-          id,
-        });
-      }
-
-      // Rate limit check
-      if (!rateLimiter.isAllowed(clientIp, name)) {
-        const resetTime = rateLimiter.getResetTime(clientIp, name);
-        return res.status(429).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32001,
-            message: `Rate limit exceeded for ${name}. Reset in ${Math.ceil(resetTime / 1000)}s`,
-          },
-          id,
-          headers: { 'Retry-After': Math.ceil(resetTime / 1000) },
-        });
-      }
-
-      // Execute tool
-      const tool = TOOLS[name];
-      if (!tool) {
-        return res.status(404).json({
-          jsonrpc: '2.0',
-          error: { code: -32001, message: `Tool not found: ${name}` },
-          id,
-        });
-      }
-
-      try {
-        console.log(`[Tool] Executing ${name} with args:`, toolArgs);
-        const result = await tool.handler(toolArgs || {});
-
-        console.log(`[Tool] ${name} succeeded`);
-
-        // Send result to client via SSE
-        const response = {
-          jsonrpc: '2.0',
-          id,
-          result: {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(result),
-              },
-            ],
-          },
-        };
-
-        // Broadcast to all connected SSE clients
-        sseConnections.forEach(({ res: sseRes }) => {
-          sseRes.write(`data: ${JSON.stringify(response)}\n\n`);
-        });
-
-        // Also return directly
-        return res.json(response);
-      } catch (error: any) {
-        console.error(`[Tool] ${name} failed:`, error.message);
-
-        const response = {
-          jsonrpc: '2.0',
-          id,
-          error: {
-            code: -32001,
-            message: error.message || 'Tool execution failed',
-          },
-        };
-
-        // Broadcast error to all connected SSE clients
-        sseConnections.forEach(({ res: sseRes }) => {
-          sseRes.write(`data: ${JSON.stringify(response)}\n\n`);
-        });
-
-        return res.status(400).json(response);
-      }
-    }
-
-    // Handle list tools request
-    if (message.method === 'tools/list') {
-      const toolDefinitions = Object.values(TOOLS).map((t) => t.definition);
-      return res.json({
-        jsonrpc: '2.0',
-        id: message.id,
-        result: {
-          tools: toolDefinitions,
-        },
-      });
-    }
-
-    // Unknown method
-    return res.status(400).json({
-      jsonrpc: '2.0',
-      error: { code: -32601, message: 'Method not found' },
-      id: message.id,
-    });
+    await server.connect(transport);
   } catch (err: any) {
-    console.error('[Server] Error processing message:', err);
-    return res.status(500).json({
-      jsonrpc: '2.0',
-      error: { code: -32603, message: 'Internal server error' },
-    });
+    console.error('[SSE] connect failed:', err?.message ?? err);
+    cleanup();
+    if (!res.headersSent) res.status(500).end();
   }
 });
 
+app.post('/messages', httpRateLimit, jsonBody, async (req: Request, res: Response) => {
+  const sessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId : undefined;
+
+  if (sessionId) {
+    const session = sseSessions.get(sessionId);
+    if (!session) {
+      res.status(404).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Unknown or expired session. Reconnect to /sse.' }, id: null });
+      return;
+    }
+    await withContext(req, 'sse', () => session.transport.handlePostMessage(req, res, req.body));
+    return;
+  }
+
+  await withContext(req, 'json-rpc', () => handleShim(req, res));
+});
+
 // ──────────────────────────────────────────────────────────────
-// Error Handling
+// Sessionless JSON-RPC shim (v1 behavior of POST /messages)
 // ──────────────────────────────────────────────────────────────
+
+async function handleShim(req: Request, res: Response): Promise<void> {
+  const message = req.body ?? {};
+  const id = message.id ?? null;
+  if (message.jsonrpc !== '2.0' || typeof message.method !== 'string') {
+    res.status(400).json({ jsonrpc: '2.0', error: { code: -32600, message: 'Invalid Request' }, id });
+    return;
+  }
+
+  switch (message.method) {
+    case 'initialize':
+      res.json({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          protocolVersion: '2025-06-18',
+          capabilities: { tools: { listChanged: false } },
+          serverInfo: { name: SERVER_NAME, title: SERVER_TITLE, version: SERVER_VERSION },
+          instructions: SERVER_INSTRUCTIONS,
+        },
+      });
+      return;
+    case 'ping':
+      res.json({ jsonrpc: '2.0', id, result: {} });
+      return;
+    case 'tools/list':
+      res.json({ jsonrpc: '2.0', id, result: { tools: toolListForShim() } });
+      return;
+    case 'tools/call': {
+      const name = message.params?.name;
+      const spec = TOOLS.find((t) => t.name === name);
+      if (!spec) {
+        res.status(400).json({ jsonrpc: '2.0', error: { code: -32602, message: `Unknown tool: ${String(name)}` }, id });
+        return;
+      }
+      const parsed = parseShimArgs(spec, message.params?.arguments);
+      if (!parsed.ok) {
+        res.json({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: parsed.message }], isError: true } });
+        return;
+      }
+      const result = await runTool(spec, parsed.value);
+      res.json({ jsonrpc: '2.0', id, result });
+      return;
+    }
+    default:
+      if (id === null) {
+        res.status(202).end(); // notification
+        return;
+      }
+      res.status(400).json({ jsonrpc: '2.0', error: { code: -32601, message: 'Method not found' }, id });
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Fallbacks
+// ──────────────────────────────────────────────────────────────
+
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ error: 'Not found', mcp: '/mcp', sse: '/sse', serverCard: '/mcp/server-card' });
+});
 
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('[Error]', err);
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: NODE_ENV === 'development' ? err.message : 'An error occurred',
-  });
+  if (err?.type === 'entity.too.large') {
+    res.status(413).json({ jsonrpc: '2.0', error: { code: -32600, message: 'Request too large' }, id: null });
+    return;
+  }
+  if (err?.type === 'entity.parse.failed') {
+    res.status(400).json({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error' }, id: null });
+    return;
+  }
+  console.error('[Error]', err?.message ?? err);
+  res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// ──────────────────────────────────────────────────────────────
-// Startup
-// ──────────────────────────────────────────────────────────────
-
-app.listen(PORT, () => {
-  console.log(`
-╔════════════════════════════════════════════════════════════════╗
-║                 FindA.Sale MCP Server v1.0.0                  ║
-╠════════════════════════════════════════════════════════════════╣
-║  Status:     Running                                           ║
-║  Port:       ${PORT}                                              ║
-║  Environment: ${NODE_ENV}                                         ║
-║  Tools:      ${Object.keys(TOOLS).length}                                              ║
-║                                                                ║
-║  Endpoints:                                                    ║
-║  - GET  /health       → Server health                         ║
-║  - GET  /sse          → MCP SSE connection                    ║
-║  - POST /messages     → Tool invocation                       ║
-╚════════════════════════════════════════════════════════════════╝
-  `);
+const httpServer = app.listen(PORT, () => {
+  console.log(`FindA.Sale MCP Server ${SERVER_VERSION} listening on :${PORT} (${NODE_ENV}) with ${TOOLS.length} tools`);
+  console.log('  POST /mcp (Streamable HTTP) | GET /sse + POST /messages (legacy SSE) | GET /mcp/server-card');
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully...');
-  process.exit(0);
-});
+function shutdown(signal: string): void {
+  console.log(`${signal} received, shutting down...`);
+  for (const { transport } of sseSessions.values()) void transport.close().catch(() => undefined);
+  void mcpHandler.close().catch(() => undefined);
+  httpServer.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref();
+}
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully...');
-  process.exit(0);
-});
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

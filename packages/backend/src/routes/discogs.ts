@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { authenticate, requireOrganizer, requireAdmin, AuthRequest } from '../middleware/auth';
+import { requirePublishVerified } from '../lib/publishGate'; // 2026-10-23: verify email to publish
 import {
   connectDiscogsEndpoint,
   getDiscogsConnectionStatus,
@@ -40,7 +41,7 @@ router.get('/items/:id/eligibility', authenticate, requireOrganizer, getDiscogsE
 // Listing push/remove — every route resolves the organizer from the JWT subject; none
 // accepts an organizer id from the client (AUTHZ-ON-EVERY-ENDPOINT / OWNERSHIP invariant,
 // CLAUDE.md §9 Security-QA Gate — full adversarial pass happens at QA time, not here).
-router.post('/items/:id/listing', authenticate, requireOrganizer, pushItemToDiscogs);
+router.post('/items/:id/listing', authenticate, requireOrganizer, requirePublishVerified, pushItemToDiscogs);
 router.delete('/items/:id/listing', authenticate, requireOrganizer, removeItemFromDiscogs);
 
 // ADR-132: release matching + organizer confirmation + per-item correction + rematch sweep.

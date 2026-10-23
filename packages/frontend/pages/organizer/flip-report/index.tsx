@@ -6,16 +6,19 @@
  * If organizer has multiple sales, shows a sale-picker UI
  * If organizer has no sales, shows empty state with link to create sale
  *
- * Tier: PRO minimum (enforced by TierGate)
+ * Tier: PRO minimum (enforced by TierGate), or a SIMPLE organizer's own sales that have the paid $9.99 upgrade
+ * (Sale.hasProFeatures from GET /sales/mine, decided server-side in lib/saleProFeatures.ts). A SIMPLE organizer only
+ * sees those upgraded sales here.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import TierGate from '../../../components/TierGate';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import Skeleton from '../../../components/Skeleton';
 import Link from 'next/link';
 
@@ -23,11 +26,13 @@ interface Sale {
   id: string;
   title: string;
   status: string;
+  hasProFeatures?: boolean;
 }
 
 export default function FlipReportIndexPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const { canAccess } = useOrganizerTier();
 
   // Redirect if not authenticated or not an organizer
   useEffect(() => {
@@ -46,12 +51,21 @@ export default function FlipReportIndexPage() {
     enabled: !!user && user.roles?.includes('ORGANIZER'),
   });
 
-  // Auto-redirect if exactly one sale
+  // PRO/TEAMS: every sale. SIMPLE: only sales with the paid $9.99 upgrade (server-computed hasProFeatures).
+  const isPro = canAccess('PRO');
+  const reportSales = useMemo(
+    () => (isPro ? salesData : salesData?.filter((s) => s.hasProFeatures)),
+    [isPro, salesData]
+  );
+  const unlocked = isPro || (reportSales?.length ?? 0) > 0;
+  const visibleSales = unlocked ? reportSales : salesData;
+
+  // Auto-redirect if exactly one sale has a report
   useEffect(() => {
-    if (salesData && salesData.length === 1) {
-      router.push(`/organizer/flip-report/${salesData[0].id}`);
+    if (unlocked && reportSales && reportSales.length === 1) {
+      router.push(`/organizer/flip-report/${reportSales[0].id}`);
     }
-  }, [salesData, router]);
+  }, [unlocked, reportSales, router]);
 
   if (authLoading || salesLoading) {
     return (
@@ -75,7 +89,7 @@ export default function FlipReportIndexPage() {
         <meta name="description" content="View your flip reports to optimize pricing for future sales" />
       </Head>
 
-      <TierGate requiredTier="PRO" featureName="Flip Report" description="See exactly what sold, at what price, and what to price next time. Flip Report turns your sale history into your next sale's strategy.">
+      <TierGate unlocked={unlocked} requiredTier="PRO" featureName="Flip Report" description="See exactly what sold, at what price, and what to price next time. Included with PRO and TEAMS, or with the optional $9.99 upgrade for a single sale.">
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto">
             {/* Header */}
@@ -90,7 +104,7 @@ export default function FlipReportIndexPage() {
             </div>
 
             {/* No Sales State */}
-            {salesData && salesData.length === 0 ? (
+            {visibleSales && visibleSales.length === 0 ? (
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center">
                 <svg className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -112,7 +126,7 @@ export default function FlipReportIndexPage() {
                 </p>
 
                 <div className="space-y-3">
-                  {salesData?.map((sale) => (
+                  {visibleSales?.map((sale) => (
                     <button
                       key={sale.id}
                       onClick={() => router.push(`/organizer/flip-report/${sale.id}`)}

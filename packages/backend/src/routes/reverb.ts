@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
+import { requirePublishVerified } from '../lib/publishGate'; // 2026-10-23: verify email to publish
 import {
   connectReverbEndpoint,
   getReverbConnectionStatus,
@@ -25,7 +26,7 @@ router.delete('/connection', authenticate, requireOrganizer, disconnectReverb);
 // Listing push/remove — every route resolves the organizer from the JWT subject; none
 // accepts an organizer id from the client (AUTHZ-ON-EVERY-ENDPOINT / OWNERSHIP invariant,
 // CLAUDE.md §9 Security-QA Gate — full adversarial pass happens at QA time, not here).
-router.post('/items/:id/listing', authenticate, requireOrganizer, pushItemToReverb);
+router.post('/items/:id/listing', authenticate, requireOrganizer, requirePublishVerified, pushItemToReverb);
 router.delete('/items/:id/listing', authenticate, requireOrganizer, removeItemFromReverb);
 
 export default router;

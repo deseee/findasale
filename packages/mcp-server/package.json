@@ -1,7 +1,7 @@
 {
   "name": "@findasale/mcp-server",
-  "version": "1.0.0",
-  "description": "FindA.Sale MCP (Model Context Protocol) Server Phase 1 MVP",
+  "version": "2.0.0",
+  "description": "FindA.Sale public MCP server: read-only sale and item discovery over Streamable HTTP (/mcp) and legacy HTTP+SSE (/sse)",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn src/index.ts",
@@ -13,20 +13,26 @@
     "mcp",
     "model-context-protocol",
     "findasale",
-    "estate-sales",
+    "yard-sales",
     "marketplace"
   ],
   "author": "FindA.Sale",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/node": "2.1.1",
+    "@modelcontextprotocol/server": "2.3.1",
+    "@modelcontextprotocol/server-legacy": "2.3.1",
     "axios": "^1.18.1",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.0",
-    "zod": "^3.22.0"
+    "zod": "^4.2.0"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^20.0.0",

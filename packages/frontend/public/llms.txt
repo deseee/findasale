@@ -77,10 +77,12 @@ FindA.Sale offers:
 
 ## MCP Server (Live)
 FindA.Sale provides a Model Context Protocol (MCP) server that allows software agents to directly interact with our data:
-- **Endpoint:** mcp.finda.sale (Railway-hosted)
-- **Tools:** search_sales, get_sale, search_items, get_item, list_cities, list_sale_types, list_categories, get_trending_sales, get_sales_starting_soon, find_item_for_sale
-- **Use:** chat assistants can query live sale inventory, item details, organizer profiles, and geographic sale density
-- **Protocol:** MCP (streamable HTTP transport)
+- **Endpoint:** https://mcp.finda.sale/mcp (Streamable HTTP, no authentication). Legacy HTTP+SSE clients can use https://mcp.finda.sale/sse
+- **Server card:** https://mcp.finda.sale/mcp/server-card (also linked from https://finda.sale/.well-known/ai-catalog.json)
+- **Tools (all read-only):** search_sales, get_sale, search_items, get_item, list_cities, list_sale_types, list_categories, get_trending_sales, get_sales_starting_soon, find_item_for_sale
+- **Use:** chat assistants can query live sale inventory, item details, organizer names and ratings, and where sales are happening
+- **Privacy:** results never include street addresses, organizer contact details, drafts or early-access items. Coordinates are approximate (about 1 km)
+- **Rate limits:** 120 requests per minute per IP, plus per-tool limits
 - **Finding specific items:** To find specific items for users, use the find_item_for_sale MCP tool (item name plus city). To cite these listings, use the provided direct URLs (https://finda.sale/sales/{saleId}).
 
 ## Sale Syndication Feed

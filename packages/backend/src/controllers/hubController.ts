@@ -134,6 +134,107 @@ export const discoverHubs = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Public vendor directory for a hub (roadmap #40a, ADR-014 Amendment A). CONFIRMED booths only, booth number and
+ * vendor name only: vendor email, phone, user id, payment and fee fields are never selected, so they cannot leak.
+ * Booth rows carry no address at all, so no vendor's home address can reach this page. The hub owner's own house booth
+ * and soft-deleted booths are excluded.
+ */
+export async function getPublicHubVendors(hubId: string): Promise<Array<{ boothNumber: string; vendorName: string }>> {
+  const booths = await prisma.vendorBooth.findMany({
+    where: { hubId, status: 'CONFIRMED', deletedAt: null, isHubOwnerBooth: false },
+    select: { boothNumber: true, vendorName: true },
+    take: 500,
+  });
+  return booths
+    .map((b) => ({ boothNumber: String(b.boothNumber ?? '').trim(), vendorName: String(b.vendorName ?? '').trim() }))
+    .filter((b) => b.vendorName.length > 0)
+    .sort((a, b) => a.boothNumber.localeCompare(b.boothNumber, undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+export type HubPublicSale = { id: string; title: string; startDate: Date; endDate: Date; isOngoing: boolean };
+
+/** Max distance (km) between a hub pin and a sale pin for the two to count as the same venue. */
+const HUB_SALE_MAX_KM = 2;
+
+/**
+ * The hub's published FLEA_MARKET Sale (roadmap #40a, ADR-014 Amendment A: inventory is reached through the sale, not
+ * a parallel hub-item query). SaleHub has no saleId column, so the sale is matched: same organizer, saleType
+ * FLEA_MARKET, publicly visible (PUBLISHED, not deleted, not ended, past any early-access publishedAt), then
+ * 1) a sale whose dates cover the hub's event date, 2) otherwise the nearest sale within HUB_SALE_MAX_KM of the hub pin,
+ * 3) otherwise the organizer's only such sale. Anything ambiguous returns null rather than linking the wrong market.
+ * Only id, title and dates are returned: the sale page applies its own street-address gate.
+ */
+export async function findHubPublicSale(
+  hub: { organizerId: string; lat: number | null; lng: number | null; saleDate: Date | null },
+  now: Date = new Date()
+): Promise<HubPublicSale | null> {
+  const candidates = await prisma.sale.findMany({
+    where: {
+      organizerId: hub.organizerId,
+      saleType: 'FLEA_MARKET',
+      status: 'PUBLISHED',
+      deletedAt: null,
+      AND: [
+        { OR: [{ isOngoing: true }, { endDate: { gte: now } }] },
+        { OR: [{ publishedAt: null }, { publishedAt: { lte: now } }] },
+      ],
+    },
+    select: { id: true, title: true, startDate: true, endDate: true, isOngoing: true, lat: true, lng: true },
+    orderBy: { startDate: 'asc' },
+    take: 50,
+  });
+  if (candidates.length === 0) return null;
+
+  const pick = (s: (typeof candidates)[number]): HubPublicSale => ({
+    id: s.id,
+    title: s.title,
+    startDate: s.startDate,
+    endDate: s.endDate,
+    isOngoing: s.isOngoing,
+  });
+
+  const hubHasPin = typeof hub.lat === 'number' && typeof hub.lng === 'number';
+  const hasPin = (s: (typeof candidates)[number]) => typeof s.lat === 'number' && typeof s.lng === 'number';
+  const nearest = (pool: typeof candidates) => {
+    if (!hubHasPin) return null;
+    let best: (typeof candidates)[number] | null = null;
+    let bestKm = Infinity;
+    for (const s of pool) {
+      if (!hasPin(s)) continue;
+      const km = haversineDistance(hub.lat as number, hub.lng as number, s.lat as number, s.lng as number);
+      if (km <= HUB_SALE_MAX_KM && km < bestKm) {
+        best = s;
+        bestKm = km;
+      }
+    }
+    return best;
+  };
+
+  // 1) Dates cover the hub's event day (calendar day, UTC, matching how date-only sale dates are stored).
+  if (hub.saleDate) {
+    const eventDay = new Date(hub.saleDate).toISOString().slice(0, 10);
+    const onDate = candidates.filter(
+      (s) =>
+        new Date(s.startDate).toISOString().slice(0, 10) <= eventDay &&
+        (s.isOngoing || new Date(s.endDate).toISOString().slice(0, 10) >= eventDay)
+    );
+    if (onDate.length === 1) return pick(onDate[0]);
+    if (onDate.length > 1) {
+      const n = nearest(onDate);
+      return n ? pick(n) : null;
+    }
+  }
+
+  // 2) Same venue: nearest within HUB_SALE_MAX_KM of the hub pin.
+  const n = nearest(candidates);
+  if (n) return pick(n);
+
+  // 3) The organizer's only such sale, unless both pins exist and say it is somewhere else.
+  if (candidates.length === 1 && !(hubHasPin && hasPin(candidates[0]))) return pick(candidates[0]);
+  return null;
+}
+
 // GET /api/hubs/:slug
 // Public: get hub landing page data
 export const getHub = async (req: Request, res: Response) => {
@@ -158,6 +259,11 @@ export const getHub = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Hub not found' });
     }
 
+    const [vendors, sale] = await Promise.all([
+      getPublicHubVendors(hub.id),
+      findHubPublicSale({ organizerId: hub.organizerId, lat: hub.lat, lng: hub.lng, saleDate: hub.saleDate }),
+    ]);
+
     res.json({
       hub: {
         id: hub.id,
@@ -176,6 +282,9 @@ export const getHub = async (req: Request, res: Response) => {
         phone: hub.phone,
         contactEmail: hub.contactEmail,
         hoursText: hub.hoursText,
+        // Roadmap #40a (2026-10-23, ADR-014 Amendment A): CONFIRMED vendor directory + link to the hub's sale.
+        vendors,
+        sale,
       },
     });
   } catch (error) {

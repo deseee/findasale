@@ -42,8 +42,11 @@ import { postAC } from './posts/cataloging-is-getting-cheaper-discovery-still-is
 import { postAD } from './posts/that-free-cataloging-tool-has-a-30-day-clock';
 import { postAE } from './posts/vinted-home-goods-category-why-a-sale-day-still-wins';
 import { postAF } from './posts/flat-cataloging-fee-same-bill-slow-sale-or-big-one';
+import { postAG } from './posts/timed-online-auction-reserves-soft-close-bidder-trust';
+import { postAH } from './posts/flea-market-booth-and-market-operator-setup-guide';
+import { postAI } from './posts/consignment-splits-statements-unsold-items-guide';
 
-export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR, postS, postT, postU, postV, postW, postX, postY, postZ, postAA, postAB, postAC, postAD, postAE, postAF];
+export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR, postS, postT, postU, postV, postW, postX, postY, postZ, postAA, postAB, postAC, postAD, postAE, postAF, postAG, postAH, postAI];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {
   return posts.find((p) => p.slug === slug);

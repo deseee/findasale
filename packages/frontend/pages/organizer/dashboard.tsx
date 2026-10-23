@@ -54,6 +54,7 @@ import { OGBuyerCountBadge } from '../../components/OGBuyerBadge'; // Feature #4
 import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Store, Package } from 'lucide-react';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useGuardedPublish } from '../../hooks/useGuardedPublish';
+import VerifyEmailToPublishBanner from '../../components/VerifyEmailToPublishBanner';
 import { isTierLimitPublishError } from '../../lib/publishSale';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
 import SmartSearchViewsCard from '../../components/SmartSearchViewsCard';
@@ -102,21 +103,7 @@ const OrganizerDashboard = () => {
   const queryClient = useQueryClient();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
-  // 2026-10-23: the verification banner had no way to request a new link (the only resend
-  // button lived inside the dismissable OnboardingWizard), so an organizer whose link expired was stuck.
-  const [verifyResendState, setVerifyResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
-  const handleResendVerificationFromBanner = async () => {
-    if (!user?.email || verifyResendState !== 'idle') return;
-    setVerifyResendState('sending');
-    try {
-      await api.post('/auth/resend-verification', { email: user.email });
-      setVerifyResendState('sent');
-      showToast(`New verification link sent to ${user.email}. Check your inbox and spam folder.`, 'success');
-    } catch (error: any) {
-      setVerifyResendState('idle');
-      showToast(error?.response?.data?.message || 'Could not send a new link. Please try again in a few minutes.', 'error');
-    }
-  };
+  // 2026-10-23: the verification banner and its resend button live in components/VerifyEmailToPublishBanner.tsx.
   const { tier: orgTier, isSimple, isTeams, canAccess, isLapsed, inDunning, entitlementEndsAt } = useOrganizerTier();
   const { data: existingWorkspace, isLoading: workspaceLoading } = useMyWorkspace();
   // Which sale (if any) the FirstSaleNudge card is featuring, so the Next Action Zone does not repeat it.
@@ -207,42 +194,35 @@ const OrganizerDashboard = () => {
       router.push(`/organizer/edit-sale/${sale.id}?publish=1`);
       return;
     }
-    setConfirmState({
-      open: true,
-      title: 'Publish this sale?',
-      message: `${sale.title ? `"${sale.title}"` : 'This sale'} will be visible to shoppers on the map.`,
-      onConfirm: async () => {
-        setPublishingSaleId(sale.id);
-        try {
-          await guardedPublish.publish(sale.id, {
-            onPublished: () => {
-              showToast('Your sale is live.', 'success');
-              refreshAfterStatusChange();
-            },
-            onError: (error) => showPublishError(error, "We couldn't publish your sale. Please try again."),
-          });
-        } finally {
-          setPublishingSaleId(null);
-        }
-      },
-    });
+    // The guarded helper's dialog is the confirm step (2026-10-23): it also offers "Also publish N ready
+    // items" (ticked by default) and lists the items that are not ready, so items go live with the sale.
+    setPublishingSaleId(sale.id);
+    guardedPublish
+      .publish(sale.id, {
+        confirm: {
+          title: 'Publish this sale?',
+          message: `${sale.title ? `"${sale.title}"` : 'This sale'} will be visible to shoppers on the map.`,
+          confirmLabel: 'Publish sale',
+        },
+        onPublished: (_saleId, info) => {
+          const n = info?.itemsPublished ?? 0;
+          showToast(n > 0 ? `Your sale is live with ${n} ${n === 1 ? 'item' : 'items'}.` : 'Your sale is live.', 'success');
+          refreshAfterStatusChange();
+        },
+        onError: (error) => showPublishError(error, "We couldn't publish your sale. Please try again."),
+      })
+      .finally(() => setPublishingSaleId(null));
   };
 
   // Reopen an ENDED sale (PUBLISHED again). Same guard: an empty sale asks first.
   const handleReopenSale = (saleId: string) => {
-    setConfirmState({
-      open: true,
-      title: 'Reopen Sale',
-      message: 'Reopen this sale? It will become visible to shoppers again.',
-      onConfirm: async () => {
-        await guardedPublish.publish(saleId, {
-          onPublished: () => {
-            showToast('Sale reopened', 'success');
-            refreshAfterStatusChange();
-          },
-          onError: (error) => showPublishError(error, 'Failed to reopen sale'),
-        });
+    guardedPublish.publish(saleId, {
+      confirm: { title: 'Reopen this sale?', message: 'It will be visible to shoppers again.', confirmLabel: 'Reopen sale' },
+      onPublished: () => {
+        showToast('Sale reopened', 'success');
+        refreshAfterStatusChange();
       },
+      onError: (error) => showPublishError(error, 'Failed to reopen sale'),
     });
   };
 
@@ -840,32 +820,8 @@ const OrganizerDashboard = () => {
           {/* Workspace Invitation Banner */}
           <WorkspaceInvitationBanner />
 
-          {/* Email Verification Banner: S512: show until emailVerified === true */}
-          {user?.emailVerified === false && (
-            <div className="mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 flex items-start gap-3">
-              <span className="text-amber-500 text-lg mt-0.5" aria-hidden="true">✉️</span>
-              <div>
-                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                  Check your inbox to verify your email
-                </p>
-                <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                  We sent a verification link to <strong>{user.email}</strong>. Verify your email to publish sales and use your full account.
-                </p>
-                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                  Can&apos;t find it? Check your spam folder, or{' '}
-                  <button
-                    type="button"
-                    onClick={handleResendVerificationFromBanner}
-                    disabled={verifyResendState !== 'idle'}
-                    className="font-semibold underline hover:no-underline disabled:opacity-60 disabled:no-underline"
-                  >
-                    {verifyResendState === 'sending' ? 'sending...' : verifyResendState === 'sent' ? 'new link sent' : 'send a new link'}
-                  </button>
-                  .
-                </p>
-              </div>
-            </div>
-          )}
+          {/* Email verification (S512; 2026-10-23: verification is required to publish, not to set up). */}
+          <VerifyEmailToPublishBanner className="mb-4" />
 
           {/* Workspace Welcome Banner */}
           {welcomedWorkspace && (
@@ -1006,7 +962,7 @@ const OrganizerDashboard = () => {
               );
             })()}
 
-            <Link href="/organizer/holds" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors flex items-center gap-1">
+            <Link href="/organizer/holds" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition-colors flex items-center gap-1">
               <Clock className="w-4 h-4" />
               Holds
             </Link>
@@ -1091,9 +1047,9 @@ const OrganizerDashboard = () => {
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                   <div className="flex-1">
                     <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Your Plan: SIMPLE</h3>
-                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Get 500+ items per sale, advanced analytics, and Brand Kit with PRO, just $29/mo</p>
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Run 3 sales at once, get 2,000 auto tags a month, advanced analytics, and Brand Kit with PRO, just $29/mo</p>
                   <p className="text-sm text-warm-700 dark:text-warm-300">
-                    <strong>PRO includes:</strong> 500+ items per sale • Advanced analytics • Brand Kit
+                    <strong>PRO includes:</strong> 3 sales at once • 2,000 auto tags a month • Advanced analytics • Brand Kit
                   </p>
                 </div>
                 <Link href="/pricing" className="flex-shrink-0 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
@@ -1564,15 +1520,15 @@ const OrganizerDashboard = () => {
                   CORRECTED 2026-08-17: this read "You have $X ready to withdraw — Platform fee
                   credits available for payout" in green, which is the exact opposite of what
                   cashFeeBalance is. It is commission the organizer OWES on sales they collected
-                  in cash, and payoutController subtracts it from their next payout (and refuses
-                  the payout outright when it exceeds the amount). Showing a debt as withdrawable
+                  in cash, and cashFeeService.applyCashDebtToAppFee collects it from their next card
+                  sale on FindA.Sale (Square app fee). Updated 2026-10-23: the old payout deduction is gone. Showing a debt as withdrawable
                   credit made a smaller-than-expected payout unexplainable. Same data, same
                   banner, honest copy. */}
               {cashFeeBalance > 0 && (
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 flex items-center justify-between">
                   <div>
                     <p className="font-semibold text-amber-900 dark:text-amber-100">${cashFeeBalance.toFixed(2)} in commission due on your cash sales</p>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">You already collected that money in person, so we take it out of your next payout instead.</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">You already collected that money in person, so we collect it from your next card sale on FindA.Sale instead.</p>
                   </div>
                   <Link href="/organizer/earnings" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0">
                     See details
@@ -1617,7 +1573,7 @@ const OrganizerDashboard = () => {
                           <p className="font-semibold text-orange-900 dark:text-orange-100 mb-1">You have {holdCount} holds! Add more items.</p>
                           <p className="text-sm text-orange-700 dark:text-orange-300">Only {available} items left available.</p>
                         </div>
-                        <Link href={`/organizer/add-items/${id}`} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
+                        <Link href={`/organizer/add-items/${id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
                           Add Items
                         </Link>
                       </div>

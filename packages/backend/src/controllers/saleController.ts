@@ -5,6 +5,7 @@ import { z } from 'zod';
 import QRCode from 'qrcode';
 import { handleFavoriteBadge } from './userController';
 import { prisma } from '../lib/prisma';
+import { saleHasProFeatures } from '../lib/saleProFeatures'; // 2026-10-23: per-sale PRO features ($9.99 a-la-carte upgrade)
 import { Prisma } from '@prisma/client';
 import type { Organizer } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
@@ -38,7 +39,9 @@ import { geocodeAddress } from '../services/geocodingService'; // Map pin fix: g
 import { redis } from '../lib/redis'; // Perf: short-TTL cache for getCities GROUP BY
 import { checkQrScan, qrScanRejectionBody } from '../services/qrScanGuardService'; // anti-spoof guard for check-in (2026-09-29)
 import { parseBodyLatitude, parseBodyLongitude, parseBodyAccuracyMeters } from '../utils/qrScanGuards';
-import { publicShopperLabel } from '../utils/publicDisplayName'; // Privacy: public activity names are opt-in, first name + last initial
+import { publicShopperLabel } from '../utils/publicDisplayName';
+import { getSalePublishReadiness } from '../services/salePublishReadinessService';
+import { canPublish, emailNotVerifiedBody } from '../lib/publishGate'; // 2026-10-23: verification is required to publish, not to set up // 2026-10-23: publish a sale together with its ready items // Privacy: public activity names are opt-in, first name + last initial
 
 // Feature #5: Sale type categories (inlined from shared package)
 enum SaleType {
@@ -468,6 +471,8 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
         holdsEnabled: true,
         isAuctionSale: true,
         isPinned: true,
+        purchaseModel: true,
+        alaCarteFeePaid: true,
         organizer: { select: { userId: true, businessName: true, phone: true, address: true } },
         items: { where: { listingType: { not: 'CONSIGNOR_TAG' } }, select: { id: true, title: true, price: true, status: true, organizerDiscountAmount: true, draftStatus: true, isActive: true, listingType: true } },
         _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } } }
@@ -516,11 +521,16 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
       return {
         ...s,
         maxOrganizerDiscount: maxOrganizerDiscount || null,
+        // Per-sale PRO features (Flip Report, Virtual Queue, 10 photos, 500 auto tags): PRO/TEAMS, or this sale has
+        // the paid $9.99 a-la-carte upgrade. One shared rule, lib/saleProFeatures.ts; the frontend only reads this flag.
+        hasProFeatures: saleHasProFeatures(s, organizer),
         stats: {
           itemCount: s._count.items,
           // Items shoppers can actually see (same conditions as PUBLIC_ITEM_FILTER). Drives the
           // first-sale "add items" / "review items" / "ready to publish" nudges on the organizer side.
           liveItemCount: (s.items ?? []).filter((item: any) => isPublicItem(item)).length,
+          // 2026-10-23: drives the "dates have passed, nothing sold, pick new dates" prompt.
+          soldItemCount: (s.items ?? []).filter((item: any) => item.status === 'SOLD').length,
           holdCount: holdCountsMap.get(s.id) ?? 0,
           visitorCount: s.qrScanCount
         }
@@ -707,8 +717,9 @@ export const getSale = async (req: Request, res: Response) => {
       organizer: {
         id: organizer.id, userId: organizer.userId, businessName: organizer.businessName,
         ...(isPrivilegedViewer ? { phone: organizer.phone } : {}),
-        // Organizer business address can equal the sale address: gated the same way.
-        address: addressGate.visible ? organizer.address : '', badges, avgRating,
+        // Organizer street address is never public (Patrick-approved 2026-10-23): owner/admin only, same
+        // gate as phone. Matches GET /api/organizers/:id (2026-10-13). Sale-level address keeps its own gate.
+        address: isPrivilegedViewer ? organizer.address : '', badges, avgRating,
         reviewCount,
         tier: organizer.tier, verificationStatus: organizer.verificationStatus, verificationSource: organizer.verificationSource,
         subscriptionTier: organizer.subscriptionTier, removeWatermarkEnabled: organizer.removeWatermarkEnabled,
@@ -799,13 +810,9 @@ export const createSale = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    // Security: Email verification gate (P0)
-    if (!isAdmin && !req.user.emailVerified) {
-      return res.status(403).json({
-        code: 'EMAIL_NOT_VERIFIED',
-        message: 'Please verify your email address before creating a sale. Check your inbox for a verification link.',
-      });
-    }
+    // Email verification is required to PUBLISH, not to create a draft (Patrick, 2026-10-23): unverified
+    // organizers can set up a sale and add items; updateSaleStatus refuses the publish (lib/publishGate.ts).
+    // A new sale is always a DRAFT (the schema never accepts a client status).
 
     const saleData = saleCreateSchema.parse(req.body);
 
@@ -1289,6 +1296,96 @@ export const searchSales = async (req: Request, res: Response) => {
   }
 };
 
+/** Thrown inside the sale publish transaction when a ready item fails publishItemForUser; rolls everything back. */
+class SaleItemPublishError extends Error {
+  constructor(public itemId: string, public reason: string) {
+    super(`Item ${itemId} could not be published: ${reason}`);
+  }
+}
+
+/**
+ * GET /api/sales/:id/publish-readiness (owner or admin). What the publish dialog shows: the unpublished
+ * items that will go live with the sale, and the ones that are not ready yet and why.
+ */
+export const getSalePublishReadinessHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+    const { id } = req.params;
+    const sale = await prisma.sale.findUnique({ where: { id }, select: { id: true, organizerId: true, deletedAt: true } });
+    if (!sale || sale.deletedAt) return res.status(404).json({ message: 'Sale not found' });
+    if (!isAdmin) {
+      const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+      if (!organizerProfile || sale.organizerId !== organizerProfile.id) {
+        return res.status(403).json({ message: 'Access denied. You can only view your own sales.' });
+      }
+    }
+    const readiness = await getSalePublishReadiness(id);
+    res.json(readiness);
+  } catch (error) {
+    console.error('Error loading sale publish readiness:', error);
+    res.status(500).json({ message: 'Server error while checking your items' });
+  }
+};
+
+/**
+ * POST /api/sales/:id/redate (owner or admin) { startDate, endDate } as ISO date-times.
+ * One-click "pick new dates" for a draft or live sale whose dates have passed (activation nudges and the
+ * edit-sale prompt, 2026-10-23). Only the two dates change, so a partial PUT can never touch other fields.
+ */
+const redateSchema = z
+  .object({
+    startDate: z.string().datetime({ offset: true }),
+    endDate: z.string().datetime({ offset: true }),
+  })
+  .refine((v) => Date.parse(v.endDate) > Date.parse(v.startDate), { message: 'End must be after start.' })
+  .refine((v) => Date.parse(v.endDate) > Date.now(), { message: 'Pick dates in the future.' })
+  .refine((v) => Date.parse(v.endDate) - Date.parse(v.startDate) <= 60 * 24 * 60 * 60 * 1000, {
+    message: 'A sale can run for at most 60 days.',
+  });
+
+export const redateSale = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+    const parsed = redateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0]?.message || 'Invalid dates.' });
+    }
+    const { id } = req.params;
+    const existing = await prisma.sale.findUnique({ where: { id } });
+    if (!existing || existing.deletedAt) return res.status(404).json({ message: 'Sale not found' });
+    if (!isAdmin) {
+      const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+      if (!organizerProfile || existing.organizerId !== organizerProfile.id) {
+        return res.status(403).json({ message: 'Access denied. You can only update your own sales.' });
+      }
+    }
+    if (existing.status === 'ENDED') {
+      return res.status(400).json({ message: 'Reopen this sale before picking new dates.' });
+    }
+    const sale = await prisma.sale.update({
+      where: { id },
+      data: { startDate: new Date(parsed.data.startDate), endDate: new Date(parsed.data.endDate) },
+    });
+    if (sale.status === 'PUBLISHED') {
+      const citySlug = citySlugFromCityState(sale.city, sale.state);
+      triggerSaleAndCityRevalidation([sale.id], citySlug ? [citySlug] : []).catch(() => {});
+      invalidateCommandCenterCache(sale.organizerId).catch(() => {});
+    }
+    res.json(convertDecimalsToNumbers(sale));
+  } catch (error) {
+    console.error('Error re-dating sale:', error);
+    res.status(500).json({ message: 'Server error while updating the sale dates' });
+  }
+};
+
 export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -1305,8 +1402,15 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}` });
     }
 
+    // Email verification gate (2026-10-23, moved here from createSale): publishing or reopening a sale needs
+    // a verified email. Closing a sale early (ENDED) does not.
+    if (status === 'PUBLISHED' && !canPublish(req.user)) {
+      return res.status(403).json(emailNotVerifiedBody());
+    }
+
     const existingSale = await prisma.sale.findUnique({ where: { id } });
-    if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
+    // 2026-10-23: a soft-deleted sale can never be republished or ended (same 404 as GET /sales/:id).
+    if (!existingSale || existingSale.deletedAt) return res.status(404).json({ message: 'Sale not found' });
 
     let organizerProfile: Organizer | null = null;
     if (!isAdmin) {
@@ -1384,7 +1488,66 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
       updateData.publishedAt = new Date();
     }
 
-    const updated = await prisma.sale.update({ where: { id }, data: updateData });
+    // 2026-10-23 (activation-funnel-2026-10-23.md, finding 1): publishing a sale also publishes its READY
+    // unpublished items (services/salePublishReadinessService.ts), by default. The publish dialog sends
+    // publishReadyItems: false when the organizer unticks "Also publish N ready items"; anything else
+    // (true, or an older client that does not send it) means yes. Items that are not ready stay as they are.
+    // The sale and every item publish run in ONE transaction: if any item fails its publish check (for
+    // example it changed since the dialog loaded), nothing is published and the organizer is asked to retry.
+    // Item side effects (webhooks, auto-fanout, eBay comps, marketplace enqueue) run only after the commit.
+    // No tier or fee rule changes here: the concurrent-sales gate above already ran, items per sale are
+    // uncapped on every tier (constants/tierLimits.ts), and publishing stays free on SIMPLE (the optional
+    // $9.99 a-la-carte upgrade is offered by the client before it calls this endpoint, never required).
+    const publishReadyItems = status === 'PUBLISHED' && req.body?.publishReadyItems !== false;
+    const itemOwner = organizerProfile
+      ? { id: organizerProfile.userId, organizerId: organizerProfile.id }
+      : null;
+    let readyItemIds: string[] = [];
+    let notReadyItemCount = 0;
+    if (publishReadyItems && itemOwner) {
+      const readiness = await getSalePublishReadiness(id);
+      readyItemIds = readiness.readyItems.map((i) => i.id);
+      notReadyItemCount = readiness.notReadyItems.length;
+    }
+
+    let updated: Awaited<ReturnType<typeof prisma.sale.update>>;
+    const itemSideEffects: Array<() => void> = [];
+    if (readyItemIds.length > 0 && itemOwner) {
+      const { publishItemForUser } = await import('./itemController');
+      try {
+        updated = await prisma.$transaction(
+          async (tx) => {
+            const sale = await tx.sale.update({ where: { id }, data: updateData });
+            for (const itemId of readyItemIds) {
+              // verifiedByCaller: the actor already passed the email verification gate at the top of this handler.
+              const result = await publishItemForUser(itemOwner, itemId, {}, { tx, deferSideEffects: true, verifiedByCaller: true });
+              if (!result.ok) {
+                throw new SaleItemPublishError(itemId, result.message);
+              }
+              if (!result.dryRun && result.runSideEffects) itemSideEffects.push(result.runSideEffects);
+            }
+            return sale;
+          },
+          // A few queries per item; give large sales room without holding a connection forever.
+          { timeout: Math.min(120_000, 15_000 + readyItemIds.length * 500), maxWait: 10_000 }
+        );
+      } catch (err) {
+        if (err instanceof SaleItemPublishError) {
+          console.warn(`[sale-publish] rolled back saleId=${id}: item ${err.itemId} failed its publish check: ${err.reason}`);
+          return res.status(409).json({
+            code: 'SALE_ITEMS_CHANGED',
+            message: 'Some of your items changed while you were publishing. Nothing was published. Please try again.',
+          });
+        }
+        throw err;
+      }
+      for (const run of itemSideEffects) {
+        try { run(); } catch (e) { console.error('[sale-publish] item side effect failed:', e); }
+      }
+      console.log(`[sale-publish] saleId=${id} published with ${readyItemIds.length} ready item(s); ${notReadyItemCount} not ready`);
+    } else {
+      updated = await prisma.sale.update({ where: { id }, data: updateData });
+    }
 
     // ADR 2026-07-11: on-demand ISR revalidation — status changed to/from PUBLISHED
     // means the sale's own page and its city listing page both need a refresh.
@@ -1536,7 +1699,12 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    res.json(convertDecimalsToNumbers(updated));
+    res.json({
+      ...convertDecimalsToNumbers(updated),
+      // 2026-10-23: how many unpublished items went live with this publish, and how many were left as drafts.
+      itemsPublished: readyItemIds.length,
+      itemsNotReady: notReadyItemCount,
+    });
 
     // Map pin fix: geocode platform sales on publish if lat is missing
     if (status === 'PUBLISHED' && updated.lat == null && updated.address && updated.city && updated.state) {

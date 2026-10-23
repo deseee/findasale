@@ -328,7 +328,7 @@ const GuestSaleAlert: React.FC<{ saleTitle: string; saleCity: string }> = ({ sal
     <div className="rounded-lg border border-[#C8552B]/25 bg-[#C8552B]/5 dark:bg-[#C8552B]/10 p-4">
       <h3 className="text-sm font-semibold text-[#1A1814] dark:text-[#F2F0EA] mb-0.5">Get alerts for this sale</h3>
       {submitted ? (
-        <p className="text-sm font-medium text-[#C8552B]">&#10003; Check your email to confirm your alert. We only start watching once you confirm.</p>
+        <p className="text-sm font-medium text-[#B34A22] dark:text-[#E97C4D]">&#10003; Check your email to confirm your alert. We only start watching once you confirm.</p>
       ) : (
         <>
           <p className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] mb-3">We&apos;ll email you when items are added. No account needed.</p>
@@ -344,7 +344,7 @@ const GuestSaleAlert: React.FC<{ saleTitle: string; saleCity: string }> = ({ sal
             />
             <button
               type="submit"
-              className="px-4 py-2 min-h-[44px] rounded-lg bg-[#C8552B] hover:bg-[#b14a25] text-white text-sm font-semibold transition-colors whitespace-nowrap"
+              className="px-4 py-2 min-h-[44px] rounded-lg bg-[#B34A22] hover:bg-[#9A3F1C] text-white text-sm font-semibold transition-colors whitespace-nowrap"
             >
               Get alerts
             </button>
@@ -367,6 +367,20 @@ const AddressGateNote: React.FC<{ gate?: Sale['addressGate'] }> = ({ gate }) => 
   );
 };
 
+// 2026-10-23 AA contrast: the old #C8552B accent was 4.38:1 on white and ~3.7:1 on the dark surface.
+// Pick a theme-aware accent the same way create-sale.tsx picks its LIGHT/DARK palette.
+function useIsDarkMode(): boolean {
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    const check = () => setDark(document.documentElement.classList.contains('dark'));
+    check();
+    const obs = new MutationObserver(check);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+  return dark;
+}
+
 const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, eventSeriesData, noindex, unavailableAfter }) => {
   const router = useRouter();
   const { id } = router.query;
@@ -374,6 +388,9 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   const { data: xpProfile } = useXpProfile(!!user?.id); // Rank-Based Early Access: fresh rank from /api/xp/profile
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const isDarkMode = useIsDarkMode();
+  const accent = isDarkMode ? '#E97C4D' : '#B34A22'; // AA on both themes (5.36:1 on white, 5.78:1 on #19202F)
+  const tipInk = isDarkMode ? '#E0A85B' : '#8A5A12'; // day-of tip (was #A87420, 3.49:1)
   const shopperCart = useShopperCart(user?.id);
 
   const [checkoutItem, setCheckoutItem] = useState<{ id: string; title: string; price: number; listingType?: string } | null>(null);
@@ -1445,7 +1462,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 <div
                   key={idx}
                   className="relative flex-shrink-0 rounded-md overflow-hidden cursor-pointer group"
-                  style={{ width: 88, height: 60, outline: idx === currentPhotoIndex ? '2px solid #C8552B' : '1px solid rgba(20,18,14,0.12)', outlineOffset: idx === currentPhotoIndex ? -2 : 0 }}
+                  style={{ width: 88, height: 60, outline: idx === currentPhotoIndex ? `2px solid ${accent}` : '1px solid rgba(20,18,14,0.12)', outlineOffset: idx === currentPhotoIndex ? -2 : 0 }}
                   onClick={() => setCurrentPhotoIndex(idx)}
                 >
                   <img src={getSaleImageUrl(url) || url} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
@@ -1535,7 +1552,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
 
             {/* ── ABOUT / DESCRIPTION ── */}
             <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
-              <div className="text-xs uppercase tracking-widest mb-1" style={{ fontFamily: 'ui-monospace, monospace', color: '#C8552B', letterSpacing: '0.1em' }}>About this sale</div>
+              <div className="text-xs uppercase tracking-widest mb-1" style={{ fontFamily: 'ui-monospace, monospace', color: accent, letterSpacing: '0.1em' }}>About this sale</div>
               <h2 style={{ fontFamily: '"Inter Tight", "Inter", sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', margin: '0 0 12px', color: 'inherit' }}>
                 What's inside
               </h2>
@@ -1589,12 +1606,12 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                           const isToday = mounted && dayDate >= new Date(new Date().setHours(0,0,0,0)) && dayDate < new Date(new Date().setHours(24,0,0,0));
                           return (
                             <div key={i} className="flex items-center justify-between px-2.5 py-1.5 rounded-md" style={{ background: isToday ? 'rgba(200,85,43,0.10)' : 'transparent', border: isToday ? '1px solid rgba(200,85,43,0.18)' : '1px solid transparent' }}>
-                              <span className="flex items-center gap-2" style={{ color: isToday ? '#C8552B' : 'inherit', fontWeight: isToday ? 500 : 400 }}>
-                                {isToday && <span className="w-1.5 h-1.5 rounded-full bg-[#C8552B] inline-block" />}
+                              <span className="flex items-center gap-2" style={{ color: isToday ? accent : 'inherit', fontWeight: isToday ? 500 : 400 }}>
+                                {isToday && <span className="w-1.5 h-1.5 rounded-full bg-[#B34A22] dark:bg-[#E97C4D] inline-block" />}
                                 {day.label}
                               </span>
                               {parseISO(day.date).getUTCHours() !== 0 || parseISO(day.date).getUTCMinutes() !== 0 ? (
-                                <span className={`text-xs ${isToday ? 'text-[#C8552B]' : 'text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]'}`} style={{ fontFamily: 'ui-monospace, monospace' }}>
+                                <span className={`text-xs ${isToday ? 'text-[#B34A22] dark:text-[#E97C4D]' : 'text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]'}`} style={{ fontFamily: 'ui-monospace, monospace' }}>
                                   {format(parseISO(day.date), 'h:mm a')}
                                 </span>
                               ) : null}
@@ -1638,7 +1655,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                     <div className="text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">{sale.city}, {sale.state} {sale.zip}</div>
                     <button
                       className="mt-2 text-xs font-medium flex items-center gap-1 hover:underline"
-                      style={{ color: '#C8552B' }}
+                      style={{ color: accent }}
                       onClick={() => {
                         const dest = sale.address ? `${sale.address}, ${sale.city}, ${sale.state}` : `${sale.city}, ${sale.state}`;
                         window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`, '_blank');
@@ -1654,11 +1671,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               {/* Entrance / parking tip */}
               {sale.entranceNote && (
                 <div className="mt-4 p-4 rounded-lg flex items-start gap-3" style={{ background: 'rgba(168,116,32,0.08)', border: '1px solid rgba(168,116,32,0.18)' }}>
-                  <div className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center" style={{ background: 'rgba(168,116,32,0.14)', color: '#A87420' }}>
+                  <div className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center" style={{ background: 'rgba(168,116,32,0.14)', color: tipInk }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v.01M11 12h1v5h1"/></svg>
                   </div>
                   <div className="flex-1">
-                    <div className="text-xs uppercase tracking-wider mb-1 font-medium" style={{ fontFamily: 'ui-monospace, monospace', color: '#A87420', letterSpacing: '0.06em' }}>Day-of tip from organizer</div>
+                    <div className="text-xs uppercase tracking-wider mb-1 font-medium" style={{ fontFamily: 'ui-monospace, monospace', color: tipInk, letterSpacing: '0.06em' }}>Day-of tip from organizer</div>
                     <div className="text-sm leading-relaxed">{sale.entranceNote}</div>
                   </div>
                 </div>
@@ -1821,7 +1838,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               {/* Section header */}
               <div className="flex items-end justify-between gap-6 pb-4 mb-4 border-b border-black/8 dark:border-white/8">
                 <div>
-                  <div className="text-xs uppercase tracking-widest mb-1.5" style={{ fontFamily: 'ui-monospace, monospace', color: '#C8552B', letterSpacing: '0.1em' }}>
+                  <div className="text-xs uppercase tracking-widest mb-1.5" style={{ fontFamily: 'ui-monospace, monospace', color: accent, letterSpacing: '0.1em' }}>
                     {sale.isAuctionSale ? 'Lot catalog' : 'Inventory'}
                   </div>
                   <h2 style={{ fontFamily: '"Inter Tight", "Inter", sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>
@@ -1864,7 +1881,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               {selectedRoom && (
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-xs text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">Showing:</span>
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: 'rgba(200,85,43,0.10)', color: accent }}>
                     {selectedRoom}
                     <button onClick={() => setSelectedRoom(null)} className="ml-0.5 hover:opacity-70 transition-opacity" aria-label="Clear room filter">×</button>
                   </span>
@@ -2039,7 +2056,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                             </Link>
                             {/* Rarity badge */}
                             {item.listingType && ['RARE','LEGENDARY'].includes(item.rarity ?? '') && (
-                              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wide" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10, backdropFilter: 'blur(4px)', background: item.rarity === 'LEGENDARY' ? 'rgba(224,168,91,0.18)' : 'rgba(157,183,232,0.14)', color: item.rarity === 'LEGENDARY' ? '#E0A85B' : '#9DB7E8' }}>
+                              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wide" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10, backdropFilter: 'blur(4px)', background: isDarkMode ? 'rgba(25,32,47,0.85)' : 'rgba(255,248,235,0.92)', color: item.rarity === 'LEGENDARY' ? (isDarkMode ? '#E0A85B' : '#8A5A12') : (isDarkMode ? '#9DB7E8' : '#3B5A9A') }}>
                                 {item.rarity === 'LEGENDARY' ? 'Legendary' : 'Rare'}
                               </div>
                             )}
@@ -2222,7 +2239,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             {/* ── REVIEWS ── */}
             {(sale.organizer.avgRating ?? 0) > 0 && (
               <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
-                <div className="text-xs uppercase tracking-widest mb-1.5" style={{ fontFamily: 'ui-monospace, monospace', color: '#C8552B', letterSpacing: '0.1em' }}>
+                <div className="text-xs uppercase tracking-widest mb-1.5" style={{ fontFamily: 'ui-monospace, monospace', color: accent, letterSpacing: '0.1em' }}>
                   From {sale.organizer.businessName}'s past sales
                 </div>
                 <div className="flex items-end justify-between gap-4 pb-4 mb-4 border-b border-black/8 dark:border-white/8">
@@ -2231,7 +2248,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                       {(sale.organizer.avgRating ?? 0).toFixed(1)}
                     </div>
                     <div>
-                      <div className="flex gap-0.5 mb-1" style={{ color: '#C8552B' }}>
+                      <div className="flex gap-0.5 mb-1" style={{ color: accent }}>
                         {[1,2,3,4,5].map(i => <svg key={i} width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.6"><path d="M12 3l2.6 5.8 6.4.7-4.8 4.4 1.4 6.3L12 17l-5.6 3.2 1.4-6.3L3 9.5l6.4-.7L12 3z"/></svg>)}
                       </div>
                       <div className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">
@@ -2239,7 +2256,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                       </div>
                     </div>
                   </div>
-                  <Link href={`/organizers/${sale.organizer.id}`} className="text-xs font-medium flex items-center gap-1 hover:underline" style={{ color: '#C8552B' }}>
+                  <Link href={`/organizers/${sale.organizer.id}`} className="text-xs font-medium flex items-center gap-1 hover:underline" style={{ color: accent }}>
                     See all reviews
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                   </Link>
@@ -2252,7 +2269,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             <section className="lg:hidden rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
               <div className="flex items-center gap-4">
                 {/* Logo / initials */}
-                <div className="w-14 h-14 rounded-xl flex-shrink-0 flex items-center justify-center border border-black/10 dark:border-white/8 bg-[#FFFFFF] dark:bg-[#19202F]" style={{ fontFamily: '"Inter Tight","Inter",sans-serif', fontWeight: 700, fontSize: 20, color: '#C8552B', letterSpacing: '-0.02em' }}>
+                <div className="w-14 h-14 rounded-xl flex-shrink-0 flex items-center justify-center border border-black/10 dark:border-white/8 bg-[#FFFFFF] dark:bg-[#19202F]" style={{ fontFamily: '"Inter Tight","Inter",sans-serif', fontWeight: 700, fontSize: 20, color: accent, letterSpacing: '-0.02em' }}>
                   {sale.organizer.businessName.slice(0, 2).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -2266,7 +2283,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   </div>
                   {(sale.organizer.avgRating ?? 0) > 0 && (
                     <div className="flex items-center gap-2 mt-1 text-xs text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">
-                      <span className="flex items-center gap-1 font-medium" style={{ color: '#C8552B' }}>
+                      <span className="flex items-center gap-1 font-medium" style={{ color: accent }}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.6"><path d="M12 3l2.6 5.8 6.4.7-4.8 4.4 1.4 6.3L12 17l-5.6 3.2 1.4-6.3L3 9.5l6.4-.7L12 3z"/></svg>
                         {(sale.organizer.avgRating ?? 0).toFixed(1)}
                       </span>
@@ -2406,7 +2423,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             {/* Organizer rail card */}
             <div className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-4">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center border border-black/10 dark:border-white/8 bg-white dark:bg-[#19202F]" style={{ fontFamily: '"Inter Tight","Inter",sans-serif', fontWeight: 700, fontSize: 16, color: '#C8552B' }}>
+                <div className="w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center border border-black/10 dark:border-white/8 bg-white dark:bg-[#19202F]" style={{ fontFamily: '"Inter Tight","Inter",sans-serif', fontWeight: 700, fontSize: 16, color: accent }}>
                   {sale.organizer.businessName.slice(0, 2).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -2417,7 +2434,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   <div className="font-semibold text-sm leading-tight truncate" style={{ fontFamily: '"Inter Tight","Inter",sans-serif' }}>{sale.organizer.businessName}</div>
                   {(sale.organizer.avgRating ?? 0) > 0 && (
                     <div className="text-xs mt-0.5 flex items-center gap-1 text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.6" style={{ color: '#C8552B' }}><path d="M12 3l2.6 5.8 6.4.7-4.8 4.4 1.4 6.3L12 17l-5.6 3.2 1.4-6.3L3 9.5l6.4-.7L12 3z"/></svg>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.6" style={{ color: accent }}><path d="M12 3l2.6 5.8 6.4.7-4.8 4.4 1.4 6.3L12 17l-5.6 3.2 1.4-6.3L3 9.5l6.4-.7L12 3z"/></svg>
                       {(sale.organizer.avgRating ?? 0).toFixed(1)} · {sale.organizer.reviewCount} reviews
                     </div>
                   )}

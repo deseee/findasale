@@ -5,6 +5,8 @@ import {
   generateOrGetAffiliateCode,
   getAffiliateCodeWithStats,
 } from '../services/affiliateService';
+import { getCreditBalance } from '../services/subscriptionCreditService';
+import { isReferralCreditEnabled } from '../config/affiliateConfig';
 import {
   createOrGetSaleLink,
   getCreatorAccess,
@@ -379,27 +381,25 @@ export const getEarningsSummary = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Calculate totals
+    // Roadmap #661 (2026-10-23): referral rewards are subscription credit, not cash. payoutAmountCents on a referral is the
+    // usable credit it has earned (net of refund / chargeback clawbacks); unpaidBalance is the credit available right now
+    // for the next PRO/TEAMS renewal (it can be below zero after a clawback of credit already used).
     const totalEarned = referrals
-      .filter((r) => r.status === 'PAID' && r.payoutAmountCents)
+      .filter((r) => (r.status === 'QUALIFIED' || r.status === 'PAID') && r.payoutAmountCents)
       .reduce((sum, r) => sum + (r.payoutAmountCents || 0), 0);
 
-    const unpaidBalance = referrals
-      .filter((r) => r.status === 'QUALIFIED' && r.payoutAmountCents)
-      .reduce((sum, r) => sum + (r.payoutAmountCents || 0), 0);
+    const credit = await getCreditBalance(userId);
+    const unpaidBalance = credit.availableCents;
 
     // Calculate this month earnings (QUALIFIED in current month)
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thisMonthEarnings = referrals
-      .filter(
-        (r) =>
-          r.status === 'QUALIFIED' &&
-          r.qualifiedAt &&
-          r.qualifiedAt >= monthStart &&
-          r.payoutAmountCents
-      )
-      .reduce((sum, r) => sum + (r.payoutAmountCents || 0), 0);
+    // Referral credit booked this month (earnings net of clawbacks; held-for-review credit excluded).
+    const monthRows = await prisma.subscriptionCreditEntry.findMany({
+      where: { userId, kind: { in: ['REFERRAL_EARNED', 'REFERRAL_ADJUSTMENT'] }, status: 'ACTIVE', createdAt: { gte: monthStart } },
+      select: { amountCents: true },
+    });
+    const thisMonthEarnings = monthRows.reduce((sum, r) => sum + (r.amountCents || 0), 0);
 
     // Get recent payouts (last 5 PAID referrals)
     const recentPayouts = referrals
@@ -428,6 +428,9 @@ export const getEarningsSummary = async (req: AuthRequest, res: Response) => {
     res.json({
       totalEarned,
       unpaidBalance,
+      referralCreditEnabled: isReferralCreditEnabled(), // feature flag; the page promises no reward while false
+      creditPendingCents: credit.pendingCents, // earned, still inside the 7-day hold
+      creditHeldCents: credit.heldCents, // parked for review
       thisMonthEarnings,
       referralCode,
       shareUrl,

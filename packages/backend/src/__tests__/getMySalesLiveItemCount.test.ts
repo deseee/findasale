@@ -75,8 +75,9 @@ describe('getMySales', () => {
     const res = makeRes();
     await getMySales(organizerReq, res);
     const [s1, s2] = res.body.sales;
-    expect(s1.stats).toEqual({ itemCount: 4, liveItemCount: 1, holdCount: 0, visitorCount: 0 });
-    expect(s2.stats).toEqual({ itemCount: 0, liveItemCount: 0, holdCount: 0, visitorCount: 3 });
+    // soldItemCount (2026-10-23) drives the "dates have passed, pick new dates" prompt.
+    expect(s1.stats).toEqual({ itemCount: 4, liveItemCount: 1, soldItemCount: 0, holdCount: 0, visitorCount: 0 });
+    expect(s2.stats).toEqual({ itemCount: 0, liveItemCount: 0, soldItemCount: 0, holdCount: 0, visitorCount: 3 });
   });
 
   it('queries only the signed-in organizer and selects the fields liveItemCount needs', async () => {

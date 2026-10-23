@@ -206,7 +206,7 @@ interface SizeWeightCeilingRule {
     maxLengthPlusGirthIn?: number;
     /** When true, an item with NO usable weight AND NO usable dimension is ineligible (nothing proves it ships). */
     requirePackageData?: boolean;
-    /** Minimum whole-dollar listing price (after rounding) a new listing needs, e.g. Poshmark's $3. */
+    /** Minimum listing price in dollars a new listing needs (compared exactly, in cents; no rounding), e.g. Poshmark's $5. */
     minPriceUsd?: number;
     reasonLowPrice?: string;
     reasonOversize?: string;
@@ -909,7 +909,10 @@ const RULES: EligibilityRule[] = [
       'taser', 'stun gun', 'self defense',
       'narcotic', 'drug', 'prescription', 'alcohol', 'liquor', 'wine', 'beer', 'tobacco',
       'cigarette', 'cigar', 'vape', 'e-cigarette', 'cbd', 'supplement', 'vitamin', 'food',
-      'gold', 'silver', 'platinum', 'precious metal', 'bullion', 'loose gem', 'loose diamond',
+      // 2026-10-23: bare 'gold'/'silver'/'platinum'/'precious metal'/'bullion' moved to the separate MERCARI precious
+      // metals rule below, which only matches bullion contexts (bars, coins, rounds, scrap). Bare words blocked
+      // ordinary items such as "Ornate Gold Leaf Picture Frame" or a silver plated tray.
+      'loose gem', 'loose diamond',
       'unset diamond', 'gemstone', 'cryptocurrency', 'crypto', 'gift card', 'prepaid card',
       'counterfeit', 'replica', 'taxidermy', 'ivory', 'adult', 'pornographic', 'sex toy',
       'fetish', 'lottery ticket', 'pull tab', 'raffle',
@@ -949,6 +952,32 @@ const RULES: EligibilityRule[] = [
       'gunmetal', 'bladerunner',
     ],
     reason: 'This category isn’t allowed on Mercari (Prohibited Items policy).',
+  },
+  // ---- MERCARI precious metals (2026-10-23). Mercari's Prohibited Items page (re-fetched 2026-10-23) bans
+  // "Selling precious metals, including gold, silver, and platinum sold in any medium" (bars, rounds, coins, scrap,
+  // grain) under regulated financial products. It does not ban jewelry or ordinary goods that are gold or silver in
+  // color or finish, so only bullion-context phrases match here, and decor/plated/tone wording is carved out.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'MERCARI',
+    nameKeywords: [
+      'bullion', 'precious metal', 'bars rounds',
+      'gold bar', 'silver bar', 'platinum bar', 'palladium bar',
+      'gold coin', 'silver coin', 'platinum coin', 'palladium coin',
+      'gold ingot', 'silver ingot', 'platinum ingot',
+      'gold nugget', 'gold grain', 'silver grain', 'silver shot', 'gold dust', 'gold flake',
+      'scrap gold', 'gold scrap', 'scrap silver', 'silver scrap', 'sterling scrap', 'dental gold',
+      'troy oz', 'troy ounce', '999 fine', 'fine silver', 'fine gold', 'krugerrand',
+    ],
+    excludeKeywords: [
+      'bar stool', 'barstool', 'bar cart', 'bar set', 'bar tool', 'bar sign', 'bar mirror', 'bar glass',
+      'plated', 'gold tone', 'goldtone', 'silver tone', 'silvertone', 'gold leaf', 'gold filled',
+      'coin purse', 'coin bank', 'coin holder', 'coin album', 'coin tube', 'coin folder', 'coin sorter',
+      // Jewelry is allowed on Mercari; novelty and toy coins are not precious metal.
+      'necklace', 'pendant', 'bracelet', 'earring', 'jewelry', 'jewellery', 'charm', 'cufflink', 'money clip',
+      'keychain', 'key chain', 'chocolate', 'pirate', 'toy', 'plastic', 'costume', 'movie prop', 'stage prop',
+    ],
+    reason: 'Mercari does not allow selling precious metals such as gold, silver or platinum bullion, coins or scrap (Prohibited Items policy).',
   },
 
   // ---- VINTED -- broader than originally assumed: Women/Men/Designer/Kids/Home/Electronics/
@@ -1537,7 +1566,9 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
             return { eligible: false, reason: nl.reasonOversize || rule.reason };
           }
         }
-        if (nl.minPriceUsd != null && item.price != null && isFinite(Number(item.price)) && Math.round(Number(item.price)) < nl.minPriceUsd) {
+        // 2026-10-23: compare the real price in whole cents. Math.round(price) used to let $4.99 through Poshmark's $5
+        // floor and $2.50-$2.99 through Mercari's $3 floor (both round up to the minimum).
+        if (nl.minPriceUsd != null && item.price != null && isFinite(Number(item.price)) && Math.round(Number(item.price) * 100) < Math.round(nl.minPriceUsd * 100)) {
           return { eligible: false, reason: nl.reasonLowPrice || rule.reason };
         }
         if (nl.requirePackageData === true && weightOz == null && longestSideIn == null) {

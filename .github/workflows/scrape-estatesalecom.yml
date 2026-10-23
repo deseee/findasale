@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       # Fixed 2026-07-26: this was the only workflow in the fleet hardcoding
       # a pnpm version here (8.15.5) instead of letting action-setup read it

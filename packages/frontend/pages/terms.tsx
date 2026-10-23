@@ -155,10 +155,15 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">6. Platform Fees</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
-              FindA.Sale charges an <strong>inclusive platform fee</strong> on each completed transaction, regardless of
-              sale type (fixed-price or auction). The fee is {describeInclusiveRates('SIMPLE')} on the SIMPLE plan and{' '}
+              FindA.Sale charges an <strong>inclusive platform fee</strong> on each completed transaction made through
+              FindA.Sale, regardless of sale type (fixed-price or auction). That means sales paid on the FindA.Sale website
+              and sales rung up on the FindA.Sale POS, including cash, Venmo, and Zelle sales. FindA.Sale charges no fee on
+              sales made outside FindA.Sale, including items an Organizer marks sold in FindA.Sale only to keep inventory
+              accurate. The fee is {describeInclusiveRates('SIMPLE')} on the SIMPLE plan and{' '}
               {describeInclusiveRates('PRO')} on the PRO and TEAMS plans, with a minimum of {MINIMUM_TRANSACTION_FEE_LABEL} per
-              transaction. The fee is deducted automatically from the Organizer payout.
+              card transaction. On card payments the fee is deducted automatically when the payment is made. On cash, Venmo,
+              and Zelle sales rung up on the POS, the fee is added to the Organizer&apos;s fee balance and collected from the
+              Organizer&apos;s next card sale on FindA.Sale.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               <strong>Auction buyer&apos;s premium.</strong> On auction items, the winning bidder pays a{' '}

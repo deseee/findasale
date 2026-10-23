@@ -254,7 +254,7 @@ export default function AuctionsCityPage({
             >
               Yard Sales
             </Link>
-            <span className="px-3 py-1.5 rounded-full text-sm border bg-amber-500 border-amber-500 text-white font-medium">
+            <span className="px-3 py-1.5 rounded-full text-sm border bg-amber-600 border-amber-600 text-white font-medium">
               Auctions
             </span>
             <Link
@@ -461,7 +461,7 @@ export default function AuctionsCityPage({
             </p>
             <Link
               href="/register"
-              className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
+              className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
             >
               List your auction free
             </Link>

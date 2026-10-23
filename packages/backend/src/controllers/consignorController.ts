@@ -24,6 +24,7 @@ import {
 } from '../services/consignorLedgerService';
 import { renderConsignorAgreementForConsignor } from '../services/consignorAgreementService';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
+import { canPublish } from '../lib/publishGate'; // 2026-10-23: verify to publish
 import { findLinkableUserId, sendWelcomeInviteNonBlocking, sendWelcomeInviteForConsignor } from '../services/consignorInviteService';
 import { CONSIGNOR_SQUARE_CLEARED_FIELDS, consignorHasSquareData, consignorSquareStatus } from '../utils/consignorSquareStatus';
 
@@ -441,7 +442,8 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
             price: parsedItemPrice,
             category: item.category || null,
             status: 'AVAILABLE',
-            draftStatus: 'PUBLISHED',
+            // 2026-10-23: saved as a draft until the organizer's email is verified (lib/publishGate.ts).
+            draftStatus: canPublish(req.user) ? 'PUBLISHED' : 'DRAFT',
             ebayShippingClassification: classifyEbayShipping(item.category || null, []),
             rarity: assignRarityForIntakeItem(parsedItemPrice),
             // U1: satisfies NOT NULL constraint; scheduleItemEmbedding (itemController.ts)

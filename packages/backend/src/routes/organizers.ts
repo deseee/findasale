@@ -4,6 +4,7 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { isTrustedServerRequest } from '../middleware/rateLimitShared';
 import { prisma } from '../index';
+import { saleHasProFeatures } from '../lib/saleProFeatures'; // 2026-10-23: per-sale PRO features ($9.99 a-la-carte upgrade)
 import { authenticate, optionalAuthenticate, AuthRequest, checkTierLapse, requireOrganizer, requireAdmin } from '../middleware/auth';
 import { gateSalesForViewer } from '../lib/publicSaleGate';
 import { coarseCoord } from '../lib/saleLocationPrivacy';
@@ -28,6 +29,7 @@ import {
 } from '../services/organizerEmailForwardingService';
 import { SOLD_VIA_FB_EMAIL_ORDER } from '../services/facebookMarketplaceEmailSoldDetection';
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
+import { getAutoQueueSettings, patchAutoQueueSettings } from '../controllers/extensionController';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue, getEbayInsertionsForecast, getEbaySyncIssues, retryEbaySync } from '../controllers/platformStatsController';
@@ -138,6 +140,11 @@ router.get('/:organizerId/export/commerce-feed', exportOrganizerCommerceManagerF
 router.get('/me/platform-stats', authenticate, getPlatformStats);
 router.get('/me/platform-gap', authenticate, getPlatformGap);
 router.patch('/me/ebay-queue-settings', authenticate, updateEbayQueueSettings);
+// Auto queue settings (2026-10-23): moved here from the Bearer-only /api/extension router, where the web card's cookie
+// PATCH always got 401 BEARER_REQUIRED. Cookie session + the global CSRF check (this path is not CSRF-exempt);
+// organizer-only, PRO-gated as before; the controller resolves the organizer from the session (own settings only).
+router.get('/me/auto-queue-settings', authenticate, requireOrganizer, requireTier('PRO'), getAutoQueueSettings);
+router.patch('/me/auto-queue-settings', authenticate, requireOrganizer, requireTier('PRO'), patchAutoQueueSettings);
 router.post('/me/ebay-queue', authenticate, addToEbayQueue);
 router.delete('/me/ebay-queue/:itemId', authenticate, removeFromEbayQueue);
 // ADR ebay-renewal-forecasting (2026-09-15): real free-insertion usage + projected GTC-renewal forecast
@@ -832,11 +839,16 @@ router.get('/me/sales', authenticate, async (req: AuthRequest, res: Response) =>
         endDate: true,
         saleType: true,
         qrScanCount: true,
+        organizerId: true,
+        purchaseModel: true,
+        alaCarteFeePaid: true,
       },
       orderBy: { startDate: 'desc' },
     });
 
-    res.json(sales);
+    // hasProFeatures: PRO/TEAMS, or this sale has the paid $9.99 a-la-carte upgrade (lib/saleProFeatures.ts). The
+    // line-queue page uses it to unlock the Virtual Queue for that one sale.
+    res.json(sales.map((s) => ({ ...s, hasProFeatures: saleHasProFeatures(s, organizer) })));
   } catch (error) {
     console.error('Error fetching organizer sales:', error);
     res.status(500).json({ message: 'Server error' });

@@ -7,6 +7,7 @@
 
 import { prisma } from './prisma';
 import { SubscriptionTier, getTierLimit } from '../constants/tierLimits';
+import { getSaleAiTagAllowance } from './aiTagsQuotaTracker';
 
 /**
  * Check if a sale exceeds the organizer's item limit for their tier
@@ -69,21 +70,33 @@ export async function checkItemOverPhotoLimit(
  */
 export async function checkAITagLimit(
   organizerId: string,
-  tier: SubscriptionTier
+  tier: SubscriptionTier,
+  saleId?: string | null
 ): Promise<{
   isOverLimit: boolean;
   tagCount: number;
   limit: number;
   message?: string;
 }> {
-  // Count items tagged with AI this calendar month
+  // A paid $9.99 a-la-carte sale with tags left in its own 500 (lib/saleProFeatures.ts) is never over the limit for
+  // its own items. Only that sale: any other saleId falls through to the monthly count below.
+  if (saleId) {
+    const saleAllowance = await getSaleAiTagAllowance(organizerId, saleId);
+    if (saleAllowance && saleAllowance.remaining > 0) {
+      return { isOverLimit: false, tagCount: saleAllowance.used, limit: saleAllowance.limit };
+    }
+  }
+
+  // Count items tagged with AI this calendar month. Items of paid a-la-carte sales are metered by their sale's own
+  // allowance, so they do not use up the monthly allowance of the organizer's other sales.
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
   const tagCount = await prisma.item.count({
     where: {
       sale: {
-        organizerId
+        organizerId,
+        NOT: { purchaseModel: 'ALA_CARTE', alaCarteFeePaid: true },
       },
       isAiTagged: true,
       createdAt: {

@@ -2894,16 +2894,21 @@ const CreateSalePage: React.FC = () => {
     setIsSubmitting(true);
     setTierLimitError(null);
     setRetailTierError(null);
+    // The draft this attempt saved, if any (verify-to-publish below sends the organizer on to add items).
+    let savedSaleId: string | null = null;
     try {
       // createSale always makes a DRAFT (the sale schema never accepts a client status), so
       // publishing is a second call to the tier-gated PATCH /sales/:id/status endpoint
       // (P0 fix 2026-08-08, S1196). If that second call fails, the sale id is remembered and
       // the next attempt updates the same sale instead of creating another draft.
       const { id: saleId, status: currentStatus, record } = await ensureServerSale(payload);
+      savedSaleId = saleId;
 
       // allowEmpty is only passed in after the organizer confirmed in PublishWithoutItemsDialog.
+      // publishReadyItems (2026-10-23): a wizard sale normally has no items yet; if a resumed draft already
+      // has some, the ready ones go live with it, same default as every other publish path.
       if (currentStatus !== 'PUBLISHED') {
-        await publishSaleStatus(saleId, { allowEmpty: opts.allowEmpty === true });
+        await publishSaleStatus(saleId, { allowEmpty: opts.allowEmpty === true, publishReadyItems: true });
       }
 
       setPublishedSaleId(saleId);
@@ -2936,7 +2941,29 @@ const CreateSalePage: React.FC = () => {
       // ADR vendor-booth-sale-onboarding-gate (2026-09-25): belt-and-suspenders for a stale
       // tab that bypassed Step1's frontend gate (e.g. lost its claimed booth between load and
       // publish). Reuses the same onboarding messaging the Step1 panel shows.
-      if (err.response?.status === 403 && err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+      if (err.response?.status === 403 && err.response?.data?.code === 'EMAIL_NOT_VERIFIED' && savedSaleId) {
+        // Verify to publish (2026-10-23): the sale itself is saved as a draft (creating one no longer needs a
+        // verified email), only publishing does. Send a fresh link once, then let them keep going: add items.
+        let linkSent = false;
+        if (!verificationResentRef.current && user?.email) {
+          verificationResentRef.current = true;
+          try {
+            await api.post('/auth/resend-verification', { email: user.email });
+            linkSent = true;
+          } catch {
+            verificationResentRef.current = false;
+          }
+        }
+        showToast(
+          `Your sale is saved as a draft. Verify your email to publish it${
+            linkSent ? `: we just sent a new link to ${user?.email}` : ''
+          }. You can add items while you wait.`,
+          'info'
+        );
+        clearStoredWizardDraft();
+        setServerSale(null);
+        router.push(`/organizer/add-items/${savedSaleId}`);
+      } else if (err.response?.status === 403 && err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
         // 2026-10-23: this used to fall through to the generic toast ("Check your inbox for a
         // verification link") with no way to get a new link. Organizers whose first link had
         // expired, or who never saw it, were stuck. Send a fresh link right away (the backend
@@ -3158,6 +3185,7 @@ const CreateSalePage: React.FC = () => {
         onCancel={handleDialogCancel}
         busy={publishDialogBusy}
         addItemsFirstHelper="Your sale stays a draft until you publish it."
+        needsVerification={user?.emailVerified === false}
       />
 
       <div style={{

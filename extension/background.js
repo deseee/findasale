@@ -1246,7 +1246,7 @@ async function fasEditLogEntry(level, platform, entry, code, message, extra) {
     const rec = Object.assign({ t: Date.now(), level: level, platform: platform, itemId: entry ? entry.id : undefined, title: entry ? String(entry.title || '').slice(0, 70) : undefined, code: code || '', msg: String(message || '').slice(0, 700) }, extra || {});
     await chrome.storage.local.set({ [FAS_EDIT_LOG_KEY]: FAS_EDIT_CORE.pushRing(st[FAS_EDIT_LOG_KEY], rec, 120) });
   } catch (e) { /* logging never breaks the run */ }
-  if (level !== 'info') fasLog(level === 'error' ? 'error' : 'warn', 'autoApply', platform + ': ' + (code || '') + ' ' + String(message || '').slice(0, 300), extra && extra.step ? { step: extra.step, selector: extra.selector || '' } : null, { platform: platform, itemId: entry ? entry.id : undefined });
+  if (level !== 'info') fasLog(level === 'error' ? 'error' : 'warn', 'autoApply', platform + ': ' + (code || '') + ' ' + String(message || '').slice(0, 300), extra && extra.step ? Object.assign({ step: extra.step, selector: extra.selector || '' }, extra.diag ? { diag: extra.diag } : {}) : null, { platform: platform, itemId: entry ? entry.id : undefined });
 }
 async function fasEditAddDiag(platform, record) {
   try {
@@ -1730,7 +1730,8 @@ async function fasPoshShipRun(force) {
         if (!tb) { res = { state: 'fail', code: 'tab_closed', reason: 'tab closed' }; break; }
         try {
           await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['fas-posh-shipping.js'] });
-          const o = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: (c) => self.FAS_POSH_SHIP.step(c), args: [{ id: r.id, phase: scratch.phase || '' }] });
+          // 1.0.63: pass the whole scratch (finish clicks, picked value, re-read flag) so the verify step can report what happened.
+          const o = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: (c) => self.FAS_POSH_SHIP.step(c), args: [Object.assign({}, scratch, { id: r.id, phase: scratch.phase || '' })] });
           const x = o && o[0] ? o[0].result : null;
           if (!x) { if (++errs > 3) { res = { state: 'fail', code: 'no_result', reason: 'engine returned nothing' }; break; } await sleep(1300); continue; }
           if (x.scratch) scratch = Object.assign({}, scratch, x.scratch);
@@ -1743,7 +1744,7 @@ async function fasPoshShipRun(force) {
       const entry = { id: r.id, title: r.title };
       if (res.state === 'done') { fixed++; delete st.fails[r.id]; await fasEditLogEntry('info', 'POSHMARK', entry, 'shipping_fixed', 'Shipping set to No Discount (verified on Poshmark)'); }
       else if (res.state === 'blocked') { stopped = res.code; st.backoffUntil = Date.now() + 6 * 3600 * 1000; await fasEditLogEntry('error', 'POSHMARK', entry, res.code, 'Shipping fix stopped: ' + res.reason + '. Will not touch Poshmark for 6 hours.'); break; }
-      else { failed++; const f = st.fails[r.id] || { n: 0 }; f.n++; f.until = Date.now() + Math.min(24, 2 * f.n) * 3600 * 1000; st.fails[r.id] = f; await fasEditLogEntry('error', 'POSHMARK', entry, res.code || 'failed', 'Shipping fix failed: ' + (res.reason || '') + ' (attempt ' + f.n + ', retry later)', { step: 'shipping' }); }
+      else { failed++; const f = st.fails[r.id] || { n: 0 }; f.n++; f.until = Date.now() + Math.min(24, 2 * f.n) * 3600 * 1000; st.fails[r.id] = f; await fasEditLogEntry('error', 'POSHMARK', entry, res.code || 'failed', 'Shipping fix failed: ' + (res.reason || '') + ' (attempt ' + f.n + ', retry later)', { step: 'shipping', diag: res.diag }); }
       await chrome.storage.local.set({ [FAS_POSH_SHIP_STATE_KEY]: st });
       await sleep(4000 + Math.random() * 5000);
     }
@@ -1752,8 +1753,14 @@ async function fasPoshShipRun(force) {
     st.lastRun = Date.now();
     await chrome.storage.local.set({ [FAS_POSH_SHIP_STATE_KEY]: st });
     await chrome.storage.local.remove([FAS_EDIT_RUN_KEY]);
-    if (prevTabId != null) await new Promise((resolve) => chrome.tabs.update(prevTabId, { active: true }, () => { void chrome.runtime.lastError; resolve(); }));
-    await new Promise((resolve) => chrome.tabs.remove(tab.id, () => { void chrome.runtime.lastError; resolve(); }));
+    if (stopped === 'poshmark_flagged') {
+      // 1.0.63: a certify / verification prompt after Update is for the person: leave the tab open on it (Patrick's rule:
+      // flagged Poshmark items hold for the seller), and say so. The 6 h back-off above keeps automation off Poshmark.
+      try { chrome.notifications.create('fasPoshShipNeedsYou', { type: 'basic', iconUrl: 'icon128.png', title: 'FindA.Sale needs you', message: 'Poshmark asked for a check while changing a listing to No Discount shipping. The tab is left open on it.', priority: 2 }); } catch (e) { /* best-effort */ }
+    } else {
+      if (prevTabId != null) await new Promise((resolve) => chrome.tabs.update(prevTabId, { active: true }, () => { void chrome.runtime.lastError; resolve(); }));
+      await new Promise((resolve) => chrome.tabs.remove(tab.id, () => { void chrome.runtime.lastError; resolve(); }));
+    }
     fasPoshShipRunning = false;
   }
 }
@@ -2466,14 +2473,35 @@ chrome.runtime.onStartup.addListener(ensureAutoListQueueAlarm);
 // non-empty AND index < queue.length) is left completely untouched this tick, never clobbered or
 // reordered -- their current run finishes on its own, and any newly-approved items for that
 // platform simply get picked up on a later poll once it goes idle again.
+// 1.0.63 (2026-10-23): the organizer's optional auto queue test limits, sent by the server with the queue
+// (Organizer auto queue settings on the web: "max new listings per check" and "only these items"). The server already
+// applies them; the extension applies them again to what it merges (defense in depth). Pure, so tests can run it.
+function fasAutoQueueLimitPlan(limits) {
+  const l = limits && typeof limits === 'object' ? limits : {};
+  const ids = Array.isArray(l.onlyItemIds) ? l.onlyItemIds.filter((x) => typeof x === 'string' && x) : [];
+  const n = l.maxNewPerRun;
+  return {
+    onlyIds: ids.length ? ids : null,
+    budget: Number.isInteger(n) && n >= 1 ? n : Infinity,
+  };
+}
+function fasAutoQueueApplyLimit(items, plan) {
+  let out = Array.isArray(items) ? items : [];
+  if (plan.onlyIds) out = out.filter((q) => q && plan.onlyIds.indexOf(q.id) !== -1);
+  if (plan.budget !== Infinity) out = out.slice(0, Math.max(0, plan.budget));
+  return out;
+}
+
 async function checkAutoListQueue() {
   const resp = await apiFetch('/extension/autolist-queue');
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
   const queues = (resp.data && resp.data.queues) || {};
   const outcomes = [];
   const pausedForQueue = await fasGetPausedPlatforms();
+  const limitPlan = fasAutoQueueLimitPlan(resp.data && resp.data.limits);
   for (const platform of Object.keys(FAS_AUTOLIST_QUEUE_CFG)) {
     let items = queues[platform];
+    if (Array.isArray(items) && limitPlan.onlyIds) items = items.filter((q) => q && limitPlan.onlyIds.indexOf(q.id) !== -1);
     // 2026-10-21: defense in depth for the server's pickup-only rule (popup.js PICKUP_INCOMPATIBLE_PLATFORMS):
     // Mercari and Poshmark have no local pickup option, so a pickup-only item is never queued there.
     if (Array.isArray(items) && FAS_AUTOLIST_PICKUP_BLOCKED.indexOf(platform) !== -1) {
@@ -2500,6 +2528,10 @@ async function checkAutoListQueue() {
     const curIndex = st[cfg.index] || 0;
     const isIdle = curQueue.length === 0 || curIndex >= curQueue.length;
     if (!isIdle) { outcomes.push(platform + ':skipped_active'); continue; }
+    // 1.0.63: max new listings per check, across all platforms in this poll.
+    if (limitPlan.budget <= 0) { outcomes.push(platform + ':limit_reached'); continue; }
+    items = fasAutoQueueApplyLimit(items, limitPlan);
+    if (limitPlan.budget !== Infinity) limitPlan.budget -= items.length;
     // Same write path/shape as the manual setXQueue handlers above (queue + index reset to 0).
     // autoPublish default (2026-09-17, per handoff): nobody clicked anything to get here, so
     // there is no msg.autoPublish to read -- preserve whatever the organizer already has stored

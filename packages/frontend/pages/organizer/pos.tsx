@@ -34,7 +34,7 @@ import BulkQuantityModal from '../../components/BulkQuantityModal'; // ADR-136 (
 import { BULK_COPY, BULK_ERROR_COPY, BulkLot, BulkQuote, cartLabelForLot, cartLabelForPack, formatCardCount, parsePackCountInput, readBulkStatus } from '../../lib/bulkLot';
 import { PosTierStatus } from '../../lib/types/posTiers';
 import QRCode from 'react-qr-code';
-import { socketAuth } from '../../lib/socketAuth';
+import { socketAuth, reconnectAfterServerDrop } from '../../lib/socketAuth';
 
 // Cart line text for a consignor price tag: "Consigned tag $5.00, <consignor>, Booth <n>" (booth only on the venue register).
 function consignorTagLineTitle(priceCents: number, consignorName: string | null, boothNumber: string | null, boothName: string | null): string {
@@ -1148,6 +1148,7 @@ export default function POSPage() {
         reconnectionDelayMax: 5000,
         reconnectionAttempts: 5,
       });
+      reconnectAfterServerDrop(socketInstance);
 
       const handlePaymentStatus = (event: any) => {
         if (!isMounted) return;
@@ -2217,7 +2218,7 @@ export default function POSPage() {
       setPaymentStatus('success');
       const methodLabel = method === 'venmo' ? 'Venmo' : 'Zelle';
       setSuccessMessage(
-        `✅ ${methodLabel} sale recorded for $${cartTotal.toFixed(2)}. Platform fee will be deducted from your next payout.`
+        `✅ ${methodLabel} sale recorded for $${cartTotal.toFixed(2)}. The platform fee is added to your fee balance and collected from your next card sale on FindA.Sale.`
       );
 
       showSurvey('OG-3');
@@ -4540,7 +4541,7 @@ export default function POSPage() {
                   🧪 Test transaction. This fee was calculated but NOT charged or added to your balance.
                 </p>
               ) : (
-                <p className="text-xs text-emerald-700 dark:text-emerald-400 italic">This fee will be deducted from your next payout.</p>
+                <p className="text-xs text-emerald-700 dark:text-emerald-400 italic">This fee is added to your fee balance and collected from your next card sale on FindA.Sale.</p>
               )}
               {!lastCashFee.isTestTransaction && lastCashFee.cashFeeBalance > 0 && (
                 <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-800">

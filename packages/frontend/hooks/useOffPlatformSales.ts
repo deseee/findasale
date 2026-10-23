@@ -7,8 +7,8 @@ import api from '../lib/api';
  * Organizers who opt in can mark a plain AVAILABLE item "sold" without it
  * going through FindA.Sale's own checkout (cash, Venmo, their own Square
  * reader, etc.). FindA.Sale never sees or processes that payment -- it just
- * records that the item sold and bills the organizer a separate flat fee
- * later via the existing (non-Connect) Stripe billing client.
+ * records that the item sold. FindA.Sale never charges organizers for sales
+ * made off-platform (Patrick 2026-10-23), so recording them is free.
  *
  * See: claude_docs/feature-notes/bring-your-own-rails-architecture-and-scoping-2026-09-06.md
  *
@@ -26,7 +26,7 @@ import api from '../lib/api';
  *     200: { items: OffPlatformSaleLogEntry[], page, limit, total, totalPages }
  *
  *   GET /billing/off-platform-usage
- *     200: { offPlatformSalesEnabled, billingPeriodKey, itemCount, amountCents: null, pricingNotYetSet: true }
+ *     200: { offPlatformSalesEnabled, billingPeriodKey, itemCount, amountCents: 0, feeApplies: false, pricingNotYetSet: false }
  *
  *   POST /billing/off-platform-sales/opt-in
  *     body: { enabled: boolean }  <-- REQUIRED, this is a real on/off toggle, not opt-in-only
@@ -38,8 +38,11 @@ export interface OffPlatformUsage {
   enabled: boolean;
   itemCount: number;
   billingPeriodKey: string | null;
-  /** Always null until Patrick's flat/tiered fee decision ships (byorFeeCalculator.ts). */
+  /** Always 0: off-platform sales are never charged (Patrick 2026-10-23). */
   amountCents: number | null;
+  /** Always false: no fee applies to off-platform sales. */
+  feeApplies: boolean;
+  /** Legacy field, always false. */
   pricingNotYetSet: boolean;
 }
 
@@ -47,8 +50,9 @@ const DEFAULT_USAGE: OffPlatformUsage = {
   enabled: false,
   itemCount: 0,
   billingPeriodKey: null,
-  amountCents: null,
-  pricingNotYetSet: true,
+  amountCents: 0,
+  feeApplies: false,
+  pricingNotYetSet: false,
 };
 
 /**
@@ -69,8 +73,9 @@ export function useOffPlatformUsage() {
         enabled: !!data.offPlatformSalesEnabled,
         itemCount: data.itemCount ?? 0,
         billingPeriodKey: data.billingPeriodKey ?? null,
-        amountCents: data.amountCents ?? null,
-        pricingNotYetSet: data.pricingNotYetSet ?? true,
+        amountCents: data.amountCents ?? 0,
+        feeApplies: data.feeApplies === true,
+        pricingNotYetSet: data.pricingNotYetSet === true,
       } as OffPlatformUsage;
     },
     staleTime: 60 * 1000,

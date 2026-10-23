@@ -30,6 +30,7 @@ import { awardXp, applyHuntPassMultiplier, XP_AWARDS } from './xpService';
 import { checkAndAwardOgBuyer } from './badgeService';
 import { referralTrancheService } from './referralTrancheService';
 import { evaluateReferralFraud, getAccountAgeDays, MIN_ACCOUNT_AGE_DAYS } from './referralFraudService';
+import { fireReferralCreditCheck } from './affiliateService'; // roadmap #661: organizer referral credit rides on the same post-commit hook
 
 const HOLD_72H_MS = 72 * 60 * 60 * 1000;
 const HOLD_24H_MS = 24 * 60 * 60 * 1000;
@@ -335,6 +336,10 @@ async function awardForCanonical(canonicalId: string, siblingIds: string[]): Pro
  */
 export function fireSquarePurchaseEngagement(purchaseId: string | null | undefined): void {
   if (!purchaseId) return;
+  // Roadmap #661 (2026-10-23): organizer-to-organizer referral credit for the SELLER's referrer. Independent of the
+  // shopper engagement below (it also counts guest and walk-up card sales), never throws, and expands to the other paid
+  // rows of the same sale. jobs/referralCreditSweepJob.ts is the backstop for paths that never reach this hook.
+  fireReferralCreditCheck(purchaseId);
   try {
     setImmediate(() => {
       awardSquarePurchaseEngagement(purchaseId).catch((err) =>

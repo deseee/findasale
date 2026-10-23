@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
 import { extensionBearerOnly } from '../middleware/extensionBearerOnly';
-import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform, setItemRemoteListingId, reportVintedSold, reportVintedBundleOrderItems, postExtensionLogs, getPausedMarketplaces, setPausedMarketplaces, getAutoQueueSettings, patchAutoQueueSettings } from '../controllers/extensionController';
+import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform, setItemRemoteListingId, reportVintedSold, reportVintedBundleOrderItems, postExtensionLogs, getPausedMarketplaces, setPausedMarketplaces } from '../controllers/extensionController';
 
 // Endpoints for the FindA.Sale Marketplace Autofill browser extension (ADR-084).
 // Auth is via Bearer token (the organizer's accessToken, read from the finda.sale
@@ -71,8 +71,8 @@ router.post('/logs', authenticate, requireOrganizer, requireTier('PRO'), postExt
 router.get('/paused-marketplaces', authenticate, requireOrganizer, requireTier('PRO'), getPausedMarketplaces);
 router.put('/paused-marketplaces', authenticate, requireOrganizer, requireTier('PRO'), setPausedMarketplaces);
 
-// Auto queue opt-ins (2026-10-21): per-marketplace *AutoListEnabled flags read by GET /autolist-queue.
-router.get('/auto-queue-settings', authenticate, requireOrganizer, requireTier('PRO'), getAutoQueueSettings);
-router.patch('/auto-queue-settings', authenticate, requireOrganizer, requireTier('PRO'), patchAutoQueueSettings);
+// Auto queue opt-ins + test limits: GET/PATCH /api/organizers/me/auto-queue-settings (routes/organizers.ts) since
+// 2026-10-23. They were here, but this router is Bearer-only for writes, so the web card's cookie PATCH could never
+// save. The extension does not call them (GET /autolist-queue already applies the settings and returns the limits).
 
 export default router;

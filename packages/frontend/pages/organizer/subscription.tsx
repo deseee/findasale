@@ -246,7 +246,7 @@ export default function SubscriptionPage() {
                     Just one big sale?
                   </h3>
                   <p className="text-purple-800 dark:text-purple-200 mb-6">
-                    Upgrade that sale for $9.99 to unlock PRO-level capacity without a monthly subscription.
+                    Upgrade that sale for $9.99 to get up to 10 photos per item (5 on SIMPLE), 500 auto tags, the Flip Report and the Virtual Queue on it, with no monthly subscription.
                   </p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -256,7 +256,7 @@ export default function SubscriptionPage() {
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 auto tags included</p>
-                      <p className="text-sm text-purple-700 dark:text-purple-300">Descriptions write themselves. Save hours of work.</p>
+                      <p className="text-sm text-purple-700 dark:text-purple-300">For that sale's items, on top of your 100 a month. Descriptions write themselves.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Flip Report</p>
@@ -443,7 +443,7 @@ export default function SubscriptionPage() {
                     Growing Your Team?
                   </h3>
                   <p className="text-teal-800 dark:text-teal-200 mb-6">
-                    Upgrade to TEAMS ($79/month) to unlock team management, unlimited sales, and command center controls.
+                    Upgrade to TEAMS ($79/month) to add up to 5 team members, run as many sales at once as you need, get unlimited auto tags, and manage every sale from the Command Center.
                   </p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -593,7 +593,7 @@ export default function SubscriptionPage() {
                   Just one big sale?
                 </h3>
                 <p className="text-purple-800 dark:text-purple-200 mb-6">
-                  Upgrade that sale for $9.99 to unlock PRO-level capacity without a monthly subscription.
+                  Upgrade that sale for $9.99 to get up to 10 photos per item (5 on SIMPLE), 500 auto tags, the Flip Report and the Virtual Queue on it, with no monthly subscription.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -603,7 +603,7 @@ export default function SubscriptionPage() {
                   </div>
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                     <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 auto tags included</p>
-                    <p className="text-sm text-purple-700 dark:text-purple-300">Descriptions write themselves. Save hours of work.</p>
+                    <p className="text-sm text-purple-700 dark:text-purple-300">For that sale's items, on top of your 100 a month. Descriptions write themselves.</p>
                   </div>
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                     <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Flip Report</p>

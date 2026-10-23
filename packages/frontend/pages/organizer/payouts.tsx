@@ -373,10 +373,11 @@ const OrganizerPayoutsPage = () => {
                       handles, so the commission on them cannot come out of a card charge —
                       it collects here and is netted out of the next payout instead. */}
                   <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
-                    Commission on sales you collected in cash or in person. We never touched that
-                    money, so we take our share out of your next payout instead. A $100 cash sale
+                    Commission on cash, Venmo, and Zelle sales you rang up on the FindA.Sale POS. We never
+                    touched that money, so we collect our share from your next card sale on FindA.Sale instead.
+                    Sales made outside FindA.Sale carry no fee. A $100 cash sale
                     at the in-person rate ({formatInclusiveFeeRate('SIMPLE', 'IN_PERSON')} on SIMPLE, {formatInclusiveFeeRate('PRO', 'IN_PERSON')} on PRO and TEAMS,
-                    {MINIMUM_TRANSACTION_FEE_LABEL} minimum) adds ${calculateInclusiveCommission(100, 'SIMPLE', 'IN_PERSON').toFixed(2)} on SIMPLE
+                    no minimum) adds ${calculateInclusiveCommission(100, 'SIMPLE', 'IN_PERSON').toFixed(2)} on SIMPLE
                     or ${calculateInclusiveCommission(100, 'PRO', 'IN_PERSON').toFixed(2)} on PRO and TEAMS here.
                   </p>
                   {earnings?.cashFeeBalanceUpdatedAt && (
@@ -390,7 +391,7 @@ const OrganizerPayoutsPage = () => {
                 {isCashFeeStale() && (
                   <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 p-3">
                     <p className="text-sm text-amber-800">
-                      <span className="font-semibold">⚠️ Cash fee balance hasn't been cleared in 30+ days.</span> It will be deducted from your next payout.
+                      <span className="font-semibold">⚠️ Cash fee balance hasn't been cleared in 30+ days.</span> It will be collected from your next card sale on FindA.Sale.
                     </p>
                   </div>
                 )}
@@ -566,7 +567,7 @@ const OrganizerPayoutsPage = () => {
             <p className="text-xs text-gray-400 mb-4">
               Item-level breakdown of your sold items. The platform fee includes card processing, so there is
               no separate processing charge. SIMPLE pays {describeInclusiveRates('SIMPLE')}; PRO and TEAMS pay{' '}
-              {describeInclusiveRates('PRO')}. Every sale has a {MINIMUM_TRANSACTION_FEE_LABEL} minimum fee.
+              {describeInclusiveRates('PRO')}. Every card sale has a {MINIMUM_TRANSACTION_FEE_LABEL} minimum fee.
             </p>
 
             {earningsLoading ? (

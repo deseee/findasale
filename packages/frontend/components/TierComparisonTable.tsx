@@ -27,13 +27,13 @@ const FEATURES: Feature[] = [
   },
   {
     name: 'Photos per item',
-    simple: '5',
+    simple: '5 (10 with $9.99 sale upgrade)',
     pro: '10',
     teams: 'Unlimited*',
   },
   {
     name: 'Auto tags per month',
-    simple: '100',
+    simple: '100 (+500 for a sale with the $9.99 upgrade)',
     pro: '2,000',
     teams: 'Unlimited*',
   },
@@ -171,13 +171,13 @@ const FEATURES: Feature[] = [
   },
   {
     name: 'Virtual Queue (Line Queue)',
-    simple: false,
+    simple: 'With $9.99 sale upgrade',
     pro: true,
     teams: true,
   },
   {
     name: 'Flip Report (post-sale PDF)',
-    simple: false,
+    simple: 'With $9.99 sale upgrade',
     pro: true,
     teams: true,
   },

@@ -19,6 +19,7 @@ import {
   type BulkRefundSource,
 } from './bulkLot/bulkLotRefundService'; // ADR-136 Addendum B (2026-10-05, #659): partial-quantity refunds of a bulk lot sale row
 import { resolveCnpSurchargeRefund } from './cnpSurcharge'; // CNP surcharge (2026-09-30): the manual-card surcharge is refunded proportionally with the principal; helpers are pure integer-cents math
+import { dropUserSockets } from '../lib/dropUserSockets'; // 2026-10-23 (security): drop live sockets on chargeback suspension
 
 /**
  * squareRefundService.ts -- Square-side mirror of refundService.ts's single-choke-point
@@ -1412,7 +1413,9 @@ export async function handleSquareDisputeWebhook(event: SquareDisputeWebhookEven
           await prisma.user.update({ where: { id: purchase.user.id }, data: { chargebackCount: { increment: 1 } } });
           const updatedUser = await prisma.user.findUnique({ where: { id: purchase.user.id }, select: { chargebackCount: true, suspendedAt: true } });
           if (updatedUser && updatedUser.chargebackCount >= 3 && !updatedUser.suspendedAt) {
-            await prisma.user.update({ where: { id: purchase.user.id }, data: { suspendedAt: new Date(), suspendReason: 'SERIAL_CHARGEBACKS' } });
+            // 2026-10-23 (security): the suspension also revokes existing sessions (tokenVersion) and live sockets.
+            await prisma.user.update({ where: { id: purchase.user.id }, data: { suspendedAt: new Date(), suspendReason: 'SERIAL_CHARGEBACKS', tokenVersion: { increment: 1 } } });
+            await dropUserSockets(purchase.user.id, 'square-chargeback-suspend');
             // 2026-09-30: record that THIS dispute applied the suspension, so a WON decision lifts only a suspension
             // the dispute logic set (never a manual admin one, which has its own reason). A step marker rather than
             // text in suspendReason, because suspendReason is shown to the user on the suspended-account screen.

@@ -159,7 +159,7 @@ const AdminCreatorCommissions = () => {
               }}
               className={`px-3 py-1.5 rounded-full text-sm border ${
                 filter === f.key
-                  ? 'bg-amber-500 border-amber-500 text-white font-medium'
+                  ? 'bg-amber-600 border-amber-600 text-white font-medium'
                   : 'border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300'
               }`}
             >

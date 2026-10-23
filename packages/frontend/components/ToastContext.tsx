@@ -49,8 +49,8 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     success: 'bg-green-500 text-white dark:bg-green-700',
     error: 'bg-red-500 text-white dark:bg-red-700',
     info: 'bg-blue-500 text-white dark:bg-blue-700',
-    warning: 'bg-yellow-500 text-white dark:bg-yellow-700',
-    points: 'bg-amber-500 text-white dark:bg-amber-700',
+    warning: 'bg-yellow-700 text-white dark:bg-yellow-700',
+    points: 'bg-amber-600 text-white dark:bg-amber-700',
   };
 
   return (

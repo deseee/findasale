@@ -87,7 +87,7 @@ export const itemKitHandlers = {
     try {
       const organizerId = await organizerIdFor(req, res);
       if (!organizerId) return res;
-      const kit = await createKit(organizerId, req.body);
+      const kit = await createKit(organizerId, req.body, req.user?.id); // 2026-10-23: DRAFT unless the account may publish
       return res.status(201).json({ success: true, data: { kit } });
     } catch (err) {
       return sendError(res, err, 'create');

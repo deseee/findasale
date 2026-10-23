@@ -3,6 +3,8 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { listAdminCommissions, settleCommission } from '../services/creatorAffiliateService';
 import { sendCreatorError } from './creatorAffiliateController';
+import { reviewReferral } from '../services/affiliateService';
+import { getCreditBalance } from '../services/subscriptionCreditService';
 
 // GET /api/admin/affiliate/creators
 // Returns paginated list of users who have an AffiliateCode or at least one AffiliateLink,
@@ -209,5 +211,92 @@ export const recordCommissionClawback = async (req: AuthRequest, res: Response) 
     res.json(await settleCommission(req.params.id, 'CLAWBACK', req.body?.note));
   } catch (err) {
     sendCreatorError(res, err, 'Failed to record commission clawback');
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Roadmap #661 (2026-10-23): organizer referral credit review queue (ADR-119 admin appeal path)
+// ---------------------------------------------------------------------------
+
+const REVIEW_FILTERS = ['PENDING_REVIEW', 'BLOCKED', 'APPROVED', 'REJECTED', 'CLEAR'];
+
+// GET /api/admin/affiliate/referrals?review=PENDING_REVIEW|BLOCKED|APPROVED|REJECTED|CLEAR|OPEN (default OPEN = PENDING_REVIEW + BLOCKED)
+// Referrals with their fraud signals and the credit they have earned (usable / held). Read only.
+export const getReferralReviewQueue = async (req: AuthRequest, res: Response) => {
+  try {
+    const review = typeof req.query.review === 'string' ? req.query.review.toUpperCase() : 'OPEN';
+    const statuses = review === 'OPEN' ? ['PENDING_REVIEW', 'BLOCKED'] : REVIEW_FILTERS.includes(review) ? [review] : null;
+    if (!statuses) return res.status(400).json({ message: 'Invalid review filter' });
+    const take = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50));
+    const referrals = await prisma.affiliateReferral.findMany({
+      where: { fraudReviewStatus: { in: statuses } },
+      orderBy: { updatedAt: 'desc' },
+      take,
+      select: {
+        id: true,
+        status: true,
+        fraudReviewStatus: true,
+        fraudCompositeScore: true,
+        deviceFraudFlag: true,
+        cardFraudFlag: true,
+        qualifiedAt: true,
+        holdUntil: true,
+        reviewedAt: true,
+        createdAt: true,
+        payoutAmountCents: true,
+        referrer: { select: { id: true, name: true, email: true } },
+        referredUser: { select: { id: true, name: true, email: true } },
+        fraudSignals: { select: { signalType: true, confidenceScore: true, flags: true, purchaseId: true, reviewOutcome: true, createdAt: true } },
+        creditEntries: { where: { kind: { in: ['REFERRAL_EARNED', 'REFERRAL_ADJUSTMENT'] } }, select: { amountCents: true, status: true } },
+      },
+    });
+    res.json({
+      referrals: referrals.map(({ creditEntries, ...r }) => ({
+        ...r,
+        creditActiveCents: creditEntries.filter((e) => e.status === 'ACTIVE').reduce((s, e) => s + e.amountCents, 0),
+        creditHeldCents: creditEntries.filter((e) => e.status === 'HELD').reduce((s, e) => s + e.amountCents, 0),
+      })),
+    });
+  } catch (err) {
+    console.error('[admin-affiliate] referral review queue failed:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// POST /api/admin/affiliate/referrals/:id/review { decision: 'APPROVE' | 'REJECT', note }
+// APPROVE releases the referral's held credit; REJECT cancels the referral and voids its credit. Note required on REJECT.
+export const reviewReferralHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const decision = typeof req.body?.decision === 'string' ? req.body.decision.toUpperCase() : '';
+    if (decision !== 'APPROVE' && decision !== 'REJECT') return res.status(400).json({ message: 'decision must be APPROVE or REJECT' });
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+    if (decision === 'REJECT' && !note) return res.status(400).json({ message: 'A note is required to reject a referral' });
+    console.info(`[admin-affiliate] review referral=${req.params.id} decision=${decision} admin=${req.user?.id}`);
+    const result = await reviewReferral({ referralId: req.params.id, decision, adminUserId: req.user.id, note });
+    res.json(result);
+  } catch (err) {
+    if ((err as Error)?.message === 'REFERRAL_NOT_FOUND') return res.status(404).json({ message: 'Referral not found' });
+    console.error('[admin-affiliate] referral review failed:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// GET /api/admin/affiliate/credit/:userId -- one account's subscription credit balance and ledger (latest 100 rows).
+export const getUserCreditLedger = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.params.userId;
+    const [balance, entries] = await Promise.all([
+      getCreditBalance(userId),
+      prisma.subscriptionCreditEntry.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        select: { id: true, amountCents: true, kind: true, status: true, availableAt: true, sourcePurchaseId: true, affiliateReferralId: true, billingChargeId: true, netFeeCents: true, commissionRateBps: true, note: true, createdAt: true },
+      }),
+    ]);
+    res.json({ userId, balance, entries });
+  } catch (err) {
+    console.error('[admin-affiliate] credit ledger failed:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 };

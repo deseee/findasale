@@ -21,6 +21,7 @@ import {
 } from '../services/squareBillingService';
 import { claimBillingCharge, completeBillingCharge, failBillingCharge, findRecentCompletedSubscribeCharge } from '../services/organizerBillingLedger';
 import { addDaysUtc, renewalPeriodKey } from '../utils/billingPeriod'; // 2026-09-30: every period / trial end is exact UTC-millisecond arithmetic, same as the renewal job
+import { dropUserSockets } from '../lib/dropUserSockets';
 
 // 2026-09-29: lazy. This used to call getStripe() at import time, which throws when
 // STRIPE_SECRET_KEY is missing and would crash the whole server at boot even though Stripe is closed
@@ -973,6 +974,9 @@ export const createSquareBillingSubscription = async (req: AuthRequest, res: Res
       }
       throw grantErr;
     }
+    if (currentTier !== grantTier) {
+      await dropUserSockets(req.user.id, 'billing-tier-change'); // 2026-10-23: tokenVersion bumped above; refresh live sockets
+    }
 
     const roleTrialEndsAt = mode === 'trial_start' ? trialEndsAt : mode === 'new_period' ? null : organizer.trialEndsAt ?? null;
     await prisma.userRoleSubscription.upsert({
@@ -1249,24 +1253,24 @@ function getTierFromPriceId(priceId: string | null): SubscriptionTier {
 }
 
 // ---------------------------------------------------------------------------
-// Bring-Your-Own-Rails (BYOR, 2026-09-06) -- opt-in/consent + usage-visibility endpoints.
+// Bring-Your-Own-Rails (BYOR, 2026-09-06) -- opt-in + usage-visibility endpoints.
 // Deliberately ZERO Stripe calls in this section: no `stripe.*` reference, no invoiceItems,
-// no touching organizer.stripeCustomerId for a charge. Scope note (2026-09-06 dispatch): only
-// steps 1-4 of the architect's build order are built here (schema, mark-sold endpoint,
-// opt-in/consent, read endpoints). byorFeeCalculator.ts / byorInvoicingCron.ts / the real
-// invoice-webhook extension (step 5, which DOES need Stripe) are a separate, later dispatch
-// pending Patrick's fee-amount decision -- see claude_docs/feature-notes/
-// bring-your-own-rails-architecture-and-scoping-2026-09-06.md. No PlatformInvoice row is ever
-// created by this file yet.
+// no touching organizer.stripeCustomerId for a charge.
+// Patrick 2026-10-23: FindA.Sale never charges organizers for sales made off-platform (sales not
+// paid through the FindA.Sale POS or website). The fee/invoicing step originally planned for this
+// feature (byorFeeCalculator.ts / byorInvoicingCron.ts) will not be built. Recording off-platform
+// sales is free; nothing here or anywhere else creates a PlatformInvoice row for them.
 // ---------------------------------------------------------------------------
 
 /**
  * POST /api/billing/off-platform-sales/opt-in
  * Body: { enabled: boolean }
  *
- * Toggles Organizer.offPlatformSalesEnabled. Turning it ON requires and stamps consent
- * (RoleConsent.offPlatformSalesConsentedAt) -- turning it OFF just pauses the feature and never
- * clears that historical consent timestamp (matches how every other *AcceptedAt field on
+ * Toggles Organizer.offPlatformSalesEnabled. Turning it ON stamps an opt-in timestamp
+ * (RoleConsent.offPlatformSalesConsentedAt). That timestamp only records that the organizer turned
+ * the feature on; it is NOT consent to any fee, since off-platform sales are never charged
+ * (Patrick 2026-10-23). Turning it OFF just pauses the feature and never
+ * clears that historical timestamp (matches how every other *AcceptedAt field on
  * RoleConsent behaves elsewhere in this codebase: an acceptance timestamp is a historical fact,
  * never nulled out again).
  *
@@ -1356,11 +1360,10 @@ export const optInOffPlatformSales = async (req: AuthRequest, res: Response) => 
 /**
  * GET /api/billing/off-platform-usage
  *
- * Current-billing-period off-platform-sale usage for the logged-in organizer. Fee amount is
- * NOT computed here -- Patrick's flat/tiered/hybrid pricing decision (ADR-121 Open Decision
- * #13) hasn't been made yet, so this deliberately returns amountCents: null and
- * pricingNotYetSet: true rather than guessing a number. byorFeeCalculator.ts (a later
- * dispatch) is what turns itemCount into a real amountCents.
+ * Current-month off-platform-sale count for the logged-in organizer. No fee applies: FindA.Sale
+ * never charges organizers for sales made off-platform (Patrick 2026-10-23), so amountCents is
+ * always 0 and feeApplies is always false. billingPeriodKey is kept as the "YYYY-MM" month key
+ * for the count. pricingNotYetSet is kept (always false) for response-shape compatibility.
  */
 export const getOffPlatformUsage = async (req: AuthRequest, res: Response) => {
   try {
@@ -1391,8 +1394,9 @@ export const getOffPlatformUsage = async (req: AuthRequest, res: Response) => {
       offPlatformSalesEnabled: organizer.offPlatformSalesEnabled,
       billingPeriodKey,
       itemCount,
-      amountCents: null,
-      pricingNotYetSet: true,
+      amountCents: 0,
+      feeApplies: false,
+      pricingNotYetSet: false,
     });
   } catch (error) {
     console.error('[Billing] off-platform-usage error:', error);

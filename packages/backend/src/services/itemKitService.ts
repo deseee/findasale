@@ -21,6 +21,7 @@
  */
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { userCanPublish } from '../lib/publishGate'; // 2026-10-23: kits are created PUBLISHED only for accounts that may publish
 import { KIT_LISTING_TYPE, computeKitAvailability, materializedKitStockTotal, recomputeKitStock } from './itemKitStock';
 import { organizerEditStampAlways } from '../utils/organizerEdit';
 import { scheduleKitRelatedStockSync } from './kitStockSyncTrigger';
@@ -311,8 +312,14 @@ async function clearComponentFlags(db: Db, itemIds: string[]): Promise<void> {
   `;
 }
 
-export async function createKit(organizerId: string, raw: unknown): Promise<KitView> {
+/**
+ * Creates a kit. 2026-10-23: a kit is listable everywhere (organizerListableScope), so it is created PUBLISHED only when
+ * the organizer's account may publish (verified email or admin, lib/publishGate.ts); otherwise it is saved as a DRAFT.
+ * userId is the signed-in account; without it the kit is always a draft (fail closed).
+ */
+export async function createKit(organizerId: string, raw: unknown, userId?: string): Promise<KitView> {
   const input = parseKitCreate(raw);
+  const publishOk = userId ? await userCanPublish(userId) : false;
   return prisma.$transaction(async (txClient) => {
     const db = txClient as unknown as Db;
     if (input.saleId) {
@@ -336,7 +343,7 @@ export async function createKit(organizerId: string, raw: unknown): Promise<KitV
         category: rows[0].item.category,
         condition: rows[0].item.condition,
         status: 'AVAILABLE',
-        draftStatus: 'PUBLISHED',
+        draftStatus: publishOk ? 'PUBLISHED' : 'DRAFT', // 2026-10-23: verify email to publish
         embedding: [],
         photoUrls: photos,
         listingType: KIT_LISTING_TYPE,

@@ -2788,11 +2788,12 @@
     // for why a mid-flow overlayWarn() call alone doesn't work (this function replaces it).
     const warningsHtml = vintedWarningsBlockHtml(warnings);
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
-      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/material/package size are UNVERIFIED guesses), then click Vinted\'s own <b>Upload</b> yourself -- this extension never publishes for you and never reposts a listing automatically.</div>' +
+      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6"><b>Vinted: saves a draft for you to post.</b> FindA.Sale saves this listing as a draft on Vinted and never presses Upload. Open your Vinted drafts, check every field (category, brand, material and package size are best guesses), and post it yourself.</div>' +
+      '<div id="fas-vin-draft"></div>' +
       '<div id="fas-vin-warnings">' + warningsHtml + '</div>' +
       '<div id="fas-vin-deferred">' + (deferred ? vintedDeferredNoteHtml('waiting') : '') + '</div>' +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
-      button('fas-vin-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
+      button('fas-vin-next', more ? 'I posted it myself — next item &#9654;' : 'I posted it myself — done', true) +
       button('fas-vin-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     // DIAGNOSTIC 2026-09-27 ROUND 3 (S-EXT-VINTED-POST-REVIEW-RESET, Patrick live-confirmed via
@@ -2901,6 +2902,47 @@
       if (more) { location.href = LISTING_URL_HINT; } else { bar && bar.remove(); }
     };
     closeBtnHandler();
+    // 1.0.63 DRAFTS ONLY (Patrick, 2026-10-23: Vinted is suspending accounts that use automation). The furthest any
+    // FindA.Sale automation goes on Vinted is Vinted's own "Save draft" button. Upload is NEVER clicked by code (see
+    // fasVintedFindSaveDraftButton: it only ever matches the exact text "Save draft"). The organizer posts the draft.
+    // A saved draft is not a live listing, so the item is NOT marked listed here; the queue just moves on.
+    // UNVERIFIED live: the "Save draft" button text is taken from this file's own earlier live notes (the sizing
+    // dialog "blocking Save draft/Upload"); if it is not found, the overlay says so and nothing is clicked.
+    let fasDraftSaved = false;
+    const setDraftNote = (html) => { const el = document.getElementById('fas-vin-draft'); if (el) el.innerHTML = html; };
+    fasVintedSaveDraftNow = async (why) => {
+      if (fasDraftSaved) return 'already';
+      if (!bar || !bar.isConnected) return 'overlay_gone';
+      const btn = fasVintedFindSaveDraftButton();
+      if (!btn) {
+        T.warn('vinted_save_draft_not_found', 'No "Save draft" button found on the Vinted form; nothing was saved or published', { why: why });
+        setDraftNote('<div style="margin-top:8px;padding:8px 10px;background:#3a2a1a;border:1px solid #a06b2a;border-radius:8px;font-size:12px;color:#ffcf7a">FindA.Sale could not find Vinted\'s <b>Save draft</b> button. Click it yourself to keep this as a draft.</div>');
+        return 'not_found';
+      }
+      fasDraftSaved = true;
+      fasUploadClickedAt = Date.now(); // the save-draft navigation is ours: let it through the leave-page guard
+      try { await chrome.storage.local.set({ fasVintedLastDraft: { itemId: item.id, title: String(item.title || '').slice(0, 80), at: Date.now(), why: why } }); } catch (e) { /* best-effort */ }
+      T.step('Saving this listing as a draft on Vinted', 'Drafts only: FindA.Sale never presses Upload on Vinted. Post the draft yourself from your Vinted drafts.');
+      setDraftNote('<div style="margin-top:8px;padding:8px 10px;background:#1f3a2a;border:1px solid #3c8c5a;border-radius:8px;font-size:12px;color:#cfe3d6">Saved as a draft on Vinted. Post it yourself from your Vinted drafts.' + (more ? ' The next item opens next.' : '') + '</div>');
+      // Advance the queue BEFORE the click: Vinted navigates away after saving, which ends this script.
+      try { chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }).catch(() => {}); } catch (e) { /* ignore */ }
+      window.removeEventListener('beforeunload', fasReviewUnloadHandler);
+      window.removeEventListener('pagehide', fasReviewUnloadHandler);
+      btn.click();
+      T.end('Saved as a Vinted draft (not posted): ' + item.title + (more ? ' (next item next)' : ' (queue finished)'));
+      if (more) setTimeout(() => { if (location.pathname.indexOf('/items/new') !== -1) location.href = LISTING_URL_HINT; }, 4000);
+      return 'clicked';
+    };
+    // Category-first (deferred) fills save the draft from fasVintedStartDeferredWatch once the rest is filled.
+    if (!deferred) setTimeout(() => { fasVintedSaveDraftNow('fill_done').catch(() => {}); }, 4500);
+  }
+
+  // 1.0.63: exact-text match on "Save draft" only. Never returns the Upload button, whatever the page looks like.
+  let fasVintedSaveDraftNow = async () => 'not_ready';
+  function fasVintedFindSaveDraftButton() {
+    const btn = qa('button').find((b) => /^save (as )?draft$/.test(norm(b.textContent)) && !b.disabled && b.offsetParent !== null);
+    if (!btn || norm(btn.textContent) === 'upload') return null;
+    return btn;
   }
 
   // ADR-090 (2026-09-02): Vinted hard-requires an ISBN field for Books/Comics-category
@@ -3058,6 +3100,8 @@
       if (wEl) wEl.innerHTML = vintedWarningsBlockHtml(warnings);
       setNote(ok ? 'done' : 'error');
       fasMarkStep('deferred:fillDone');
+      // 1.0.63 drafts only: once the category-dependent fields are filled, save the draft (never Upload).
+      setTimeout(() => { fasVintedSaveDraftNow('deferred_fill_done').catch(() => {}); }, 2500);
     };
     const tick = () => {
       if (finished) return;

@@ -96,7 +96,7 @@ const JoinPage = () => {
           <p className="text-warm-600 dark:text-warm-400 mb-6">
             {error || 'This invite link is no longer valid.'}
           </p>
-          <Link href="/" className="inline-block px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600">
+          <Link href="/" className="inline-block px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700">
             Back to Home
           </Link>
         </div>
@@ -136,7 +136,7 @@ const JoinPage = () => {
               <button
                 onClick={handleAcceptInvite}
                 disabled={accepting}
-                className="w-full px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 disabled:bg-gray-400 font-medium"
+                className="w-full px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:bg-gray-400 font-medium"
               >
                 {accepting ? 'Accepting...' : 'Accept Invite'}
               </button>
@@ -148,7 +148,7 @@ const JoinPage = () => {
               </p>
               <Link
                 href={`/register?inviteToken=${router.query.token}`}
-                className="block w-full px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 text-center font-medium"
+                className="block w-full px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-center font-medium"
               >
                 Create Account
               </Link>

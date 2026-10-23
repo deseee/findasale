@@ -15,8 +15,11 @@ export interface AffiliateCodeResponse {
 }
 
 export interface AffiliateEarningsSummary {
-  totalEarned: number; // cents
-  unpaidBalance: number; // cents
+  totalEarned: number; // cents of subscription credit earned (roadmap #661: referral rewards are credit, not cash)
+  unpaidBalance: number; // cents of credit available now for the next PRO/TEAMS renewal (can be negative after a clawback)
+  referralCreditEnabled?: boolean; // feature flag (REFERRAL_PAYOUTS_ENABLED); no reward copy is shown while false
+  creditPendingCents?: number; // earned, still inside the 7-day hold
+  creditHeldCents?: number; // parked for review
   thisMonthEarnings: number; // cents
   referralCode: string | null;
   shareUrl: string | null;

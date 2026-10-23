@@ -6,6 +6,7 @@ import {
 } from '../services/fraudDetectionService';
 import { prisma } from '../lib/prisma';
 import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): suspend/unsuspend notification-gap fix
+import { dropUserSockets } from '../lib/dropUserSockets';
 
 /**
  * Feature #17: Fraud Controller
@@ -179,8 +180,11 @@ export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
       data: {
         suspendedAt: new Date(),
         suspendReason: reason,
+        // 2026-10-23 (security): revoke existing sessions like adminController.suspendUser does.
+        tokenVersion: { increment: 1 },
       },
     });
+    await dropUserSockets(organizer.userId, 'fraud-suspend-organizer');
 
     // Notification-gap fix (S1195 sweep continuation, 2026-08-08): this endpoint is a
     // second, organizer-specific admin suspend path that duplicates adminController.ts's

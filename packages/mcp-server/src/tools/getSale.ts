@@ -1,21 +1,12 @@
-import { MCPToolDefinition } from '../types';
+import * as z from 'zod/v4';
+import { defineTool, idSchema } from './types';
+import { handleGetSale } from '../handlers';
 
-export const getSaleTool: MCPToolDefinition = {
+export const getSaleTool = defineTool({
   name: 'get_sale',
-  annotations: {
-    title: 'Get Sale Details',
-    readOnlyHint: true,
-    openWorldHint: true,
-  },
-  description: 'Fetch full details for a specific sale including description, organizer info, and images.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      saleId: {
-        type: 'string',
-        description: 'The unique ID of the sale, e.g. "sale_12345"',
-      },
-    },
-    required: ['saleId'],
-  },
-};
+  title: 'Get Sale Details',
+  description:
+    'Get one public sale: dates, city, approximate location, description, photos, organizer name and rating, and up to 25 available items. Street addresses are never included; the sale page shows them to signed-in shoppers from the day before the sale.',
+  inputSchema: z.object({ saleId: idSchema('sale') }),
+  handler: handleGetSale,
+});

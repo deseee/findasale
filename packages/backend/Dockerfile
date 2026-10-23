@@ -1,4 +1,4 @@
-FROM node:18
+FROM node:22-bookworm
 
 WORKDIR /app
 
@@ -7,8 +7,8 @@ ENV CI=true
 # Install OpenSSL (Prisma requirement)
 RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
-# Use stable pnpm v8
-RUN corepack enable && corepack prepare pnpm@8.15.5 --activate
+# pnpm version must match root package.json packageManager (lockfile v9)
+RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
 
 # Copy workspace root files
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./

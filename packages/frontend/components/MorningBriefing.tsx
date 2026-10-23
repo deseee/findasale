@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { socketAuth } from '../lib/socketAuth';
+import { socketAuth, reconnectAfterServerDrop } from '../lib/socketAuth';
 import api from '../lib/api';
 import { useAuth } from './AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -677,6 +677,7 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName, 
       reconnectionDelayMax: 5000,
       reconnectionAttempts: 10,
     });
+    reconnectAfterServerDrop(socket);
 
     socket.on('connect', () => {
       socket.emit('JOIN_BRIEFING', sale.id);

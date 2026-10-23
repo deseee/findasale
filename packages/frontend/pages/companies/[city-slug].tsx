@@ -203,7 +203,7 @@ export default function CompaniesCityPage({
         {/* Related city links */}
         <div className="max-w-5xl mx-auto px-4 pb-4">
           <div className="flex flex-wrap gap-2">
-            <span className="px-3 py-1.5 rounded-full text-sm border bg-amber-500 border-amber-500 text-white font-medium">
+            <span className="px-3 py-1.5 rounded-full text-sm border bg-amber-600 border-amber-600 text-white font-medium">
               Companies
             </span>
             <Link
@@ -325,7 +325,7 @@ export default function CompaniesCityPage({
             </p>
             <Link
               href="/register"
-              className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
+              className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
             >
               List your sales free
             </Link>

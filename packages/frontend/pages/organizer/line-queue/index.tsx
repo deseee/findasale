@@ -12,6 +12,7 @@ import { useAuth } from '../../../components/AuthContext';
 import Head from 'next/head';
 import Link from 'next/link';
 import TierGate from '../../../components/TierGate';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 
 interface Sale {
   id: string;
@@ -21,6 +22,7 @@ interface Sale {
   status: string; // DRAFT, PUBLISHED, UPCOMING, ENDED, ARCHIVED
   city?: string;
   state?: string;
+  hasProFeatures?: boolean; // server-computed: PRO/TEAMS, or this sale has the paid $9.99 upgrade
 }
 
 const STATUS_BADGE_STYLES: Record<string, { bg: string; text: string }> = {
@@ -35,6 +37,7 @@ const LineQueueLandingPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
+  const { canAccess } = useOrganizerTier();
 
   // Fetch organizer's sales
   const { data: salesData, isLoading, isError, refetch } = useQuery<Sale[]>({
@@ -55,9 +58,15 @@ const LineQueueLandingPage = () => {
   const sales = salesData || [];
 
   // Filter to PUBLISHED, UPCOMING, and DRAFT only
-  const availableSales = sales.filter(
+  const activeSales = sales.filter(
     s => ['PUBLISHED', 'UPCOMING', 'DRAFT'].includes(s.status)
   );
+  // The Virtual Queue is included with PRO/TEAMS, and with the $9.99 upgrade for that one sale. A SIMPLE organizer
+  // sees only their upgraded sales here (the line endpoints enforce the same rule server-side).
+  const isPro = canAccess('PRO');
+  const upgradedSales = activeSales.filter(s => s.hasProFeatures);
+  const unlocked = isPro || upgradedSales.length > 0;
+  const availableSales = isPro || !unlocked ? activeSales : upgradedSales;
 
   const handleSaleClick = (saleId: string) => {
     router.push(`/organizer/line-queue/${saleId}`);
@@ -86,9 +95,10 @@ const LineQueueLandingPage = () => {
       </Head>
 
       <TierGate
+        unlocked={unlocked}
         requiredTier="PRO"
         featureName="Line Queue"
-        description="Manage a virtual line at your sale and text shoppers when it is their turn. The line queue is included with PRO and TEAMS because every text message has a real cost."
+        description="Manage a virtual line at your sale and text shoppers when it is their turn. The line queue is included with PRO and TEAMS, or with the optional $9.99 upgrade for a single sale, because every text message has a real cost."
       >
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header with breadcrumb */}

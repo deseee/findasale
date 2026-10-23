@@ -31,7 +31,7 @@ interface BulkStatusModalProps {
   onClose: () => void;
   onApply: (status: string) => Promise<void>;
   loading?: boolean;
-  /** Whether the organizer has opted in to Off-Platform Sales billing. */
+  /** Whether the organizer has turned on Off-Platform Sales (free; never charged). */
   offPlatformEnabled?: boolean;
   /** Where to send the organizer to turn it on. */
   offPlatformSettingsHref?: string;

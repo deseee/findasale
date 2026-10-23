@@ -14,6 +14,7 @@ import { resolvePlatformRevenueDollars } from '../utils/feeCalculator'; // 2026-
 import { executeVerifiedSquareRefund } from '../services/squareRefundService'; // Square migration Wave 1 #4 (2026-09-07): one added branch in bulkRefundPurchases below routes SQUARE-processor purchases through the Square-side choke point.
 import { suppressionService } from '../services/suppressionService';
 import { handOffCrewsBeforeUserDeletion } from '../services/crewService'; // crew founder/memberCount handoff before user.delete (purgeUser)
+import { dropUserSockets } from '../lib/dropUserSockets';
 
 // BUG #2: role display helper — the scalar `user.role` (deprecated) can drift out of
 // sync with the canonical `user.roles[]` array. Compute the highest-precedence role
@@ -557,6 +558,8 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    await dropUserSockets(userId, 'admin-role-change'); // 2026-10-23 (security): role changed, tokenVersion bumped above
+
     // Security notification: any admin-initiated role change (including privilege
     // escalation to ORGANIZER/ADMIN) is an account-security-relevant event for the
     // affected user, not just an internal audit-log entry. Alert them immediately.
@@ -578,16 +581,6 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to update user role' });
   }
 };
-
-/** Disconnect a user's live sockets after their sessions are revoked. Best effort, never throws. */
-async function dropUserSockets(userId: string): Promise<void> {
-  try {
-    const { disconnectUserSockets } = await import('../lib/socket');
-    if (typeof disconnectUserSockets === 'function') disconnectUserSockets(userId);
-  } catch (err) {
-    console.error('[admin] socket disconnect failed:', err);
-  }
-}
 
 // PATCH /api/admin/users/:userId/suspend — suspend a user account
 export const suspendUser = async (req: AuthRequest, res: Response) => {
@@ -1089,6 +1082,8 @@ export const updateOrganizerTier = async (req: AuthRequest, res: Response) => {
         userId: true,
       },
     });
+
+    await dropUserSockets(updatedOrganizer.userId, 'admin-tier-change'); // 2026-10-23 (security): tier changed, tokenVersion bumped above
 
     // Notification-gap fix (S1195, 2026-08-08): an admin changing an organizer's billing
     // tier is a real account/billing change (Free->PRO grants features, PRO->SIMPLE removes

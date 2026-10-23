@@ -221,7 +221,7 @@ export default function BoostPurchaseModal({
                   onClick={() => setRail('xp')}
                   className={`flex-1 py-1.5 rounded-md font-medium transition-colors ${
                     rail === 'xp'
-                      ? 'bg-amber-500 text-white'
+                      ? 'bg-amber-600 text-white'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                 >
@@ -260,7 +260,7 @@ export default function BoostPurchaseModal({
                 <button
                   onClick={handleXpPurchase}
                   disabled={purchasing || !quote.canAffordXp}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
+                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
                 >
                   {purchasing ? 'Activating…' : `Spend ${quote.xpCost} XP`}
                 </button>

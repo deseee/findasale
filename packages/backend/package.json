@@ -3,6 +3,9 @@
   "version": "1.0.1",
   "description": "",
   "main": "index.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "nodemon --legacy-watch --exec tsx src/index.ts",
     "build": "tsc",

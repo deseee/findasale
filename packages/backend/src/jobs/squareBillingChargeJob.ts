@@ -43,6 +43,8 @@ import {
 import { claimBillingCharge, completeBillingCharge, failBillingCharge, huntPassPeriodKey } from '../services/organizerBillingLedger';
 import { addDaysUtc, renewalPeriodKey } from '../utils/billingPeriod';
 import { TIER_LIMITS } from '../constants/tierLimits'; // ADR-teams-extra-seat-billing-square-fix-2026-10-10: TEAMS renewal charge must include purchased extra seats
+import { reserveRenewalCredit, voidRenewalCredit } from '../services/subscriptionCreditService'; // roadmap #661: referral credit applied to renewals
+import { dropUserSockets } from '../lib/dropUserSockets';
 
 // 2026-09-30: periods advance by exact UTC milliseconds (utils/billingPeriod.ts), the same arithmetic the
 // subscribe path uses. The old local-time setDate here landed 23 or 25 hours off across a DST change and
@@ -105,6 +107,7 @@ async function downgradeOrganizerToSimple(organizerId: string, statusLabel: stri
     },
     select: { userId: true },
   });
+  await dropUserSockets(organizer.userId, 'billing-downgrade'); // 2026-10-23: tokenVersion bumped above
 
   if (organizer.userId) {
     await prisma.userRoleSubscription.updateMany({
@@ -315,15 +318,47 @@ export async function processOrganizerBilling(): Promise<void> {
         }
         console.warn(`[squareBillingChargeJob] Organizer ${org.id} period ${periodKey} already COMPLETED -- advancing the period without a new charge`);
       } else {
+        // Roadmap #661 (2026-10-23): apply referral subscription credit first. Reserved (a negative ledger row) BEFORE
+        // the card is charged, keyed by period + dunning attempt so a crash-retry of this same attempt reuses the same
+        // amount (and therefore the same Square idempotency key below); given back if the charge fails. Any error
+        // inside means no credit and a full charge, never a skipped renewal.
+        const credit = org.userId
+          ? await reserveRenewalCredit({
+              userId: org.userId,
+              organizerId: org.id,
+              periodKey,
+              attempt: org.billingDunningFailCount,
+              amountCents,
+              billingChargeId: claim.id,
+            })
+          : { appliedCents: 0, entryId: null };
+        const chargeCents = amountCents - credit.appliedCents;
+        if (chargeCents <= 0 && credit.entryId) {
+          // Credit covers the whole period: no card charge. The ledger row records the credit entry as the "payment".
+          paid = true;
+          paymentId = `credit:${credit.entryId}`;
+          try {
+            await completeBillingCharge(claim.id, paymentId);
+          } catch (ledgerErr) {
+            console.error(`[squareBillingChargeJob] CRITICAL: renewal for organizer ${org.id} paid by credit ${credit.entryId} but the ledger write failed:`, ledgerErr);
+          }
+          console.log(`[squareBillingChargeJob] Organizer ${org.id} ${tier} renewal covered by $${(credit.appliedCents / 100).toFixed(2)} referral credit -- no card charge`);
+        } else {
         const result = await chargeStoredCard({
           customerId: org.squareCustomerId!,
           cardId: org.squareCardId!,
-          amountCents,
+          amountCents: chargeCents,
           // period id + tier + card + dunning attempt number: a retry after a decline gets a fresh
           // key (Square never has to replay a cached decline), a crash-retry of the SAME attempt
-          // reuses the key so Square dedupes it.
-          idempotencyParts: ['org-billing', org.id, tier, periodStart.toISOString(), org.squareCardId!, `try${org.billingDunningFailCount}`],
-          note: `FindA.Sale ${tier} subscription renewal`,
+          // reuses the key so Square dedupes it. When credit reduced the amount the key carries it too, so a
+          // different amount can never reuse a key Square already saw (IDEMPOTENCY_KEY_REUSED).
+          idempotencyParts: [
+            'org-billing', org.id, tier, periodStart.toISOString(), org.squareCardId!, `try${org.billingDunningFailCount}`,
+            ...(credit.appliedCents > 0 ? [`credit${credit.appliedCents}`] : []),
+          ],
+          note: credit.appliedCents > 0
+            ? `FindA.Sale ${tier} subscription renewal ($${(credit.appliedCents / 100).toFixed(2)} referral credit applied)`
+            : `FindA.Sale ${tier} subscription renewal`,
           referenceId: org.id,
           requireCompleted: true,
         });
@@ -338,6 +373,9 @@ export async function processOrganizerBilling(): Promise<void> {
         } else {
           const markedFailed = await failBillingCharge(claim.id, result.message);
           if (markedFailed) {
+            // The card was not charged: give the reserved credit back (only when THIS attempt failed; a racing
+            // attempt that already completed the period may have used the same reservation).
+            await voidRenewalCredit(credit.entryId, result.message);
             await handleOrganizerChargeFailure(org, result.message);
             continue;
           }
@@ -345,6 +383,7 @@ export async function processOrganizerBilling(): Promise<void> {
           // stale. Treat the period as paid.
           paid = true;
           console.warn(`[squareBillingChargeJob] Organizer ${org.id} period ${periodKey} was already COMPLETED by another attempt -- ignoring the failed result`);
+        }
         }
       }
 
@@ -369,13 +408,14 @@ export async function processOrganizerBilling(): Promise<void> {
           console.warn(`[squareBillingChargeJob] Organizer ${org.id} period end changed while renewal ${periodKey} was processed -- not advancing again (payment ${paymentId})`);
           continue;
         }
+        if (healTier) await dropUserSockets(org.userId, 'billing-tier-heal'); // 2026-10-23: tokenVersion bumped above
         if (org.userId) {
           await prisma.userRoleSubscription.updateMany({
             where: { userId: org.userId, role: 'ORGANIZER' },
             data: { subscriptionStatus: 'active', tierLapsedAt: null, tierResumedAt: new Date(), ...(healTier ? { subscriptionTier: healTier } : {}) },
           });
         }
-        console.log(`[squareBillingChargeJob] Charged organizer ${org.id} $${(amountCents / 100).toFixed(2)} for ${tier} renewal (payment ${paymentId})`);
+        console.log(`[squareBillingChargeJob] Renewed organizer ${org.id} ${tier} ($${(amountCents / 100).toFixed(2)} period, payment ${paymentId})`);
       }
     } catch (err) {
       console.error(`[squareBillingChargeJob] Unexpected error processing organizer ${org.id}:`, err);

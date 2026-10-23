@@ -73,6 +73,7 @@ import {
   getScrapedSales,
   emergencyTakedown,
 } from '../controllers/scraperController';
+import { getActivationNudges } from '../controllers/adminActivationNudgesController'; // 2026-10-23: activation nudge log + dry run
 import { isEmailDomainBlocked } from '../services/suppressionService';
 import { sendTestEmailLimiter } from '../middleware/rateLimiter';
 const router = express.Router();
@@ -178,6 +179,7 @@ router.get('/scrape-pool-stats', getScrapePoolStats);
 // Outreach funnel stats and KPI drilldowns
 router.get('/outreach-stats', getOutreachStats);
 router.get('/outreach-opens', getOutreachOpens);
+router.get('/activation-nudges', getActivationNudges); // 2026-10-23: organizer activation nudges (log + dry run, never sends)
 router.get('/drilldown/:metric', getDrilldown);
 
 // GET /api/admin/extension-diagnostics?platform=&code=&organizerId=&sinceHours=48&limit=50

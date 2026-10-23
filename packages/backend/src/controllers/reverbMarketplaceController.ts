@@ -172,6 +172,12 @@ export const pushItemToReverb = async (req: AuthRequest, res: Response) => {
       res.status(404).json({ message: 'Item not found' });
       return;
     }
+    // 2026-10-23: only a published item is listed on an outside marketplace (the route already requires a
+    // verified email, lib/publishGate.ts requirePublishVerified). A Draft / Pending Review item stays on FindA.Sale.
+    if (item.draftStatus !== 'PUBLISHED') {
+      res.status(409).json({ code: 'ITEM_NOT_PUBLISHED', message: 'Publish this item on FindA.Sale before listing it on Reverb.' });
+      return;
+    }
     const lotRefusal = await marketplaceLotRefusal('Reverb', [item.id], prisma as any);
     if (lotRefusal) {
       res.status(lotRefusal.status).json({ message: lotRefusal.message, code: lotRefusal.code });

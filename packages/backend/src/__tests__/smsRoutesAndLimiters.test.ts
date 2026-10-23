@@ -22,7 +22,11 @@ const mockRequireTier = jest.fn((tier: string) => {
   mw.tier = tier;
   return mw;
 });
-jest.mock('../middleware/requireTier', () => ({ requireTier: (t: string) => mockRequireTier(t) }));
+// requireTierOrSaleUpgrade (2026-10-23): line routes are PRO, or the caller's own sale with the paid $9.99 upgrade.
+jest.mock('../middleware/requireTier', () => ({
+  requireTier: (t: string) => mockRequireTier(t),
+  requireTierOrSaleUpgrade: (t: string) => mockRequireTier(t),
+}));
 jest.mock('../middleware/auth', () => ({ authenticate: Object.assign((_a: unknown, _b: unknown, n: () => void) => n(), { isAuth: true }) }));
 jest.mock('../middleware/rateLimitShared', () => ({ createRateLimitStore: () => undefined, createBurstAlerter: () => () => {} }));
 jest.mock('../lib/prisma', () => ({ prisma: {} }));

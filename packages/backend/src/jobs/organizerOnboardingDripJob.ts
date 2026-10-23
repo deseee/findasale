@@ -8,7 +8,10 @@ import {
   sendOnboardingEmail5c,
   sendEmptySaleNudge,
   sendDraftReadyNudge,
+  sendStaleDatesNudge,
+  NudgeOutcome,
 } from '../services/onboardingEmailService';
+import { suppressionService } from '../services/suppressionService';
 import { Prisma } from '@prisma/client';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
 
@@ -50,16 +53,31 @@ import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
  *   visible items. One email, CTA /organizer/add-items/<saleId>.
  * - Draft ready: a DRAFT sale that has items, from an organizer who has never published
  *   (same NOT-sales shape as 5b/5c). One email, CTA /organizer/edit-sale/<saleId>?publish=1.
- * Dedupe: the same EmailAutomationLog table, keyed per SALE by putting the sale id in
- * automationKey ("onboarding_empty_sale:<saleId>" / "onboarding_draft_ready:<saleId>").
- * automationKey is a free-form String (schema.prisma model EmailAutomationLog), so no
- * schema change is needed.
- * No backfill burst: only sales whose qualifying state began 24h-14d ago (publishedAt for
- * the empty-sale nudge, Sale.createdAt for the draft nudge) and whose endDate has not
- * passed. Sales older than that are never mailed, so deploying this does not mail old
- * accounts in a batch. At most one email per organizer per run across the whole job.
- * Suppression/unsubscribe: each send function checks suppressionService.isSuppressed and
- * carries a per-user unsubscribe link, exactly like 5a/5b/5c.
+ *
+ * Activation nudges v2 (2026-10-23, claude_docs/operations/activation-funnel-2026-10-23.md). Three states,
+ * each nudged at most ONCE per sale, by email on the transactional (Resend) rail plus the dashboard card
+ * (frontend components/FirstSaleNudge.tsx reads the same states from GET /sales/mine):
+ *   EMPTY_PUBLISHED   a published sale, not over yet, with zero shopper-visible items.
+ *   DRAFT_UNPUBLISHED a draft sale, not over yet, that has items but was never published.
+ *   STALE_DATES       a draft or published sale whose end date passed (24h+ ago) with nothing sold.
+ *                     CTA: edit-sale ?redate=1, the one-click "pick new dates" prompt.
+ * Who: real organizers (claimed, managed), not deleted, suspended or fraud-flagged, who are not yet
+ * activated (no published or ended sale with a shopper-visible item), on sales made in the app (not
+ * synced public listings, not inventory containers, not ongoing storefronts). Addresses at
+ * @findasale.test, @system.finda.sale and @example.com are never emailed.
+ * The old 24h-14d window is gone, so organizers who have been stuck for months get their one nudge.
+ * Instead, rate limit: nobody gets more than ONE activation email per 7 days (any state, any sale, and
+ * the pre-2026-10-23 per-sale nudge keys count too), plus at most one email per organizer per run.
+ * A state still has to be at least 24h old (publishedAt / createdAt / endDate) before it is mailed.
+ * Dedupe + admin log: EmailAutomationLog, automationKey "activation_nudge:<STATE>:<saleId>:<outcome>",
+ * outcome "sent" or "suppressed" (opted out / bounced: logged so it is never retried). A failed send is
+ * not logged and is retried the next day. The pre-2026-10-23 keys ("onboarding_empty_sale:<saleId>" /
+ * "onboarding_draft_ready:<saleId>") still count as already nudged for their state.
+ * Admin view: GET /api/admin/activation-nudges (controllers/adminActivationNudgesController.ts) lists the
+ * log and a dry run of the next run's decisions. planActivationNudges() never sends anything.
+ * Suppression/unsubscribe: suppressionService.isSuppressed (opt-out, bounces, complaints, blocked
+ * domains) is checked before every send, and every email carries a per-user unsubscribe link and
+ * RFC 8058 List-Unsubscribe headers.
  */
 
 const KEY_5A = 'onboarding_5a';
@@ -78,11 +96,9 @@ const DAY2_MAX_MS = 72 * 60 * 60 * 1000;
 const DAY7_MIN_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY7_MAX_MS = 8 * 24 * 60 * 60 * 1000;
 
-// Activation nudges: per-sale keys, qualifying state 24h-14d old.
+// Pre-2026-10-23 activation nudge keys (per sale). Still honoured as "already nudged" for their state.
 export const KEY_EMPTY_SALE_PREFIX = 'onboarding_empty_sale:';
 export const KEY_DRAFT_READY_PREFIX = 'onboarding_draft_ready:';
-const NUDGE_MIN_MS = 24 * 60 * 60 * 1000;
-const NUDGE_MAX_MS = 14 * 24 * 60 * 60 * 1000;
 
 // Real (non-scraped) organizers only, same as the 5a/5b/5c passes.
 const REAL_ORGANIZER = { isClaimed: true, isUnmanagedListing: false };
@@ -210,118 +226,274 @@ async function runNoSalePass(
   return sent;
 }
 
-type SaleNudgeCandidate = {
-  id: string;
-  title: string;
-  organizer: { id: string; userId: string; user: { email: string; name: string } | null };
+// ─────────────────────────────────────────────────────────────────
+// Activation nudges v2 (2026-10-23)
+// ─────────────────────────────────────────────────────────────────
+
+export type ActivationState = 'EMPTY_PUBLISHED' | 'DRAFT_UNPUBLISHED' | 'STALE_DATES';
+export const ACTIVATION_KEY_PREFIX = 'activation_nudge:';
+export const ACTIVATION_RATE_LIMIT_MS = 7 * 24 * 60 * 60 * 1000;
+const STATE_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+/** Run order: closest to activation first. One email per organizer per run. */
+const STATE_ORDER: ActivationState[] = ['DRAFT_UNPUBLISHED', 'EMPTY_PUBLISHED', 'STALE_DATES'];
+/** Pre-2026-10-23 per-sale keys that already count as "nudged" for their state. */
+const LEGACY_KEY_PREFIX: Partial<Record<ActivationState, string>> = {
+  EMPTY_PUBLISHED: KEY_EMPTY_SALE_PREFIX,
+  DRAFT_UNPUBLISHED: KEY_DRAFT_READY_PREFIX,
 };
 
-const SALE_NUDGE_SELECT = {
-  id: true,
-  title: true,
-  organizer: { select: { id: true, userId: true, user: { select: { email: true, name: true } } } },
+/** Domains that are never emailed: QA fixtures, scraper placeholders and reserved example addresses. */
+export const NEVER_EMAIL_DOMAINS = ['findasale.test', 'system.finda.sale', 'example.com'];
+
+export function isNeverEmailAddress(email: string | null | undefined): boolean {
+  if (!email || !email.includes('@')) return true;
+  const domain = email.trim().toLowerCase().split('@').pop() || '';
+  return NEVER_EMAIL_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
+}
+
+export function activationKey(state: ActivationState, saleId: string, outcome: 'sent' | 'suppressed'): string {
+  return `${ACTIVATION_KEY_PREFIX}${state}:${saleId}:${outcome}`;
+}
+
+/** Parses an activation (or legacy nudge) automationKey for the admin log. */
+export function parseActivationKey(
+  key: string
+): { state: ActivationState; saleId: string; outcome: 'sent' | 'suppressed' } | null {
+  if (key.startsWith(ACTIVATION_KEY_PREFIX)) {
+    const [state, saleId, outcome] = key.slice(ACTIVATION_KEY_PREFIX.length).split(':');
+    if (!state || !saleId || (outcome !== 'sent' && outcome !== 'suppressed')) return null;
+    return { state: state as ActivationState, saleId, outcome };
+  }
+  if (key.startsWith(KEY_EMPTY_SALE_PREFIX)) return { state: 'EMPTY_PUBLISHED', saleId: key.slice(KEY_EMPTY_SALE_PREFIX.length), outcome: 'sent' };
+  if (key.startsWith(KEY_DRAFT_READY_PREFIX)) return { state: 'DRAFT_UNPUBLISHED', saleId: key.slice(KEY_DRAFT_READY_PREFIX.length), outcome: 'sent' };
+  return null;
+}
+
+/** EmailAutomationLog rows that count toward the 7-day activation email limit (real sends only). */
+export const ACTIVATION_SENT_KEY_FILTER: Prisma.EmailAutomationLogWhereInput = {
+  OR: [
+    { automationKey: { startsWith: ACTIVATION_KEY_PREFIX, endsWith: ':sent' } },
+    { automationKey: { startsWith: KEY_EMPTY_SALE_PREFIX } },
+    { automationKey: { startsWith: KEY_DRAFT_READY_PREFIX } },
+  ],
 };
 
-/**
- * Empty-sale nudge: a PUBLISHED sale, published 24h-14d ago and not yet over, with zero
- * shopper-visible items (PUBLIC_ITEM_FILTER), from an organizer none of whose
- * published/ended sales has a shopper-visible item. One email per sale, ever.
- */
-export async function runEmptySaleNudge(mailed: Set<string> = new Set()): Promise<number> {
-  const candidates: SaleNudgeCandidate[] = await prisma.sale.findMany({
-    where: {
-      status: 'PUBLISHED',
-      deletedAt: null,
-      publishedAt: ageWindow(NUDGE_MIN_MS, NUDGE_MAX_MS),
-      endDate: { gte: new Date() },
-      items: { none: PUBLIC_ITEM_FILTER },
-      organizer: {
-        ...REAL_ORGANIZER,
-        NOT: {
-          sales: {
-            some: { status: { in: ['PUBLISHED', 'ENDED'] }, deletedAt: null, items: { some: PUBLIC_ITEM_FILTER } },
-          },
-        },
-      },
+/** Every activation-nudge log row (sent or suppressed, new or legacy), for the admin log. */
+export const ACTIVATION_ANY_KEY_FILTER: Prisma.EmailAutomationLogWhereInput = {
+  OR: [
+    { automationKey: { startsWith: ACTIVATION_KEY_PREFIX } },
+    { automationKey: { startsWith: KEY_EMPTY_SALE_PREFIX } },
+    { automationKey: { startsWith: KEY_DRAFT_READY_PREFIX } },
+  ],
+};
+
+/** Real organizers who are not activated yet (no published/ended sale with a shopper-visible item). */
+const NOT_YET_ACTIVATED_ORGANIZER: Prisma.OrganizerWhereInput = {
+  ...REAL_ORGANIZER,
+  user: { deletedAt: null, suspendedAt: null, fraudSuspect: false },
+  NOT: {
+    sales: {
+      some: { status: { in: ['PUBLISHED', 'ENDED'] }, deletedAt: null, items: { some: PUBLIC_ITEM_FILTER } },
     },
-    select: SALE_NUDGE_SELECT,
-    orderBy: { publishedAt: 'desc' },
-    take: 500,
-  });
+  },
+};
 
-  let sent = 0;
-  for (const sale of candidates) {
-    try {
-      const org = sale.organizer;
-      if (!org?.user?.email) continue;
-      if (mailed.has(org.userId)) continue; // one email per organizer per run
-      const key = `${KEY_EMPTY_SALE_PREFIX}${sale.id}`;
-      if (await alreadyLogged(org.userId, key)) continue;
-      await sendEmptySaleNudge({
-        email: org.user.email,
-        firstName: firstNameOf(org.user.name),
-        userId: org.userId,
+/** Sales the organizer made in the app (not synced public listings, inventory containers or storefronts). */
+const IN_APP_SALE: Prisma.SaleWhereInput = {
+  deletedAt: null,
+  isInventoryContainer: false,
+  isOngoing: false,
+  saleType: { not: 'RETAIL' },
+  sourceUrl: null,
+  sourceName: null,
+};
+
+export function activationStateWhere(state: ActivationState, now: Date): Prisma.SaleWhereInput {
+  const minAge = new Date(now.getTime() - STATE_MIN_AGE_MS);
+  if (state === 'EMPTY_PUBLISHED') {
+    return {
+      ...IN_APP_SALE,
+      status: 'PUBLISHED',
+      endDate: { gte: now },
+      items: { none: PUBLIC_ITEM_FILTER },
+      OR: [{ publishedAt: { lte: minAge } }, { publishedAt: null, createdAt: { lte: minAge } }],
+      organizer: NOT_YET_ACTIVATED_ORGANIZER,
+    };
+  }
+  if (state === 'DRAFT_UNPUBLISHED') {
+    return {
+      ...IN_APP_SALE,
+      status: 'DRAFT',
+      endDate: { gte: now },
+      createdAt: { lte: minAge },
+      items: { some: DRAFT_SALE_ITEM_FILTER },
+      organizer: NOT_YET_ACTIVATED_ORGANIZER,
+    };
+  }
+  // STALE_DATES
+  return {
+    ...IN_APP_SALE,
+    status: { in: ['DRAFT', 'PUBLISHED'] },
+    endDate: { lt: minAge },
+    items: { none: { status: 'SOLD' } },
+    organizer: NOT_YET_ACTIVATED_ORGANIZER,
+  };
+}
+
+export type ActivationCandidate = {
+  state: ActivationState;
+  saleId: string;
+  saleTitle: string;
+  saleStatus: string;
+  endDate: Date | null;
+  itemCount: number;
+  organizerId: string;
+  userId: string;
+  email: string;
+  name: string | null;
+};
+
+export type ActivationDecision = ActivationCandidate & {
+  decision: 'send' | 'skip';
+  reason:
+    | 'will_send'
+    | 'never_email_address'
+    | 'already_nudged_this_state'
+    | 'rate_limited_7d'
+    | 'one_email_per_run'
+    | 'suppressed';
+};
+
+async function findActivationCandidates(now: Date): Promise<ActivationCandidate[]> {
+  const out: ActivationCandidate[] = [];
+  for (const state of STATE_ORDER) {
+    const sales = await prisma.sale.findMany({
+      where: activationStateWhere(state, now),
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        endDate: true,
+        organizer: { select: { id: true, userId: true, user: { select: { email: true, name: true } } } },
+        _count: { select: { items: { where: DRAFT_SALE_ITEM_FILTER } } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+    for (const sale of sales as any[]) {
+      if (!sale.organizer?.user?.email) continue;
+      out.push({
+        state,
         saleId: sale.id,
         saleTitle: sale.title,
+        saleStatus: sale.status,
+        endDate: sale.endDate ?? null,
+        itemCount: sale._count?.items ?? 0,
+        organizerId: sale.organizer.id,
+        userId: sale.organizer.userId,
+        email: sale.organizer.user.email,
+        name: sale.organizer.user.name ?? null,
       });
-      await logSent(org.userId, key);
-      mailed.add(org.userId);
-      sent++;
-    } catch (err) {
-      console.error(`[organizerOnboardingDrip] empty-sale nudge failed for sale ${sale.id}:`, err);
     }
   }
-  return sent;
+  return out;
+}
+
+async function alreadyNudged(userId: string, state: ActivationState, saleId: string): Promise<boolean> {
+  const or: Prisma.EmailAutomationLogWhereInput[] = [
+    { automationKey: { startsWith: `${ACTIVATION_KEY_PREFIX}${state}:${saleId}:` } },
+  ];
+  const legacy = LEGACY_KEY_PREFIX[state];
+  if (legacy) or.push({ automationKey: `${legacy}${saleId}` });
+  const existing = await prisma.emailAutomationLog.findFirst({ where: { userId, OR: or }, select: { id: true } });
+  return !!existing;
+}
+
+async function activationEmailedWithin(userId: string, sinceMs: number, now: Date): Promise<boolean> {
+  const existing = await prisma.emailAutomationLog.findFirst({
+    where: { userId, sentAt: { gte: new Date(now.getTime() - sinceMs) }, ...ACTIVATION_SENT_KEY_FILTER },
+    select: { id: true },
+  });
+  return !!existing;
 }
 
 /**
- * Draft-ready nudge: a DRAFT sale, created 24h-14d ago and not yet over, that has items,
- * from an organizer who has never had a published or ended sale. One email per sale, ever.
+ * Decides, without sending anything, what the next run would do for every candidate sale.
+ * runActivationNudges() sends exactly the 'send' decisions; the admin dry run shows all of them.
  */
-export async function runDraftReadyNudge(mailed: Set<string> = new Set()): Promise<number> {
-  const candidates: Array<SaleNudgeCandidate & { _count: { items: number } }> = await prisma.sale.findMany({
-    where: {
-      status: 'DRAFT',
-      deletedAt: null,
-      createdAt: ageWindow(NUDGE_MIN_MS, NUDGE_MAX_MS),
-      endDate: { gte: new Date() },
-      items: { some: DRAFT_SALE_ITEM_FILTER },
-      organizer: {
-        ...REAL_ORGANIZER,
-        NOT: {
-          sales: { some: { status: { in: ['PUBLISHED', 'ENDED'] }, deletedAt: null } },
-        },
-      },
-    },
-    select: { ...SALE_NUDGE_SELECT, _count: { select: { items: { where: DRAFT_SALE_ITEM_FILTER } } } },
-    orderBy: { createdAt: 'desc' },
-    take: 500,
-  });
+export async function planActivationNudges(
+  mailed: Set<string> = new Set(),
+  now: Date = new Date()
+): Promise<ActivationDecision[]> {
+  const candidates = await findActivationCandidates(now);
+  const planned = new Set(mailed);
+  const decisions: ActivationDecision[] = [];
+  for (const c of candidates) {
+    let reason: ActivationDecision['reason'] = 'will_send';
+    if (isNeverEmailAddress(c.email)) reason = 'never_email_address';
+    else if (await alreadyNudged(c.userId, c.state, c.saleId)) reason = 'already_nudged_this_state';
+    else if (planned.has(c.userId)) reason = 'one_email_per_run';
+    else if (await activationEmailedWithin(c.userId, ACTIVATION_RATE_LIMIT_MS, now)) reason = 'rate_limited_7d';
+    else if (await suppressionService.isSuppressed(c.email)) reason = 'suppressed';
+    if (reason === 'will_send') planned.add(c.userId);
+    decisions.push({ ...c, decision: reason === 'will_send' ? 'send' : 'skip', reason });
+  }
+  return decisions;
+}
 
-  let sent = 0;
-  for (const sale of candidates) {
+async function sendForState(c: ActivationCandidate): Promise<NudgeOutcome> {
+  const base = {
+    email: c.email,
+    firstName: firstNameOf(c.name),
+    userId: c.userId,
+    saleId: c.saleId,
+    saleTitle: c.saleTitle,
+  };
+  if (c.state === 'EMPTY_PUBLISHED') return sendEmptySaleNudge(base);
+  if (c.state === 'DRAFT_UNPUBLISHED') return sendDraftReadyNudge({ ...base, itemCount: c.itemCount });
+  return sendStaleDatesNudge({ ...base, itemCount: c.itemCount, saleStatus: c.saleStatus });
+}
+
+/** Sends the planned activation nudges. Returns counts by outcome. */
+export async function runActivationNudges(
+  mailed: Set<string> = new Set()
+): Promise<{ sent: number; suppressed: number; failed: number; byState: Record<ActivationState, number> }> {
+  const decisions = await planActivationNudges(mailed);
+  const result = {
+    sent: 0,
+    suppressed: 0,
+    failed: 0,
+    byState: { EMPTY_PUBLISHED: 0, DRAFT_UNPUBLISHED: 0, STALE_DATES: 0 } as Record<ActivationState, number>,
+  };
+  for (const d of decisions) {
     try {
-      const org = sale.organizer;
-      if (!org?.user?.email) continue;
-      if (mailed.has(org.userId)) continue; // one email per organizer per run
-      const key = `${KEY_DRAFT_READY_PREFIX}${sale.id}`;
-      if (await alreadyLogged(org.userId, key)) continue;
-      await sendDraftReadyNudge({
-        email: org.user.email,
-        firstName: firstNameOf(org.user.name),
-        userId: org.userId,
-        saleId: sale.id,
-        saleTitle: sale.title,
-        itemCount: sale._count?.items ?? 0,
-      });
-      await logSent(org.userId, key);
-      mailed.add(org.userId);
-      sent++;
+      if (d.reason === 'suppressed') {
+        // Never retried: an opted-out or bounced address stays out of this state for this sale.
+        await logSent(d.userId, activationKey(d.state, d.saleId, 'suppressed'));
+        result.suppressed++;
+        continue;
+      }
+      if (d.decision !== 'send') continue;
+      if (mailed.has(d.userId)) continue;
+      const outcome = await sendForState(d);
+      if (outcome === 'failed') {
+        result.failed++;
+        continue;
+      }
+      await logSent(d.userId, activationKey(d.state, d.saleId, outcome));
+      if (outcome === 'sent') {
+        mailed.add(d.userId);
+        result.sent++;
+        result.byState[d.state]++;
+      } else {
+        result.suppressed++;
+      }
     } catch (err) {
-      console.error(`[organizerOnboardingDrip] draft-ready nudge failed for sale ${sale.id}:`, err);
+      result.failed++;
+      console.error(`[organizerOnboardingDrip] activation nudge ${d.state} failed for sale ${d.saleId}:`, err);
     }
   }
-  return sent;
+  return result;
 }
 
 /** Core job logic -- exported so it can also be added to internalJobRunnerController's JOB_MAP. */
@@ -331,18 +503,19 @@ export async function runOrganizerOnboardingDrip(): Promise<void> {
     return;
   }
 
-  // Organizers mailed this run. The activation nudges skip anyone already mailed today;
-  // their 14-day window means they are picked up on a later run instead.
+  // Organizers mailed this run. The activation nudges skip anyone already mailed today and pick
+  // them up on a later run (their state has no upper age limit any more).
   const mailed = new Set<string>();
   const sent5a = await runDay0(mailed);
   const sent5b = await runNoSalePass(DAY2_MIN_MS, DAY2_MAX_MS, KEY_5B, sendOnboardingEmail5b, '5b', mailed);
   const sent5c = await runNoSalePass(DAY7_MIN_MS, DAY7_MAX_MS, KEY_5C, sendOnboardingEmail5c, '5c', mailed);
-  const sentEmpty = await runEmptySaleNudge(mailed);
-  const sentDraft = await runDraftReadyNudge(mailed);
+  const activation = await runActivationNudges(mailed);
 
   console.log(
     `[organizerOnboardingDrip] Run complete: 5a: ${sent5a}, 5b: ${sent5b}, 5c: ${sent5c}, ` +
-      `empty-sale: ${sentEmpty}, draft-ready: ${sentDraft}`
+      `activation sent: ${activation.sent} (empty-published ${activation.byState.EMPTY_PUBLISHED}, ` +
+      `draft-unpublished ${activation.byState.DRAFT_UNPUBLISHED}, stale-dates ${activation.byState.STALE_DATES}), ` +
+      `suppressed: ${activation.suppressed}, failed: ${activation.failed}`
   );
 }
 

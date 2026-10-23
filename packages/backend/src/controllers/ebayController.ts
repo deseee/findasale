@@ -4,6 +4,7 @@ import express, { Request, Response } from 'express';
 import sanitizeHtml from 'sanitize-html';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { userCanPublish, emailNotVerifiedBody } from '../lib/publishGate'; // 2026-10-23: verify to publish (eBay push included)
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots are never pushed to eBay in v1
 import { bulkChannelRefusal, findBulkLotItemIds, isBulkLotError, type BulkLotDb } from '../services/bulkLot/bulkLotService';
 import { isBulkEbayEnabled } from '../services/bulkLot/bulkLotEbayConfig'; // ADR-136 Addendum C (#659): bulk lots list on eBay as fixed-size bundles behind CARD_BULK_EBAY_ENABLED
@@ -2328,6 +2329,12 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'itemIds required' });
     }
 
+    // 2026-10-23: listing on eBay is publishing, so it needs a verified email (lib/publishGate.ts). The read-only
+    // fee check is exempt. Looked up by id because the queue path calls this with a minimal { id } user.
+    if (!feeCheckOnly && !(await userCanPublish(userId))) {
+      return res.status(403).json(emailNotVerifiedBody());
+    }
+
     // Bulk lots (ADR-136, #659). With CARD_BULK_EBAY_ENABLED off (the default) a count of cards sold by the thousand is
     // never listed on eBay (counter and storefront only); this also covers the queue and fee-check paths, which run
     // through this handler. With it on (ADR-136 Addendum C) a lot passes, and the loop below swaps in its bundle
@@ -4063,6 +4070,11 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
 
     if (!userId) {
       return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // 2026-10-23: publishing to eBay needs a verified email (lib/publishGate.ts).
+    if (!(await userCanPublish(userId))) {
+      return res.status(403).json(emailNotVerifiedBody());
     }
 
     // Bulk lots (ADR-136, #659). Off (default): never published to eBay. On (ADR-136 Addendum C): a lot is listed in
@@ -6600,6 +6612,10 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
     const organizer = await prisma.organizer.findUnique({ where: { userId } });
     if (!organizer) return res.status(403).json({ error: 'Not an organizer' });
 
+    // 2026-10-23: an import publishes on FindA.Sale only when this account may publish (verified email or admin,
+    // lib/publishGate.ts). Otherwise new and linked items stay drafts until the organizer verifies and publishes them.
+    const importCanPublish = await userCanPublish(userId);
+
     // Get eBay connection
     const ebayConn = await prisma.ebayConnection.findUnique({
       where: { organizerId: organizer.id }
@@ -6681,7 +6697,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         data: {
           ebayListingId: listingId,
           listedOnEbayAt: candidate.listedOnEbayAt ?? new Date(),
-          ...(candidate.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
+          ...(importCanPublish && candidate.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
         },
       });
       console.log(`[eBay Import] ADOPTED by SKU prefix: listing ${listingId} (sku="${sku}") -> item ${candidate.id} (was ${candidate.ebayListingId ?? 'unlinked'})`);
@@ -6740,7 +6756,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           ...(willSetCategoryOnReconcile ? { ebayShippingClassification: classifyEbayShipping(categoryName, hit.tags) } : {}),
           // Auto-publish on FindA.Sale: this item is confirmed live on eBay, so it
           // should not sit on the "review & publish" queue.
-          ...(hit.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
+          ...(importCanPublish && hit.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
         },
       });
       console.log(`[eBay Import] Reconciled eBay listing ${listingId} to existing item ${hit.id} by title match ("${target}")`);
@@ -6857,7 +6873,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
                 data: {
                   ebayListingId: ebayListingIdToStore,
                   // Auto-publish on FindA.Sale — item is live on eBay.
-                  ...(existing.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
+                  ...(importCanPublish && existing.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
                 },
               });
               console.log(`[eBay Import] Backfilled numeric listingId ${ebayListingIdToStore} on item ${existing.id} (was SKU: ${sku})`);
@@ -6892,7 +6908,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
                     ebayListingId: listingId,
                     listedOnEbayAt: new Date(),
                     // Auto-publish on FindA.Sale — item is live on eBay.
-                    ...(existing.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
+                    ...(importCanPublish && existing.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
                   },
                 });
                 skipped++;
@@ -6945,7 +6961,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             ...(invQty ? { stockTotal: invQty, ebayQuantityAvailable: invQty } : {}),
             // Imported item is live on eBay — publish it on FindA.Sale immediately
             // rather than landing it on the "review & publish" queue.
-            draftStatus: 'PUBLISHED',
+            draftStatus: importCanPublish ? 'PUBLISHED' : 'DRAFT', // 2026-10-23: verify email to publish
             conditionGrade,
             condition,
             embedding: [],  // populated later when item is indexed for search
@@ -7111,7 +7127,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             if (existing.ebayListingId !== ebayItemId) backfill.ebayListingId = ebayItemId;
             // Auto-publish on FindA.Sale — this item is live on eBay (returned by the
             // active-listings call), so it should not sit on the review queue.
-            if (existing.draftStatus !== 'PUBLISHED') backfill.draftStatus = 'PUBLISHED';
+            if (importCanPublish && existing.draftStatus !== 'PUBLISHED') backfill.draftStatus = 'PUBLISHED'; // 2026-10-23: verify email to publish
             if (Object.keys(backfill).length > 0) {
               await prisma.item.update({ where: { id: existing.id }, data: backfill });
             }
@@ -7148,7 +7164,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               // number. Adopt / reconcile-by-title / SKU-prefix never overwrite stock on an existing item.
               ...(listingQty > 1 ? { stockTotal: listingQty, ebayQuantityAvailable: listingQty } : {}),
               // Imported item is live on eBay — publish it on FindA.Sale immediately.
-              draftStatus: 'PUBLISHED',
+              draftStatus: importCanPublish ? 'PUBLISHED' : 'DRAFT', // 2026-10-23: verify email to publish
               conditionGrade,
               condition,
               category: ebayCategory || undefined,

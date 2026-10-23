@@ -5,16 +5,14 @@
  * Built per ADR-014 Amendment A (claude_docs/architecture/ADR-014-hubs-flea-market-repurpose.md:44-77):
  * venue, event date, map, and booth count are shown. Amendment A also calls for a
  * CONFIRMED-vendor-names-only directory and a link to the hub's published FLEA_MARKET
- * Sale for inventory. NEITHER of those two is rendered here: GET /api/hubs/:slug
- * (packages/backend/src/controllers/hubController.ts getHub, ~line 127) does not
- * return a vendor list or a linked Sale today — only { id, name, slug, description,
- * lat, lng, boothCount, saleDate, eventName, organizerName, organizerPhoto }. Adding
- * those fields is backend + schema work outside this page's scope; see the session
- * report for the flagged gap. Do not add a vendor list here from client-side
- * guesswork — that would defeat the whole point of Amendment A's PII removal.
+ * Sale for inventory. Both come from GET /api/hubs/:slug (hubController.getHub, roadmap
+ * #40a, 2026-10-23): `vendors` is CONFIRMED booths only with booth number + vendor name
+ * (no email, phone or address is ever selected server-side), and `sale` is the hub's
+ * published FLEA_MARKET sale (id, title, dates only; the sale page applies its own
+ * street-address gate). Never build the vendor list from any other client-side source.
  *
- * Data comes from the existing, frozen `useHub(slug)` hook (hooks/useHubs.ts) — do not
- * change that hook's shape from this page.
+ * Data comes from the existing `useHub(slug)` hook (hooks/useHubs.ts); its response type
+ * gained the optional `vendors` and `sale` fields additively, signature unchanged.
  *
  * VALID-STATE-ONLY-EXPOSURE: already enforced server-side. getHub queries
  * `where: { slug, isActive: true }` via findFirst, so a closed/deactivated hub gets the
@@ -40,6 +38,17 @@ import { useHub } from '../../hooks/useHubs';
 // (components/SaleMap.tsx wraps SaleMapInner the same way) — Leaflet cannot run
 // during server render.
 const SaleMap = dynamic(() => import('../../components/SaleMap'), { ssr: false });
+
+/** "Sat, Oct 24" or "Sat, Oct 24 - Sun, Oct 25" for the linked sale. Bad dates render nothing. */
+function formatSaleDates(start: string, end: string): string {
+  try {
+    const s = format(parseISO(start), 'EEE, MMM d');
+    const e = end ? format(parseISO(end), 'EEE, MMM d') : s;
+    return s === e ? s : `${s} - ${e}`;
+  } catch {
+    return '';
+  }
+}
 
 export default function HubLandingPage() {
   const router = useRouter();
@@ -155,6 +164,27 @@ export default function HubLandingPage() {
                   </p>
                 )}
 
+                {/* Inventory lives on the hub's published FLEA_MARKET sale (ADR-014 Amendment A). */}
+                {hub.sale && (
+                  <Link
+                    href={`/sales/${hub.sale.id}`}
+                    className="flex items-center justify-between gap-3 mb-6 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-warm-900 dark:text-gray-100">Browse items at this market</span>
+                      <span className="block text-sm text-warm-700 dark:text-gray-300 truncate">
+                        {hub.sale.title}
+                        {!hub.sale.isOngoing && hub.sale.startDate && (
+                          <> · {formatSaleDates(hub.sale.startDate, hub.sale.endDate)}</>
+                        )}
+                      </span>
+                    </span>
+                    <span aria-hidden="true" className="shrink-0 text-amber-700 dark:text-amber-300 font-semibold">
+                      →
+                    </span>
+                  </Link>
+                )}
+
                 {/* Venue details (2026-09-25) -- address/phone/contactEmail/hoursText all
                     added to SaleHub this session; previously nothing here beyond the map
                     pin, and address in particular was silently discarded on create before
@@ -209,6 +239,37 @@ export default function HubLandingPage() {
                   />
                 </div>
               )}
+
+              {/* Vendor directory: CONFIRMED booths, booth number + vendor name only (ADR-014 Amendment A). */}
+              <section
+                aria-labelledby="hub-vendors-heading"
+                className="border-t border-warm-200 dark:border-gray-700 p-6 sm:p-8"
+              >
+                <h2 id="hub-vendors-heading" className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-3">
+                  Vendors
+                </h2>
+                {hub.vendors && hub.vendors.length > 0 ? (
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {hub.vendors.map((v) => (
+                      <li
+                        key={`${v.boothNumber}-${v.vendorName}`}
+                        className="flex items-center gap-3 rounded-md border border-warm-200 dark:border-gray-700 bg-warm-50 dark:bg-gray-900/40 px-3 py-2 min-w-0"
+                      >
+                        {v.boothNumber && (
+                          <span className="shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+                            #{v.boothNumber}
+                          </span>
+                        )}
+                        <span className="text-warm-900 dark:text-gray-100 break-words min-w-0">{v.vendorName}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-warm-600 dark:text-gray-400">
+                    Vendors will be listed here once their booths are confirmed.
+                  </p>
+                )}
+              </section>
             </div>
           )}
         </div>

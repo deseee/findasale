@@ -34,7 +34,9 @@ Compare that to a fee that scales with the sale itself. A commission tied to wha
 
 ## What FindA.Sale does instead
 
-FindA.Sale's fee is built around that second model. It scales with the sale instead of charging a flat calendar-month fee untethered to how much actually sold, and card processing is built into that one number instead of showing up later as a separate line. There's no monthly software bill to justify regardless of how a given weekend goes, and no listing cap to check before deciding whether this month's sale even fits the plan already being paid for.
+FindA.Sale's fee is built around that second model. It scales with the sale, and card processing is built into that one number instead of showing up later as a separate line. On the free SIMPLE plan, that fee is the whole cost: 8% on in-person sales and 9.5% online, with a $0.75 minimum per transaction and no monthly charge at all. A slow weekend costs very little, and a weekend with no sales costs nothing.
+
+Organizers who run sales often can choose PRO, which is $29 a month and lowers the rate to 6% in person and 7.5% online. That is a flat monthly charge, the same kind this post has been describing, so it is worth doing the math before upgrading: the rate drops by 2 percentage points, so PRO covers its own $29 once an organizer sells about $1,450 a month. The difference is that it's a choice. Anyone whose sales are small or irregular can stay on SIMPLE and only pay when something sells.
 
 That matters most for organizers whose sales vary in size from one month to the next: a modest garage sale this weekend, a full estate sale the next. A flat subscription asks the same question every month no matter which one it is. A fee tied to the sale answers itself.
 

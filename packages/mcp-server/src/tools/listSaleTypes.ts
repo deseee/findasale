@@ -1,15 +1,11 @@
-import { MCPToolDefinition } from '../types';
+import * as z from 'zod/v4';
+import { defineTool } from './types';
+import { handleListSaleTypes } from '../handlers';
 
-export const listSaleTypesTool: MCPToolDefinition = {
+export const listSaleTypesTool = defineTool({
   name: 'list_sale_types',
-  annotations: {
-    title: 'List Sale Types',
-    readOnlyHint: true,
-    openWorldHint: true,
-  },
-  description: 'Get available sale type definitions (Estate, Yard, Auction, Flea Market, Consignment).',
-  inputSchema: {
-    type: 'object',
-    properties: {},
-  },
-};
+  title: 'List Sale Types',
+  description: 'List the sale type codes FindA.Sale uses (yard sale, whole-house sale, auction, flea market, shop, dorm move-out) with a short description of each.',
+  inputSchema: z.object({}),
+  handler: handleListSaleTypes,
+});

@@ -156,7 +156,7 @@ export default function SettlementWizard({ saleId, saleType, saleSubtype }: Sett
           <button
             onClick={() => closeMutation.mutate()}
             disabled={closeMutation.isPending}
-            className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+            className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
           >
             {closeMutation.isPending ? 'Closing...' : 'Close Settlement'}
           </button>
@@ -362,7 +362,7 @@ export default function SettlementWizard({ saleId, saleType, saleSubtype }: Sett
           {step < WIZARD_STEPS.length - 1 && (
             <button
               onClick={() => setStep(step + 1)}
-              className="px-4 py-2 text-sm font-medium bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
             >
               Next →
             </button>

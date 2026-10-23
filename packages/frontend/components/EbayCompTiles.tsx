@@ -74,7 +74,7 @@ const EbayCompTiles: React.FC<EbayCompTilesProps> = ({ itemId }: EbayCompTilesPr
       </div>
 
       {/* FTC affiliate disclosure */}
-      <p className="text-[10px] text-amber-600/60 dark:text-amber-400/50 mt-2 text-right">
+      <p className="text-[10px] text-warm-600 dark:text-warm-400 mt-2 text-right">
         Affiliate links. FindA.Sale may earn a commission if you buy on eBay.
       </p>
     </div>

@@ -1,362 +1,389 @@
 /**
- * Tool Handler Functions
+ * Tool handlers: validate input, call the public backend API anonymously, and
+ * return allow-listed public projections (see lib/publicShape.ts).
  *
- * Each tool receives input, validates, calls backend API, and returns response.
+ * Backend contracts (verified against packages/backend 2026-10-23):
+ * - GET /api/sales            listSales: PUBLISHED, current, non-container sales. Params city, zip,
+ *                             lat, lng, radius (km), startDate, endDate (filter on startDate),
+ *                             saleType, minConfidence, page, limit (max 50). Returns { sales, pagination }.
+ * - GET /api/sales/search     searchSales: requires q. Returns a bare array (max 20), PUBLISHED + ENDED.
+ * - GET /api/sales/:id        getSale: 404 for DRAFT/CANCELLED/deleted; embargoed items removed.
+ * - GET /api/sales/cities     getCities: { cities: [{ city, state, activeSales, totalSales, lastSaleDate }] }.
+ * - GET /api/items/search     searchItems: q, category, condition, priceMin, priceMax, sort, limit, offset.
+ *                             Published, non-embargoed items in PUBLISHED sales. Returns { data, total }.
+ * - GET /api/items/:id        getItemById: 404 for hidden / draft / embargoed items.
+ * - GET /api/items/categories { categories: { [name]: count } }.
  */
 
-import { fetchJSON } from './lib/apiClient';
+import { getJSON, DEFAULT_TTL_MS, LONG_TTL_MS, UpstreamError } from './lib/apiClient';
+import { cacheGet, cacheSet } from './lib/cache';
 import {
-  SearchSalesInput,
-  GetSaleInput,
-  SearchItemsInput,
-  GetItemInput,
-  SearchSalesResponse,
-  GetSaleResponse,
-  SearchItemsResponse,
-  GetItemResponse,
-  ListCitiesResponse,
-  ListSaleTypesResponse,
-  ListCategoriesResponse,
-  GetTrendingSalesInput,
-  GetTrendingSalesResponse,
-  GetSalesStartingSoonInput,
-  GetSalesStartingSoonResponse,
-  FindItemForSaleInput,
-  FindItemForSaleResponse,
-} from './types';
+  isPublicActiveSale,
+  isPublicItem,
+  toPublicItem,
+  toPublicSale,
+  PublicItem,
+  PublicSale,
+  saleUrl,
+  SITE_BASE,
+} from './lib/publicShape';
+
+export const SALE_TYPES = ['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET', 'RETAIL', 'DORM_DASH'] as const;
+
+const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+function requireId(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !ID_PATTERN.test(value.trim())) {
+    throw new Error(`${field} must be a FindA.Sale id (letters, numbers, - or _)`);
+  }
+  return value.trim();
+}
+
+function clampInt(v: unknown, def: number, min: number, max: number): number {
+  const n = typeof v === 'number' ? Math.trunc(v) : def;
+  if (!Number.isFinite(n)) return def;
+  return Math.min(Math.max(n, min), max);
+}
+
+function isoDay(v: unknown): string | undefined {
+  if (typeof v !== 'string' || v.trim() === '') return undefined;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) throw new Error(`Invalid date: ${v}. Use YYYY-MM-DD.`);
+  return d.toISOString().slice(0, 10);
+}
+
+function cityMatches(saleCity: unknown, wanted?: string): boolean {
+  if (!wanted) return true;
+  return typeof saleCity === 'string' && saleCity.toLowerCase().includes(wanted.trim().toLowerCase());
+}
 
 // ──────────────────────────────────────────────────────────────
-// search_sales Handler
+// Sales
 // ──────────────────────────────────────────────────────────────
 
-export async function handleSearchSales(
-  input: Record<string, any>
-): Promise<SearchSalesResponse> {
-  const {
-    city,
-    lat,
-    lng,
-    radiusKm,
+export interface SearchSalesArgs {
+  query?: string;
+  city?: string;
+  zip?: string;
+  lat?: number;
+  lng?: number;
+  radiusKm?: number;
+  startDate?: string;
+  endDate?: string;
+  saleType?: string[];
+  limit?: number;
+  minConfidence?: number;
+}
+
+export interface SalesResult {
+  sales: PublicSale[];
+  total: number;
+  browseUrl: string;
+}
+
+export async function handleSearchSales(args: SearchSalesArgs): Promise<SalesResult> {
+  const limit = clampInt(args.limit, 20, 1, 50);
+  const startDate = isoDay(args.startDate);
+  const endDate = isoDay(args.endDate);
+  const types = (args.saleType ?? []).filter((t) => (SALE_TYPES as readonly string[]).includes(t));
+
+  if ((args.lat === undefined) !== (args.lng === undefined)) {
+    throw new Error('lat and lng must be given together');
+  }
+
+  const query = args.query?.trim();
+  if (query) {
+    // Keyword search: backend matches title/description/tags, then we filter.
+    const raw = await getJSON<any[]>('/api/sales/search', {
+      q: query,
+      minConfidence: args.minConfidence,
+    });
+    const now = new Date();
+    const filtered = (Array.isArray(raw) ? raw : [])
+      .filter((s) => isPublicActiveSale(s, now))
+      .filter((s) => cityMatches(s.city, args.city))
+      .filter((s) => !args.zip || s.zip === args.zip)
+      .filter((s) => types.length === 0 || types.includes(s.saleType))
+      .filter((s) => !startDate || (s.startDate && String(s.startDate).slice(0, 10) >= startDate) || s.isOngoing)
+      .filter((s) => !endDate || (s.startDate && String(s.startDate).slice(0, 10) <= endDate));
+    const sales = filtered.slice(0, limit).map(toPublicSale);
+    return { sales, total: filtered.length, browseUrl: `${SITE_BASE}/sales` };
+  }
+
+  // Browse: one request per sale type (backend accepts a single saleType).
+  const base: Record<string, unknown> = {
+    city: args.city,
+    zip: args.zip,
     startDate,
     endDate,
+    limit,
+    page: 1,
+    minConfidence: args.minConfidence,
+  };
+  if (args.lat !== undefined && args.lng !== undefined) {
+    base.lat = args.lat;
+    base.lng = args.lng;
+    base.radius = Math.min(Math.max(args.radiusKm ?? 25, 1), 200);
+  }
+
+  const typeList: (string | undefined)[] = types.length > 0 ? types : [undefined];
+  const pages = await Promise.all(
+    typeList.map((t) => getJSON<any>('/api/sales', { ...base, saleType: t }))
+  );
+  const now = new Date();
+  const seen = new Set<string>();
+  const merged: any[] = [];
+  let total = 0;
+  for (const page of pages) {
+    total += Number(page?.pagination?.total ?? page?.total ?? 0) || 0;
+    for (const s of page?.sales ?? []) {
+      if (!isPublicActiveSale(s, now) || seen.has(s.id)) continue;
+      seen.add(s.id);
+      merged.push(s);
+    }
+  }
+  merged.sort((a, b) => String(a.startDate ?? '').localeCompare(String(b.startDate ?? '')));
+
+  // The browse feed skips listings without photos (directory stubs). When a city
+  // browse finds nothing, fall back to the keyword index (which backs public search)
+  // with the city name, still filtered to that exact city and the other filters.
+  if (merged.length === 0 && args.city && args.city.trim().length >= 3 && args.lat === undefined) {
+    return handleSearchSales({ ...args, query: args.city.trim() });
+  }
+
+  return {
+    sales: merged.slice(0, limit).map(toPublicSale),
+    total: Math.max(total, merged.length),
+    browseUrl: `${SITE_BASE}/sales`,
+  };
+}
+
+export interface SaleDetail extends PublicSale {
+  itemCount: number;
+  items: PublicItem[];
+  organizerRating: number | null;
+  organizerReviewCount: number | null;
+  calendarUrl: string;
+}
+
+const SALE_DETAIL_ITEMS = 25;
+const MAX_SALE_LOOKUPS = 10;
+const SUMMARY_TTL_MS = 30 * 60_000;
+
+export async function handleGetSale(args: { saleId: string }): Promise<SaleDetail> {
+  const saleId = requireId(args.saleId, 'saleId');
+  const key = `sale-detail:${saleId}`;
+  const cached = cacheGet<SaleDetail>(key);
+  if (cached) return cached;
+
+  const raw = await getJSON<any>(`/api/sales/${encodeURIComponent(saleId)}`, undefined, 0);
+  if (!raw || raw.status === 'DRAFT' || raw.status === 'CANCELLED' || raw.deletedAt) {
+    throw new UpstreamError('Not found', 404);
+  }
+  const allItems: any[] = Array.isArray(raw.items) ? raw.items : [];
+  const publicItems = allItems.filter((i) => isPublicItem({ ...i, sale: undefined }));
+  const available = publicItems.filter((i) => !i.status || i.status === 'AVAILABLE');
+  const saleRef = { title: raw.title, city: raw.city, state: raw.state };
+  const detail: SaleDetail = {
+    ...toPublicSale(raw),
+    itemCount: publicItems.length,
+    items: available.slice(0, SALE_DETAIL_ITEMS).map((i) => toPublicItem({ ...i, saleId }, saleRef)),
+    organizerRating: typeof raw.organizer?.avgRating === 'number' && raw.organizer.reviewCount > 0 ? raw.organizer.avgRating : null,
+    organizerReviewCount: typeof raw.organizer?.reviewCount === 'number' ? raw.organizer.reviewCount : null,
+    calendarUrl: `https://api.finda.sale/api/sales/${encodeURIComponent(saleId)}/calendar.ics`,
+  };
+  // Mirror summary cache used by item search.
+  cacheSet(`sale-summary:${saleId}`, summaryOf(raw), SUMMARY_TTL_MS);
+  cacheSet(key, detail, DEFAULT_TTL_MS);
+  return detail;
+}
+
+interface SaleSummary {
+  id: string;
+  title: string | null;
+  city: string | null;
+  state: string | null;
+  public: boolean;
+}
+
+function summaryOf(raw: any): SaleSummary {
+  return {
+    id: String(raw?.id ?? ''),
+    title: typeof raw?.title === 'string' ? raw.title : null,
+    city: typeof raw?.city === 'string' ? raw.city : null,
+    state: typeof raw?.state === 'string' ? raw.state : null,
+    public: isPublicActiveSale(raw),
+  };
+}
+
+/** Title/city/state for a sale, cached separately so item search does not hold full sale payloads. */
+async function getSaleSummary(saleId: string): Promise<SaleSummary | null> {
+  const key = `sale-summary:${saleId}`;
+  const cached = cacheGet<SaleSummary>(key);
+  if (cached) return cached;
+  try {
+    const raw = await getJSON<any>(`/api/sales/${encodeURIComponent(saleId)}`, undefined, 0);
+    const summary = summaryOf(raw);
+    cacheSet(key, summary, SUMMARY_TTL_MS);
+    return summary;
+  } catch {
+    return null;
+  }
+}
+
+export async function handleGetTrendingSales(args: { city?: string; saleType?: string; limit?: number }): Promise<SalesResult> {
+  const limit = clampInt(args.limit, 10, 1, 25);
+  const saleType = args.saleType && (SALE_TYPES as readonly string[]).includes(args.saleType) ? args.saleType : undefined;
+  // Pull a wider page, then rank by recent activity (updatedAt) among current public sales.
+  const page = await getJSON<any>('/api/sales', { city: args.city, saleType, limit: 50, page: 1 });
+  const now = new Date();
+  const ranked = (page?.sales ?? [])
+    .filter((s: any) => isPublicActiveSale(s, now))
+    .sort((a: any, b: any) => {
+      const fav = (Number(b.favoriteCount) || 0) - (Number(a.favoriteCount) || 0);
+      if (fav !== 0) return fav;
+      return String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''));
+    });
+  return { sales: ranked.slice(0, limit).map(toPublicSale), total: ranked.length, browseUrl: `${SITE_BASE}/sales` };
+}
+
+export async function handleGetSalesStartingSoon(args: { city?: string; saleType?: string; daysAhead?: number }): Promise<SalesResult> {
+  const days = clampInt(args.daysAhead, 7, 1, 14);
+  const today = new Date();
+  const future = new Date(today.getTime() + days * 24 * 60 * 60 * 1000);
+  const saleType = args.saleType && (SALE_TYPES as readonly string[]).includes(args.saleType) ? args.saleType : undefined;
+  const page = await getJSON<any>('/api/sales', {
+    city: args.city,
     saleType,
-    status,
-    query,
-    limit = 20,
-    sortBy,
-    minConfidence,
-  } = input as SearchSalesInput;
-
-  if (limit && (limit < 1 || limit > 50)) {
-    throw new Error('limit must be between 1 and 50');
-  }
-
-  if (minConfidence !== undefined && (minConfidence < 0 || minConfidence > 1)) {
-    throw new Error('minConfidence must be between 0.0 and 1.0');
-  }
-
-  const params: Record<string, any> = {};
-  if (city) params.city = city;
-  if (lat !== undefined && lng !== undefined) {
-    params.lat = lat;
-    params.lng = lng;
-  }
-  if (radiusKm !== undefined) params.radiusKm = radiusKm;
-  if (startDate) params.startDate = startDate;
-  if (endDate) params.endDate = endDate;
-  if (saleType && saleType.length > 0) params.saleType = saleType.join(',');
-  if (status) params.status = status;
-  if (query) params.query = query;
-  if (limit) params.limit = limit;
-  if (sortBy) params.sortBy = sortBy;
-  if (minConfidence !== undefined) params.minConfidence = minConfidence;
-
-  return fetchJSON<SearchSalesResponse>('get', '/api/sales/search', params);
+    startDate: today.toISOString().slice(0, 10),
+    endDate: future.toISOString().slice(0, 10),
+    limit: 25,
+    page: 1,
+  });
+  const sales = (page?.sales ?? []).filter((s: any) => isPublicActiveSale(s, today)).map(toPublicSale);
+  return { sales, total: Number(page?.pagination?.total ?? sales.length) || sales.length, browseUrl: `${SITE_BASE}/sales` };
 }
 
-// ──────────────────────────────────────────────────────────────
-// get_sale Handler
-// ──────────────────────────────────────────────────────────────
-
-export async function handleGetSale(input: Record<string, any>): Promise<GetSaleResponse> {
-  const { saleId } = input as GetSaleInput;
-
-  if (!saleId) {
-    throw new Error('saleId is required');
-  }
-
-  if (typeof saleId !== 'string' || saleId.trim().length === 0) {
-    throw new Error('saleId must be a non-empty string');
-  }
-
-  return fetchJSON<GetSaleResponse>('get', `/api/sales/${saleId}`);
+export async function handleListCities(args: { state?: string; limit?: number } = {}): Promise<{ cities: Array<{ city: string; state: string; activeSales: number; browseUrl: string }>; total: number }> {
+  const raw = await getJSON<any>('/api/sales/cities', undefined, LONG_TTL_MS);
+  const cities = (raw?.cities ?? [])
+    .filter((c: any) => typeof c?.city === 'string' && c.city.trim() !== '')
+    .map((c: any) => ({
+      city: String(c.city),
+      state: String(c.state ?? ''),
+      activeSales: Number(c.activeSales) || 0,
+      browseUrl: `${SITE_BASE}/sales?city=${encodeURIComponent(String(c.city))}`,
+    }))
+    .filter((c: { state: string }) => !args.state || c.state.toUpperCase() === args.state.trim().toUpperCase())
+    .sort((a: { activeSales: number }, b: { activeSales: number }) => b.activeSales - a.activeSales);
+  const limit = clampInt(args.limit, 100, 1, 500);
+  return { cities: cities.slice(0, limit), total: cities.length };
 }
 
-// ──────────────────────────────────────────────────────────────
-// search_items Handler
-// ──────────────────────────────────────────────────────────────
-
-export async function handleSearchItems(
-  input: Record<string, any>
-): Promise<SearchItemsResponse> {
-  const {
-    query,
-    category,
-    city,
-    priceMin,
-    priceMax,
-    condition,
-    limit = 20,
-    sortBy,
-  } = input as SearchItemsInput;
-
-  if (!query) {
-    throw new Error('query is required');
-  }
-
-  if (typeof query !== 'string' || query.trim().length === 0) {
-    throw new Error('query must be a non-empty string');
-  }
-
-  if (limit && (limit < 1 || limit > 50)) {
-    throw new Error('limit must be between 1 and 50');
-  }
-
-  const params: Record<string, any> = { query };
-  if (category) params.category = category;
-  if (city) params.city = city;
-  if (priceMin !== undefined) params.priceMin = priceMin;
-  if (priceMax !== undefined) params.priceMax = priceMax;
-  if (condition && condition.length > 0) params.condition = condition.join(',');
-  if (limit) params.limit = limit;
-  if (sortBy) params.sortBy = sortBy;
-
-  return fetchJSON<SearchItemsResponse>('get', '/api/items/search', params);
-}
-
-// ──────────────────────────────────────────────────────────────
-// get_item Handler
-// ──────────────────────────────────────────────────────────────
-
-export async function handleGetItem(input: Record<string, any>): Promise<GetItemResponse> {
-  const { itemId } = input as GetItemInput;
-
-  if (!itemId) {
-    throw new Error('itemId is required');
-  }
-
-  if (typeof itemId !== 'string' || itemId.trim().length === 0) {
-    throw new Error('itemId must be a non-empty string');
-  }
-
-  return fetchJSON<GetItemResponse>('get', `/api/items/${itemId}`);
-}
-
-// ──────────────────────────────────────────────────────────────
-// list_cities Handler
-// ──────────────────────────────────────────────────────────────
-
-export async function handleListCities(): Promise<ListCitiesResponse> {
-  return fetchJSON<ListCitiesResponse>('get', '/api/sales/cities');
-}
-
-// ──────────────────────────────────────────────────────────────
-// list_sale_types Handler
-// ──────────────────────────────────────────────────────────────
-
-export async function handleListSaleTypes(): Promise<ListSaleTypesResponse> {
-  // Hardcoded per spec -- no backend call needed
-  // ADR-023: real 6-value saleType enum only. CONSIGNMENT is a saleSubtype
-  // under RETAIL now, not a top-level type.
+export function handleListSaleTypes(): { types: Array<{ id: string; displayName: string; description: string }> } {
+  // ADR-023: the six real saleType values. Consignment is a RETAIL subtype, not a top-level type.
   return {
     types: [
-      {
-        id: 'ESTATE',
-        displayName: 'Estate Sale',
-        description: 'Liquidation of personal property from an estate',
-        icon: 'estate',
-      },
-      {
-        id: 'YARD',
-        displayName: 'Yard Sale',
-        description: 'Casual outdoor sale of household items',
-        icon: 'yard',
-      },
-      {
-        id: 'AUCTION',
-        displayName: 'Auction',
-        description: 'Competitive bidding sale with hammer price',
-        icon: 'auction',
-      },
-      {
-        id: 'FLEA_MARKET',
-        displayName: 'Flea Market',
-        description: 'Multi-vendor marketplace event',
-        icon: 'flea_market',
-      },
-      {
-        id: 'RETAIL',
-        displayName: 'Retail / Storefront',
-        description: 'Permanent storefront or resale shop',
-        icon: 'retail',
-      },
-      {
-        id: 'DORM_DASH',
-        displayName: 'Dorm Dash',
-        description: 'Student move-out sale of dorm items',
-        icon: 'dorm_dash',
-      },
+      { id: 'ESTATE', displayName: 'Whole-house sale', description: 'Contents of a home sold on site, usually over a few days' },
+      { id: 'YARD', displayName: 'Yard or garage sale', description: 'Casual sale of household items at a home' },
+      { id: 'AUCTION', displayName: 'Auction', description: 'Items sold to the highest bidder' },
+      { id: 'FLEA_MARKET', displayName: 'Flea market', description: 'Multi-vendor market event' },
+      { id: 'RETAIL', displayName: 'Shop or storefront', description: 'Resale, thrift, antique or consignment shop with regular hours' },
+      { id: 'DORM_DASH', displayName: 'Dorm move-out sale', description: 'Student move-out sale of dorm items' },
     ],
   };
 }
 
-// ──────────────────────────────────────────────────────────────
-// get_trending_sales Handler
-// ──────────────────────────────────────────────────────────────
-
-const SITE_BASE = 'https://finda.sale';
-
-export async function handleGetTrendingSales(
-  input: Record<string, any>
-): Promise<GetTrendingSalesResponse> {
-  const { city, saleType, limit = 10 } = input as GetTrendingSalesInput;
-
-  const clampedLimit = Math.min(Math.max(1, limit), 25);
-
-  const params: Record<string, any> = {
-    status: 'PUBLISHED',
-    orderBy: 'updatedAt',
-    limit: clampedLimit,
-  };
-  if (city) params.city = city;
-  if (saleType) params.saleType = saleType;
-
-  // Call listSales endpoint which accepts these params
-  const raw = await fetchJSON<any>('get', '/api/sales', params);
-
-  const sales = (raw.sales || []).map((s: any) => ({
-    id: s.id,
-    title: s.title,
-    city: s.city,
-    state: s.state,
-    saleType: s.saleType || s.type || 'UNKNOWN',
-    startDate: s.startDate,
-    endDate: s.endDate,
-    itemCount: s._count?.items ?? s.itemCount ?? 0,
-    url: SITE_BASE + '/sales/' + s.id,
-  }));
-
-  return { sales, total: raw.total ?? sales.length };
+export async function handleListCategories(): Promise<{ categories: Array<{ name: string; itemCount: number }>; total: number }> {
+  const raw = await getJSON<any>('/api/items/categories', undefined, LONG_TTL_MS);
+  const map = raw?.categories && typeof raw.categories === 'object' ? raw.categories : {};
+  const categories = Object.entries(map)
+    .map(([name, count]) => ({ name, itemCount: Number(count) || 0 }))
+    // Top-level categories only (the backend also returns full eBay category paths).
+    .filter((c) => !c.name.includes(':') && !c.name.includes('&amp;'))
+    .sort((a, b) => b.itemCount - a.itemCount);
+  return { categories, total: categories.length };
 }
 
 // ──────────────────────────────────────────────────────────────
-// get_sales_starting_soon Handler
+// Items
 // ──────────────────────────────────────────────────────────────
 
-export async function handleGetSalesStartingSoon(
-  input: Record<string, any>
-): Promise<GetSalesStartingSoonResponse> {
-  const { city, saleType, daysAhead = 7 } = input as GetSalesStartingSoonInput;
-
-  const clampedDays = Math.min(Math.max(1, daysAhead), 14);
-
-  const today = new Date();
-  const future = new Date(today.getTime() + clampedDays * 24 * 60 * 60 * 1000);
-  const todayStr = today.toISOString().split('T')[0];
-  const futureStr = future.toISOString().split('T')[0];
-
-  const params: Record<string, any> = {
-    status: 'PUBLISHED',
-    startDate: todayStr,
-    endDate: futureStr,
-    limit: 25,
-  };
-  if (city) params.city = city;
-  if (saleType) params.saleType = saleType;
-
-  const raw = await fetchJSON<any>('get', '/api/sales', params);
-
-  const sales = (raw.sales || []).map((s: any) => ({
-    id: s.id,
-    title: s.title,
-    city: s.city,
-    state: s.state,
-    saleType: s.saleType || s.type || 'UNKNOWN',
-    startDate: s.startDate,
-    endDate: s.endDate,
-    url: SITE_BASE + '/sales/' + s.id,
-  }));
-
-  return { sales, total: raw.total ?? sales.length };
+export interface SearchItemsArgs {
+  query: string;
+  category?: string;
+  city?: string;
+  priceMin?: number;
+  priceMax?: number;
+  condition?: string;
+  limit?: number;
+  sortBy?: 'relevance' | 'newest' | 'price_asc' | 'price_desc';
 }
 
-// ──────────────────────────────────────────────────────────────
-// find_item_for_sale Handler
-// ──────────────────────────────────────────────────────────────
+export interface ItemsResult {
+  items: PublicItem[];
+  total: number;
+}
 
-export async function handleFindItemForSale(
-  input: Record<string, any>
-): Promise<FindItemForSaleResponse> {
-  const { query, city, maxPrice, minPrice } = input as FindItemForSaleInput;
-
-  if (!query || typeof query !== 'string' || query.trim().length === 0) {
-    throw new Error('query is required');
+export async function handleSearchItems(args: SearchItemsArgs): Promise<ItemsResult> {
+  const query = typeof args.query === 'string' ? args.query.trim() : '';
+  if (!query) throw new Error('query is required');
+  const limit = clampInt(args.limit, 20, 1, 50);
+  if (args.priceMin !== undefined && args.priceMax !== undefined && args.priceMin > args.priceMax) {
+    throw new Error('priceMin must not be greater than priceMax');
   }
 
-  const params: Record<string, any> = { q: query.trim() };
-  if (city) params.city = city;
-  if (maxPrice !== undefined) params.priceMax = maxPrice;
-  if (minPrice !== undefined) params.priceMin = minPrice;
+  // A city filter is applied here (the item index has no city), so fetch a wider page.
+  const raw = await getJSON<any>('/api/items/search', {
+    q: query,
+    category: args.category,
+    condition: args.condition,
+    priceMin: args.priceMin,
+    priceMax: args.priceMax,
+    sort: args.sortBy ?? 'relevance',
+    limit: args.city ? 50 : limit,
+    offset: 0,
+  });
+  const rows: any[] = (raw?.data ?? raw?.items ?? []).filter((i: any) => isPublicItem(i));
 
-  const raw = await fetchJSON<any>('get', '/api/items/search', params);
-
-  const rawItems = raw.items || raw.data || [];
-
-  const items = rawItems.map((item: any) => ({
-    itemName: item.title,
-    description: item.description ?? null,
-    price: item.price != null ? Number(item.price) : null,
-    condition: item.condition ?? null,
-    saleTitle: item.sale?.title ?? item.saleName ?? '',
-    saleCity: item.sale?.city ?? item.saleCity ?? '',
-    saleState: item.sale?.state ?? item.saleState ?? '',
-    saleEndDate: item.sale?.endDate ?? item.saleEndDate ?? '',
-    saleUrl: item.sale?.id
-      ? SITE_BASE + '/sales/' + item.sale.id
-      : item.saleId
-      ? SITE_BASE + '/sales/' + item.saleId
-      : '',
-  }));
-
-  return { items, total: raw.total ?? items.length };
-}
-
-// ──────────────────────────────────────────────────────────────
-// list_categories Handler
-// ──────────────────────────────────────────────────────────────
-
-export async function handleListCategories(): Promise<ListCategoriesResponse> {
-  // Try to fetch from backend first
-  try {
-    const result = await fetchJSON<ListCategoriesResponse>('get', '/api/items/categories');
-    return result;
-  } catch (err) {
-    // Fallback to hardcoded eBay categories if backend route doesn't exist
-    console.warn('Failed to fetch categories from backend, using hardcoded list');
-    return {
-      categories: [
-        { id: 'Furniture', name: 'Furniture', itemCount: 0 },
-        { id: 'Collectibles', name: 'Collectibles', itemCount: 0 },
-        { id: 'Vintage', name: 'Vintage', itemCount: 0 },
-        { id: 'Art', name: 'Art & Antiques', itemCount: 0 },
-        { id: 'Jewelry', name: 'Jewelry & Watches', itemCount: 0 },
-        { id: 'Books', name: 'Books & Media', itemCount: 0 },
-        { id: 'Decor', name: 'Home Decor', itemCount: 0 },
-        { id: 'Tools', name: 'Tools & Hardware', itemCount: 0 },
-        { id: 'Sporting', name: 'Sporting Goods', itemCount: 0 },
-        { id: 'Toys', name: 'Toys & Games', itemCount: 0 },
-      ],
-      total: 10,
-    };
+  // Sale title/city come from the sale record, which is a large payload, so it is only
+  // looked up when a city filter needs it (max 10 distinct sales, cached 30 minutes).
+  const summaries = new Map<string, SaleSummary | null>();
+  if (args.city) {
+    const saleIds = [...new Set(rows.map((i) => i.saleId).filter((id: unknown): id is string => typeof id === 'string'))].slice(0, MAX_SALE_LOOKUPS);
+    await Promise.all(saleIds.map(async (id) => summaries.set(id, await getSaleSummary(id))));
   }
+
+  const items: PublicItem[] = [];
+  for (const row of rows) {
+    const summary = typeof row.saleId === 'string' ? summaries.get(row.saleId) ?? null : null;
+    if (summary && !summary.public) continue;
+    if (args.city && !cityMatches(summary?.city, args.city)) continue;
+    items.push(toPublicItem(row, summary));
+    if (items.length >= limit) break;
+  }
+  return { items, total: args.city ? items.length : Number(raw?.total ?? items.length) || items.length };
 }
+
+export async function handleGetItem(args: { itemId: string }): Promise<PublicItem & { saleDates: { startDate: string | null; endDate: string | null } | null }> {
+  const itemId = requireId(args.itemId, 'itemId');
+  const raw = await getJSON<any>(`/api/items/${encodeURIComponent(itemId)}`);
+  if (!isPublicItem(raw)) throw new UpstreamError('Not found', 404);
+  const item = toPublicItem(raw, raw.sale ?? null);
+  return {
+    ...item,
+    saleDates: raw.sale ? { startDate: raw.sale.startDate ?? null, endDate: raw.sale.endDate ?? null } : null,
+  };
+}
+
+export async function handleFindItemForSale(args: { query: string; city?: string; maxPrice?: number; minPrice?: number }): Promise<ItemsResult> {
+  return handleSearchItems({
+    query: args.query,
+    city: args.city,
+    priceMin: args.minPrice,
+    priceMax: args.maxPrice,
+    limit: 10,
+  });
+}
+
+export { saleUrl };

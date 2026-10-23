@@ -572,7 +572,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
               <p className="text-yellow-700 dark:text-yellow-400">Sale not found.</p>
               <button
                 onClick={handleBack}
-                className="mt-4 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-6 rounded-lg"
+                className="mt-4 bg-yellow-700 hover:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg"
               >
                 Go Back
               </button>
@@ -752,7 +752,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   <div className="text-center">
                     <button
                       onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/photo-station`, '📸 Photo Station', 'Snap a photo of your find and share it to earn XP.', canRemoveWatermark)}
-                      className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                      className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       📸 Photo Station
                     </button>
@@ -854,7 +854,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   </p>
                   <Link
                     href={`/organizer/add-items/${sale.id}`}
-                    className="inline-block bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-6 rounded-lg"
+                    className="inline-block bg-yellow-700 hover:bg-yellow-800 text-white font-bold py-2 px-6 rounded-lg"
                   >
                     Add Items
                   </Link>

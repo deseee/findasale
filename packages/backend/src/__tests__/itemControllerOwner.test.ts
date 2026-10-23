@@ -11,6 +11,7 @@
 
 const mockPrisma: any = {
   item: { findUnique: jest.fn(), update: jest.fn() },
+  user: { findUnique: jest.fn() }, // 2026-10-23: verify-to-publish lookup (lib/publishGate.ts userCanPublish)
   itemCompLookup: { findUnique: jest.fn() },
   itemCard: { findUnique: jest.fn() },
   organizer: { findUnique: jest.fn(), findFirst: jest.fn() },
@@ -110,7 +111,7 @@ function makeRes() {
 
 const OWNER_USER = 'u1';
 const OTHER_USER = 'u2';
-const asUser = (id: string) => ({ id, roles: ['ORGANIZER'], organizer: { id: `org_of_${id}` } });
+const asUser = (id: string) => ({ id, roles: ['ORGANIZER'], emailVerified: true, organizer: { id: `org_of_${id}` } });
 const flush = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
 
 const saleOrganizer = (over: Record<string, unknown> = {}) => ({
@@ -163,6 +164,7 @@ beforeEach(() => {
   );
   mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
   mockPrisma.photo.create.mockResolvedValue({});
+  mockPrisma.user.findUnique.mockResolvedValue({ emailVerified: true, role: 'ORGANIZER', roles: ['ORGANIZER'] });
   spies = (['error', 'log', 'warn'] as const).map((m) => jest.spyOn(console, m).mockImplementation(() => undefined));
 });
 afterEach(() => spies.forEach((s) => s.mockRestore()));
@@ -334,7 +336,7 @@ describe('addItemPhoto (via getItemForOrganizer): owner matrix (B1)', () => {
 
   it('an ala carte sale still gets PRO limits, a normal sale uses the owner tier', async () => {
     mockPrisma.item.findUnique.mockResolvedValue(
-      saleItem({ sale: { id: 's1', status: 'PUBLISHED', purchaseModel: 'ALA_CARTE', organizer: saleOrganizer({ subscriptionTier: 'SIMPLE' }) } }),
+      saleItem({ sale: { id: 's1', status: 'PUBLISHED', purchaseModel: 'ALA_CARTE', alaCarteFeePaid: true, organizerId: 'org_sale', organizer: saleOrganizer({ subscriptionTier: 'SIMPLE' }) } }),
     );
     mockPrisma.item.update.mockResolvedValue({ photoUrls: ['u'] });
     await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: 'u' } }, makeRes());
@@ -343,6 +345,16 @@ describe('addItemPhoto (via getItemForOrganizer): owner matrix (B1)', () => {
     mockPrisma.item.findUnique.mockResolvedValue(saleItem({ sale: { id: 's1', status: 'PUBLISHED', purchaseModel: 'SUBSCRIPTION', organizer: saleOrganizer({ subscriptionTier: 'SIMPLE' }) } }));
     await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: 'u' } }, makeRes());
     expect(mockPhotoLimit).toHaveBeenLastCalledWith('i1', 'SIMPLE');
+
+    // purchaseModel without a paid fee grants nothing (both columns are written together by the payment webhook).
+    mockPrisma.item.findUnique.mockResolvedValue(saleItem({ sale: { id: 's1', status: 'PUBLISHED', purchaseModel: 'ALA_CARTE', alaCarteFeePaid: false, organizerId: 'org_sale', organizer: saleOrganizer({ subscriptionTier: 'SIMPLE' }) } }));
+    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: 'u' } }, makeRes());
+    expect(mockPhotoLimit).toHaveBeenLastCalledWith('i1', 'SIMPLE');
+
+    // The upgrade never lowers a paying tier (TEAMS keeps its unlimited photos on an upgraded sale).
+    mockPrisma.item.findUnique.mockResolvedValue(saleItem({ sale: { id: 's1', status: 'PUBLISHED', purchaseModel: 'ALA_CARTE', alaCarteFeePaid: true, organizerId: 'org_sale', organizer: saleOrganizer({ subscriptionTier: 'TEAMS' }) } }));
+    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: 'u' } }, makeRes());
+    expect(mockPhotoLimit).toHaveBeenLastCalledWith('i1', 'TEAMS');
   });
 });
 
@@ -634,6 +646,32 @@ describe('publishItemForUser: shared publish path', () => {
     expect(mockPrisma.item.update).not.toHaveBeenCalled();
   });
 
+  it('2026-10-23: an unverified organizer cannot publish (403 EMAIL_NOT_VERIFIED), dry run included, nothing written', async () => {
+    arrange(saleItem());
+    mockPrisma.user.findUnique.mockResolvedValue({ emailVerified: false, role: 'ORGANIZER', roles: ['ORGANIZER'] });
+    expect(await publishItemForUser(owner, 'i1', {})).toMatchObject({ ok: false, status: 403, code: 'EMAIL_NOT_VERIFIED' });
+    expect(await publishItemForUser(owner, 'i1', {}, { dryRun: true })).toMatchObject({ ok: false, status: 403, code: 'EMAIL_NOT_VERIFIED' });
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+    // The sale publish path checks the actor itself and passes verifiedByCaller.
+    const viaSale = await publishItemForUser(owner, 'i1', {}, { verifiedByCaller: true });
+    expect(viaSale.ok).toBe(true);
+  });
+
+  it('2026-10-23: the not-verified check never runs before the ownership check', async () => {
+    arrange(saleItem());
+    mockPrisma.user.findUnique.mockResolvedValue({ emailVerified: false, role: 'ORGANIZER', roles: ['ORGANIZER'] });
+    const r = await publishItemForUser({ id: OTHER_USER, organizerId: null }, 'i1', {});
+    expect(r).toMatchObject({ ok: false, status: 403 });
+    expect((r as any).code).toBeUndefined();
+  });
+
+  it('2026-10-23: deferSideEffects returns the side effects instead of firing them', async () => {
+    arrange(saleItem());
+    const r: any = await publishItemForUser(owner, 'i1', {}, { deferSideEffects: true });
+    expect(r.ok).toBe(true);
+    expect(typeof r.runSideEffects).toBe('function');
+  });
+
   it('dryRun runs every check but writes nothing', async () => {
     arrange(saleItem());
     const ok = await publishItemForUser(owner, 'i1', {}, { dryRun: true });
@@ -677,6 +715,15 @@ describe('updateItem: expanded-row fields (2026-10-08)', () => {
     await updateItem({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { consignorId: 'c1' } }, res);
     expect(res.statusCode).toBe(403);
     expect(mockPrisma.consignor.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+  });
+  it('2026-10-23: an unverified organizer cannot publish through the generic update (403 EMAIL_NOT_VERIFIED, nothing written)', async () => {
+    mockPrisma.item.findUnique.mockResolvedValue(sale({ draftStatus: 'PENDING_REVIEW' }));
+    mockPrisma.sale.findUnique.mockResolvedValue({ organizerId: 'org_sale' });
+    const res = makeRes();
+    await updateItem({ user: { ...asUser(OWNER_USER), emailVerified: false }, params: { id: 'i1' }, body: { draftStatus: 'PUBLISHED' } }, res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body.code).toBe('EMAIL_NOT_VERIFIED');
     expect(mockPrisma.item.update).not.toHaveBeenCalled();
   });
 });

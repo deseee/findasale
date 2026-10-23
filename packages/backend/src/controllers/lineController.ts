@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 // Same singleton as '../index' (index.ts re-exports './lib/prisma'); importing it from here keeps this
 // controller loadable without booting the Express entry point (tests, scripts).
 import { prisma } from '../lib/prisma';
+import { effectiveTierForSale, SaleEntitlementFields } from '../lib/saleProFeatures'; // 2026-10-23: $9.99 sale upgrade includes the Virtual Queue
 import twilio from 'twilio';
 import { AuthRequest } from '../middleware/auth';
 import { handleEarlyBirdBadge, handleExplorerBadge } from './userController';
@@ -58,16 +59,22 @@ const sendSMS = async (_to: string, _body: string): Promise<void> => {
  * the sale page). Bulk texts (/start, /notify) respect quiet hours; the one-to-one "you are next" and
  * "you joined" texts do not, because they answer something the shopper is doing at that moment.
  */
+// orgTier is the tier that applies to THIS sale: a SIMPLE organizer's own sale with the paid $9.99 a-la-carte upgrade
+// includes the Virtual Queue (2026-10-23, lib/saleProFeatures.ts), so its line texts pass the PRO gate. Every other
+// sale of that organizer stays SIMPLE and is still blocked by compliantSms's tier gate.
 const lineSmsContext = (
   organizer: { id: string; businessName?: string | null; timezone?: string | null; subscriptionTier?: unknown },
-  saleId: string,
+  sale: SaleEntitlementFields & { id: string },
   over: Partial<SmsBatchOptions> = {}
 ): SmsBatchOptions => ({
   organizerId: organizer.id,
-  saleId,
+  saleId: sale.id,
   orgName: organizer.businessName ?? null,
   orgTimeZone: organizer.timezone ?? null,
-  orgTier: organizer.subscriptionTier,
+  orgTier: effectiveTierForSale(sale, {
+    id: organizer.id,
+    subscriptionTier: typeof organizer.subscriptionTier === 'string' ? organizer.subscriptionTier : null,
+  }),
   minTier: 'PRO',
   ...over,
 });
@@ -143,7 +150,7 @@ export const startLine = async (req: AuthRequest, res: Response) => {
             altMessage: `The line is open! You are #${position} in line. We'll text you when it's your turn.`,
           };
         }),
-      lineSmsContext(ctx.organizer, saleId, { exclusive: true, logMessage: '[line] line opened' })
+      lineSmsContext(ctx.organizer, ctx.sale, { exclusive: true, logMessage: '[line] line opened' })
     );
 
     res.json({
@@ -204,7 +211,7 @@ export const callNext = async (req: AuthRequest, res: Response) => {
           message: `It's your turn at "${turnTitle}"! Please proceed to the entrance now.`,
           altMessage: `It's your turn! Please proceed to the entrance now.`,
         },
-        lineSmsContext(ctx.organizer, saleId, { enforceQuietHours: false, logMessage: '[line] your turn' })
+        lineSmsContext(ctx.organizer, ctx.sale, { enforceQuietHours: false, logMessage: '[line] your turn' })
       );
       smsOutcome = sent.outcome;
     }
@@ -334,7 +341,7 @@ export const broadcastPositionUpdates = async (req: AuthRequest, res: Response) 
           },
         ];
       }),
-      lineSmsContext(ctx.organizer, saleId, { exclusive: true, logMessage: '[line] position update' })
+      lineSmsContext(ctx.organizer, ctx.sale, { exclusive: true, logMessage: '[line] position update' })
     );
 
     if (smsResult.blocked) {
@@ -434,7 +441,7 @@ export const joinLine = async (req: AuthRequest, res: Response) => {
             message: `You've joined the virtual line for "${joinTitle}"! You are #${position} in line. We'll text you when it's your turn.`,
             altMessage: `You joined the line! You are #${position}. We'll text you when it's your turn.`,
           },
-          lineSmsContext(organizer, saleId, { enforceQuietHours: false, logMessage: '[line] joined' })
+          lineSmsContext(organizer, sale, { enforceQuietHours: false, logMessage: '[line] joined' })
         );
       }
     }

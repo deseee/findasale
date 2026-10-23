@@ -7,11 +7,17 @@
  * one-line bar for 24 hours, and the bar still carries the primary action. The card goes away on
  * its own once the sale has items / is published / is ended.
  * Renders nothing while loading, on error, or when no sale qualifies.
+ *
+ * STALE_DATES (2026-10-23): a draft or live sale whose dates have passed with nothing sold gets
+ * "Pick new dates" with a one-click "Move to <next weekend>" (RedateSalePrompt, POST /sales/:id/redate).
+ * Once re-dated the sale drops out of this state and the card moves on to its next step
+ * (publish, or add items).
  */
 import React, { useEffect, useId, useState } from 'react';
 import Link from 'next/link';
-import { Package, Rocket } from 'lucide-react';
+import { Package, Rocket, CalendarClock } from 'lucide-react';
 import { useSaleItemStatus, pluralItems, trackNudgeEvent, SaleItemNudge } from '../hooks/useSaleItemStatus';
+import RedateSalePrompt from './RedateSalePrompt';
 
 const COLLAPSE_KEY = 'findasale_itemNudgeCollapsed';
 const COLLAPSE_MS = 24 * 60 * 60 * 1000;
@@ -56,6 +62,21 @@ interface Copy {
 function buildCopy(n: SaleItemNudge): Copy {
   const { sale, state, total, live } = n;
   const title = sale.title?.trim() || 'Your sale';
+  if (state === 'STALE_DATES') {
+    return {
+      eyebrow: 'Dates have passed',
+      heading: `${title} needs new dates`,
+      body:
+        total > 0
+          ? `Your ${pluralItems(total)} ${total === 1 ? 'is' : 'are'} saved. Pick new dates so shoppers can find this sale.`
+          : "Shoppers can't find a sale whose dates have passed. Pick new dates to bring it back.",
+      extra: 'One tap moves it to next weekend, same hours and length.',
+      primaryLabel: 'Pick new dates',
+      primaryHref: `/organizer/edit-sale/${sale.id}?redate=1`,
+      collapsedText: `${title} needs new dates.`,
+      collapsedButton: 'Pick new dates',
+    };
+  }
   if (state === 'LIVE_EMPTY') {
     const end = sale.endDate ? Date.parse(sale.endDate) : NaN;
     const pastDates = Number.isFinite(end) && end < Date.now() && sale.saleType !== 'RETAIL';
@@ -130,6 +151,7 @@ const FirstSaleNudge: React.FC = () => {
 
   const copy = buildCopy(top);
   const isDraft = top.state === 'DRAFT_READY';
+  const isStale = top.state === 'STALE_DATES';
   const moreCount = nudges.length - 1;
   const showCollapsed = collapsed && !expandedOverride;
 
@@ -137,7 +159,7 @@ const FirstSaleNudge: React.FC = () => {
     ? 'bg-sage-50 dark:bg-gray-800 border-sage-300 dark:border-sage-700'
     : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700';
   const eyebrowTone = isDraft ? 'text-sage-700 dark:text-sage-200' : 'text-amber-800 dark:text-amber-200';
-  const Icon = isDraft ? Rocket : Package;
+  const Icon = isStale ? CalendarClock : isDraft ? Rocket : Package;
 
   const primaryClass =
     'inline-flex items-center justify-center bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-4 min-h-[44px] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900';
@@ -223,9 +245,20 @@ const FirstSaleNudge: React.FC = () => {
           )}
         </div>
         <div className="mt-4 sm:mt-0 flex flex-col items-center sm:items-end gap-1 flex-shrink-0">
-          <Link href={copy.primaryHref} onClick={onPrimary} className={`${primaryClass} w-full sm:w-auto`}>
-            {copy.primaryLabel}
-          </Link>
+          {isStale && top.sale.endDate ? (
+            <RedateSalePrompt
+              variant="inline"
+              saleId={top.sale.id}
+              startDate={top.sale.startDate || top.sale.endDate}
+              endDate={top.sale.endDate}
+              onRedated={() => trackNudgeEvent('item_nudge_clicked', { state: top.state, sale_id: top.sale.id, action: 'redate_next_weekend' })}
+              className="w-full sm:w-auto"
+            />
+          ) : (
+            <Link href={copy.primaryHref} onClick={onPrimary} className={`${primaryClass} w-full sm:w-auto`}>
+              {copy.primaryLabel}
+            </Link>
+          )}
           <button
             type="button"
             onClick={remindLater}

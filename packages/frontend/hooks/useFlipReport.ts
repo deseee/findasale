@@ -64,6 +64,8 @@ export function useFlipReport(saleId: string | null) {
       return response.data;
     },
     enabled: !!saleId,
+    // A 403 (plan does not include the Flip Report for this sale) is a final answer: show the upgrade card at once.
+    retry: (failureCount, err: any) => err?.response?.status !== 403 && failureCount < 3,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes. Cache data longer to avoid skeletons on revisit
   });

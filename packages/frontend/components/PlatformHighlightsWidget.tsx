@@ -101,7 +101,7 @@ export default function PlatformHighlightsWidget() {
                     {data.ebay.connected ? data.ebay.activeSlots : 'N/A'}
                   </span>
                   {ebayWarning && (
-                    <span className="text-orange-500" title="eBay listing limit warning">
+                    <span className="text-amber-600" title="eBay listing limit warning">
                       &#9888;
                     </span>
                   )}
@@ -119,7 +119,7 @@ export default function PlatformHighlightsWidget() {
               {/* Unlisted */}
               <div className="flex flex-col">
                 <span className="text-xs text-warm-500 dark:text-warm-400">Unlisted</span>
-                <span className={`text-base font-bold ${data.totals.totalUnlisted > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-warm-900 dark:text-warm-100'}`}>
+                <span className={`text-base font-bold ${data.totals.totalUnlisted > 0 ? 'text-amber-600 dark:text-orange-400' : 'text-warm-900 dark:text-warm-100'}`}>
                   {data.totals.totalUnlisted}
                 </span>
               </div>

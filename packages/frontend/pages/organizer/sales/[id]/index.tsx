@@ -394,7 +394,7 @@ const SaleDetailPage = () => {
                             onClick={() => handlePushToEbay(item.id)}
                             disabled={ebayPushStatus[item.id] === 'pushing'}
                             title="Set eBay category in item editor first"
-                            className="flex-1 text-sm font-semibold py-2 px-2 rounded transition-colors text-white bg-amber-500 hover:bg-amber-600"
+                            className="flex-1 text-sm font-semibold py-2 px-2 rounded transition-colors text-white bg-amber-600 hover:bg-amber-700"
                           >
                             Set Category
                           </button>

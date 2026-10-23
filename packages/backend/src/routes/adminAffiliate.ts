@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth';
 import { requireAdmin } from '../middleware/adminAuth';
-import { getCreators, getCommissions, markCommissionPaid, voidCommission, recordCommissionClawback } from '../controllers/adminAffiliateController';
+import { getCreators, getCommissions, markCommissionPaid, voidCommission, recordCommissionClawback, getReferralReviewQueue, reviewReferralHandler, getUserCreditLedger } from '../controllers/adminAffiliateController';
 
 const router = express.Router();
 
@@ -18,5 +18,10 @@ router.post('/commissions/:id/mark-paid', markCommissionPaid);
 router.post('/commissions/:id/void', voidCommission);
 // Records that an admin handled the clawback of an already-paid commission whose purchase was refunded or disputed (note required). Nothing here moves money.
 router.post('/commissions/:id/record-clawback', recordCommissionClawback);
+
+// Organizer referral credit (roadmap #661): fraud review queue + appeal decision, and one account's credit ledger.
+router.get('/referrals', getReferralReviewQueue);
+router.post('/referrals/:id/review', reviewReferralHandler);
+router.get('/credit/:userId', getUserCreditLedger);
 
 export default router;

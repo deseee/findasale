@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { saleHasProFeatures } from '../lib/saleProFeatures'; // 2026-10-23: $9.99 sale upgrade unlocks Flip Report + Virtual Queue for that sale
 
 interface ChecklistItem {
   id: string;
@@ -34,6 +35,8 @@ interface TaskDefinition {
   label: string;
   isAuto: boolean;
   requiredTier?: 'PRO' | 'TEAMS'; // undefined = all tiers
+  /** Also shown on a SIMPLE organizer's own sale that has the paid $9.99 a-la-carte upgrade (lib/saleProFeatures.ts). */
+  includedWithSaleUpgrade?: boolean;
   link?: string;
   autoCheck?: (data: TaskEvaluationData) => boolean;
 }
@@ -80,7 +83,7 @@ const ALL_TASKS: TaskDefinition[] = [
   // Stage 4: Live
   { id: 'live_pos', stage: 'Live', label: 'POS open and test transaction done', isAuto: false, link: '/organizer/pos' },
   { id: 'live_float', stage: 'Live', label: 'Bills and coins ready for making change', isAuto: false },
-  { id: 'live_queue', stage: 'Live', label: 'Virtual Queue active', isAuto: false, requiredTier: 'PRO', link: '/organizer/line-queue/{saleId}' },
+  { id: 'live_queue', stage: 'Live', label: 'Virtual Queue active', isAuto: false, requiredTier: 'PRO', includedWithSaleUpgrade: true, link: '/organizer/line-queue/{saleId}' },
   { id: 'live_helpers', stage: 'Live', label: 'Helpers briefed on their roles', isAuto: false },
   { id: 'live_first_sold', stage: 'Live', label: 'First item sold', isAuto: true, autoCheck: (d) => d.soldCount >= 1 },
   { id: 'live_qr_check', stage: 'Live', label: 'QR scan activity checked', isAuto: false, link: '/organizer/qr-codes' },
@@ -92,7 +95,7 @@ const ALL_TASKS: TaskDefinition[] = [
   { id: 'wrap_donation_scheduled', stage: 'Wrapping Up', label: 'Donation pickup scheduled', isAuto: false },
   { id: 'wrap_relist', stage: 'Wrapping Up', label: 'Valuable items relisted for sale', isAuto: false, link: '/organizer/sales/{saleId}' },
   { id: 'wrap_messages', stage: 'Wrapping Up', label: 'Shopper messages answered', isAuto: false, link: '/organizer/messages' },
-  { id: 'wrap_flip', stage: 'Wrapping Up', label: 'Flip Report reviewed', isAuto: false, requiredTier: 'PRO', link: '/organizer/flip-report/{saleId}' },
+  { id: 'wrap_flip', stage: 'Wrapping Up', label: 'Flip Report reviewed', isAuto: false, requiredTier: 'PRO', includedWithSaleUpgrade: true, link: '/organizer/flip-report/{saleId}' },
   { id: 'wrap_closed', stage: 'Wrapping Up', label: 'Sale marked complete', isAuto: true, autoCheck: (d) => d.sale.status === 'ENDED' },
 
   // Stage 6: Complete
@@ -200,7 +203,9 @@ export const getChecklist = async (req: AuthRequest, res: Response) => {
         const tierMap: Record<string, number> = { PRO: 1, TEAMS: 2 };
         const required = tierMap[taskDef.requiredTier];
         const current = tierRank[evalData.organizerTier];
-        if (current < required) {
+        const unlockedBySaleUpgrade =
+          taskDef.includedWithSaleUpgrade === true && taskDef.requiredTier === 'PRO' && saleHasProFeatures(sale, sale.organizer);
+        if (current < required && !unlockedBySaleUpgrade) {
           continue;
         }
       }

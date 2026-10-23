@@ -12,7 +12,7 @@
 
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { socketAuth } from '../lib/socketAuth';
+import { socketAuth, reconnectAfterServerDrop } from '../lib/socketAuth';
 import api from '../lib/api';
 
 // Financial fields (sold, holds, revenue) are only sent to the sale's organizer, staff and admin;
@@ -44,6 +44,7 @@ const getSocket = (): Socket => {
       reconnectionDelayMax: 5000,
       reconnectionAttempts: 5,
     });
+    reconnectAfterServerDrop(socketInstance);
   }
   return socketInstance;
 };

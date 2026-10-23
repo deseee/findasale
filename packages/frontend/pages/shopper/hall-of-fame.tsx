@@ -44,7 +44,7 @@ interface HallOfFameData {
 }
 
 const RANK_STYLES: Record<string, string> = {
-  SAGE: 'bg-amber-500',
+  SAGE: 'bg-amber-600',
   GRANDMASTER: 'bg-purple-600',
 };
 

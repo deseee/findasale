@@ -136,7 +136,9 @@ export async function processRapidDraft(itemId: string): Promise<void> {
     });
 
     if (organizer) {
-      const aiTagLimit = await checkAITagLimit(organizer.id, tierOf(organizer.subscriptionTier));
+      // saleId: a paid $9.99 a-la-carte sale has its own 500 auto tags (lib/saleProFeatures.ts), so these checks and the
+      // reservation below look at that sale's allowance as well as the monthly one. Other sales: monthly only.
+      const aiTagLimit = await checkAITagLimit(organizer.id, tierOf(organizer.subscriptionTier), item.sale?.id ?? null);
       if (aiTagLimit.isOverLimit) {
         // AI tag limit reached — skip AI analysis and mark as PENDING_REVIEW without tags
         console.log(`[rapidfire] AI tag limit reached for item ${itemId}. Organizer ${organizer.id} has used ${aiTagLimit.tagCount}/${aiTagLimit.limit} tags this month.`);
@@ -155,7 +157,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       // call, item still lands in PENDING_REVIEW for manual entry. A read error here is not fatal
       // (the reservation below fails closed).
       try {
-        const quota = await checkAiTagQuota(organizer.id, tierOf(organizer.subscriptionTier));
+        const quota = await checkAiTagQuota(organizer.id, tierOf(organizer.subscriptionTier), item.sale?.id ?? null);
         if (quota.exceeded) {
           console.log(`[rapidfire] Smart-tag quota exhausted for item ${itemId} (${quota.used}/${quota.limit}); marking PENDING_REVIEW without AI`);
           await prisma.item.update({
@@ -233,19 +235,21 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       // call and advance it to PENDING_REVIEW for manual entry. Fails closed if the organizer or the
       // counter cannot be resolved (never spend unmetered).
       let tagReserved = false;
+      let tagReservation: { bucket?: 'SALE' | 'MONTHLY'; saleId?: string | null } | null = null;
       if (!organizer) {
         console.warn(`[rapidfire] No organizer resolved for item ${itemId}; skipping paid AI, marking PENDING_REVIEW`);
         await prisma.item.update({ where: { id: itemId }, data: { draftStatus: 'PENDING_REVIEW' } });
         return;
       }
       try {
-        const reservation = await reserveAiTags(organizer.id, tierOf(organizer.subscriptionTier), 1);
+        const reservation = await reserveAiTags(organizer.id, tierOf(organizer.subscriptionTier), 1, item.sale?.id ?? null);
         if (!reservation.ok) {
           console.log(`[rapidfire] Smart-tag quota exhausted at reservation for item ${itemId}; marking PENDING_REVIEW without AI`);
           await prisma.item.update({ where: { id: itemId }, data: { draftStatus: 'PENDING_REVIEW' } });
           return;
         }
         tagReserved = true;
+        tagReservation = reservation;
       } catch (reserveErr) {
         console.warn(`[rapidfire] Smart-tag reservation failed for item ${itemId}; skipping paid AI:`, reserveErr instanceof Error ? reserveErr.message : reserveErr);
         await prisma.item.update({ where: { id: itemId }, data: { draftStatus: 'PENDING_REVIEW' } });
@@ -255,7 +259,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         if (!tagReserved) return;
         tagReserved = false;
         try {
-          await refundAiTags(organizer.id, 1);
+          await refundAiTags(organizer.id, 1, tagReservation);
         } catch (refundErr) {
           console.warn(`[rapidfire] refundAiTags failed for item ${itemId}:`, refundErr instanceof Error ? refundErr.message : refundErr);
         }

@@ -301,7 +301,7 @@ const AdminFraudSignals = () => {
                         <button
                           onClick={() => handleReview(record.id, 'PENDING')}
                           disabled={actionLoading === record.id || record.reviewOutcome === 'PENDING'}
-                          className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white text-xs px-2 py-1 rounded"
+                          className="bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white text-xs px-2 py-1 rounded"
                         >
                           {actionLoading === record.id ? '...' : 'Reopen'}
                         </button>

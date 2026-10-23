@@ -87,7 +87,7 @@ function PreviewCard({ item }: { item: WidgetItem }) {
           href={item.detailUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="block text-center text-xs font-semibold py-1.5 rounded bg-amber-500 hover:bg-amber-600 text-white transition"
+          className="block text-center text-xs font-semibold py-1.5 rounded bg-amber-600 hover:bg-amber-700 text-white transition"
         >
           View Item
         </a>
@@ -206,7 +206,7 @@ export default function WebsiteEmbedTab({ organizerSlug }: WebsiteEmbedTabProps)
                   onClick={() => setSelectedLimit(n)}
                   className={`px-4 py-1.5 rounded-lg text-sm font-semibold border transition ${
                     selectedLimit === n
-                      ? 'bg-amber-500 border-amber-500 text-white'
+                      ? 'bg-amber-600 border-amber-600 text-white'
                       : 'border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 hover:border-amber-400'
                   }`}
                 >
@@ -223,7 +223,7 @@ export default function WebsiteEmbedTab({ organizerSlug }: WebsiteEmbedTabProps)
         <button
           type="button"
           onClick={() => refetchPreview()}
-          className="mt-5 px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold text-sm transition"
+          className="mt-5 px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold text-sm transition"
         >
           Update Preview
         </button>
@@ -288,14 +288,14 @@ export default function WebsiteEmbedTab({ organizerSlug }: WebsiteEmbedTabProps)
         <h3 className="text-base font-semibold text-warm-900 dark:text-gray-100 mb-4">How to Add This to Your Website</h3>
         <ol className="space-y-4">
           <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center mt-0.5">1</span>
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">1</span>
             <div>
               <p className="text-sm font-medium text-warm-900 dark:text-gray-100">Copy the code above.</p>
               <p className="text-sm text-warm-600 dark:text-gray-400">Click &quot;Copy Code&quot; to copy your personal embed snippet.</p>
             </div>
           </li>
           <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center mt-0.5">2</span>
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">2</span>
             <div>
               <p className="text-sm font-medium text-warm-900 dark:text-gray-100">Open your website editor.</p>
               <p className="text-sm text-warm-600 dark:text-gray-400">
@@ -306,7 +306,7 @@ export default function WebsiteEmbedTab({ organizerSlug }: WebsiteEmbedTabProps)
             </div>
           </li>
           <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center mt-0.5">3</span>
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">3</span>
             <div>
               <p className="text-sm font-medium text-warm-900 dark:text-gray-100">Paste and save.</p>
               <p className="text-sm text-warm-600 dark:text-gray-400">

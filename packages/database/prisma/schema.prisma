@@ -182,6 +182,7 @@ model User {
   // Affiliate relationships
   affiliateReferralsGiven      AffiliateReferral[]    @relation("AffiliateReferrals_Referrer") // Users I referred
   affiliateReferralsReceived   AffiliateReferral[]    @relation("AffiliateReferrals_Referred") // Users who referred me (inverse for P1012)
+  subscriptionCreditEntries    SubscriptionCreditEntry[] @relation("SubscriptionCreditEntries") // Roadmap #661: referral credit ledger (applied to PRO/TEAMS renewals)
   // Hold-to-Pay feature: invoices (shopper and organizer sides)
   shopperInvoices              HoldInvoice[]          @relation("ShopperInvoices")
   organizerInvoices            HoldInvoice[]          @relation("OrganizerInvoices")
@@ -695,11 +696,11 @@ model Organizer {
   province                 String?
 
   // Bring-Your-Own-Rails (BYOR, 2026-09-06): organizer marks an item sold off-platform (their own
-  // Stripe/Square/Venmo/cash), FindA.Sale bills a separate flat fee instead of taking a % commission.
-  // Additive-only, zero intersection with Stripe Connect. See claude_docs/feature-notes/
-  // bring-your-own-rails-architecture-and-scoping-2026-09-06.md. Invoicing (byorFeeCalculator.ts /
-  // byorInvoicingCron.ts) is a later dispatch pending Patrick's fee decision -- PlatformInvoice rows
-  // are not created by anything yet.
+  // Stripe/Square/Venmo/cash) so stock, sold state and crosslisting stay accurate. FindA.Sale never
+  // charges organizers for sales made off-platform (Patrick 2026-10-23): recording them is free.
+  // Additive-only, zero intersection with Stripe Connect. The planned invoicing step
+  // (byorFeeCalculator.ts / byorInvoicingCron.ts) will not be built; platformInvoices is a legacy
+  // relation that nothing writes to.
   offPlatformSalesEnabled  Boolean            @default(false)
   offPlatformSales         OffPlatformSale[]
   platformInvoices         PlatformInvoice[]
@@ -1049,8 +1050,9 @@ model RoleConsent {
   businessVerificationAcceptedAt DateTime? // ORGANIZER only
   paymentMethodAcceptedAt        DateTime? // ORGANIZER only
   marketingOptInAt               DateTime? // SHOPPER only
-  // Bring-Your-Own-Rails (BYOR, 2026-09-06): ORGANIZER only -- consent to mark items sold
-  // off-platform and be billed a separate flat fee for it. Built fresh -- paymentMethodAcceptedAt
+  // Bring-Your-Own-Rails (BYOR, 2026-09-06): ORGANIZER only -- timestamp of turning on Off-Platform
+  // Sales (marking items sold outside FindA.Sale). Not a fee consent: off-platform sales are never
+  // charged (Patrick 2026-10-23). Built fresh -- paymentMethodAcceptedAt
   // above has zero call sites anywhere in the backend and is NOT a working reference to copy
   // (confirmed by findasale-dev scoping pass, 2026-09-06).
   offPlatformSalesConsentedAt    DateTime? // ORGANIZER only
@@ -1065,9 +1067,9 @@ model RoleConsent {
 }
 
 // Bring-Your-Own-Rails (BYOR, 2026-09-06) -- organizer keeps using their own payment method
-// (their own Stripe/Square/Venmo/cash) outside FindA.Sale, marks the item sold in-app, and
-// FindA.Sale bills a separate flat/tiered fee (never a % of the real sale, which FindA.Sale
-// never sees). Fully additive, zero intersection with Stripe Connect. See
+// (their own Stripe/Square/Venmo/cash) outside FindA.Sale and marks the item sold in-app.
+// FindA.Sale never charges organizers for these sales (Patrick 2026-10-23); the row exists for
+// stock, sold state, crosslist removal and the organizer's own log. Fully additive, zero intersection with Stripe Connect. See
 // claude_docs/feature-notes/bring-your-own-rails-architecture-and-scoping-2026-09-06.md for
 // the full design. One row per off-platform sale event.
 model OffPlatformSale {
@@ -1081,7 +1083,7 @@ model OffPlatformSale {
   markedByUserId    String
   markedByUser      User              @relation(fields: [markedByUserId], references: [id], onDelete: Restrict)
   quantity          Int               @default(1)
-  reportedAmount    Decimal?          @db.Decimal(10, 2) // organizer's own bookkeeping only -- NEVER used in FindA.Sale billing math
+  reportedAmount    Decimal?          @db.Decimal(10, 2) // organizer's own bookkeeping only -- off-platform sales are never charged
   paymentMethodNote String?
   buyerNameNote     String?
   buyerEmailNote    String?
@@ -1096,10 +1098,9 @@ model OffPlatformSale {
   @@index([invoiceId])
 }
 
-// Bring-Your-Own-Rails (BYOR, 2026-09-06) -- one invoice per organizer per billing period for
-// off-platform-sale fees. Table built now (schema-complete) even though nothing writes to it
-// yet: byorFeeCalculator.ts / byorInvoicingCron.ts / the billingController.ts webhook extension
-// are a later dispatch, pending Patrick's fee-amount decision -- see the feature-notes doc.
+// Bring-Your-Own-Rails (BYOR, 2026-09-06) -- LEGACY, unused. Built for off-platform-sale fee
+// invoices that will never exist: FindA.Sale never charges organizers for sales made off-platform
+// (Patrick 2026-10-23). Nothing writes to this table; kept only to avoid a migration.
 model PlatformInvoice {
   id                  String            @id @default(cuid())
   organizerId         String
@@ -1201,6 +1202,7 @@ model Sale {
   purchaseModel               String                     @default("SUBSCRIPTION") // "SUBSCRIPTION" | "ALA_CARTE"
   alaCarte                    Boolean                    @default(false)
   alaCarteFeePaid             Boolean                    @default(false)
+  alaCarteAiTagUsage          SaleAiTagUsage? // 2026-10-23: per-sale meter for the 500 auto tags included with the $9.99 upgrade (lib/saleProFeatures.ts)
   // #112 Soft-Delete Archival + #120 Sale Cancellation Audit
   deletedAt                   DateTime?
   cancellationReason          String?
@@ -5035,8 +5037,10 @@ model AffiliateReferral {
   referredUserId String // Organizer who was referred
   referredUser User @relation("AffiliateReferrals_Referred", fields: [referredUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  // Code tracking
-  referralCode String @unique // Generated code (e.g., "ORG_K9X2L4")
+  // Code tracking. NOT unique (roadmap #661, 2026-10-23): this is the REFERRER's own code, so every organizer the same
+  // referrer brings in carries the same value. The old @unique made the second referred signup fail its registration
+  // transaction with P2002. Uniqueness of the relationship is @@unique([referrerId, referredUserId]) below.
+  referralCode String // Code used at signup (e.g., "ORG_K9X2L4")
 
   // Status flow: PENDING → QUALIFIED → PAID
   status String @default("PENDING") // PENDING | QUALIFIED | PAID | CANCELLED
@@ -5052,6 +5056,19 @@ model AffiliateReferral {
   stripeTransferId String? // Stripe Transfer object ID (created when payout issued)
   paidAt           DateTime? // When transfer completed in Stripe
 
+  // Fraud gate (roadmap #661, ADR-119 decisions of 2026-09-04). Nullable/defaulted, no backfill needed.
+  // CLEAR | PENDING_REVIEW (composite signal or per-referrer cap, credit HELD) | BLOCKED (identity-grade match:
+  // self-referral / shared device / shared card, credit HELD) | APPROVED (admin cleared it) | REJECTED (admin, credit VOID)
+  fraudReviewStatus   String    @default("CLEAR")
+  deviceFraudFlag     Boolean   @default(false)
+  cardFraudFlag       Boolean   @default(false)
+  fraudCompositeScore Int       @default(0)
+  holdUntil           DateTime? // earliest moment this referral's first credit can be used (qualifiedAt + hold days)
+  reviewedByAdminId   String?
+  reviewedAt          DateTime?
+  fraudSignals        AffiliateFraudSignal[]
+  creditEntries       SubscriptionCreditEntry[]
+
   // Audit trail
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -5062,6 +5079,61 @@ model AffiliateReferral {
   @@index([referralCode])
   @@index([status])
   @@index([qualifiedAt])
+  @@index([fraudReviewStatus])
+}
+
+// Roadmap #661 (2026-10-23): one row per fraud signal raised on an organizer-to-organizer referral (ADR-119 section 7,
+// mirrors ReferralFraudSignal). Identity-grade signals block, composite signals hold for admin review.
+model AffiliateFraudSignal {
+  id                  String            @id @default(cuid())
+  affiliateReferralId String
+  affiliateReferral   AffiliateReferral @relation(fields: [affiliateReferralId], references: [id], onDelete: Cascade)
+  referrerId          String
+  referredUserId      String
+  purchaseId          String? // set for per-purchase signals (e.g. the referrer buying from the referred organizer)
+  signalType          String // SELF_REFERRAL | SHARED_DEVICE_FP | SHARED_CARD_FP | REFERRAL_VELOCITY | ROUND_TRIP_REFERRAL | REFERRER_CAP | PURCHASE_SELF_DEALING
+  confidenceScore     Int               @default(0)
+  flags               String[]
+  reviewOutcome       String            @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewedByAdminId   String?
+  reviewedAt          DateTime?
+  notes               String?
+  createdAt           DateTime          @default(now())
+
+  @@unique([affiliateReferralId, signalType, purchaseId])
+  @@index([referrerId])
+  @@index([referredUserId])
+  @@index([reviewOutcome])
+}
+
+// Roadmap #661 (2026-10-23): subscription credit ledger. Append-only rows; the balance is a SUM, never a stored
+// number. Positive rows add credit (referral earnings), negative rows consume it (applied to a PRO/TEAMS renewal) or
+// take it back (refund / chargeback clawback). A balance can go negative after a clawback of credit that was already
+// spent: later earnings then pay it down first and nothing is applied to a renewal until it is positive again.
+//   status ACTIVE counts toward the balance once availableAt has passed; HELD is parked for fraud review and never
+//   counts; VOID never counts (a rejected referral, or a renewal reservation whose card charge then failed).
+model SubscriptionCreditEntry {
+  id                  String             @id @default(cuid())
+  userId              String // the account the credit belongs to (the referrer's User.id)
+  user                User               @relation("SubscriptionCreditEntries", fields: [userId], references: [id], onDelete: Restrict)
+  amountCents         Int // + earned, - applied or clawed back
+  kind                String // REFERRAL_EARNED | REFERRAL_ADJUSTMENT | RENEWAL_APPLIED | ADMIN_ADJUSTMENT
+  status              String             @default("ACTIVE") // ACTIVE | HELD | VOID
+  availableAt         DateTime // ACTIVE rows count only once this has passed (hold period for earnings)
+  idempotencyKey      String?            @unique // e.g. referral-earn:<purchaseId>, renewal-apply:<organizerId>:<periodKey>:try<n>
+  affiliateReferralId String?
+  affiliateReferral   AffiliateReferral? @relation(fields: [affiliateReferralId], references: [id], onDelete: SetNull)
+  sourcePurchaseId    String? // the referred organizer's Purchase that earned it (plain id: Purchase rows are never hard-deleted in practice, and a ledger row must outlive one)
+  netFeeCents         Int? // commission base: FindA.Sale's fee on that purchase net of Square's processing cost
+  commissionRateBps   Int? // snapshot of the rate used, so a later rate change never restates history
+  billingChargeId     String? // OrganizerBillingCharge.id this credit was applied to (RENEWAL_APPLIED rows)
+  note                String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([userId, status, availableAt])
+  @@index([affiliateReferralId])
+  @@index([sourcePurchaseId])
 }
 
 // Feature #87: Brand & Designer Tracking
@@ -5842,6 +5914,17 @@ model OrganizerScore {
 
   @@index([expansionTier])
   @@index([churnBand])
+}
+
+// SaleAiTagUsage (2026-10-23) — per-sale Smart-tag meter for the $9.99 a-la-carte upgrade, which includes 500 auto
+// tags for that one sale (lib/saleProFeatures.ts ALA_CARTE_AI_TAGS_PER_SALE). Row is created lazily on first use and
+// metered atomically by lib/aiTagsQuotaTracker.ts (reserve/refund with a conditional UPDATE). Never reset monthly.
+model SaleAiTagUsage {
+  saleId    String   @id
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  tagsUsed  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ApiUsageLog — persistent daily API call + cost tracking, replaces in-memory counters (S483)
@@ -7252,6 +7335,19 @@ model MessageAutosendLog {
 // data -- counts, error names -- never full page HTML or PII). No retention/rotation job exists
 // yet; add one if volume ever becomes a real storage concern (unlikely at FindA.Sale's current
 // scale -- this logs lifecycle events, not per-request/per-poll noise).
+// Auto queue test limits (2026-10-23). Optional, per organizer, default off: caps how many new listings one
+// GET /extension/autolist-queue response may hand the extension (maxNewPerRun) and/or restricts the auto queue to
+// an explicit list of the organizer's own item ids (onlyItemIds), so a supervised few-item live test is possible.
+// Deliberately a separate table with no relation field on Organizer: every full Organizer read stays unaffected
+// if this table is missing, and the code treats a missing table as "no limits" (services/autoQueueSettings.ts).
+model OrganizerAutoQueueLimit {
+  organizerId  String   @id
+  maxNewPerRun Int?
+  onlyItemIds  String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 model ExtensionRuntimeLog {
   id          String    @id @default(cuid())
   organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)

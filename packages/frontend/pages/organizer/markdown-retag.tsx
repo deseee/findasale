@@ -230,7 +230,7 @@ const MarkdownRetagPage: React.FC = () => {
               </p>
             </div>
             {data && data.total > 0 && (
-              <div className="px-4 py-2 rounded-full text-white font-semibold text-lg bg-amber-500">
+              <div className="px-4 py-2 rounded-full text-white font-semibold text-lg bg-amber-600">
                 {data.total} need{data.total === 1 ? 's' : ''} re-tagging
               </div>
             )}
@@ -240,13 +240,13 @@ const MarkdownRetagPage: React.FC = () => {
           <div className="flex gap-2 mb-4 print:hidden">
             <button
               onClick={() => setTab('retag')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'retag' ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 border border-warm-200 dark:border-gray-700'}`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'retag' ? 'bg-amber-600 text-white' : 'bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 border border-warm-200 dark:border-gray-700'}`}
             >
               Needs re-tagging{data ? ` (${data.total})` : ''}
             </button>
             <button
               onClick={() => setTab('active')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'active' ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 border border-warm-200 dark:border-gray-700'}`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'active' ? 'bg-amber-600 text-white' : 'bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 border border-warm-200 dark:border-gray-700'}`}
             >
               All discounted now{activeData ? ` (${activeData.total})` : ''}
             </button>
@@ -331,7 +331,7 @@ const MarkdownRetagPage: React.FC = () => {
               <button
                 onClick={() => markBulkMutation.mutate(Array.from(selectedIds))}
                 disabled={selectedIds.size === 0 || markBulkMutation.isPending}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {markBulkMutation.isPending
                   ? 'Marking…'

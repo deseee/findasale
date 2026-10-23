@@ -125,7 +125,8 @@ function mockRes() {
   res.json = jest.fn().mockReturnValue(res);
   return res;
 }
-const req = (extra: Record<string, unknown> = {}) => ({ user: { id: 'u1' }, query: {}, params: {}, body: {}, ...extra }) as any;
+// 2026-10-23: emailVerified, so the verify-to-publish guard on the extension queues (lib/publishGate.ts) lets the queue through.
+const req = (extra: Record<string, unknown> = {}) => ({ user: { id: 'u1', emailVerified: true }, query: {}, params: {}, body: {}, ...extra }) as any;
 
 let mainItems: any[] = [];
 let extraRows: any[] = [];

@@ -33,13 +33,13 @@ export default function FlipReportPage() {
   const router = useRouter();
   const { saleId } = router.query;
   const { canAccess, tierLoading } = useOrganizerTier();
-  // Only fetch the report when the organizer has PRO access.
-  // Passing null disables the query (enabled: !!saleId in the hook) and prevents
-  // a 403 from the backend which would surface as "Unable to load flip report"
-  // for non-PRO users before TierGate gets a chance to render.
+  // The server decides access per sale: PRO/TEAMS, or a SIMPLE organizer's own sale with the paid $9.99 upgrade
+  // (backend lib/saleProFeatures.ts). So the report is requested for every tier once auth has loaded, and a
+  // 403 TIER_REQUIRED answer shows the upgrade card instead of the generic error.
   const { data: flipReport, isLoading, error } = useFlipReport(
-    canAccess('PRO') ? (saleId as string | null) : null
+    !tierLoading ? (saleId as string | null) : null
   );
+  const lockedByPlan = (error as any)?.response?.status === 403 && (error as any)?.response?.data?.code === 'TIER_REQUIRED';
 
   // Show minimal loader while router is hydrating
   if (!saleId) {
@@ -52,15 +52,15 @@ export default function FlipReportPage() {
     );
   }
 
-  // Show TierGate for non-PRO users before any error/empty state can surface.
-  // tierLoading guard prevents a flash of the upgrade UI for PRO users while auth loads.
-  if (!tierLoading && !canAccess('PRO')) {
+  // Show TierGate when the server says this sale's plan does not include the Flip Report, before any
+  // error/empty state can surface.
+  if (!tierLoading && lockedByPlan) {
     return (
       <>
         <Head>
           <title>Flip Report - FindA.Sale</title>
         </Head>
-        <TierGate requiredTier="PRO" featureName="Flip Report" description="See exactly what sold, at what price, and what to price next time. Flip Report turns your sale history into your next sale's strategy.">
+        <TierGate requiredTier="PRO" featureName="Flip Report" description="See exactly what sold, at what price, and what to price next time. Included with PRO and TEAMS, or with the optional $9.99 upgrade for a single sale.">
           <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8" />
         </TierGate>
       </>
@@ -122,7 +122,7 @@ export default function FlipReportPage() {
         <meta name="description" content={`Post-sale analytics report for ${flipReport.saleTitle}`} />
       </Head>
 
-      <TierGate requiredTier="PRO" featureName="Flip Report" description="See exactly what sold, at what price, and what to price next time. Flip Report turns your sale history into your next sale's strategy.">
+      <TierGate unlocked requiredTier="PRO" featureName="Flip Report" description="See exactly what sold, at what price, and what to price next time. Included with PRO and TEAMS, or with the optional $9.99 upgrade for a single sale.">
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8 print:bg-white dark:bg-gray-800">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
@@ -338,8 +338,9 @@ export default function FlipReportPage() {
             </ul>
           </div>
 
-          {/* Feature #300: Return to Inventory: show when there are unsold items */}
-          {flipReport.unsoldItems.length > 0 && (
+          {/* Feature #300: Return to Inventory: show when there are unsold items. PRO only: the destination is
+              Persistent Inventory (PRO), which the $9.99 single-sale upgrade does not include. */}
+          {flipReport.unsoldItems.length > 0 && canAccess('PRO') && (
             <div className="mt-8 print:hidden">
               <ReturnToInventoryPanel
                 saleId={flipReport.saleId}

@@ -59,7 +59,7 @@ const ChecklistPage = () => {
             <p className="text-gray-600 dark:text-gray-400 mb-4">We couldn't find the sale you're looking for.</p>
             <Link
               href="/organizer/dashboard"
-              className="inline-block px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+              className="inline-block px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
             >
               Back to Dashboard
             </Link>

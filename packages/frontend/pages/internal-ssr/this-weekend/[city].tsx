@@ -315,7 +315,7 @@ export default function ThisWeekendPage({
             </p>
             <Link
               href="/register"
-              className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
+              className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
             >
               List your sales free
             </Link>

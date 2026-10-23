@@ -112,7 +112,7 @@ describe('processRapidDraft Smart-tag metering', () => {
   it('reserves one Smart tag atomically before the paid call and keeps it after a successful analysis', async () => {
     await processRapidDraft('it1');
     expect(mockReserveAiTags).toHaveBeenCalledTimes(1);
-    expect(mockReserveAiTags).toHaveBeenCalledWith('org1', 'SIMPLE', 1);
+    expect(mockReserveAiTags).toHaveBeenCalledWith('org1', 'SIMPLE', 1, 's1');
     expect(mockAnalyzeItemImage).toHaveBeenCalledTimes(1);
     expect(mockRefundAiTags).not.toHaveBeenCalled();
     // No post-hoc increment any more: the reservation IS the count.
@@ -123,7 +123,7 @@ describe('processRapidDraft Smart-tag metering', () => {
   it('uses Organizer.subscriptionTier as the truth (a PRO organizer is reserved as PRO)', async () => {
     mockOrganizerFindUnique.mockResolvedValue({ id: 'org1', subscriptionTier: 'PRO' });
     await processRapidDraft('it1');
-    expect(mockReserveAiTags).toHaveBeenCalledWith('org1', 'PRO', 1);
+    expect(mockReserveAiTags).toHaveBeenCalledWith('org1', 'PRO', 1, 's1');
   });
 
   it('skips the paid call when the atomic reservation is refused (parallel jobs cannot overspend)', async () => {
@@ -160,7 +160,8 @@ describe('processRapidDraft Smart-tag metering', () => {
     mockAnalyzeItemImage.mockResolvedValue(null);
     await processRapidDraft('it1');
     expect(mockRefundAiTags).toHaveBeenCalledTimes(1);
-    expect(mockRefundAiTags).toHaveBeenCalledWith('org1', 1);
+    // Refunded to the same allowance it was reserved from (the reservation object carries bucket + saleId).
+    expect(mockRefundAiTags).toHaveBeenCalledWith('org1', 1, expect.objectContaining({ ok: true }));
     expect(mockIncrementAiTagCount).not.toHaveBeenCalled();
   });
 

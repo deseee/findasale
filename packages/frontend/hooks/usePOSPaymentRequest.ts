@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
-import { socketAuth } from '../lib/socketAuth';
+import { socketAuth, reconnectAfterServerDrop } from '../lib/socketAuth';
 import api from '../lib/api';
 
 export interface POSPaymentRequestData {
@@ -81,6 +81,7 @@ export const usePOSPaymentRequest = (requestId: string | undefined): UsePOSPayme
         reconnectionDelayMax: 5000,
         reconnectionAttempts: 5,
       });
+      reconnectAfterServerDrop(socketRef.current);
     }
 
     const handlePaymentStatus = (event: any) => {

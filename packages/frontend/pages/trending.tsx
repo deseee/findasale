@@ -98,7 +98,7 @@ export default function TrendingPage() {
                           <div className="h-full flex items-center justify-center text-4xl">🏠</div>
                         )}
                         {index < 3 && (
-                          <div className="absolute top-2 left-2 bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                          <div className="absolute top-2 left-2 bg-amber-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                             #{index + 1} HOT
                           </div>
                         )}

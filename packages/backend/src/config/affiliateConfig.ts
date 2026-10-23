@@ -8,21 +8,67 @@
  */
 
 /**
- * Affiliate payout amounts by subscription tier
- * Units: USD dollars (will be converted to cents in service)
+ * Organizer-to-organizer referral credit (roadmap #661, wired 2026-10-23).
  *
- * Payout rules:
- * - PRO: $20 per referred organizer's first PAID sale
- * - TEAMS: $55 per referred organizer's first PAID sale
- * - SIMPLE: $0 (prevent exploit vector)
- * - ENTERPRISE: $0 (custom deals handled off-platform)
+ * Replaces the never-called 2%-of-GMV / $50-floor / per-tier-dollar payout constants, which were superseded by:
+ *   - roadmap #621 (2026-08-09): the reward is a SUBSCRIPTION CREDIT on the referrer's own PRO/TEAMS plan, triggered by real
+ *     Purchase rows on the referred organizer's sales (not cash, not guildXp);
+ *   - Patrick, 2026-10-12: affiliate/creator commission is calculated on the NET platform fee (FindA.Sale's fee minus
+ *     Square's processing cost, which the platform bears);
+ *   - ADR-119 section 11 (Patrick "go with the reccs", 2026-09-04): identity-grade fraud hard-blocks, composite signals
+ *     hold for review, 7-day hold, per-referrer cap of 20 qualified referrals or $1,000 per rolling 90 days.
+ *
+ * Why the math pencils out: every credit cent is a share (< 100%) of fee cents FindA.Sale actually collected on that same
+ * purchase, so the program can never pay out more than it earned, and a self-dealing ring (an organizer buying from
+ * their own referred account to farm credit) always loses money: it pays the full fee to earn a fraction of the net fee
+ * back. The old $50 floor on a first sale was the opposite: a $1 self-purchase minted $50.
+ *
+ * Every value below is a one-line change. Rate and earning window are proposed launch values for Patrick to confirm.
  */
-export const AFFILIATE_PAYOUT_USD = {
-  SIMPLE: 0, // never paid — exploit vector
-  PRO: 20, // 2% or floor, whichever is greater
-  TEAMS: 55, // 2% or floor, whichever is greater
-  ENTERPRISE: 0, // custom deal, handled off-platform
+export const ORGANIZER_REFERRAL_CREDIT = {
+  /** Credit = this many basis points of the net platform fee on each qualifying purchase (1000 = 10%, same rate as the
+   *  creator program's CREATOR_PROGRAM.COMMISSION_RATE_BPS). */
+  COMMISSION_RATE_BPS: 1000,
+  /** A referred organizer's purchases earn credit for the referrer only within this many days of the referral. */
+  EARNING_WINDOW_DAYS: 365,
+  /** ADR-119 decision 2: credit becomes usable this many days after the purchase that earned it. */
+  HOLD_DAYS: 7,
+  /** ADR-119 decision 3 (placeholder pending real volume): per referrer, per rolling window. Anything past either limit is
+   *  HELD for admin review, never silently dropped. */
+  CAP_WINDOW_DAYS: 90,
+  CAP_MAX_QUALIFIED_REFERRALS: 20,
+  CAP_MAX_CREDIT_CENTS: 100000, // $1,000
+  /** Composite (flag-for-review) scoring, mirrors referralFraudService.ts. Score at or above the threshold holds the referral. */
+  REVIEW_SCORE_THRESHOLD: 50,
+  VELOCITY_WINDOW_DAYS: 7,
+  VELOCITY_MEDIUM_COUNT: 5, // qualifications by one referrer in the window -> +50
+  VELOCITY_HIGH_COUNT: 10, // -> +90
+  ROUND_TRIP_SCORE: 30, // B referred A and A referred B: weak alone, never holds by itself
 } as const;
+
+/**
+ * FEATURE FLAG (advisory board, 2026-10-23): the referral credit program ships to a safe checkpoint, OFF by default.
+ * This is the ONLY place REFERRAL_PAYOUTS_ENABLED is read; it is read on every call, so flipping the Railway variable
+ * takes effect on the next request / cron tick without a deploy. Only the exact string "true" turns it on.
+ * While OFF: no referral is qualified, no fraud signal or credit row is written (earn, clawback or renewal), the sweep
+ * job and the payment hook do nothing, renewals charge the full price, and the organizer page promises no reward.
+ */
+export function isReferralCreditEnabled(): boolean {
+  return process.env.REFERRAL_PAYOUTS_ENABLED === 'true';
+}
+
+/**
+ * Referral credit (cents) on one purchase, rounded DOWN so we never over-credit.
+ * @param netFeeCents FindA.Sale's fee on the purchase net of Square's processing cost and of any cash-debt recoupment.
+ */
+export function calculateReferralCreditCents(
+  netFeeCents: number,
+  rateBps: number = ORGANIZER_REFERRAL_CREDIT.COMMISSION_RATE_BPS
+): number {
+  if (!Number.isFinite(netFeeCents) || netFeeCents <= 0) return 0;
+  if (!Number.isFinite(rateBps) || rateBps <= 0) return 0;
+  return Math.floor((netFeeCents * Math.min(rateBps, 10000)) / 10000);
+}
 
 /**
  * Fraud prevention gates
@@ -30,28 +76,6 @@ export const AFFILIATE_PAYOUT_USD = {
 export const AFFILIATE_FRAUD_GATES = {
   // Minimum account age before affiliate code can be generated
   MIN_ACCOUNT_AGE_DAYS: 7,
-
-  // Minimum account age before payout can be requested
-  // (protects against chargeback cycles)
-  MIN_PAYOUT_LOCKOUT_DAYS: 30,
-} as const;
-
-/**
- * Referral qualification rules
- */
-export const AFFILIATE_QUALIFICATION = {
-  // Commission rate: 2% of first PAID sale GMV
-  COMMISSION_RATE_PERCENT: 2,
-
-  // Minimum payout (in cents)
-  // If 2% < $50, use $50 floor
-  MINIMUM_PAYOUT_CENTS: 5000, // $50 USD
-
-  // Minimum balance before payout can be requested
-  MINIMUM_PAYOUT_REQUEST_CENTS: 5000, // $50 USD threshold
-
-  // One payout per referral relationship lifetime
-  // (prevents churn-rejoin exploitation)
 } as const;
 
 /**
@@ -64,18 +88,6 @@ export const AFFILIATE_CODE = {
 } as const;
 
 /**
- * Calculate payout amount (cents) for a referral
- * Rule: max(2% of first PAID sale, $50 minimum)
- *
- * @param saleAmountCents Purchase amount in cents
- * @returns Payout amount in cents
- */
-export function calculateAffiliatePayoutCents(saleAmountCents: number): number {
-  const commissionCents = Math.round(saleAmountCents * 0.02); // 2% of GMV
-  return Math.max(commissionCents, AFFILIATE_QUALIFICATION.MINIMUM_PAYOUT_CENTS);
-}
-
-/**
  * Check if organizer is eligible to generate affiliate code
  * Requirements:
  * - Account age ≥ 7 days
@@ -83,18 +95,6 @@ export function calculateAffiliatePayoutCents(saleAmountCents: number): number {
  * - Has completed ≥1 PAID sale
  */
 export interface AffiliateEligibility {
-  eligible: boolean;
-  reason?: string;
-}
-
-/**
- * Check if organizer can request payout
- * Requirements:
- * - Account age ≥ 30 days
- * - Unpaid balance ≥ $50
- * - Has Stripe Connect account
- */
-export interface PayoutRequestEligibility {
   eligible: boolean;
   reason?: string;
 }

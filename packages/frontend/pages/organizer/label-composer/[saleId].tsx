@@ -1265,7 +1265,7 @@ export default function LabelComposerPage() {
                             title={`Start at slot ${slot}`}
                             className={`h-11 sm:h-5 rounded-sm border text-xs sm:text-[8px] flex items-center justify-center transition-colors ${
                               isStart
-                                ? 'bg-amber-500 border-amber-600 text-white font-bold'
+                                ? 'bg-amber-600 border-amber-600 text-white font-bold'
                                 : isSkipped
                                 ? 'bg-warm-200 dark:bg-gray-600 border-warm-300 dark:border-gray-500 text-warm-400 dark:text-gray-400'
                                 : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40'

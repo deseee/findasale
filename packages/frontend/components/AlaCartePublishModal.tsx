@@ -151,6 +151,14 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-green-600 dark:text-green-400 mt-0.5">✓</span>
+                  <span>500 auto tags for this sale&apos;s items, on top of your 100 a month</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 dark:text-green-400 mt-0.5">✓</span>
+                  <span>Flip Report and Virtual Queue for this sale</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 dark:text-green-400 mt-0.5">✓</span>
                   <span>No recurring charges</span>
                 </li>
               </ul>

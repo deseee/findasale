@@ -17,6 +17,11 @@ interface TierGateProps {
   requiredTier: SubscriptionTier;
   featureName?: string;
   description?: string;
+  /**
+   * The server already granted access for this page's sale (for example the paid $9.99 a-la-carte sale upgrade
+   * unlocks the Flip Report and Virtual Queue for that one sale). Renders children as for a paying tier.
+   */
+  unlocked?: boolean;
   children: React.ReactNode;
 }
 
@@ -24,12 +29,13 @@ export default function TierGate({
   requiredTier,
   featureName,
   description,
+  unlocked = false,
   children,
 }: TierGateProps) {
   const { canAccess, tier } = useOrganizerTier();
 
   // User has access: render children normally
-  if (canAccess(requiredTier)) {
+  if (unlocked || canAccess(requiredTier)) {
     return <>{children}</>;
   }
 

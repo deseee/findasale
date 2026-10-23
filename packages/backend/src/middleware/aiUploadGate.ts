@@ -75,7 +75,12 @@ export function resolveTier(rawTier: unknown, _ignoredLapseFlag?: boolean): Subs
 }
 
 export interface OrganizerAiGateOptions {
-  /** Reject the request when no saleId is supplied (batch-analyze creates items, so it needs one). */
+  /**
+   * Reject the request when no saleId is supplied (batch-analyze creates items, so it needs one). This also marks the
+   * call as SALE-BOUND: its results become items of that sale, so a paid $9.99 a-la-carte sale may spend its own 500
+   * tags here. Routes that only return an analysis (analyze-photo, rapid-batch) are not bound to a sale, so they always
+   * use the monthly allowance; otherwise an upgraded sale's tags could be spent on items for the organizer's other sales.
+   */
   requireSaleId?: boolean;
   /** Smart tags this call will consume (default 1). The call is refused when fewer remain. */
   units?: (req: Request) => number;
@@ -132,7 +137,9 @@ export function organizerAiGate(options: OrganizerAiGateOptions = {}): RequestHa
       const units = Number.isFinite(rawUnits) ? Math.max(1, Math.floor(rawUnits)) : 1;
 
       // ATOMIC reservation: check-and-spend in one conditional UPDATE (no check-then-increment race).
-      const reservation = await reserveAiTags(organizer.id, tier, units);
+      // On a sale-bound route (requireSaleId) the ownership-checked saleId lets a paid $9.99 a-la-carte sale spend its
+      // own 500 tags first (lib/saleProFeatures.ts). Everything else uses the monthly allowance.
+      const reservation = await reserveAiTags(organizer.id, tier, units, options.requireSaleId ? saleId : null);
       if (!reservation.ok) {
         const used = reservation.used ?? 0;
         const remaining = reservation.remaining ?? 0;
@@ -156,7 +163,7 @@ export function organizerAiGate(options: OrganizerAiGateOptions = {}): RequestHa
         const refund = units - keep;
         if (refund <= 0) return;
         try {
-          await refundAiTags(organizer.id, refund);
+          await refundAiTags(organizer.id, refund, reservation);
         } catch (err: unknown) {
           console.warn('[aiUploadGate] refundAiTags failed:', err instanceof Error ? err.message : err);
         }

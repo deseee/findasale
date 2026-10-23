@@ -391,7 +391,7 @@ const SaleMapInner = ({
             pathOptions={{
               fillColor: '#F59E0B',
               fillOpacity: 0.8,
-              color: '#F97316',
+              color: '#C2410C',
               weight: 2,
             }}
           >

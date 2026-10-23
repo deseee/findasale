@@ -1,21 +1,11 @@
-import { MCPToolDefinition } from '../types';
+import * as z from 'zod/v4';
+import { defineTool, idSchema } from './types';
+import { handleGetItem } from '../handlers';
 
-export const getItemTool: MCPToolDefinition = {
+export const getItemTool = defineTool({
   name: 'get_item',
-  annotations: {
-    title: 'Get Item Details',
-    readOnlyHint: true,
-    openWorldHint: true,
-  },
-  description: 'Fetch full details for a specific item including description, images, sale info, and organizer details.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      itemId: {
-        type: 'string',
-        description: 'The unique ID of the item',
-      },
-    },
-    required: ['itemId'],
-  },
-};
+  title: 'Get Item Details',
+  description: 'Get one publicly listed item: title, description, price, condition, photos, and the sale it belongs to (title, city, dates, link).',
+  inputSchema: z.object({ itemId: idSchema('item') }),
+  handler: handleGetItem,
+});

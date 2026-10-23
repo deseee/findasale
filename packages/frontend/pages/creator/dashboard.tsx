@@ -627,7 +627,7 @@ const CreatorDashboard = () => {
                     <button
                       onClick={handleConnectSquare}
                       disabled={connecting}
-                      className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-6 rounded transition-colors text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="bg-yellow-700 hover:bg-yellow-800 text-white font-bold py-2 px-6 rounded transition-colors text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {connecting ? 'Connecting...' : 'Connect Square'}
                     </button>

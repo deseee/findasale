@@ -17,8 +17,9 @@ import { resolveGrailedCategory } from '../services/grailedCategoryResolver';
 import { resolveCraigslistCategory } from '../services/craigslistCategoryResolver';
 import { suggestNativeShippingPrice, ShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // S-VINTED-SHIPPING-FALLBACK-PRICE: same buyer-facing shipping number FindA.Sale itself suggests (ShippingHardBlockError is the same class re-exported from ebayRateEstimateService)
 import { loadListingExtras, listingExtraFields, organizerListableScope, stockRemainingOf } from '../services/itemKitListing'; // 2026-10-13: kits listable everywhere + the one stock number on every queue entry
+import { actorCanPublish } from '../lib/publishGate'; // 2026-10-23: an account that cannot publish gets empty listing queues
 import { pickStoredRemoteRef, extractRemoteId, resolveListingRef, listingRefFields } from '../services/marketplaceListingRef'; // 2026-10-18: best remote id + URL on every sync queue entry
-import { AUTO_QUEUE_FLAG_SELECT, toAutoQueueSettings, parseAutoQueuePatch, isPickupOnlyBlockedForAutoQueue } from '../services/autoQueueSettings';
+import { AUTO_QUEUE_FLAG_SELECT, toAutoQueueSettings, parseAutoQueuePatch, isPickupOnlyBlockedForAutoQueue, toAutoQueueLimits, parseAutoQueueLimitsPatch, applyAutoQueueLimits, isMissingTableError, NO_AUTO_QUEUE_LIMITS, AutoQueueLimits } from '../services/autoQueueSettings';
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
 
@@ -319,6 +320,9 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     markdownEnabled: s.markdownEnabled, markdownFloor: s.markdownFloor,
   }]));
 
+  // 2026-10-23 defense in depth (lib/publishGate.ts): the organizer is the signed-in account (looked up by userId), so
+  // when that account cannot publish (unverified email, not admin) nothing of theirs is listed on any marketplace.
+  const ownerCanPublish = await actorCanPublish(req.user);
   const items = await prisma.item.findMany({
     // ADR-084 amendment 2026-07-15: exclude DONT_LIST items -- mirrors PostSaleEbayPanel's
     // auto-unselect on the eBay side, applied here at the query level instead of frontend-only.
@@ -328,7 +332,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // The OR keeps NULL-override items while still excluding explicit DONT_LIST.
     where: {
       // 2026-07-26 (S1169): sale.deletedAt filter -- see matching comment on the sales query above.
-      AND: [{ OR: organizerListableScope(organizer.id) }], // sale items + the organizer's saleless kits
+      AND: [{ OR: organizerListableScope(organizer.id) }, ...(ownerCanPublish ? [] : [{ id: { in: [] as string[] } }])], // sale items + the organizer's saleless kits
       status: 'AVAILABLE',
       draftStatus: 'PUBLISHED', // 2026-10-11: a Draft / Pending Review item is never listed, price-synced or renewed on a marketplace
       OR: [
@@ -2088,10 +2092,13 @@ export const getPendingUpdates = async (req: AuthRequest, res: Response): Promis
   // Mirrors getExtensionItems' base item-list filter (status AVAILABLE, excluding DONT_LIST via
   // the same NULL-safe OR -- see the 2026-07-16 fix comment above) so a sold/removed/do-not-list
   // item can never surface here.
+  // 2026-10-23 defense in depth (lib/publishGate.ts): the organizer is the signed-in account (looked up by userId), so
+  // when that account cannot publish (unverified email, not admin) nothing of theirs is listed on any marketplace.
+  const ownerCanPublish = await actorCanPublish(req.user);
   const items = await prisma.item.findMany({
     where: {
       // 2026-07-26 (S1169): sale.deletedAt filter -- see matching comment in getExtensionItems.
-      AND: [{ OR: organizerListableScope(organizer.id) }], // sale items + the organizer's saleless kits
+      AND: [{ OR: organizerListableScope(organizer.id) }, ...(ownerCanPublish ? [] : [{ id: { in: [] as string[] } }])], // sale items + the organizer's saleless kits
       status: 'AVAILABLE',
       draftStatus: 'PUBLISHED', // 2026-10-11: a Draft / Pending Review item is never listed, price-synced or renewed on a marketplace
       OR: [
@@ -2755,9 +2762,12 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   // 'DONT_LIST' -- same ADR-084 amendment getExtensionItems already applies at the query level).
   const applyWatermark = !canRemoveWatermark(organizer);
 
+  // 2026-10-23 defense in depth (lib/publishGate.ts): the organizer is the signed-in account (looked up by userId), so
+  // when that account cannot publish (unverified email, not admin) nothing of theirs is listed on any marketplace.
+  const ownerCanPublish = await actorCanPublish(req.user);
   const items = await prisma.item.findMany({
     where: {
-      AND: [{ OR: organizerListableScope(organizer.id) }],
+      AND: [{ OR: organizerListableScope(organizer.id) }, ...(ownerCanPublish ? [] : [{ id: { in: [] as string[] } }])],
       draftStatus: 'PUBLISHED',
       status: 'AVAILABLE',
       OR: [
@@ -2920,8 +2930,25 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     }
   }
 
-  res.json({ ok: true, queues, pausedMarketplaces: pausedForQueue });
+  // 2026-10-23: optional per-organizer test limits (max new listings per response / only these item ids). Read after
+  // every other gate so they only ever narrow the queue. A read error other than "table not migrated yet" fails the
+  // request (fail closed: never hand out an unlimited queue when a limit may be set).
+  const { limits } = await loadAutoQueueLimits(organizer.id);
+  const limited = applyAutoQueueLimits(queues as unknown as Record<string, Array<{ id: string }>>, limits, enabledPlatforms);
+  res.json({ ok: true, queues: limited, pausedMarketplaces: pausedForQueue, limits });
 };
+
+// Auto queue test limits (2026-10-23). { limits, available }: available=false only when the OrganizerAutoQueueLimit
+// table does not exist yet (migration not applied) -- then nobody can have saved a limit, so "no limits" is correct.
+async function loadAutoQueueLimits(organizerId: string): Promise<{ limits: AutoQueueLimits; available: boolean }> {
+  try {
+    const row = await prisma.organizerAutoQueueLimit.findUnique({ where: { organizerId }, select: { maxNewPerRun: true, onlyItemIds: true } });
+    return { limits: toAutoQueueLimits(row), available: true };
+  } catch (err) {
+    if (isMissingTableError(err)) return { limits: { ...NO_AUTO_QUEUE_LIMITS, onlyItemIds: [] }, available: false };
+    throw err;
+  }
+}
 
 // FACEBOOK excluded -- see getPriceSyncQueue's doc comment for why it already has its own
 // dedicated ADR-086 mechanism above and isn't duplicated here.
@@ -3239,25 +3266,67 @@ export const setPausedMarketplaces = async (req: AuthRequest, res: Response): Pr
   res.json({ ok: true, paused, pausable: [...PAUSABLE_PLATFORMS] });
 };
 
-// GET /api/extension/auto-queue-settings -- the six per-marketplace auto queue opt-ins (Organizer.*AutoListEnabled)
-// that GET /extension/autolist-queue reads. Returns { ok, settings: { CRAIGSLIST: bool, ... } }.
+// GET /api/organizers/me/auto-queue-settings (cookie session + CSRF, routes/organizers.ts; moved 2026-10-23 off the
+// Bearer-only /api/extension router, where the web card's cookie PATCH was always refused with BEARER_REQUIRED).
+// Returns { ok, settings: { CRAIGSLIST: bool, ... }, paused: [...], limits: { maxNewPerRun, onlyItemIds }, limitsAvailable }.
+// `paused` is Organizer.pausedMarketplaces, so the card can show that a marketplace is paused (nothing is queued for it).
+const autoQueueResponse = async (organizerId: string) => {
+  const org = await prisma.organizer.findUnique({ where: { id: organizerId }, select: { ...(AUTO_QUEUE_FLAG_SELECT as any), pausedMarketplaces: true } as any });
+  const { limits, available } = await loadAutoQueueLimits(organizerId);
+  return {
+    ok: true,
+    settings: toAutoQueueSettings(org as any),
+    paused: sanitizePausedPlatforms((org as any)?.pausedMarketplaces),
+    limits,
+    limitsAvailable: available,
+  };
+};
+
 export const getAutoQueueSettings = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
-  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: AUTO_QUEUE_FLAG_SELECT as any });
+  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
-  res.json({ ok: true, settings: toAutoQueueSettings(organizer as any) });
+  res.json(await autoQueueResponse(organizer.id));
 };
 
-// PATCH /api/extension/auto-queue-settings  body: { settings: { MERCARI: true, ... } } -- updates only the provided
-// platforms; values must be real booleans (400 otherwise). Organizer is resolved from the session, never the body.
+// PATCH /api/organizers/me/auto-queue-settings
+//   body: { settings?: { MERCARI: true, ... }, limits?: { maxNewPerRun?: number | null, onlyItemIds?: string[] } }
+// Only those two top-level keys are accepted; settings values must be real booleans and limits are validated by
+// parseAutoQueueLimitsPatch (400 otherwise, nothing is written). The organizer is resolved from the session, never
+// the body, so an organizer can only ever change their own settings.
 export const patchAutoQueueSettings = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
-  const parsed = parseAutoQueuePatch(req.body);
-  if (parsed.ok === false) { res.status(400).json({ message: parsed.message }); return; }
+  const body = req.body as Record<string, unknown> | null | undefined;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) { res.status(400).json({ message: 'Body must be an object' }); return; }
+  const unknownKey = Object.keys(body).find((k) => k !== 'settings' && k !== 'limits');
+  if (unknownKey) { res.status(400).json({ message: 'Unknown field: ' + unknownKey }); return; }
+  if (body.settings === undefined && body.limits === undefined) { res.status(400).json({ message: 'Nothing to update' }); return; }
+  const parsedSettings = body.settings !== undefined ? parseAutoQueuePatch({ settings: body.settings }) : null;
+  if (parsedSettings && parsedSettings.ok === false) { res.status(400).json({ message: parsedSettings.message }); return; }
+  const parsedLimits = body.limits !== undefined ? parseAutoQueueLimitsPatch(body.limits) : null;
+  if (parsedLimits && parsedLimits.ok === false) { res.status(400).json({ message: parsedLimits.message }); return; }
   const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
-  const updated = await prisma.organizer.update({ where: { id: organizer.id }, data: parsed.data, select: AUTO_QUEUE_FLAG_SELECT as any });
-  res.json({ ok: true, settings: toAutoQueueSettings(updated as any) });
+  if (parsedLimits && parsedLimits.ok) {
+    const d = parsedLimits.data;
+    try {
+      await prisma.organizerAutoQueueLimit.upsert({
+        where: { organizerId: organizer.id },
+        create: { organizerId: organizer.id, maxNewPerRun: d.maxNewPerRun ?? null, onlyItemIds: d.onlyItemIds ?? [] },
+        update: {
+          ...(d.maxNewPerRun !== undefined ? { maxNewPerRun: d.maxNewPerRun } : {}),
+          ...(d.onlyItemIds !== undefined ? { onlyItemIds: d.onlyItemIds } : {}),
+        },
+      });
+    } catch (err) {
+      if (isMissingTableError(err)) { res.status(503).json({ message: 'Auto queue test limits are not available yet. Try again after the next update.' }); return; }
+      throw err;
+    }
+  }
+  if (parsedSettings && parsedSettings.ok) {
+    await prisma.organizer.update({ where: { id: organizer.id }, data: parsedSettings.data, select: { id: true } });
+  }
+  res.json(await autoQueueResponse(organizer.id));
 };

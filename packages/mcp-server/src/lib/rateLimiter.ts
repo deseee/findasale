@@ -1,120 +1,94 @@
 /**
- * In-Memory Rate Limiter for MCP Tools
+ * In-memory rate limiters for the public MCP server.
  *
- * Tracks requests per IP per tool name.
- * Respects per-tool rate limits defined in spec.
+ * Two layers, both keyed by client IP (Express `trust proxy` resolves the real
+ * client behind Railway's edge):
+ * - toolLimiter: per tool, per IP, per minute (limits below).
+ * - httpLimiter: all MCP HTTP requests per IP per minute, so protocol traffic
+ *   that never reaches a tool (initialize, tools/list, pings) is bounded too.
+ *
+ * State is per process. The service runs one replica; if it is scaled out, each
+ * replica enforces its own budget (still bounded, just multiplied by replicas).
  */
 
 import { RateLimitStore } from '../types';
 
-// Rate limits per tool (requests per minute)
-const RATE_LIMITS: Record<string, number> = {
-  search_sales: 10,
-  search_items: 15,
-  get_sale: 30,
-  get_item: 30,
-  list_cities: 5,
-  list_sale_types: 999999, // unlimited
-  list_categories: 999999, // unlimited
+const WINDOW_MS = 60_000;
+
+/** Requests per minute per IP for each tool. */
+export const TOOL_RATE_LIMITS: Record<string, number> = {
+  search_sales: 20,
+  search_items: 20,
+  find_item_for_sale: 20,
+  get_sale: 40,
+  get_item: 40,
+  get_trending_sales: 20,
+  get_sales_starting_soon: 20,
+  list_cities: 10,
+  list_sale_types: 30,
+  list_categories: 10,
 };
 
-const WINDOW_MS = 60000; // 1 minute
+const DEFAULT_TOOL_LIMIT = 20;
 
-class InMemoryRateLimiter {
+/** All MCP HTTP requests (any method) per IP per minute. */
+export const HTTP_REQUESTS_PER_MINUTE = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '120', 10) || 120;
+
+class WindowLimiter {
   private store: RateLimitStore = {};
 
-  /**
-   * Check if a request is allowed
-   * @returns true if allowed, false if rate limited
-   */
-  isAllowed(ip: string, toolName: string): boolean {
-    const limit = RATE_LIMITS[toolName];
-    if (!limit || limit >= 999999) {
-      // Unlimited
+  constructor(private readonly windowMs: number) {}
+
+  /** Records a hit and returns true when it is within `limit`. */
+  hit(key: string, bucket: string, limit: number): boolean {
+    const now = Date.now();
+    const perKey = (this.store[key] ??= {});
+    const entry = perKey[bucket];
+    if (!entry || now >= entry.resetAt) {
+      perKey[bucket] = { count: 1, resetAt: now + this.windowMs };
       return true;
     }
-
-    // Initialize IP bucket if needed
-    if (!this.store[ip]) {
-      this.store[ip] = {};
-    }
-
-    const now = Date.now();
-    const toolEntry = this.store[ip][toolName];
-
-    // New entry or window expired
-    if (!toolEntry || now >= toolEntry.resetAt) {
-      this.store[ip][toolName] = {
-        count: 1,
-        resetAt: now + WINDOW_MS,
-      };
-      return true;
-    }
-
-    // Increment count
-    toolEntry.count++;
-
-    // Check if exceeded limit
-    if (toolEntry.count > limit) {
-      return false;
-    }
-
-    return true;
+    entry.count++;
+    return entry.count <= limit;
   }
 
-  /**
-   * Get remaining requests for this IP/tool
-   */
-  getRemaining(ip: string, toolName: string): number {
-    const limit = RATE_LIMITS[toolName];
-    if (!limit || limit >= 999999) {
-      return 999999;
-    }
-
-    const toolEntry = this.store[ip]?.[toolName];
-    const now = Date.now();
-
-    // Window expired or no entry
-    if (!toolEntry || now >= toolEntry.resetAt) {
-      return limit;
-    }
-
-    return Math.max(0, limit - toolEntry.count);
+  /** Milliseconds until the bucket resets. */
+  resetIn(key: string, bucket: string): number {
+    const entry = this.store[key]?.[bucket];
+    return entry ? Math.max(0, entry.resetAt - Date.now()) : 0;
   }
 
-  /**
-   * Get time until rate limit resets (ms)
-   */
-  getResetTime(ip: string, toolName: string): number {
-    const toolEntry = this.store[ip]?.[toolName];
-    if (!toolEntry) {
-      return 0;
-    }
-
-    const now = Date.now();
-    const timeUntilReset = Math.max(0, toolEntry.resetAt - now);
-    return timeUntilReset;
-  }
-
-  /**
-   * Cleanup old entries (call periodically)
-   */
   cleanup(): void {
     const now = Date.now();
-    for (const ip in this.store) {
-      const hasValidEntry = Object.values(this.store[ip]).some(
-        (entry) => entry.resetAt > now
-      );
-      if (!hasValidEntry) {
-        delete this.store[ip];
+    for (const key of Object.keys(this.store)) {
+      const buckets = this.store[key];
+      for (const b of Object.keys(buckets)) {
+        if (buckets[b].resetAt <= now) delete buckets[b];
       }
+      if (Object.keys(buckets).length === 0) delete this.store[key];
     }
   }
 }
 
-export const rateLimiter = new InMemoryRateLimiter();
+const toolWindow = new WindowLimiter(WINDOW_MS);
+const httpWindow = new WindowLimiter(WINDOW_MS);
 
-// Run cleanup every 5 minutes
-setInterval(() => {
-  rateLimiter.cleanup();
-}, 5 * 60 * 1000);
+export const rateLimiter = {
+  /** Per-tool check. Returns null when allowed, else seconds until retry. */
+  checkTool(ip: string, toolName: string): number | null {
+    const limit = TOOL_RATE_LIMITS[toolName] ?? DEFAULT_TOOL_LIMIT;
+    if (toolWindow.hit(ip, toolName, limit)) return null;
+    return Math.max(1, Math.ceil(toolWindow.resetIn(ip, toolName) / 1000));
+  },
+  /** Per-IP HTTP check. Returns null when allowed, else seconds until retry. */
+  checkHttp(ip: string): number | null {
+    if (httpWindow.hit(ip, 'http', HTTP_REQUESTS_PER_MINUTE)) return null;
+    return Math.max(1, Math.ceil(httpWindow.resetIn(ip, 'http') / 1000));
+  },
+  cleanup(): void {
+    toolWindow.cleanup();
+    httpWindow.cleanup();
+  },
+};
+
+setInterval(() => rateLimiter.cleanup(), 5 * 60 * 1000).unref();

@@ -267,7 +267,7 @@ const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
                    aria-label="Add custom task..." />
                   <button
                     onClick={() => handleAddItem(phase)}
-                    className="px-4 py-2 bg-amber-500 dark:bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-600 dark:hover:bg-amber-700 transition-colors"
+                    className="px-4 py-2 bg-amber-600 dark:bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 dark:hover:bg-amber-700 transition-colors"
                   >
                     Add
                   </button>

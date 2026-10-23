@@ -7,6 +7,8 @@ import {
   createSale,
   updateSale,
   updateSaleStatus,
+  getSalePublishReadinessHandler,
+  redateSale,
   deleteSale,
   searchSales,
   generateQRCode,
@@ -814,6 +816,8 @@ router.get('/organizer/:organizerId/recurring', async (req, res) => {
 router.get('/:id', optionalAuthenticate, getSale);
 router.put('/:id', authenticate, updateSale);
 router.patch('/:id/status', authenticate, updateSaleStatus);
+router.get('/:id/publish-readiness', authenticate, getSalePublishReadinessHandler); // 2026-10-23: publish dialog item list
+router.post('/:id/redate', authenticate, redateSale); // 2026-10-23: one-click "pick new dates"
 router.delete('/:id', authenticate, deleteSale);
 router.post('/:id/clone', authenticate, cloneSale);
 

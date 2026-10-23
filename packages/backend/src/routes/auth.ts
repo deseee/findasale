@@ -11,6 +11,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { createRateLimitStore, isWhitelistedIP } from '../middleware/rateLimitShared'; // rate-limit hardening Item 2
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { EMAIL_VERIFICATION_TTL_MS, reportVerificationSendFailure } from '../utils/emailVerificationSend'; // 2026-10-23
 import { createNotification } from '../lib/notificationService';
 import { escapeHtml } from '../utils/htmlEscape';
 import { normalizeEmailInput, stripSensitiveUserFields, hashOpaqueToken, tokenLookupCandidates } from '../utils/authSecurity';
@@ -113,6 +114,18 @@ const verifyEmailLimiter = rateLimit({
   store: createRateLimitStore('rl:verify:'),
 });
 
+// 2026-10-23: resend gets its own bucket (same 3/hour/IP). It used to share verifyEmailLimiter, so a
+// few failed /verify-email attempts (expired link clicked repeatedly) blocked the user from asking
+// for a fresh link, which is exactly the recovery path for an expired link.
+const resendVerificationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification requests. Please try again in an hour.' },
+  store: createRateLimitStore('rl:verify-resend:'),
+});
+
 // L1: Login rate limiter
 // QA bypass: if QA_RATE_LIMIT_BYPASS_SECRET is set in Railway env vars, requests carrying
 // that secret in the X-QA-Bypass header skip this limiter entirely.
@@ -165,7 +178,7 @@ router.post('/login', loginLimiter, loginAccountLimiter, login);
 router.post('/oauth', loginLimiter, oauthLogin); // OAuth is authentication not registration; loginLimiter (skipSuccessfulRequests) is correct here
 router.post('/redeem-invite', authenticate, redeemInvite);
 router.post('/verify-email', verifyEmailLimiter, verifyEmail);
-router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res: Response) => {
+router.post('/resend-verification', resendVerificationLimiter, async (req: Request, res: Response) => {
   // P0 Security Fix Item 5: Email verification resend endpoint with enumeration prevention
   try {
     const { email: rawEmail } = req.body;
@@ -195,41 +208,38 @@ router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res
     // expiry stayed at its original registration-time value, so anyone who waited
     // past that original 24h window (exactly who "resend" exists for) got a fresh
     // token that verifyEmail() would reject as already-expired.
-    const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    await prisma.user.update({
+    // 2026-10-23: links last 7 days (EMAIL_VERIFICATION_TTL_MS), same as registration.
+    const newExpiry = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
+    const verifyUrl = `${frontendUrl}/verify-email?token=${newToken}`;
+    // 2026-10-23: sent from the Resend rail's verified default sender (noreply@finda.sale); the old fallback
+    // find@outreach.finda.sale is not a Resend-verified domain. Failures go to Sentry.
+
+    // 2026-10-23: this used to be wrapped in `if (user.emailVerificationToken)`, checked against the user row read
+    // before the token update. An unverified account whose token was null (never issued, or cleared) got a fresh
+    // token written to the DB but never received an email. Every unverified account now gets the email.
+    // 2026-10-23: neither the token write nor the send is awaited, so the response time is the same whether or not
+    // the address has an unverified account (only the user lookup above runs either way). The email goes out only
+    // after the new token is saved, so the link in it always works; any failure goes to Sentry.
+    void Promise.resolve().then(() => prisma.user.update({
       where: { id: user.id },
       data: { emailVerificationToken: hashOpaqueToken(newToken), emailVerificationTokenExpiry: newExpiry } // 2026-09-30: hashed at rest, raw token only in the link
+    })).then(() => transactionalEmailService.emails.send({
+      to: email,
+      subject: 'Verify your FindA.Sale email address',
+      html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
+        <h2 style="color:#2563eb;">Verify your email</h2>
+        <p>Click the button below to verify your email address and complete your FindA.Sale account setup.</p>
+        <a href="${verifyUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;margin:16px 0;">Verify Email</a>
+        <p style="color:#6b7280;font-size:13px;">This link will expire in 7 days.</p>
+        <p style="color:#6b7280;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
+      </div>
+      `,
+    })).then((result: any) => {
+      if (!result?.sent) reportVerificationSendFailure('resend', user.id, result?.reason ?? 'no result');
+    }).catch((emailError: unknown) => {
+      reportVerificationSendFailure('resend', user.id, emailError);
     });
-    const verifyUrl = `${frontendUrl}/verify-email?token=${newToken}`;
-    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
-
-    // 2026-10-23: this used to be wrapped in `if (user.emailVerificationToken)`, checked against the
-    // user row read BEFORE the update above. An unverified account whose token was null (never issued,
-    // or cleared) got a fresh token written to the DB but never received an email. The token was just
-    // written above, so always send.
-    {
-      try {
-        // 2026-09-29: not awaited, so response time does not reveal whether the address has an unverified account.
-        void Promise.resolve(transactionalEmailService.emails.send({
-          from: fromEmail,
-          to: email,
-          subject: 'Verify your FindA.Sale email address',
-          html: `
-            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
-              <h2 style="color:#2563eb;">Verify your email</h2>
-              <p>Click the button below to verify your email address and complete your FindA.Sale account setup.</p>
-              <a href="${verifyUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;margin:16px 0;">Verify Email</a>
-              <p style="color:#6b7280;font-size:13px;">This link will expire in 24 hours.</p>
-              <p style="color:#6b7280;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
-            </div>
-          `,
-        })).catch((emailError) => {
-          console.error('[Email Verification] Failed to send email:', emailError);
-        });
-      } catch (emailError) {
-        console.error('[Email Verification] Failed to send email:', emailError);
-      }
-    }
 
     res.json(genericResponse);
   } catch (error) {

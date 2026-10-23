@@ -23,17 +23,23 @@ export interface SaleItemSummary {
   endDate?: string | null;
   updatedAt?: string | null;
   createdAt?: string | null;
+  startDate?: string | null;
   stats?: {
     itemCount?: number;
     liveItemCount?: number;
+    /** Items marked SOLD (backend getMySales, 2026-10-23). Missing on an older backend = unknown. */
+    soldItemCount?: number;
     holdCount?: number;
     visitorCount?: number;
   };
 }
 
+/** Dashboard nudge states: the item states plus STALE_DATES (dates passed, nothing sold: pick new dates). */
+export type SaleNudgeState = Exclude<SaleItemState, 'OK' | 'DRAFT_EMPTY'> | 'STALE_DATES';
+
 export interface SaleItemNudge {
   sale: SaleItemSummary;
-  state: Exclude<SaleItemState, 'OK' | 'DRAFT_EMPTY'>;
+  state: SaleNudgeState;
   total: number;
   live: number | undefined;
 }
@@ -51,6 +57,19 @@ export function getSaleItemState(sale: SaleItemSummary | null | undefined): Sale
     return total > 0 ? 'DRAFT_READY' : 'DRAFT_EMPTY';
   }
   return 'OK';
+}
+
+/**
+ * True for a draft or live sale whose end date has passed with nothing sold (2026-10-23 activation nudges,
+ * same rule as the backend STALE_DATES email): it needs new dates before shoppers can find it.
+ * Storefronts (RETAIL) never expire. An unknown sold count (older backend) is never treated as stale.
+ */
+export function isStaleSale(sale: SaleItemSummary | null | undefined, now: number = Date.now()): boolean {
+  if (!sale || (sale.status !== 'DRAFT' && sale.status !== 'PUBLISHED')) return false;
+  if (sale.saleType === 'RETAIL') return false;
+  const end = sale.endDate ? Date.parse(sale.endDate) : NaN;
+  if (!Number.isFinite(end) || end >= now) return false;
+  return typeof sale.stats?.soldItemCount === 'number' && sale.stats.soldItemCount === 0;
 }
 
 /**
@@ -87,6 +106,7 @@ const NUDGE_RANK: Record<SaleItemNudge['state'], number> = {
   LIVE_EMPTY: 0,
   LIVE_UNREVIEWED: 1,
   DRAFT_READY: 2,
+  STALE_DATES: 3,
 };
 
 function updatedAtMs(sale: SaleItemSummary): number {
@@ -94,10 +114,19 @@ function updatedAtMs(sale: SaleItemSummary): number {
   return Number.isFinite(t) ? t : 0;
 }
 
-/** Ordered dashboard nudges: LIVE_EMPTY, then LIVE_UNREVIEWED, then DRAFT_READY; newest first inside each. */
+/**
+ * Ordered dashboard nudges: LIVE_EMPTY, then LIVE_UNREVIEWED, then DRAFT_READY, then STALE_DATES; newest first
+ * inside each. A sale whose dates have passed with nothing sold is STALE_DATES first (new dates come before
+ * adding or publishing items, since shoppers can't find it either way).
+ */
 export function buildNudges(sales: SaleItemSummary[]): SaleItemNudge[] {
   const out: SaleItemNudge[] = [];
+  const now = Date.now();
   for (const sale of sales) {
+    if (isStaleSale(sale, now)) {
+      out.push({ sale, state: 'STALE_DATES', total: sale.stats?.itemCount ?? 0, live: sale.stats?.liveItemCount });
+      continue;
+    }
     const state = getSaleItemState(sale);
     if (state === 'LIVE_EMPTY' || state === 'LIVE_UNREVIEWED' || state === 'DRAFT_READY') {
       out.push({ sale, state, total: sale.stats?.itemCount ?? 0, live: sale.stats?.liveItemCount });

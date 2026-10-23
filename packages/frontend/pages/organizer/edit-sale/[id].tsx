@@ -29,6 +29,9 @@ import ConfirmDialog from '../../../components/ConfirmDialog';
 import { useGuardedPublish } from '../../../hooks/useGuardedPublish'; // shows PublishWithoutItemsDialog on the server's empty-sale 409 (2026-10-13)
 import { isTierLimitPublishError } from '../../../lib/publishSale';
 import SaleItemsNudgeBanner from '../../../components/SaleItemsNudgeBanner';
+import RedateSalePrompt from '../../../components/RedateSalePrompt';
+import VerifyEmailToPublishBanner from '../../../components/VerifyEmailToPublishBanner'; // 2026-10-23: verify to publish // 2026-10-23: one-click re-date when the dates have passed
+import { saleDatesHavePassed } from '../../../lib/saleRedate';
 import { useSaleItemStatus, getSaleItemState, isSecondSaleOrLater } from '../../../hooks/useSaleItemStatus';
 import { AUCTION_BUYER_PREMIUM_LABEL } from '../../../lib/platformFees'; // platform-set auction buyer premium — not organizer-configurable
 
@@ -62,6 +65,8 @@ const EditSalePage = () => {
   const publishBannerButtonRef = useRef<HTMLButtonElement>(null);
   const headerStatusButtonRef = useRef<HTMLButtonElement>(null);
   const publishFocusDone = useRef(false);
+  const redateButtonRef = useRef<HTMLButtonElement>(null);
+  const redateFocusDone = useRef(false);
   const [isSendingApproachNotification, setIsSendingApproachNotification] = useState(false); // Feature #84: Approach Notes notification
   const [geocodingAttempted, setGeocodingAttempted] = useState(false); // Track whether geocoding has been attempted
   const [isAutoGeocodingOnLoad, setIsAutoGeocodingOnLoad] = useState(false); // Track auto-geocoding in progress
@@ -466,6 +471,8 @@ const EditSalePage = () => {
   };
 
   const onPublishedHere = () => {
+    // Item counts and nudges change when ready items go live with the sale (2026-10-23).
+    queryClient.invalidateQueries({ queryKey: ['organizer-sales'] });
     setShowPublishCelebration(true);
     showSurvey('OG-1');
   };
@@ -498,6 +505,13 @@ const EditSalePage = () => {
 
   const handleToggleSaleStatus = async (opts?: { confirmedWithoutItems?: boolean }) => {
     if (!id || !sale) return;
+
+    // Verify to publish (2026-10-23): an unverified organizer gets the "Verify your email to publish" dialog
+    // with a resend button first, before any empty-sale question or the optional à la carte offer.
+    if (sale.status !== 'PUBLISHED' && user?.emailVerified === false) {
+      await guardedPublish.publish(String(id));
+      return;
+    }
 
     // Guided first-sale flow: a DRAFT with zero items gets "Publish without items?" INSTEAD of the
     // generic confirm, and BEFORE the SIMPLE-tier à la carte modal, so nobody pays for an empty
@@ -536,6 +550,25 @@ const EditSalePage = () => {
         return;
       }
 
+      // Publishing (draft or reopen) goes through the guarded helper. Its dialog is the confirm step and,
+      // when the sale has unpublished items, offers "Also publish N ready items" (ticked by default) and
+      // lists the items that are not ready (2026-10-23). An empty sale gets "Publish without items?" instead.
+      if (newStatus === 'PUBLISHED') {
+        const reopening = sale.status === 'ENDED';
+        try {
+          await guardedPublish.publish(String(id), {
+            confirm: reopening
+              ? { title: 'Reopen this sale?', message: 'It will be visible to shoppers again.', confirmLabel: 'Reopen sale' }
+              : { title: 'Publish this sale?', message: 'Your sale will be visible to shoppers on the map.', confirmLabel: 'Publish sale' },
+            onPublished: onPublishedHere,
+            onError: (error) => handlePublishError(error),
+          });
+        } finally {
+          setIsTogglingStatus(false);
+        }
+        return;
+      }
+
       const getConfirmMessage = (status: string) => {
         if (status === 'PUBLISHED') return 'Close this sale early? You can reopen it later from your dashboard.';
         if (status === 'ENDED') return 'Reopen this sale? It will become visible to shoppers again.';
@@ -547,20 +580,7 @@ const EditSalePage = () => {
         title: 'Confirm Status Change',
         message: getConfirmMessage(sale.status),
         onConfirm: async () => {
-          // Publishing (draft or reopen) goes through the guarded helper so an empty sale gets
-          // "Publish without items?" from the server's 409 even when the item count is unknown here.
-          if (newStatus === 'PUBLISHED') {
-            setConfirmState(s => ({ ...s, open: false }));
-            try {
-              await guardedPublish.publish(String(id), {
-                onPublished: onPublishedHere,
-                onError: (error) => handlePublishError(error),
-              });
-            } finally {
-              setIsTogglingStatus(false);
-            }
-            return;
-          }
+          // Publishing (draft or reopen) returned above through the guarded helper (2026-10-23).
           try {
             // Only ENDED reaches this point; publishing returned above.
             await api.patch(`/sales/${id}/status`, { status: newStatus });
@@ -632,6 +652,53 @@ const EditSalePage = () => {
     btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
     btn.focus({ preventScroll: true });
   });
+
+  // 2026-10-23: a draft or live sale whose dates have passed gets the one-click re-date prompt.
+  // ?redate=1 (activation email and the dashboard card) brings it into view and focuses its button once.
+  const showRedatePrompt =
+    !!sale &&
+    (sale.status === 'DRAFT' || sale.status === 'PUBLISHED') &&
+    sale.saleType !== 'RETAIL' &&
+    !sale.isOngoing &&
+    saleDatesHavePassed(sale.endDate);
+  useEffect(() => {
+    if (redateFocusDone.current) return;
+    if (router.query.redate !== '1' || !showRedatePrompt) return;
+    const btn = redateButtonRef.current;
+    if (!btn) return;
+    redateFocusDone.current = true;
+    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    btn.focus({ preventScroll: true });
+  });
+
+  // After a one-click re-date, show the new dates in the form (it only initialises once) and refetch.
+  const handleRedated = (dates: { startDate: string; endDate: string }) => {
+    const toDateInput = (iso: string) => {
+      const d = new Date(iso);
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    };
+    const toTimeInput = (iso: string) => {
+      const d = new Date(iso);
+      return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    };
+    setFormData(prev => ({
+      ...prev,
+      startDate: toDateInput(dates.startDate),
+      endDate: toDateInput(dates.endDate),
+      startTime: toTimeInput(dates.startDate),
+      endTime: toTimeInput(dates.endDate),
+    }));
+    refetch();
+  };
+
+  const focusDateFields = () => {
+    const el = document.getElementById('edit-startDate');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      (el as HTMLInputElement).focus({ preventScroll: true });
+    }
+  };
 
   const handlePublishCelebrationClose = () => {
     setShowPublishCelebration(false);
@@ -806,6 +873,18 @@ const EditSalePage = () => {
           {/* Items banner (guided first-sale flow, 2026-10-12). Replaces the old "no items yet" banner,
               which read sale.items (shopper-visible items only) and told organizers with unreviewed
               items that their sale had none. */}
+          <VerifyEmailToPublishBanner className="mb-4" />
+          {showRedatePrompt && typeof id === 'string' && (
+            <RedateSalePrompt
+              ref={redateButtonRef}
+              saleId={id}
+              startDate={sale.startDate || sale.endDate}
+              endDate={sale.endDate}
+              onRedated={handleRedated}
+              onPickOtherDates={focusDateFields}
+              className="mb-4"
+            />
+          )}
           {sale && typeof id === 'string' && (
             <SaleItemsNudgeBanner
               ref={publishBannerButtonRef}
@@ -1243,7 +1322,7 @@ const EditSalePage = () => {
                       setGeocodingAttempted(false);
                       attemptGeocode(formData.address, formData.city, formData.state, formData.zip);
                     }}
-                    className="text-sm bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded mt-3"
+                    className="text-sm bg-yellow-700 hover:bg-yellow-800 text-white py-2 px-4 rounded mt-3"
                   >
                     Retry Geocoding
                   </button>

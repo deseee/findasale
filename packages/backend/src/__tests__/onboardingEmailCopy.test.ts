@@ -6,12 +6,17 @@
  * Nothing is sent: the mail rail, suppression and unsubscribe links are mocked.
  */
 jest.mock('../lib/emailService', () => ({ emailService: { emails: { send: jest.fn(async () => ({})) } } }));
+// Activation nudges use the transactional (Resend) rail since 2026-10-23.
+jest.mock('../lib/transactionalEmailService', () => ({
+  transactionalEmailService: { emails: { send: jest.fn(async () => ({ sent: true })) } },
+}));
 jest.mock('../services/suppressionService', () => ({ suppressionService: { isSuppressed: jest.fn(async () => false) } }));
 jest.mock('../controllers/unsubscribeController', () => ({
   buildUnsubscribeLinks: jest.fn(async () => ({ webUrl: 'https://finda.sale/unsubscribe?token=t', listUnsubscribeHeader: '<x>' })),
 }));
 
 import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from '../services/suppressionService';
 import {
   sendOnboardingEmail5a,
@@ -19,9 +24,12 @@ import {
   sendOnboardingEmail5c,
   sendEmptySaleNudge,
   sendDraftReadyNudge,
+  sendStaleDatesNudge,
 } from '../services/onboardingEmailService';
 
-const send = (emailService as any).emails.send as jest.Mock;
+const gmailSend = (emailService as any).emails.send as jest.Mock;
+const resendSend = (transactionalEmailService as any).emails.send as jest.Mock;
+let send: jest.Mock = gmailSend;
 const isSuppressed = (suppressionService as any).isSuppressed as jest.Mock;
 
 const base = { email: 'o@example.com', firstName: 'Pat', userId: 'u1' };
@@ -39,7 +47,10 @@ function expectCopyRules(text: string) {
 }
 
 beforeEach(() => {
-  send.mockClear();
+  gmailSend.mockClear();
+  resendSend.mockClear();
+  resendSend.mockResolvedValue({ sent: true });
+  send = gmailSend;
   isSuppressed.mockResolvedValue(false);
   jest.spyOn(console, 'log').mockImplementation(() => {});
 });
@@ -65,6 +76,41 @@ describe('onboarding emails 5a/5b/5c', () => {
 });
 
 describe('activation nudges', () => {
+  beforeEach(() => {
+    send = resendSend;
+  });
+
+  it('go out on the Resend rail from support@ with one-click unsubscribe headers, never the Gmail rail', async () => {
+    expect(await sendEmptySaleNudge({ ...base, saleId: 's1', saleTitle: 'T' })).toBe('sent');
+    expect(gmailSend).not.toHaveBeenCalled();
+    const call = resendSend.mock.calls[0][0];
+    expect(call.from).toContain('support@finda.sale');
+    expect(call.headers['List-Unsubscribe']).toContain('https://finda.sale/unsubscribe?token=t');
+    expect(call.headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
+  });
+
+  it('report failed (retry) when the rail throws, suppressed when the rail blocks the address', async () => {
+    resendSend.mockRejectedValueOnce(new Error('boom'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await sendDraftReadyNudge({ ...base, saleId: 's', saleTitle: 't', itemCount: 1 })).toBe('failed');
+    resendSend.mockResolvedValueOnce({ sent: false, reason: 'suppressed' });
+    expect(await sendDraftReadyNudge({ ...base, saleId: 's', saleTitle: 't', itemCount: 1 })).toBe('suppressed');
+    resendSend.mockResolvedValueOnce({ sent: false, reason: 'not_configured' });
+    expect(await sendDraftReadyNudge({ ...base, saleId: 's', saleTitle: 't', itemCount: 1 })).toBe('failed');
+  });
+
+  it('stale-dates nudge links to the one-click re-date prompt and mentions saved items', async () => {
+    await sendStaleDatesNudge({ ...base, saleId: 'sale_3', saleTitle: 'Boutique', itemCount: 14, saleStatus: 'DRAFT' });
+    const { subject, html } = lastSent();
+    expect(html).toContain('/organizer/edit-sale/sale_3?redate=1');
+    expect(subject + html).toContain('14 items');
+    expectCopyRules(subject + html);
+    await sendStaleDatesNudge({ ...base, saleId: 'sale_4', saleTitle: 'Yard', itemCount: 0, saleStatus: 'PUBLISHED' });
+    expectCopyRules(lastSent().subject + lastSent().html);
+    await sendStaleDatesNudge({ ...base, saleId: 'sale_5', saleTitle: 'Yard', itemCount: 0, saleStatus: 'DRAFT' });
+    expectCopyRules(lastSent().subject + lastSent().html);
+  });
+
   it('empty-sale nudge links to add-items for that sale and escapes the title', async () => {
     await sendEmptySaleNudge({ ...base, saleId: 'sale_1', saleTitle: 'Table <b>' });
     const { subject, html } = lastSent();
@@ -83,8 +129,10 @@ describe('activation nudges', () => {
 
   it('suppressed recipients get nothing', async () => {
     isSuppressed.mockResolvedValue(true);
-    await sendEmptySaleNudge({ ...base, saleId: 's', saleTitle: 't' });
-    await sendDraftReadyNudge({ ...base, saleId: 's', saleTitle: 't', itemCount: 1 });
-    expect(send).not.toHaveBeenCalled();
+    expect(await sendEmptySaleNudge({ ...base, saleId: 's', saleTitle: 't' })).toBe('suppressed');
+    expect(await sendDraftReadyNudge({ ...base, saleId: 's', saleTitle: 't', itemCount: 1 })).toBe('suppressed');
+    expect(await sendStaleDatesNudge({ ...base, saleId: 's', saleTitle: 't', itemCount: 0, saleStatus: 'DRAFT' })).toBe('suppressed');
+    expect(resendSend).not.toHaveBeenCalled();
+    expect(gmailSend).not.toHaveBeenCalled();
   });
 });

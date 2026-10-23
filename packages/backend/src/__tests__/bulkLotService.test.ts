@@ -192,7 +192,7 @@ describe('enableBulkLot: turn a card item into a lot', () => {
 describe('createBulkLotItem', () => {
   it('creates a published, fixed price, never-listed-on-eBay item owned by the sale organizer', async () => {
     const db = makeDb({});
-    const view = await createBulkLotItem(db, { organizerId: 'org_1', saleId: 'sale_1' }, { title: 'Mixed bulk', totalCards: 10000, pricePerThousand: 5.5, lotKind: 'BULK_MIXED' });
+    const view = await createBulkLotItem(db, { organizerId: 'org_1', saleId: 'sale_1', canPublish: true }, { title: 'Mixed bulk', totalCards: 10000, pricePerThousand: 5.5, lotKind: 'BULK_MIXED' });
     const data = db.item.create.mock.calls[0][0].data;
     expect(data).toMatchObject({
       saleId: 'sale_1',
@@ -209,6 +209,14 @@ describe('createBulkLotItem', () => {
     expect(data.bulkLot.create.lotKind).toBe('BULK_MIXED');
     expect(view.pricePerThousandCents).toBe(550);
     expect(view.lotKindLabel).toBe('Mixed bulk');
+  });
+  it('saves the lot as a DRAFT when the account cannot publish yet (2026-10-23), and when the caller does not say', async () => {
+    const unverified = makeDb({});
+    await createBulkLotItem(unverified, { organizerId: 'org_1', saleId: 'sale_1', canPublish: false }, { title: 'Mixed bulk', totalCards: 10000, pricePerThousand: 5.5 });
+    expect(unverified.item.create.mock.calls[0][0].data.draftStatus).toBe('DRAFT');
+    const unspecified = makeDb({});
+    await createBulkLotItem(unspecified, { organizerId: 'org_1', saleId: 'sale_1' }, { title: 'Mixed bulk', totalCards: 10000, pricePerThousand: 5.5 });
+    expect(unspecified.item.create.mock.calls[0][0].data.draftStatus).toBe('DRAFT');
   });
   it('rejects an unknown key', async () => {
     expect(await codeOf(createBulkLotItem(makeDb({}), { organizerId: 'org_1', saleId: 's' }, { title: 'x', totalCards: 10, pricePerThousand: 5, status: 'SOLD' }))).toBe('BULK_VALIDATION');

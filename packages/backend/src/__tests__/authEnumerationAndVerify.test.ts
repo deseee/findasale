@@ -4,6 +4,11 @@
  */
 var mockPrisma: any;
 var mockSend: jest.Mock;
+var mockSentry: { captureMessage: jest.Mock; captureException: jest.Mock };
+jest.mock('@sentry/node', () => {
+  mockSentry = { captureMessage: jest.fn(), captureException: jest.fn() };
+  return { __esModule: true, ...mockSentry };
+});
 jest.mock('../index', () => {
   mockPrisma = {
     user: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn(), create: jest.fn(), count: jest.fn() },
@@ -60,8 +65,8 @@ const existingUser = { id: 'existing-id-123', email: 'someone@example.com', name
 beforeEach(() => {
   jest.clearAllMocks();
   __resetRegisterNoticeThrottle();
-  process.env.JWT_SECRET = 'unit-test-jwt-secret';
-  process.env.JWT_REFRESH_SECRET = 'unit-test-refresh-secret';
+  process.env.JWT_SECRET = 'example-jwt-secret-for-unit-tests';
+  process.env.JWT_REFRESH_SECRET = 'example-refresh-secret-for-unit-tests';
   process.env.FRONTEND_URL = 'https://finda.sale';
   mockPrisma.user.findUnique.mockReset().mockResolvedValue(null);
   mockPrisma.user.create.mockReset().mockImplementation(async ({ data }: any) => ({ id: 'new-1', createdAt: new Date(), tokenVersion: 0, ...data }));
@@ -197,6 +202,36 @@ describe('register: enumeration parity', () => {
     const raw = /verify-email\?token=([0-9a-f]+)/.exec(mail.html)![1];
     expect(hashOpaqueToken(raw)).toBe(stored);
     expect(mail.html).not.toContain(stored);
+  });
+});
+
+describe('register: verification email (2026-10-23)', () => {
+  it('the link lasts 7 days and goes out from the Resend rail default sender (no outreach From)', async () => {
+    mockSend.mockResolvedValue({ sent: true });
+    const before = Date.now();
+    await register(req(good), fakeRes());
+    const expiry = mockPrisma.user.create.mock.calls[0][0].data.emailVerificationTokenExpiry as Date;
+    expect(expiry.getTime() - before).toBeGreaterThanOrEqual(7 * 24 * 60 * 60 * 1000 - 5000);
+    expect(expiry.getTime() - before).toBeLessThanOrEqual(7 * 24 * 60 * 60 * 1000 + 5000);
+    const mail = mockSend.mock.calls[0][0];
+    expect(mail.from).toBeUndefined();
+    expect(mail.html).toContain('7 days');
+    expect(mockSentry.captureMessage).not.toHaveBeenCalled();
+  });
+
+  it('a send that does not go out is reported to Sentry, and signup still succeeds', async () => {
+    mockSend.mockResolvedValue({ sent: false, reason: 'not_configured' });
+    const res = fakeRes();
+    await register(req(good), res);
+    expect(res.body).toEqual(REGISTER_ACCEPTED_BODY);
+    expect(mockSentry.captureMessage).toHaveBeenCalledTimes(1);
+    expect(mockSentry.captureMessage.mock.calls[0][1].tags).toMatchObject({ kind: 'verification_send_failed', path: 'register' });
+  });
+
+  it('a thrown send error is reported to Sentry as an exception', async () => {
+    mockSend.mockRejectedValue(new Error('resend down'));
+    await register(req(good), fakeRes());
+    expect(mockSentry.captureException).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -20,10 +20,18 @@
  *
  * Monthly counters reset lazily at the start of each calendar month (UTC) with a guarded
  * updateMany so two concurrent first-requests-of-the-month cannot both reset (and lose usage).
+ *
+ * PER-SALE ALLOWANCE (2026-10-23): the optional $9.99 a-la-carte upgrade includes 500 auto tags for that one sale
+ * (lib/saleProFeatures.ts). Every entry point takes an optional saleId. When it names a paid ALA_CARTE sale owned by
+ * this organizer, the tags come from that sale's SaleAiTagUsage row first (same atomic conditional UPDATE), and only
+ * fall back to the monthly allowance once the sale's 500 are used. Any other sale (including the same organizer's other
+ * sales) never touches the sale row. If the sale row cannot be read or written (e.g. migration not yet applied), the
+ * call falls back to the monthly allowance, which is still metered, so a failure can never grant unmetered tags.
  */
 
 import { prisma } from './prisma';
 import { TIER_LIMITS, SubscriptionTier } from '../constants/tierLimits';
+import { ALA_CARTE_AI_TAGS_PER_SALE, loadSaleEntitlement, saleHasAlaCarteUpgrade } from './saleProFeatures';
 
 interface QuotaRecord {
   organizerId: string;
@@ -88,6 +96,75 @@ export interface AiTagQuotaStatus {
   used: number;
   limit: number;
   remaining: number;
+  /** Present only when a saleId named a paid a-la-carte sale of this organizer: that sale's own 500-tag allowance. */
+  sale?: SaleAiTagAllowance;
+}
+
+export interface SaleAiTagAllowance {
+  saleId: string;
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+/** Which allowance a reservation came from, so a refund goes back to the same place. */
+export type AiTagBucket = 'SALE' | 'MONTHLY';
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * The saleId when it names a paid a-la-carte sale owned by this organizer, otherwise null. Lookup errors resolve to
+ * null (monthly allowance applies, still metered).
+ */
+async function upgradedSaleIdFor(organizerId: string, saleId: string | null | undefined): Promise<string | null> {
+  if (!saleId) return null;
+  try {
+    const sale = await loadSaleEntitlement(saleId);
+    return sale && saleHasAlaCarteUpgrade(sale, { id: organizerId }) ? sale.id : null;
+  } catch (err) {
+    console.warn('[AI Tags Quota] sale entitlement lookup failed, using the monthly allowance:', errMessage(err));
+    return null;
+  }
+}
+
+/** Atomically take n tags from the sale's 500. False when fewer than n remain or the row cannot be written. */
+async function reserveFromSale(saleId: string, n: number): Promise<boolean> {
+  try {
+    await prisma.saleAiTagUsage.createMany({ data: [{ saleId }], skipDuplicates: true });
+    const res = await prisma.saleAiTagUsage.updateMany({
+      where: { saleId, tagsUsed: { lte: ALA_CARTE_AI_TAGS_PER_SALE - n } },
+      data: { tagsUsed: { increment: n } },
+    });
+    return res.count === 1;
+  } catch (err) {
+    console.error(`[AI Tags Quota] per-sale allowance unavailable for sale ${saleId}, using the monthly allowance:`, errMessage(err));
+    return false;
+  }
+}
+
+/** Read the sale's allowance (null when the row cannot be read). */
+async function readSaleAllowance(saleId: string): Promise<SaleAiTagAllowance | null> {
+  try {
+    const row = await prisma.saleAiTagUsage.findUnique({ where: { saleId }, select: { tagsUsed: true } });
+    const used = row?.tagsUsed ?? 0;
+    return { saleId, used, limit: ALA_CARTE_AI_TAGS_PER_SALE, remaining: Math.max(0, ALA_CARTE_AI_TAGS_PER_SALE - used) };
+  } catch (err) {
+    console.error(`[AI Tags Quota] per-sale allowance unreadable for sale ${saleId}:`, errMessage(err));
+    return null;
+  }
+}
+
+/**
+ * The 500-tag allowance of a paid a-la-carte sale, or null when the sale is not an upgraded sale of this organizer.
+ */
+export async function getSaleAiTagAllowance(
+  organizerId: string,
+  saleId: string | null | undefined
+): Promise<SaleAiTagAllowance | null> {
+  const upgraded = await upgradedSaleIdFor(organizerId, saleId);
+  return upgraded ? readSaleAllowance(upgraded) : null;
 }
 
 function statusFor(used: number, tier: SubscriptionTier): AiTagQuotaStatus {
@@ -107,11 +184,22 @@ function statusFor(used: number, tier: SubscriptionTier): AiTagQuotaStatus {
  */
 export async function checkAiTagQuota(
   organizerId: string,
-  tier: SubscriptionTier
+  tier: SubscriptionTier,
+  saleId?: string | null
 ): Promise<AiTagQuotaStatus> {
   const used = await readUsedFromDb(organizerId);
   quotaCache.set(organizerId, { organizerId, tagsUsed: used, monthStart: getMonthStart(), cachedAt: Date.now() });
-  return statusFor(used, tier);
+  const monthly = statusFor(used, tier);
+  if (!saleId) return monthly;
+  // Items of a paid a-la-carte sale can also draw on that sale's 500 tags.
+  const sale = await getSaleAiTagAllowance(organizerId, saleId);
+  if (!sale) return monthly;
+  return {
+    ...monthly,
+    exceeded: monthly.exceeded && sale.remaining <= 0,
+    remaining: monthly.remaining + sale.remaining,
+    sale,
+  };
 }
 
 /**
@@ -138,6 +226,10 @@ export async function getCachedAiTagQuotaForDisplay(
 export interface ReserveResult {
   /** True when `units` were atomically reserved (the caller now owns them and must settle/refund). */
   ok: boolean;
+  /** Where the units came from: pass this object (or bucket + saleId) to refundAiTags so they go back there. */
+  bucket?: AiTagBucket;
+  /** The upgraded sale the units came from (bucket 'SALE' only). */
+  saleId?: string | null;
   /** Units held by this reservation (0 when !ok). */
   reserved: number;
   used?: number;
@@ -154,9 +246,19 @@ export interface ReserveResult {
 export async function reserveAiTags(
   organizerId: string,
   tier: SubscriptionTier,
-  units: number = 1
+  units: number = 1,
+  saleId?: string | null
 ): Promise<ReserveResult> {
   const n = clampUnits(units);
+  // A paid a-la-carte sale spends its own 500 tags first; any other sale goes straight to the monthly allowance.
+  const upgradedSaleId = await upgradedSaleIdFor(organizerId, saleId);
+  if (upgradedSaleId && (await reserveFromSale(upgradedSaleId, n))) {
+    return { ok: true, reserved: n, limit: ALA_CARTE_AI_TAGS_PER_SALE, bucket: 'SALE', saleId: upgradedSaleId };
+  }
+  return reserveMonthlyAiTags(organizerId, tier, n);
+}
+
+async function reserveMonthlyAiTags(organizerId: string, tier: SubscriptionTier, n: number): Promise<ReserveResult> {
   const limit = TIER_LIMITS[normalizeTier(tier)].aiTagsPerMonth;
   const monthStart = getMonthStart();
   await ensureMonthlyReset(organizerId, monthStart);
@@ -178,7 +280,7 @@ export async function reserveAiTags(
 
   quotaCache.delete(organizerId);
   if (ok) {
-    return { ok: true, reserved: n, limit };
+    return { ok: true, reserved: n, limit, bucket: 'MONTHLY', saleId: null };
   }
 
   // Denied (or organizer missing): report the real numbers for the 429 body.
@@ -186,6 +288,8 @@ export async function reserveAiTags(
   return {
     ok: false,
     reserved: 0,
+    bucket: 'MONTHLY',
+    saleId: null,
     used,
     limit,
     remaining: Math.max(0, limit - used),
@@ -198,10 +302,27 @@ export async function reserveAiTags(
  * fewer photos than reserved). Never drives the counter below zero and never touches a counter that
  * has already rolled into a new month. Returns the number of rows refunded (0 or 1).
  */
-export async function refundAiTags(organizerId: string, units: number = 1): Promise<number> {
+export async function refundAiTags(
+  organizerId: string,
+  units: number = 1,
+  from?: { bucket?: AiTagBucket; saleId?: string | null } | null
+): Promise<number> {
   if (!Number.isFinite(units) || units <= 0) return 0;
   const n = Math.floor(units);
   if (n <= 0) return 0;
+  if (from?.bucket === 'SALE' && from.saleId) {
+    // Back to the a-la-carte sale's own allowance (never below zero).
+    try {
+      const saleRes = await prisma.saleAiTagUsage.updateMany({
+        where: { saleId: from.saleId, tagsUsed: { gte: n } },
+        data: { tagsUsed: { decrement: n } },
+      });
+      return saleRes.count;
+    } catch (err) {
+      console.warn(`[AI Tags Quota] per-sale refund failed for sale ${from.saleId}:`, errMessage(err));
+      return 0;
+    }
+  }
   const res = await prisma.organizer.updateMany({
     where: {
       id: organizerId,
@@ -222,8 +343,14 @@ export async function refundAiTags(organizerId: string, units: number = 1): Prom
  */
 export async function incrementAiTagCount(
   organizerId: string,
-  tagCount: number = 1
+  tagCount: number = 1,
+  saleId?: string | null
 ): Promise<number> {
+  // Items of a paid a-la-carte sale are counted against that sale's 500 first (whole amount or not at all).
+  const upgradedSaleId = await upgradedSaleIdFor(organizerId, saleId);
+  if (upgradedSaleId && (await reserveFromSale(upgradedSaleId, clampUnits(tagCount)))) {
+    return readUsedFromDb(organizerId);
+  }
   await ensureMonthlyReset(organizerId, getMonthStart());
 
   const updated = await prisma.organizer.update({

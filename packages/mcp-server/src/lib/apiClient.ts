@@ -1,90 +1,62 @@
 /**
- * HTTP Client to FindA.Sale Backend
+ * HTTP client to the FindA.Sale backend (read-only).
  *
- * Wraps axios and handles connection to backend API.
- * Reads BACKEND_URL from env (defaults to http://localhost:3001).
+ * Calls are always anonymous: no Authorization header or cookie is ever sent or
+ * forwarded, so the backend applies its public-viewer rules (DRAFT sales hidden,
+ * early-access items embargoed, street addresses withheld). Successful GET
+ * responses are cached for a short TTL.
  */
 
 import axios, { AxiosInstance } from 'axios';
+import { cacheGet, cacheKey, cacheSet } from './cache';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+
+/** Default cache lifetime for search/list responses. */
+export const DEFAULT_TTL_MS = 60_000;
+/** Cache lifetime for slow-moving reference data (cities, categories). */
+export const LONG_TTL_MS = 10 * 60_000;
 
 export const api: AxiosInstance = axios.create({
   baseURL: BACKEND_URL,
   timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { Accept: 'application/json', 'User-Agent': 'FindA.Sale-MCP/2.0' },
+  // Never follow redirects off the backend host.
+  maxRedirects: 0,
+  // Cap response size defensively (backend list pages are well under this).
+  maxContentLength: 5 * 1024 * 1024,
 });
 
-// Log all requests in dev mode
-if (process.env.NODE_ENV !== 'production') {
-  api.interceptors.request.use((config) => {
-    console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
-    return config;
-  });
-
-  api.interceptors.response.use(
-    (response) => {
-      console.log(`[API] Response ${response.status} for ${response.config.url}`);
-      return response;
-    },
-    (error) => {
-      console.error(
-        `[API] Error ${error.response?.status} for ${error.config?.url}:`,
-        error.response?.data?.message || error.message
-      );
-      return Promise.reject(error);
-    }
-  );
-}
-
-export async function fetchJSON<T>(
-  method: 'get' | 'post' | 'put' | 'patch' | 'delete',
-  path: string,
-  params?: Record<string, any>,
-  data?: Record<string, any>
-): Promise<T> {
-  try {
-    const config: any = {};
-    if (params) {
-      config.params = params;
-    }
-
-    let response;
-    switch (method) {
-      case 'get':
-        response = await api.get<T>(path, config);
-        break;
-      case 'post':
-        response = await api.post<T>(path, data, config);
-        break;
-      case 'put':
-        response = await api.put<T>(path, data, config);
-        break;
-      case 'patch':
-        response = await api.patch<T>(path, data, config);
-        break;
-      case 'delete':
-        response = await api.delete<T>(path, config);
-        break;
-      default:
-        throw new Error(`Unsupported method: ${method}`);
-    }
-
-    return response.data;
-  } catch (error: any) {
-    if (error.response?.status === 404) {
-      throw new Error(`Not found: ${path}`);
-    }
-    if (error.response?.status === 400) {
-      throw new Error(`Bad request: ${error.response.data?.message || error.message}`);
-    }
-    if (error.response?.status >= 500) {
-      throw new Error(`Server error: ${error.response.data?.message || error.message}`);
-    }
-    throw error;
+export class UpstreamError extends Error {
+  constructor(message: string, public readonly status?: number) {
+    super(message);
+    this.name = 'UpstreamError';
   }
 }
 
-export default api;
+/**
+ * GET a backend path with params. Errors are mapped to short, generic messages
+ * so backend internals never reach MCP clients.
+ */
+export async function getJSON<T>(
+  path: string,
+  params?: Record<string, unknown>,
+  ttlMs: number = DEFAULT_TTL_MS
+): Promise<T> {
+  const key = cacheKey(path, params);
+  const cached = cacheGet<T>(key);
+  if (cached !== undefined) return cached;
+
+  try {
+    const response = await api.get<T>(path, { params });
+    if (ttlMs > 0) cacheSet(key, response.data, ttlMs);
+    return response.data;
+  } catch (error: any) {
+    const status: number | undefined = error?.response?.status;
+    if (status === 404) throw new UpstreamError('Not found', 404);
+    if (status === 400) throw new UpstreamError('Invalid request parameters', 400);
+    if (status === 429) throw new UpstreamError('FindA.Sale is busy right now. Try again shortly.', 429);
+    console.error(`[API] GET ${path} failed:`, status ?? error?.code ?? error?.message);
+    throw new UpstreamError('FindA.Sale data is temporarily unavailable. Try again shortly.', status);
+  }
+}

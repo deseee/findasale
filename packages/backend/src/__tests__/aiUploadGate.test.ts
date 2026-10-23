@@ -88,7 +88,8 @@ describe('organizerAiGate', () => {
     expect(next).toHaveBeenCalled();
     expect(getAiGate(res)).toMatchObject({ organizerId: 'org1', tier: 'SIMPLE', saleId: 'sale1', reserved: 1 });
     expect(typeof getAiGate(res)!.settle).toBe('function');
-    expect(mockReserveAiTags).toHaveBeenCalledWith('org1', 'SIMPLE', 1);
+    // analyze-photo only returns an analysis (not bound to a sale), so it never spends an upgraded sale's own tags.
+    expect(mockReserveAiTags).toHaveBeenCalledWith('org1', 'SIMPLE', 1, null);
   });
 
   it('settle(used) keeps what was spent and refunds the rest, exactly once', async () => {
@@ -98,7 +99,7 @@ describe('organizerAiGate', () => {
     await gate.settle(2);
     await gate.settle(0); // idempotent: the second call is ignored
     expect(mockRefundAiTags).toHaveBeenCalledTimes(1);
-    expect(mockRefundAiTags).toHaveBeenCalledWith('org1', 3);
+    expect(mockRefundAiTags).toHaveBeenCalledWith('org1', 3, expect.objectContaining({ ok: true }));
   });
 
   it('settle(all) refunds nothing; settle clamps out-of-range values', async () => {
@@ -109,7 +110,7 @@ describe('organizerAiGate', () => {
     const res2 = mockRes();
     await organizerAiGate({ units: () => 3 })(organizerReq(), res2, jest.fn());
     await getAiGate(res2)!.settle(NaN);
-    expect(mockRefundAiTags).toHaveBeenCalledWith('org1', 3);
+    expect(mockRefundAiTags).toHaveBeenCalledWith('org1', 3, expect.objectContaining({ ok: true }));
   });
 
   it('refunds the whole reservation when the response finishes without the handler settling', async () => {
@@ -118,7 +119,7 @@ describe('organizerAiGate', () => {
     res.emit('finish');
     await Promise.resolve();
     await Promise.resolve();
-    expect(mockRefundAiTags).toHaveBeenCalledWith('org1', 4);
+    expect(mockRefundAiTags).toHaveBeenCalledWith('org1', 4, expect.objectContaining({ ok: true }));
   });
 
   it('a settled call is not refunded again by the finish safety net', async () => {
@@ -218,7 +219,7 @@ describe('organizerAiGate', () => {
     mockPrisma.organizer.findUnique.mockResolvedValue({ id: 'org1', subscriptionTier: 'PRO' });
     const res = mockRes();
     await organizerAiGate()(organizerReq({ user: { id: 'u1', roles: ['ORGANIZER'], subscriptionLapsed: true } }), res, jest.fn());
-    expect(mockReserveAiTags).toHaveBeenCalledWith('org1', 'PRO', 1);
+    expect(mockReserveAiTags).toHaveBeenCalledWith('org1', 'PRO', 1, null);
   });
 
   it('serialises an unlimited (Infinity) TEAMS quota without leaking Infinity', async () => {
@@ -322,6 +323,7 @@ describe('batch-analyze quota pre-check counts one Smart tag per photo', () => {
     const next = jest.fn();
     await gate(organizerReq({ body: { saleId: 'sale1', imageUrls: urls } }), mockRes(), next);
     expect(next).toHaveBeenCalled();
-    expect(mockReserveAiTags).toHaveBeenLastCalledWith('org1', 'SIMPLE', 12);
+    // batch-analyze creates items on that sale (requireSaleId), so a paid $9.99 a-la-carte sale spends its own tags.
+    expect(mockReserveAiTags).toHaveBeenLastCalledWith('org1', 'SIMPLE', 12, 'sale1');
   });
 });

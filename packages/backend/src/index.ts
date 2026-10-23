@@ -88,6 +88,7 @@ import notificationRoutes from './routes/notifications';
 import affiliateRoutes from './routes/affiliate';
 import syndicationRoutes from './routes/syndication'; // #459: public per-sale syndication feed (rate limited, public data only)
 import { scheduleCreatorWeeklySummaryJob } from './jobs/creatorWeeklySummaryJob'; // Creator Program: Monday in-app summaries
+import { scheduleReferralCreditSweepJob } from './jobs/referralCreditSweepJob'; // Roadmap #661: organizer referral subscription credit (earn + refund/chargeback clawback)
 import lineRoutes from './routes/lines';
 import geocodeRoutes from './routes/geocode';
 import uploadRoutes from './routes/upload';
@@ -1141,6 +1142,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Creator Program: weekly in-app summary for creators who opted in (Mondays 15:07 UTC)
   scheduleCreatorWeeklySummaryJob();
+  scheduleReferralCreditSweepJob();
 
   // Guild seasonal reset (Jan 1-7 00:05 UTC catch-up window, idempotent per year)
   startSeasonalResetJob();

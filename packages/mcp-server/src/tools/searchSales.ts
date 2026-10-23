@@ -1,66 +1,24 @@
-import { MCPToolDefinition } from '../types';
+import * as z from 'zod/v4';
+import { defineTool, saleTypeEnum, SALE_TYPE_HELP } from './types';
+import { handleSearchSales } from '../handlers';
 
-export const searchSalesTool: MCPToolDefinition = {
+export const searchSalesTool = defineTool({
   name: 'search_sales',
-  annotations: {
-    title: 'Search Sales',
-    readOnlyHint: true,
-    openWorldHint: true,
-  },
+  title: 'Search Sales',
   description:
-    'Search for active estate sales, yard sales, auctions, flea markets, and consignment sales by city, location, or date.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      city: {
-        type: 'string',
-        description: 'City name, e.g. "Grand Rapids"',
-      },
-      lat: {
-        type: 'number',
-        description: 'Latitude for radius search',
-      },
-      lng: {
-        type: 'number',
-        description: 'Longitude for radius search',
-      },
-      radiusKm: {
-        type: 'number',
-        description: 'Search radius in kilometers (default 25)',
-      },
-      startDate: {
-        type: 'string',
-        description: 'ISO date for sales starting on or after this date (e.g., "2026-05-10")',
-      },
-      endDate: {
-        type: 'string',
-        description: 'ISO date for sales ending on or before this date (e.g., "2026-05-15")',
-      },
-      saleType: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Filter by sale type: ESTATE, YARD, AUCTION, FLEA_MARKET, CONSIGNMENT',
-      },
-      status: {
-        type: 'string',
-        description: 'Filter by status: ACTIVE, UPCOMING, COMPLETED (default: ACTIVE)',
-      },
-      query: {
-        type: 'string',
-        description: 'Keyword search in sale name/description',
-      },
-      limit: {
-        type: 'integer',
-        description: 'Max results to return (default 20, max 50)',
-      },
-      sortBy: {
-        type: 'string',
-        description: 'Sort order: relevance, startDate, distance (default: relevance)',
-      },
-      minConfidence: {
-        type: 'number',
-        description: 'Minimum organizer confidence score (0.0–1.0). Use 0.7 for verified entries, 0.4 for third-party-corroborated. Default: no filter.',
-      },
-    },
-  },
-};
+    'Find current public sales (yard and garage sales, whole-house sales, auctions, flea markets, shops) by keyword, city, ZIP, map point, date range or sale type. Returns sale summaries with approximate location and a link to each sale page. Street addresses are never included.',
+  inputSchema: z.object({
+    query: z.string().max(100).optional().describe('Keywords to match in the sale title or description, e.g. "mid-century" or "tools"'),
+    city: z.string().max(80).optional().describe('City name, e.g. "Grand Rapids"'),
+    zip: z.string().regex(/^\d{5}$/).optional().describe('5-digit US ZIP code'),
+    lat: z.number().min(-90).max(90).optional().describe('Latitude for a radius search (use with lng)'),
+    lng: z.number().min(-180).max(180).optional().describe('Longitude for a radius search (use with lat)'),
+    radiusKm: z.number().min(1).max(200).optional().describe('Radius in kilometers for lat/lng search (default 25)'),
+    startDate: z.string().max(30).optional().describe('Only sales starting on or after this date (YYYY-MM-DD)'),
+    endDate: z.string().max(30).optional().describe('Only sales starting on or before this date (YYYY-MM-DD)'),
+    saleType: z.array(saleTypeEnum).max(6).optional().describe(SALE_TYPE_HELP),
+    limit: z.number().int().min(1).max(50).optional().describe('Max results (default 20, max 50)'),
+    minConfidence: z.number().min(0).max(1).optional().describe('Minimum listing confidence 0 to 1. 0.7 = organizer-verified, 0.4 = corroborated by a third party.'),
+  }),
+  handler: handleSearchSales,
+});

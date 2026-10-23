@@ -8,6 +8,7 @@ import { TIER_LIMITS } from '../constants/tierLimits';
 import { prisma } from '../lib/prisma';
 import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): finalizeGracePeriod notification-gap fix
 import { notifyAutoMarkdownsPaused } from '../lib/syncTier'; // 2026-09-29: one-time "auto-markdown cycles paused" notice when a scheduled cancellation ends
+import { dropUserSockets } from '../lib/dropUserSockets'; // 2026-10-23 (security): drop live sockets on a tier change
 
 // Uses shared Prisma singleton (avoids a second connection pool — S1013 perf fix)
 
@@ -371,6 +372,7 @@ export async function downgradeScheduledCancelFrozenOrganizers(now: Date = new D
       });
       if (result.count !== 1) continue;
       downgraded++;
+      await dropUserSockets(org.userId, 'scheduled-cancel-downgrade');
 
       if (org.userId) {
         await prisma.userRoleSubscription.updateMany({
