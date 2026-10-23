@@ -40,6 +40,12 @@ const getStatusLabel = (status: string): string => {
   return status;
 };
 
+// GET /sales/:id (and the ISR-rendered /sales/[id] page, which fetches it without the organizer's cookie) only
+// serves PUBLISHED and ENDED sales; a DRAFT always 404s there, even for its owner. Send anything else to the edit page.
+const isPublicStatus = (status: string): boolean => status === 'PUBLISHED' || status === 'LIVE' || status === 'ENDED';
+const saleHref = (sale: { id: string; status: string }): string =>
+  isPublicStatus(sale.status) ? `/sales/${sale.id}` : `/organizer/edit-sale/${sale.id}`;
+
 const SecondarySaleCard: React.FC<SecondarySaleCardProps> = ({
   sale,
   stats = {},
@@ -76,7 +82,8 @@ const SecondarySaleCard: React.FC<SecondarySaleCardProps> = ({
               {sale.title}
             </h3>
             <Link
-              href={`/sales/${sale.id}`}
+              href={saleHref(sale)}
+              title={isPublicStatus(sale.status) ? 'See your sale as shoppers see it' : 'Not public yet: open it to finish and publish'}
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0 ${getStatusBadgeColor(
                 sale.status
               )} hover:opacity-80 transition-opacity`}

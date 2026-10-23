@@ -316,6 +316,14 @@ const nextConfig = {
         { source: '/api/auth/redeem-invite',       destination: `${railwayApi}/auth/redeem-invite` },
         { source: '/api/auth/resend-verification', destination: `${railwayApi}/auth/resend-verification` },
         { source: '/api/auth/passkey/:path*',        destination: `${railwayApi}/auth/passkey/:path*` },
+        // HIGH fix (2026-10-23, weekly audit 2026-10-17 #1): both routes below were added to the backend
+        // without a matching entry here, so they fell into the NextAuth catch-all and got a 400.
+        // socket-token (fbcfacf7f): every socket silently connected anonymously, so private rooms
+        // (Live Sale Status, Morning Briefing JOIN_BRIEFING, POS payment alerts) never received events.
+        // exit-impersonation (2026-09-25): the "Exit" button on the admin "Log in as" banner never reached the backend.
+        // lib/__tests__/authRewrites.test.ts now fails if any backend /auth route is missing from this list.
+        { source: '/api/auth/socket-token',        destination: `${railwayApi}/auth/socket-token` },
+        { source: '/api/auth/exit-impersonation',  destination: `${railwayApi}/auth/exit-impersonation` },
         // P0 fix (2026-09-13): pages/api/billing/checkout.ts is a stale proxy left over from
         // a pre-httpOnly-cookie auth era -- it checks NextAuth's getSession() and a
         // session.backendJwt field that the current login flow never populates (the app
