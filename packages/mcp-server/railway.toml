@@ -1,3 +1,5 @@
+# NOTE (2026-10-23): Railway stops reading config-as-code on 2026-12-01. These settings now live in the Railway service settings
+# (findasale service c4d6abd9-0150-4b37-ba8d-09f6e01cefd5, project keen-wisdom, production). Edit them in Railway; this file is kept for reference only and is no longer authoritative.
 [build]
 dockerfilePath = "Dockerfile.production"
 

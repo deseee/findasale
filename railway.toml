@@ -1,3 +1,5 @@
+# NOTE (2026-10-23): Railway stops reading config-as-code on 2026-12-01. These settings now live in the Railway service settings
+# (backend service 8bf78954-aaf2-4e39-b45a-43fa48d4fd1c, project keen-wisdom, production). Edit them in Railway; this file is kept for reference only and is no longer authoritative.
 [build]
 dockerfilePath = "packages/backend/Dockerfile.production"
 # Watch paths: trigger a backend deploy whenever backend source, database schema,
