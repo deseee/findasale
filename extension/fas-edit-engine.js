@@ -536,6 +536,24 @@
     // ---- API apply + verify (one call; several awaits; no navigation expected) ----
     if (S.phase === 'posh_uiverify') return poshUiVerify(id, W, S);
     if (S.phase === 'posh_verify_only') {
+      // 1.0.62 (Patrick's yes, 2026-10-23): Poshmark's own edit form ends in two more steps -- a "Share Listing" screen with "List This Item", then
+      // for glass/lamp-type items a "Fragile Item Detected" packing acknowledgement (Cancel Edit / Publish Listing). The Update click alone never saved
+      // anything. Click through exactly those two, and only those: any certify / suspicious / prohibited / oversized prompt still stops the run.
+      for (var fe = 0; fe < 10; fe++) {
+        var ackBtn = null, ackWhich = '';
+        // Live-confirmed 2026-10-23: dialog 1 "Fragile Item Detected" (Cancel Edit / Publish Listing), then dialog 2 "Publish Listing: ... Poshmark will not be
+        // compensating me" (Cancel / Publish). Only a button inside a modal carrying that exact packing text is ever clicked.
+        qa(BTN_SEL).filter(function (b2) { return visible(b2) && !isDisabled(b2); }).forEach(function (b2) {
+          var mt = textOf(b2.closest('.modal, [role="dialog"]'));
+          var lb = btnLabel(b2);
+          if (lb === 'publish' && /not be compensating/.test(mt)) { ackBtn = b2; ackWhich = 'confirm'; }
+          else if (lb === 'publish listing' && /potential breakable item/.test(mt) && ackWhich !== 'confirm') { ackBtn = b2; ackWhich = 'fragile'; }
+        });
+        if (ackBtn) { tLog('info', 'posh_fragile_ack', 'Poshmark asked for its packing acknowledgement on this fragile item (' + ackWhich + ' step); clicking ' + btnLabel(ackBtn) + ' (price/stock edit on an already-live listing)', {}); await realClick(ackBtn); await sleep(2500); continue; }
+        var shareBtn = findButton(/^list this item$/);
+        if (shareBtn && /share listing/i.test(pageText())) { await realClick(shareBtn); await sleep(2500); continue; }
+        break;
+      }
       // 1.0.43: after the form's Update click, a certify / suspicious / verification prompt on the page means Poshmark wants the person -- stop, keep the tab.
       var flagTxt = textOf(qa('[role="dialog"], .modal, [class*="modal" i], [class*="error" i], [class*="toast" i]').filter(visible).slice(-3).map(function (e) { return e; })[0] || document.body).slice(0, 2000);
       if (/suspicious|certify|single listing creation|verify (that )?you|are you a robot/i.test(flagTxt)) return blocked('poshmark_flagged', 'Poshmark showed a certify/verification prompt after the Update click, so the edit needs you. The tab is left open.', 'form');
