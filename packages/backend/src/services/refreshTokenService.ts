@@ -151,6 +151,14 @@ export async function revokeFamily(familyId: string, reason: string): Promise<nu
 
 /** Revoke every live refresh token of a user (password change / reset). Never throws: tokenVersion already kills them. */
 export async function revokeAllRefreshTokensForUser(userId: string, reason: string): Promise<number> {
+  // 2026-10-23 (security): sessions are being revoked, so also drop the user's live sockets. Their personal room carries
+  // POS payment requests, hold invoices and cart shares; on reconnect the handshake re-checks tokenVersion in the DB.
+  try {
+    const { disconnectUserSockets } = await import('../lib/socket');
+    if (typeof disconnectUserSockets === 'function') disconnectUserSockets(userId);
+  } catch (err) {
+    console.error('[refreshToken] socket disconnect failed:', err);
+  }
   try {
     const r = await db().refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date(), revokedReason: reason } });
     return r?.count ?? 0;

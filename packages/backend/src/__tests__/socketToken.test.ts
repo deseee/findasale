@@ -136,6 +136,8 @@ describe('a socket-purpose token is not an API credential', () => {
   });
 });
 
+const flush = () => new Promise((r) => setImmediate(r));
+
 describe('socket handshake', () => {
   function connect(token?: string) {
     initSocket({} as any, ['https://finda.sale']);
@@ -143,6 +145,7 @@ describe('socket handshake', () => {
     const socket: any = {
       handshake: { auth: token ? { token } : {}, headers: {} },
       data: {},
+      connected: true,
       join: jest.fn(),
       leave: jest.fn(),
       on: (evt: string, fn: any) => { handlers[evt] = fn; },
@@ -154,6 +157,7 @@ describe('socket handshake', () => {
   it('accepts a socket token and admits the owning organizer to the private rooms', async () => {
     const { socket, handlers } = connect(signSocketToken({ id: 'u1', role: 'ORGANIZER', tokenVersion: 0 }));
     expect(socket.data.userId).toBe('u1');
+    await flush();
     expect(socket.join).toHaveBeenCalledWith('user:u1');
     await handlers.JOIN_BRIEFING('s1');
     await handlers.JOIN_SALE_STATUS('s1');
@@ -188,6 +192,39 @@ describe('socket handshake', () => {
 
     const foreign = connect(jwt.sign({ id: 'u1', tokenVersion: 0, purpose: 'unsubscribe' }, SECRET, { expiresIn: '5m' }));
     expect(foreign.socket.data.userId).toBeUndefined();
+  });
+
+  // 2026-10-23 (security): the personal user room carries POS payment requests, hold invoices and cart shares, so
+  // the join is gated on the same DB check as the private rooms.
+  it('does not join the user room for a revoked token (tokenVersion bumped)', async () => {
+    mockLibPrisma.user.findUnique.mockResolvedValue({ ...baseUser, tokenVersion: 1 });
+    const { socket } = connect(signSocketToken({ id: 'u1', tokenVersion: 0 }));
+    await flush();
+    expect(socket.join).not.toHaveBeenCalledWith('user:u1');
+  });
+
+  it('does not join the user room for a suspended or deleted user', async () => {
+    mockLibPrisma.user.findUnique.mockResolvedValue({ ...baseUser, suspendedAt: new Date() });
+    const suspended = connect(signSocketToken({ id: 'u1', tokenVersion: 0 }));
+    await flush();
+    expect(suspended.socket.join).not.toHaveBeenCalledWith('user:u1');
+
+    mockLibPrisma.user.findUnique.mockResolvedValue({ ...baseUser, deletedAt: new Date() });
+    const deleted = connect(accessToken());
+    await flush();
+    expect(deleted.socket.join).not.toHaveBeenCalledWith('user:u1');
+
+    mockLibPrisma.user.findUnique.mockResolvedValue(null);
+    const gone = connect(accessToken());
+    await flush();
+    expect(gone.socket.join).not.toHaveBeenCalledWith('user:u1');
+  });
+
+  it('does not join the user room if the DB check fails', async () => {
+    mockLibPrisma.user.findUnique.mockRejectedValue(new Error('db down'));
+    const { socket } = connect(accessToken());
+    await flush();
+    expect(socket.join).not.toHaveBeenCalledWith('user:u1');
   });
 
   it('rejects an expired socket token', () => {

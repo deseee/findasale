@@ -5599,21 +5599,14 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       }
 
       if (activeScans.length >= 2) {
-        // Fetch item title for POS panel context
-        const scannerIds = activeScans.map(e => e.userId);
-        const io = getIO();
-        // Emit to the sale's item room — organizer POS listens on sale room or item room.
-        // Also emit to a broad 'pos:scan_and_split' event on the sale room.
-        io.to(`item:${itemId}`).emit('SCAN_AND_SPLIT', {
-          itemId,
-          scannerIds,
-          scannedAt: Date.now(),
-        });
-        // Also emit to sale room in case organizer POS is listening there
+        // 2026-10-23 (security): this used to go to the public item:<id> and sale:<id> rooms with the
+        // scanning shoppers' user IDs. The only listener is the organizer POS, and it only needs the count,
+        // so it now goes to the private sale-status:<id> room (organizer / workspace staff / admin, see
+        // canJoinPrivateSaleRoom) with no shopper IDs at all.
         if (item.sale?.id) {
-          io.to(`sale:${item.sale.id}`).emit('SCAN_AND_SPLIT', {
+          getIO().to(`sale-status:${item.sale.id}`).emit('SCAN_AND_SPLIT', {
             itemId,
-            scannerIds,
+            scannerCount: activeScans.length,
             scannedAt: Date.now(),
           });
         }

@@ -101,17 +101,18 @@ export async function submitInterest(input: InterestInput): Promise<InterestOutc
   let leadId: string;
   if (existing) {
     if (TERMINAL_STATUSES.includes(existing.status) || existing.consentAt) return 'accepted';
+    // 2026-10-23 (security): only a lead still waiting on its own confirmation is touched by the public form.
+    // Anyone who knows an address can post this form, so a lead an admin queued, approved, skipped (e.g. "do not
+    // contact") or that is mid-send must never be reset to PENDING_CONFIRM, un-skipped, re-sourced or re-emailed here.
+    if (existing.status !== 'PENDING_CONFIRM') return 'accepted';
     leadId = existing.id;
     await prisma.recruitLead.update({
       where: { id: existing.id },
       data: {
-        source: 'OPT_IN_FORM',
-        status: 'PENDING_CONFIRM',
         sourceDetail: input.src ?? existing.sourceDetail,
         businessName: input.businessName,
         state: input.state ?? existing.state,
         organizerId: existing.organizerId ?? organizerId,
-        skipReason: null,
       },
     });
   } else {

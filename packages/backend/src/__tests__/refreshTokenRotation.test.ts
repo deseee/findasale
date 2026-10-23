@@ -70,6 +70,7 @@ jest.mock('../controllers/authController', () => {
   };
 });
 jest.mock('../utils/securityEvent', () => ({ logSecurityEvent: jest.fn() }));
+jest.mock('../lib/socket', () => ({ disconnectUserSockets: jest.fn() }));
 
 import http from 'http';
 import express from 'express';
@@ -241,6 +242,8 @@ describe('POST /auth/refresh rotation', () => {
     const b = await issueRefreshToken(claims);
     const other = await issueRefreshToken({ ...claims, id: 'u2' });
     expect(await revokeAllRefreshTokensForUser('u1', 'password_change')).toBe(2);
+    // 2026-10-23 (security): the user's live sockets (POS / hold-invoice user room) are dropped too.
+    expect(jest.requireMock('../lib/socket').disconnectUserSockets).toHaveBeenCalledWith('u1');
     expect(rowFor(a).revokedReason).toBe('password_change');
     expect(rowFor(b).revokedAt).toBeTruthy();
     expect(rowFor(other).revokedAt).toBeNull();

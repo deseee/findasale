@@ -35,7 +35,7 @@ jest.mock('../services/mercariCategoryResolver', () => ({ resolveMercariCategory
 jest.mock('../services/grailedCategoryResolver', () => ({ resolveGrailedCategory: jest.fn() }));
 jest.mock('../services/craigslistCategoryResolver', () => ({ resolveCraigslistCategory: jest.fn() }));
 
-import { postExtensionLogs } from '../controllers/extensionController';
+import { postExtensionLogs, scrubDiagString } from '../controllers/extensionController';
 
 function mockRes() {
   const res: any = {};
@@ -79,6 +79,34 @@ describe('FAS_EDIT_DIAG automatic diagnostics', () => {
     await postExtensionLogs({ user: { id: 'u1' }, body: { logs: [{ level: 'info', source: 'resyncListings', message: 'x', context: bigCtx() }] } } as any, res);
     expect(mockPrisma.extensionRuntimeLog.createMany.mock.calls[0][0].data[0].context).toBeUndefined();
     expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it('stores a scrubbed message for diag sources (JWT, email, query, #fragment) and leaves ordinary messages alone', async () => {
+    // Built at runtime so the repo secret scanner does not read a JWT-shaped literal.
+    const jwtLike = ['eyJ' + 'hbGciOiJIUzI1NiJ9', 'eyJ' + 'pZCI6InUxIn0', 'sig-PART_1'].join('.');
+    const msg = `fail ${jwtLike} owner@example.com https://x.com/cb#access_token=SECRET2 https://y.com/p?csrf=SECRET1`;
+    const res = mockRes();
+    await postExtensionLogs({ user: { id: 'u1' }, body: { logs: [
+      { level: 'error', source: 'FAS_FLOW_DIAG', message: msg },
+      { level: 'info', source: 'resyncListings', message: 'plain message' },
+    ] } } as any, res);
+    const [diagRow, plainRow] = mockPrisma.extensionRuntimeLog.createMany.mock.calls[0][0].data;
+    expect(diagRow.message).not.toContain('eyJ');
+    expect(diagRow.message).not.toContain('owner@example.com');
+    expect(diagRow.message).not.toContain('SECRET1');
+    expect(diagRow.message).not.toContain('SECRET2');
+    expect(diagRow.message).toContain('[jwt]');
+    expect(diagRow.message).toContain('https://x.com/cb');
+    expect(diagRow.message.length).toBeLessThanOrEqual(500);
+    expect(plainRow.message).toBe('plain message');
+  });
+
+  it('scrubDiagString strips JWTs and URL fragments and stays JSON-safe', () => {
+    expect(scrubDiagString('t eyJa-b.eyJc_d.e-f_g x')).toBe('t [jwt] x');
+    expect(scrubDiagString('https://a.com/p#access_token=S')).toBe('https://a.com/p');
+    expect(scrubDiagString('https://a.com/p?x=1#y=2')).toBe('https://a.com/p');
+    const ctx = { u: 'https://a.com/p#t=S', n: 'ok' };
+    expect(JSON.parse(scrubDiagString(JSON.stringify(ctx)))).toEqual({ u: 'https://a.com/p', n: 'ok' });
   });
 
   it('drops contexts above the diagnostic cap', async () => {

@@ -1187,24 +1187,28 @@ export default function POSPage() {
         }
       };
 
-      // Join sale room so organizer receives sale-scoped events (e.g., SCAN_AND_SPLIT)
+      // Join the private sale-status room (organizer / staff / admin only, checked server-side) so the POS
+      // receives SCAN_AND_SPLIT. Re-joined on every (re)connect because rooms do not survive a reconnect.
       if (selectedSaleId) {
-        socketInstance.emit('JOIN_SALE_FEED', selectedSaleId);
+        socketInstance.on('connect', () => {
+          socketInstance.emit('JOIN_SALE_STATUS', selectedSaleId);
+        });
       }
 
       socketInstance.on('POS_PAYMENT_STATUS', handlePaymentStatus);
 
       // Feature #408: Scan & Split: listen for simultaneous QR scans on the same item
-      socketInstance.on('SCAN_AND_SPLIT', (event: { itemId: string; scannerIds: string[]; scannedAt: number }) => {
+      socketInstance.on('SCAN_AND_SPLIT', (event: { itemId: string; scannerCount: number; scannedAt: number }) => {
         if (!isMounted) return;
         // Split Bill UI hidden per Patrick decision 2026-08-24 -- don't auto-open a panel
         // that's no longer rendered, and don't tell the cashier it opened when it didn't.
         if (!ENABLE_SPLIT_BILL) return;
         // Auto-open the split-bill panel with the scanned item in context
         setSplitBillOpen(true);
-        setSplitCount(Math.max(2, event.scannerIds.length));
+        const shoppers = Math.max(2, Number(event.scannerCount) || 2);
+        setSplitCount(shoppers);
         setSplitCollected([]);
-        setSplitCustomAmounts(Array(Math.max(2, event.scannerIds.length)).fill(''));
+        setSplitCustomAmounts(Array(shoppers).fill(''));
         showToast('Two shoppers scanned the same item. Split Bill opened', 'info');
       });
     }).catch((err) => {

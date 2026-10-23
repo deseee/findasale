@@ -16,7 +16,7 @@ jest.mock('../lib/prisma', () => ({
   },
 }));
 
-import { canJoinPrivateSaleRoom } from '../lib/socket';
+import { canJoinPrivateSaleRoom, isSocketUserCurrent, disconnectUserSockets } from '../lib/socket';
 
 const baseUser = { id: 'u1', role: 'USER', roles: ['USER'], tokenVersion: 0, suspendedAt: null, deletedAt: null };
 
@@ -65,5 +65,25 @@ describe('canJoinPrivateSaleRoom', () => {
     mockUserFindUnique.mockResolvedValue(baseUser);
     mockSaleFindUnique.mockResolvedValue(null);
     await expect(canJoinPrivateSaleRoom({ userId: 'u1', tokenVersion: 0 }, 'nope')).resolves.toBe(false);
+  });
+});
+
+describe('isSocketUserCurrent (personal user room gate, 2026-10-23)', () => {
+  it('admits a current user and refuses anonymous, revoked, suspended, deleted and missing users', async () => {
+    await expect(isSocketUserCurrent({ userId: 'u1', tokenVersion: 0 })).resolves.toBe(true);
+    await expect(isSocketUserCurrent({})).resolves.toBe(false);
+    mockUserFindUnique.mockResolvedValue({ ...baseUser, tokenVersion: 2 });
+    await expect(isSocketUserCurrent({ userId: 'u1', tokenVersion: 1 })).resolves.toBe(false);
+    await expect(isSocketUserCurrent({ userId: 'u1' })).resolves.toBe(false);
+    mockUserFindUnique.mockResolvedValue({ ...baseUser, suspendedAt: new Date() });
+    await expect(isSocketUserCurrent({ userId: 'u1', tokenVersion: 0 })).resolves.toBe(false);
+    mockUserFindUnique.mockResolvedValue({ ...baseUser, deletedAt: new Date() });
+    await expect(isSocketUserCurrent({ userId: 'u1', tokenVersion: 0 })).resolves.toBe(false);
+    mockUserFindUnique.mockResolvedValue(null);
+    await expect(isSocketUserCurrent({ userId: 'u1', tokenVersion: 0 })).resolves.toBe(false);
+  });
+
+  it('disconnectUserSockets is a safe no-op before the socket server exists', () => {
+    expect(() => disconnectUserSockets('u1')).not.toThrow();
   });
 });

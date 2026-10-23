@@ -3158,11 +3158,16 @@ const EXTENSION_LOG_MESSAGE_MAX_LEN = 500;
 // emitted as ONE stdout JSON line with a stable prefix so they can be grepped in Railway logs.
 const EXTENSION_DIAG_SOURCES = ['FAS_EDIT_DIAG', 'FAS_FLOW_DIAG'];
 const EXTENSION_DIAG_CONTEXT_MAX_LEN = 16000;
+// 2026-10-23 (security): also redacts bare JWTs (access / socket / OAuth id tokens pasted into a page or URL) and strips URL
+// #fragments (OAuth implicit-flow access_token=... lives there), beside the existing ?query strip. Replacements never
+// introduce quotes or backslashes, so this stays safe to run on a JSON.stringify'd context and JSON.parse it back.
 export function scrubDiagString(raw: string): string {
   return raw
+    .replace(/eyJ[\w-]+\.[\w-]+\.[\w-]+/g, '[jwt]')
     .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[email]')
     .replace(/\bBearer\s+[A-Za-z0-9._~+\/=-]+/gi, 'Bearer [redacted]')
-    .replace(/https?:\/\/[^\s"'<>)\\]+\?[^\s"'<>)\\]*/gi, (m) => m.split('?')[0]);
+    .replace(/https?:\/\/[^\s"'<>)\\]+\?[^\s"'<>)\\]*/gi, (m) => m.split('?')[0])
+    .replace(/(https?:\/\/[^\s"'<>)\\#]+)#[^\s"'<>)\\]*/gi, '$1');
 }
 
 export const postExtensionLogs = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -3185,7 +3190,11 @@ export const postExtensionLogs = async (req: AuthRequest, res: Response): Promis
       source: String(entry.source).slice(0, 100),
       platform: typeof entry.platform === 'string' ? entry.platform.slice(0, 30) : null,
       itemId: typeof entry.itemId === 'string' ? entry.itemId.slice(0, 30) : null,
-      message: String(entry.message).slice(0, EXTENSION_LOG_MESSAGE_MAX_LEN),
+      // 2026-10-23 (security): diag messages are stored scrubbed too, not only the context (scrub before the slice so a
+      // secret straddling the cut cannot survive half-redacted).
+      message: EXTENSION_DIAG_SOURCES.includes(entry.source)
+        ? scrubDiagString(String(entry.message).slice(0, 20000)).slice(0, EXTENSION_LOG_MESSAGE_MAX_LEN)
+        : String(entry.message).slice(0, EXTENSION_LOG_MESSAGE_MAX_LEN),
       // Guard against a caller accidentally passing something huge (e.g. a full page's worth of
       // data) -- this is an event log, not a blob store. JSON.stringify a second time is cheap at
       // this size and keeps the cap exact regardless of what shape `context` is.

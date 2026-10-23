@@ -157,12 +157,22 @@ const CSRF_EXEMPT_AUTH_PATHS: ReadonlySet<string> = new Set([
   '/api/auth/logout',
 ]);
 
+/**
+ * Anchored patterns for mail-client one-click endpoints whose HMAC token is a path segment (2026-10-23).
+ * ADR-139 recruit unsubscribe: POST /api/recruit/unsubscribe/:leadId/:sig is the RFC 8058 List-Unsubscribe-Post
+ * target; mail providers send it with no cookies, so the double-submit check 403'd every one-click unsubscribe.
+ * The constant-time HMAC in the URL (recruitTokens.ts) is the route's authentication, and the only effect of a
+ * forged POST is opting that lead's own address out.
+ */
+const CSRF_EXEMPT_PATTERNS: readonly RegExp[] = [/^\/api\/recruit\/unsubscribe\/[^/]+\/[^/]+$/];
+
 const normalizePath = (path: string): string => (path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path);
 
 /** True when this exact request path is on the CSRF allowlist. Exported for tests. */
 export const isCsrfExemptPath = (rawPath: string): boolean => {
   const path = normalizePath(rawPath);
   if (CSRF_EXEMPT_EXACT_PATHS.has(path) || CSRF_EXEMPT_AUTH_PATHS.has(path)) return true;
+  if (CSRF_EXEMPT_PATTERNS.some((re) => re.test(path))) return true;
   return CSRF_EXEMPT_PREFIXES.some((prefix) => path.startsWith(prefix));
 };
 

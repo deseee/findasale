@@ -579,6 +579,16 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
   }
 };
 
+/** Disconnect a user's live sockets after their sessions are revoked. Best effort, never throws. */
+async function dropUserSockets(userId: string): Promise<void> {
+  try {
+    const { disconnectUserSockets } = await import('../lib/socket');
+    if (typeof disconnectUserSockets === 'function') disconnectUserSockets(userId);
+  } catch (err) {
+    console.error('[admin] socket disconnect failed:', err);
+  }
+}
+
 // PATCH /api/admin/users/:userId/suspend — suspend a user account
 export const suspendUser = async (req: AuthRequest, res: Response) => {
   try {
@@ -593,6 +603,7 @@ export const suspendUser = async (req: AuthRequest, res: Response) => {
         tokenVersion: { increment: 1 },
       },
     });
+    await dropUserSockets(userId); // 2026-10-23 (security): live sockets keep receiving user-room events otherwise
 
     // Security notification: the affected user needs to know an admin suspended their
     // account -- this also doubles as an audit trail for a trust-and-safety action.
@@ -754,6 +765,7 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
         tokenVersion: { increment: 1 },
       },
     });
+    await dropUserSockets(userId); // 2026-10-23 (security): live sockets keep receiving user-room events otherwise
 
     // Notification-gap fix (S1195, 2026-08-08): deleteUser is a soft-delete (deletedAt set,
     // reversible via restoreUser below) that previously notified nobody -- inconsistent with

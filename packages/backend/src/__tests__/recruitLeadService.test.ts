@@ -37,6 +37,7 @@ import { signRecruitToken } from '../services/recruit/recruitTokens';
 import { confirmLead, sendNextStepForLead, submitInterest, unsubscribeLead } from '../services/recruit/recruitLeadService';
 import { interestSchema, batchSchema, manualSchema, testSendSchema } from '../services/recruit/recruitSchemas';
 import { renderConfirmEmail, renderSequenceEmail } from '../services/recruit/recruitTemplates';
+import { isCsrfExemptPath } from '../middleware/csrf';
 
 const SECRET = 's'.repeat(40);
 // Fake keys, built short so the pre-commit secret scan does not read them as real ones.
@@ -193,6 +194,27 @@ describe('double opt-in', () => {
     const where = mockPrisma.recruitLead.updateMany.mock.calls[0][0].where;
     expect(where.confirmSentCount).toEqual({ lt: 3 });
     expect(mockResendSend).not.toHaveBeenCalled();
+  });
+});
+
+describe('public interest form cannot reset a lead it does not own (2026-10-23 adversarial pass)', () => {
+  it.each(['QUEUED', 'APPROVED', 'SENDING', 'SENT', 'SKIPPED', 'FAILED'])(
+    'leaves an existing %s lead untouched and sends nothing',
+    async (status) => {
+      mockPrisma.recruitLead.findUnique.mockResolvedValue({ id: 'leadX', status, consentAt: null, organizerId: null, sourceDetail: null, state: null, source: 'DIRECTORY' });
+      expect(await submitInterest({ email: 'known@example.com', businessName: 'Attacker Name' })).toBe('accepted');
+      expect(mockPrisma.recruitLead.update).not.toHaveBeenCalled();
+      expect(mockPrisma.recruitLead.updateMany).not.toHaveBeenCalled();
+      expect(mockResendSend).not.toHaveBeenCalled();
+    }
+  );
+
+  it('a recruit one-click unsubscribe POST is CSRF-exempt, but only that exact shape', () => {
+    expect(isCsrfExemptPath('/api/recruit/unsubscribe/lead1/sig1')).toBe(true);
+    expect(isCsrfExemptPath('/api/recruit/unsubscribe/lead1')).toBe(false);
+    expect(isCsrfExemptPath('/api/recruit/unsubscribe/lead1/sig1/extra')).toBe(false);
+    expect(isCsrfExemptPath('/api/recruit/interest')).toBe(false);
+    expect(isCsrfExemptPath('/api/recruit/confirm')).toBe(false);
   });
 });
 

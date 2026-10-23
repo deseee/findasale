@@ -9,6 +9,56 @@ import { canAccessOrganizerSales } from '../utils/saleStaffAccess';
 
 let _io: Server | undefined;
 
+type SocketUserRow = {
+  id: string;
+  role: any;
+  roles: any;
+  tokenVersion: number | null;
+  suspendedAt: Date | null;
+  deletedAt: Date | null;
+};
+
+/**
+ * 2026-10-23 (security): shared user half of every socket privilege check. A handshake JWT is only trusted if the
+ * user still exists, is not suspended or deleted, and the token's tokenVersion matches the DB (password reset,
+ * change-password, suspend and delete all bump tokenVersion). A token minted without tokenVersion is accepted only
+ * while the user's tokenVersion is still 0.
+ */
+function isSocketUserActive(socketData: { tokenVersion?: number }, user: SocketUserRow | null): user is SocketUserRow {
+  if (!user || user.suspendedAt || user.deletedAt) return false;
+  const staleTokenVersion =
+    socketData.tokenVersion === undefined ? (user.tokenVersion ?? 0) > 0 : socketData.tokenVersion !== user.tokenVersion;
+  return !staleTokenVersion;
+}
+
+const SOCKET_USER_SELECT = { id: true, role: true, roles: true, tokenVersion: true, suspendedAt: true, deletedAt: true } as const;
+
+/** Re-reads the handshake user from the DB; false for anonymous, revoked, suspended or deleted. Never throws. */
+export async function isSocketUserCurrent(socketData: { userId?: string; tokenVersion?: number }): Promise<boolean> {
+  try {
+    if (!socketData?.userId) return false;
+    const user = await prisma.user.findUnique({ where: { id: socketData.userId }, select: SOCKET_USER_SELECT });
+    return isSocketUserActive(socketData, user as SocketUserRow | null);
+  } catch (error) {
+    console.error('[socket] user check failed (denying):', error);
+    return false;
+  }
+}
+
+/**
+ * Force-disconnect every live socket in a user's personal room (POS payment requests, hold invoices, cart shares).
+ * Call after anything that revokes the user's sessions (tokenVersion bump). Safe before initSocket and never throws;
+ * with the Redis adapter this reaches sockets on every instance.
+ */
+export function disconnectUserSockets(userId: string): void {
+  try {
+    if (!_io || !userId) return;
+    _io.in(`user:${userId}`).disconnectSockets(true);
+  } catch (error) {
+    console.error('[socket] disconnectUserSockets failed:', error);
+  }
+}
+
 /**
  * 2026-10-13 (security): private sale rooms (morning briefing team data, live organizer status with
  * revenue) are joined only by the sale's organizer, its workspace staff or an admin. Identity comes from
@@ -22,17 +72,11 @@ export async function canJoinPrivateSaleRoom(
   try {
     if (!socketData?.userId) return false;
     const [user, sale] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: socketData.userId },
-        select: { id: true, role: true, roles: true, tokenVersion: true, suspendedAt: true, deletedAt: true },
-      }),
+      prisma.user.findUnique({ where: { id: socketData.userId }, select: SOCKET_USER_SELECT }),
       prisma.sale.findUnique({ where: { id: saleId }, select: { organizerId: true } }),
     ]);
-    if (!user || !sale || user.suspendedAt || user.deletedAt) return false;
-    const staleTokenVersion =
-      socketData.tokenVersion === undefined ? (user.tokenVersion ?? 0) > 0 : socketData.tokenVersion !== user.tokenVersion;
-    if (staleTokenVersion) return false;
-    return await canAccessOrganizerSales({ id: user.id, role: user.role, roles: user.roles }, sale.organizerId);
+    if (!sale || !isSocketUserActive(socketData, user as SocketUserRow | null)) return false;
+    return await canAccessOrganizerSales({ id: user!.id, role: user!.role, roles: user!.roles }, sale.organizerId);
   } catch (error) {
     console.error('[socket] private sale room check failed (denying):', error);
     return false;
@@ -96,8 +140,13 @@ export const initSocket = (httpServer: any, allowedOrigins: string[]): Server =>
         socket.data.userId = decoded.id;
         socket.data.role = decoded.role;
         socket.data.tokenVersion = decoded.tokenVersion;
-        // Auto-join authenticated users to their personal user room for direct notifications (POS payment requests, etc.)
-        socket.join(`user:${decoded.id}`);
+        // Auto-join authenticated users to their personal user room for direct notifications (POS payment requests,
+        // hold invoices, cart shares). 2026-10-23 (security): only after a DB check, so a revoked token (tokenVersion
+        // bumped by password reset/change, suspend, delete) or a suspended/deleted user never receives them.
+        const userId = decoded.id;
+        void isSocketUserCurrent(socket.data).then((ok) => {
+          if (ok && socket.connected) socket.join(`user:${userId}`);
+        });
       } catch (err) {
         // S708: TokenExpiredError is expected — the client will refresh via /auth/refresh on
         // the next API call and reconnect with a fresh cookie. Only log truly invalid tokens
