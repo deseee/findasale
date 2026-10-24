@@ -22,6 +22,7 @@ jest.mock('../lib/prisma', () => {
 jest.mock('@sentry/node', () => new Proxy({ __esModule: true }, { get: (t: any, k: string) => (k in t ? t[k] : jest.fn()) }));
 jest.mock('../services/revalidationService', () => ({
   triggerSaleAndCityRevalidation: jest.fn(() => Promise.resolve()),
+  triggerSaleTakedownRevalidation: jest.fn(() => Promise.resolve()),
   debouncedTriggerSaleAndCityRevalidation: jest.fn(),
   citySlugFromCityState: jest.fn(() => null),
 }));

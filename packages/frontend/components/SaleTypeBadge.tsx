@@ -138,11 +138,14 @@ const THEME_MAP = {
     text: '#1A1814',
     onlineColor: '#3A6EB4',
   },
+  // 2026-10-23 (first-sale QA): the dark theme sits on top of photos and the light "no photo"
+  // placeholder. A near-transparent white backing made light text unreadable on light images, so it
+  // now carries its own dark backing (text stays AA on any image underneath).
   dark: {
-    bg: 'rgba(255,255,255,0.06)',
-    border: 'rgba(255,255,255,0.08)',
+    bg: 'rgba(20,18,14,0.78)',
+    border: 'rgba(255,255,255,0.16)',
     text: '#F2F0EA',
-    onlineColor: '#9BB7E5',
+    onlineColor: '#BFD3F2',
   },
 };
 
@@ -169,7 +172,7 @@ const SaleTypeBadge: React.FC<SaleTypeBadgeProps> = ({
           gap: s.gap,
           padding: s.padding,
           borderRadius: 999,
-          background: theme === 'dark' ? 'rgba(108,148,210,0.18)' : 'rgba(58,110,180,0.10)',
+          background: theme === 'dark' ? 'rgba(20,18,14,0.78)' : 'rgba(58,110,180,0.10)',
           border: `1px solid ${theme === 'dark' ? 'rgba(108,148,210,0.25)' : 'rgba(58,110,180,0.20)'}`,
           fontFamily: 'JetBrains Mono, ui-monospace, monospace',
           fontSize: s.fontSize,
@@ -209,7 +212,11 @@ const SaleTypeBadge: React.FC<SaleTypeBadgeProps> = ({
         position: 'relative',
       }}
     >
-      <span className={base.colorClass} style={{ display: 'flex' }}>
+      <span
+        className={theme === 'dark' ? undefined : base.colorClass}
+        // Dark theme: a light icon tint on the dark backing (the light-theme -700 tints are too dark there).
+        style={{ display: 'flex', ...(theme === 'dark' ? { color: saleType === 'YARD' ? '#86EFAC' : '#FCD34D' } : {}) }}
+      >
         <TypeIcon name={icon} size={s.iconSize} />
       </span>
       {label}
@@ -218,7 +225,7 @@ const SaleTypeBadge: React.FC<SaleTypeBadgeProps> = ({
         <span
           style={{
             marginLeft: 2,
-            color: theme === 'dark' ? '#E97C4D' : '#B34A22',
+            color: theme === 'dark' ? '#E97C4D' : '#C2410C',
             display: 'inline-flex',
           }}
           title="Benefit / Charity Sale"
@@ -244,7 +251,7 @@ export const CharityHeartBadge: React.FC<{ size?: number }> = ({ size = 32 }) =>
       width: size,
       height: size,
       borderRadius: '50%',
-      background: '#B34A22',
+      background: '#C2410C',
       color: '#FBF8F2',
       display: 'flex',
       alignItems: 'center',

@@ -108,6 +108,34 @@ export async function triggerSaleAndCityRevalidation(
 }
 
 /**
+ * Upper bound on item detail paths revalidated when a sale is taken down
+ * (deleted, cancelled, archived). Item pages are only ISR-cached once visited,
+ * and each revalidated path is one ISR write, so a very large sale is capped
+ * rather than firing hundreds of writes; the rest age out on their own timer.
+ */
+export const MAX_TAKEDOWN_ITEM_PATHS = 100;
+
+/**
+ * 2026-10-23 (first-sale QA): a sale that stops being public (soft-deleted,
+ * cancelled, archived, admin/scraper takedown) must purge its OWN cached
+ * /sales/[id] page and its item pages, not only the city listing. The delete
+ * path previously revalidated only /city/<slug>, so the deleted sale's page kept
+ * serving from the ISR cache (s-maxage 7 days) with the organizer's name on it.
+ * Never throws (same contract as triggerRevalidation).
+ */
+export async function triggerSaleTakedownRevalidation(
+  saleId: string,
+  itemIds: string[],
+  citySlug: string | null
+): Promise<void> {
+  const itemPaths = Array.from(new Set(itemIds.filter(Boolean)))
+    .slice(0, MAX_TAKEDOWN_ITEM_PATHS)
+    .map((id) => `/items/${id}`);
+  const paths = [`/sales/${saleId}`, ...(citySlug ? [`/city/${citySlug}`] : []), ...itemPaths];
+  await triggerRevalidation(paths);
+}
+
+/**
  * ADR (2026-07-23): Debounced ISR revalidation for per-field organizer
  * autosave. Vercel's ISR Writes billing metric was running 2-4x over the
  * sustainable free-tier budget; the dominant remaining cause was updateSale

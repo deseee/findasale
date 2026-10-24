@@ -68,6 +68,20 @@ import SaleFloorMap from '../../components/SaleFloorMap'; // #416: Floor Map
 import ReviewsSection from '../../components/ReviewsSection';
 
 // M-005: Sale-type display labels (shared by badge + meta copy): audit 2026-05-30
+// 2026-10-23 (first-sale QA): hero status and sale-type pills sit on the cover photo, or on the light
+// "Photos coming soon" placeholder. Their old near-transparent backings made the light text unreadable
+// there ("Yard Sale" was light-on-light). Each pill now has its own dark backing; text contrast against
+// it measures 5.5:1 or better even over a pure white image (computed 2026-10-23).
+const HERO_PILL_LIVE = '#86EFAC';
+const HERO_PILL_UPCOMING = '#FDBA74';
+const HERO_PILL_ENDED = 'rgba(242,240,234,0.78)';
+const HERO_PILL_BASE_STYLE = (color: string): React.CSSProperties => ({
+  background: 'rgba(20,18,14,0.78)',
+  color,
+  border: '1px solid rgba(255,255,255,0.16)',
+  backdropFilter: 'blur(6px)',
+});
+
 const SALE_TYPE_LABELS: Record<string, string> = {
   ESTATE: 'Estate Sale', ESTATE_SALE: 'Estate Sale', YARD: 'Yard Sale', YARD_SALE: 'Yard Sale',
   GARAGE: 'Yard Sale', MOVING: 'Moving Sale', DOWNSIZING: 'Downsizing Sale', AUCTION: 'Auction',
@@ -328,7 +342,7 @@ const GuestSaleAlert: React.FC<{ saleTitle: string; saleCity: string }> = ({ sal
     <div className="rounded-lg border border-[#C8552B]/25 bg-[#C8552B]/5 dark:bg-[#C8552B]/10 p-4">
       <h3 className="text-sm font-semibold text-[#1A1814] dark:text-[#F2F0EA] mb-0.5">Get alerts for this sale</h3>
       {submitted ? (
-        <p className="text-sm font-medium text-[#B34A22] dark:text-[#E97C4D]">&#10003; Check your email to confirm your alert. We only start watching once you confirm.</p>
+        <p className="text-sm font-medium text-[#C2410C] dark:text-[#E97C4D]">&#10003; Check your email to confirm your alert. We only start watching once you confirm.</p>
       ) : (
         <>
           <p className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] mb-3">We&apos;ll email you when items are added. No account needed.</p>
@@ -344,7 +358,7 @@ const GuestSaleAlert: React.FC<{ saleTitle: string; saleCity: string }> = ({ sal
             />
             <button
               type="submit"
-              className="px-4 py-2 min-h-[44px] rounded-lg bg-[#B34A22] hover:bg-[#9A3F1C] text-white text-sm font-semibold transition-colors whitespace-nowrap"
+              className="px-4 py-2 min-h-[44px] rounded-lg bg-[#C2410C] hover:bg-[#9A3412] text-white text-sm font-semibold transition-colors whitespace-nowrap"
             >
               Get alerts
             </button>
@@ -389,7 +403,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const isDarkMode = useIsDarkMode();
-  const accent = isDarkMode ? '#E97C4D' : '#B34A22'; // AA on both themes (5.36:1 on white, 5.78:1 on #19202F)
+  const accent = isDarkMode ? '#E97C4D' : '#C2410C'; // AA on both themes (5.36:1 on white, 5.78:1 on #19202F)
   const tipInk = isDarkMode ? '#E0A85B' : '#8A5A12'; // day-of tip (was #A87420, 3.49:1)
   const shopperCart = useShopperCart(user?.id);
 
@@ -1395,30 +1409,34 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               {/* Status pill */}
               {(() => {
                 const s = sale.status?.toUpperCase();
-                const isLive = s === 'ACTIVE' || s === 'PUBLISHED' || (saleHasStarted && !saleHasEnded);
+                // 2026-10-23 (first-sale QA): PUBLISHED alone is not "live" -- a published sale whose
+                // start date is still ahead showed "Live now". Live = public AND started (permanent
+                // storefronts are always live); before the start it reads "Starts <date>".
+                const isPublic = s === 'ACTIVE' || s === 'PUBLISHED';
+                const isLive = isPublic && (saleHasStarted || !!sale.isOngoing);
                 const isEnded = s === 'ENDED' || saleHasEnded;
                 if (isLive && !isEnded) return (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono tracking-wide" style={{ background: 'rgba(123,176,123,0.22)', color: '#7BB07B', border: '1px solid rgba(123,176,123,0.3)' }}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#7BB07B] inline-block" />
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono tracking-wide" style={HERO_PILL_BASE_STYLE(HERO_PILL_LIVE)}>
+                    <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: HERO_PILL_LIVE }} />
                     Live now
                   </span>
                 );
                 if (isEnded) return (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono tracking-wide" style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(242,240,234,0.6)', border: '1px solid rgba(255,255,255,0.15)' }}>
-                    <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'rgba(242,240,234,0.4)' }} />
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono tracking-wide" style={HERO_PILL_BASE_STYLE(HERO_PILL_ENDED)}>
+                    <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: HERO_PILL_ENDED }} />
                     Ended
                   </span>
                 );
                 return (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono tracking-wide" style={{ background: 'rgba(233,124,77,0.2)', color: '#E97C4D', border: '1px solid rgba(233,124,77,0.3)' }}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#E97C4D] inline-block" />
-                    Upcoming
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono tracking-wide" style={HERO_PILL_BASE_STYLE(HERO_PILL_UPCOMING)}>
+                    <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: HERO_PILL_UPCOMING }} />
+                    {saleStartDate && !isNaN(saleStartDate.getTime()) ? `Starts ${format(saleStartDate, 'MMM d')}` : 'Upcoming'}
                   </span>
                 );
               })()}
               {/* Sale type pill: M-005: inferred display type (organizer intent wins) */}
               {displaySaleTypeLabel && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-mono tracking-wide" style={{ background: 'rgba(255,255,255,0.12)', color: '#F2F0EA', border: '1px solid rgba(255,255,255,0.18)' }}>
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-mono tracking-wide" style={HERO_PILL_BASE_STYLE('#F2F0EA')}>
                   {displaySaleTypeLabel}
                 </span>
               )}
@@ -1607,11 +1625,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                           return (
                             <div key={i} className="flex items-center justify-between px-2.5 py-1.5 rounded-md" style={{ background: isToday ? 'rgba(200,85,43,0.10)' : 'transparent', border: isToday ? '1px solid rgba(200,85,43,0.18)' : '1px solid transparent' }}>
                               <span className="flex items-center gap-2" style={{ color: isToday ? accent : 'inherit', fontWeight: isToday ? 500 : 400 }}>
-                                {isToday && <span className="w-1.5 h-1.5 rounded-full bg-[#B34A22] dark:bg-[#E97C4D] inline-block" />}
+                                {isToday && <span className="w-1.5 h-1.5 rounded-full bg-[#C2410C] dark:bg-[#E97C4D] inline-block" />}
                                 {day.label}
                               </span>
                               {parseISO(day.date).getUTCHours() !== 0 || parseISO(day.date).getUTCMinutes() !== 0 ? (
-                                <span className={`text-xs ${isToday ? 'text-[#B34A22] dark:text-[#E97C4D]' : 'text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]'}`} style={{ fontFamily: 'ui-monospace, monospace' }}>
+                                <span className={`text-xs ${isToday ? 'text-[#C2410C] dark:text-[#E97C4D]' : 'text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]'}`} style={{ fontFamily: 'ui-monospace, monospace' }}>
                                   {format(parseISO(day.date), 'h:mm a')}
                                 </span>
                               ) : null}
@@ -1949,7 +1967,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 const availableCount = countItems.filter(i => i.status === 'AVAILABLE').length;
                 const soldCount = countItems.filter(i => i.status === 'SOLD').length;
                 const reservedCount = countItems.filter(i => i.status === 'RESERVED').length;
-                const isLowStock = !itemSearch && availableCount > 0 && availableCount <= Math.max(3, Math.floor(sale.items.length * 0.2));
+                // 2026-10-23 (first-sale QA): "Only N left!" fired on a brand-new 2-item sale with nothing sold,
+                // because any sale of 3 or fewer items met the threshold. Urgency only once items are actually
+                // going (some sold or on hold) AND what remains is a small share of the sale.
+                const isLowStock = !itemSearch && availableCount > 0 && (soldCount + reservedCount) > 0
+                  && availableCount <= Math.max(3, Math.floor(sale.items.length * 0.2));
                 const isSoldOut = availableCount === 0;
                 const saleIsEnded = sale.status?.toUpperCase() === 'ENDED' || saleHasEnded;
                 return (
@@ -2357,6 +2379,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             {sale.items.length > 0 && sale.items[0] && (
               <SimilarItems
                 itemId={sale.items[0].id}
+                excludeSaleId={sale.id}
                 category={sale.items[0].category || 'general'}
                 ebaySearchUrl={(() => {
                   // eBay discovery link (moved here from the inventory header): renders only inside the
@@ -2719,6 +2742,16 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
 
     if (!res.ok) {
       if (res.status === 404) {
+        // 2026-10-23 (first-sale QA): a sale that EXISTS but is not public yet (DRAFT) is
+        // reported by the backend with code SALE_NOT_PUBLIC (only to this trusted renderer,
+        // via x-ssr-secret). Its 404 must expire quickly: a draft checked before publish was
+        // otherwise cached as missing for 30 days. Publish also revalidates this path.
+        const notFoundBody = await res.json().catch(() => null);
+        if (notFoundBody?.code === 'SALE_NOT_PUBLIC') {
+          console.warn('[getStaticProps:fallback] backend-404-not-public', { id });
+          await logIsrWrite('sales/[id]', 'backend_404');
+          return { notFound: true, revalidate: 60 };
+        }
         // Unknown/deleted sale: confirmed-absent signal, not transient -- Sale IDs are
         // cuid()-generated and never reused, so a real backend 404 is permanent. 30-day
         // window (matches ENDED-sale precedent below) instead of daily re-checks.

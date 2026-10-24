@@ -60,8 +60,8 @@ const LIGHT = {
   text: '#1A1814',
   textDim: 'rgba(26,24,20,0.62)',
   textFaint: 'rgba(26,24,20,0.4)',
-  accent: '#B34A22', // darkened from #C8552B 2026-10-23: accentInk on accent was 4.1:1, now 5.05:1 (WCAG AA)
-  accentSoft: 'rgba(179,74,34,0.10)',
+  accent: '#C2410C', // brand CTA orange (2026-10-23, Patrick-approved): accentInk #FBF8F2 on it = 4.89:1, white = 5.18:1 (WCAG AA). Was #B34A22, then #C8552B.
+  accentSoft: 'rgba(194,65,12,0.10)',
   accentInk: '#FBF8F2',
   success: '#3F7A4B',
   warn: '#A87420',
@@ -284,6 +284,10 @@ const DRAFT_SAVED_AT_KEY = 'findasale_create_sale_draft_saved_at';
 // succeeded but the follow-up publish failed (tier limit, network, empty-sale 409), a retry must
 // update this sale instead of POSTing a duplicate. Cleared when the wizard completes or on "Start fresh".
 const DRAFT_SERVER_SALE_KEY = 'findasale_create_sale_draft_server_sale';
+// 2026-10-23 (first-sale QA): the user id the stored draft belongs to. The keys above are per browser,
+// so on a shared device one account's half-finished sale (its address, its server DRAFT id) showed up
+// in another account's wizard. A draft whose owner does not match the signed-in user is discarded.
+const DRAFT_OWNER_KEY = 'findasale_create_sale_draft_owner';
 
 interface WizardServerSale {
   id: string;
@@ -309,6 +313,7 @@ function clearStoredWizardDraft() {
     localStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(DRAFT_SAVED_AT_KEY);
     localStorage.removeItem(DRAFT_SERVER_SALE_KEY);
+    localStorage.removeItem(DRAFT_OWNER_KEY);
   } catch { /* ignore */ }
 }
 
@@ -2667,22 +2672,49 @@ const CreateSalePage: React.FC = () => {
     }
   }, [authLoading, user, router]);
 
+  // Owner check for a restored local draft (see DRAFT_OWNER_KEY). Runs once the signed-in user is known;
+  // the page shows its loading state until then, so another account's draft is never rendered.
+  const [draftOwnerChecked, setDraftOwnerChecked] = useState(false);
+  useEffect(() => {
+    if (authLoading || !user?.id || draftOwnerChecked) return;
+    let owner: string | null = null;
+    let hasDraft = false;
+    try {
+      owner = localStorage.getItem(DRAFT_OWNER_KEY);
+      hasDraft = !!localStorage.getItem(DRAFT_KEY) || !!localStorage.getItem(DRAFT_SERVER_SALE_KEY);
+    } catch { /* storage unavailable: nothing was restored */ }
+    // A draft with no owner predates this key and cannot be attributed to anyone: discard it too.
+    if (hasDraft && owner !== user.id) {
+      clearStoredWizardDraft();
+      setForm(DEFAULT_FORM);
+      setRestoredFromDraft(false);
+      setServerSale(null);
+      setLastSaved(null);
+    }
+    setDraftOwnerChecked(true);
+  }, [authLoading, user?.id, draftOwnerChecked]);
+
   // Auto-save to localStorage on every step transition
   const saveDraft = useCallback(() => {
     if (typeof window === 'undefined') return;
+    // Never write (or overwrite) a draft before it is known whose it is.
+    if (!user?.id || !draftOwnerChecked) return;
     try {
       const now = new Date();
       localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
       localStorage.setItem(DRAFT_SAVED_AT_KEY, String(now.getTime()));
+      localStorage.setItem(DRAFT_OWNER_KEY, user.id);
       setLastSaved(now);
     } catch { /* ignore */ }
-  }, [form]);
+  }, [form, user?.id, draftOwnerChecked]);
 
   const rememberServerSale = (next: WizardServerSale | null) => {
     setServerSale(next);
     try {
-      if (next) localStorage.setItem(DRAFT_SERVER_SALE_KEY, JSON.stringify(next));
-      else localStorage.removeItem(DRAFT_SERVER_SALE_KEY);
+      if (next) {
+        localStorage.setItem(DRAFT_SERVER_SALE_KEY, JSON.stringify(next));
+        if (user?.id) localStorage.setItem(DRAFT_OWNER_KEY, user.id);
+      } else localStorage.removeItem(DRAFT_SERVER_SALE_KEY);
     } catch { /* ignore */ }
   };
 
@@ -3127,7 +3159,7 @@ const CreateSalePage: React.FC = () => {
     showToast('Scheduling coming soon on Pro plan.', 'info');
   };
 
-  if (!isClient || authLoading) {
+  if (!isClient || authLoading || (!!user?.id && !draftOwnerChecked)) {
     return (
       <div style={{ minHeight: '100vh', background: c.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', color: c.textDim }}>
         Loading…
@@ -3303,7 +3335,7 @@ const CreateSalePage: React.FC = () => {
                 currentStep === 5
                   ? (isSubmitting ? 'Publishing…' : 'Publish now')
                   : currentStep === 3 && photoUrls.length === 0
-                  ? 'Skip photos →'
+                  ? 'Skip photos'
                   : 'Continue'
               }
               warn={

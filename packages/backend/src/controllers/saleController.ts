@@ -21,7 +21,8 @@ import { PUBLIC_ITEM_FILTER, isPublicItem } from '../helpers/itemQueries'; // Ph
 import { canRemoveWatermark } from '../utils/watermarkPolicy'; // #27b: iCal watermark footer
 import { buildSaleIcs } from '../utils/icalBuilder'; // RFC 5545 builder for GET /sales/:id/calendar.ics
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
-import { triggerSaleAndCityRevalidation, citySlugFromCityState, debouncedTriggerSaleAndCityRevalidation } from '../services/revalidationService'; // ADR 2026-07-11: on-demand ISR revalidation
+import { triggerSaleAndCityRevalidation, triggerSaleTakedownRevalidation, citySlugFromCityState, debouncedTriggerSaleAndCityRevalidation } from '../services/revalidationService'; // ADR 2026-07-11: on-demand ISR revalidation
+import { isTrustedServerRequest } from '../middleware/rateLimitShared'; // 2026-10-23: getSale tells our ISR renderer a 404 is 'not public yet'
 import { notifyNearbyFavorites } from '../services/rippleService'; // Phase 5: #51 Sale Ripples
 import { getIO } from '../lib/socket'; // V1: Socket.io instance
 import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Feature #32: Wishlist Alerts
@@ -615,6 +616,13 @@ export const getSale = async (req: Request, res: Response) => {
     // noindex policy handles SEO treatment for ended sales; 404ing here made that logic
     // unreachable (S1099 fix — see claude_docs/STATE.md Blocked Queue history).
     if (sale.status !== 'PUBLISHED' && sale.status !== 'ENDED' && !isOrganizer && !isAdmin) {
+      // 2026-10-23: tell our own ISR renderer (x-ssr-secret) that this DRAFT exists but is not
+      // public yet, so /sales/[id] caches its 404 briefly instead of for 30 days. CANCELLED /
+      // ARCHIVED stay on the long 30-day 404 (they are not coming back; keeps ISR writes down).
+      // Anonymous callers get the same plain 404 as before (no existence signal).
+      if (sale.status === 'DRAFT' && isTrustedServerRequest(req)) {
+        return res.status(404).json({ message: 'Sale not found', code: 'SALE_NOT_PUBLIC' });
+      }
       return res.status(404).json({ message: 'Sale not found' });
     }
 
@@ -1192,14 +1200,13 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
         `"${existingSale.title}" was removed by the organizer. Your hold on "${itemTitle}" has been released.`,
     });
 
-    // ADR 2026-07-11: on-demand ISR revalidation — a deleted PUBLISHED sale's own
-    // /sales/[id] page will 404 on next visit regardless (soft-deleted); the city
-    // listing page still needs a refresh so it disappears from there immediately.
-    if (existingSale.status === 'PUBLISHED') {
+    // ADR 2026-07-11: on-demand ISR revalidation. 2026-10-23 (first-sale QA): the sale's
+    // own /sales/[id] page and its item pages are ISR-cached for up to 7 days, so a deleted
+    // sale kept rendering publicly until they were purged too. Only public statuses
+    // (PUBLISHED/ENDED) can have a cached public page; a DRAFT/CANCELLED one already 404s.
+    if (existingSale.status === 'PUBLISHED' || existingSale.status === 'ENDED') {
       const citySlug = citySlugFromCityState(existingSale.city, existingSale.state);
-      if (citySlug) {
-        triggerSaleAndCityRevalidation([], [citySlug]).catch(() => {});
-      }
+      triggerSaleTakedownRevalidation(id, saleItemsForHoldRelease.map((i) => i.id), citySlug).catch(() => {});
     }
 
     const hadActivity = soldItemCount > 0 || purchaseCount > 0 || reviewCount > 0 || affiliateLinkCount > 0;
@@ -2466,7 +2473,8 @@ export const cancelSale = async (req: AuthRequest, res: Response) => {
     // page also needs to reflect the CANCELLED state immediately.
     if (existingSale.status === 'PUBLISHED') {
       const citySlug = citySlugFromCityState(cancelled.city, cancelled.state);
-      triggerSaleAndCityRevalidation([cancelled.id], citySlug ? [citySlug] : []).catch(() => {});
+      // 2026-10-23: include the item pages too, so a cancelled sale's items stop rendering publicly.
+      triggerSaleTakedownRevalidation(cancelled.id, existingSale.items.map((i: { id: string }) => i.id), citySlug).catch(() => {});
     }
 
     // #120: Audit alert — if created < 2h ago and has 100+ items on hold

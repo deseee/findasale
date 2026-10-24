@@ -993,10 +993,15 @@ router.get('/efficiency-stats', authenticate, async (req: AuthRequest, res: Resp
     const avgPhotoToPublishMinutes = publishCount > 0 ? Math.round(totalPublishMinutes / publishCount) : 0;
     const sellThroughRate = totalItems > 0 ? soldItems / totalItems : 0;
 
-    // Simple percentile rank (based on sell-through rate vs all organizers)
-    const allOrganizers = await prisma.organizer.count();
+    // Simple percentile rank (based on total sales vs the organizer cohort).
+    // 2026-10-23 (first-sale QA): "Compared to N organizers" counted every Organizer row, including the
+    // scraped / unmanaged directory listings (isUnmanagedListing) that no real organizer runs, so the
+    // dashboard quoted a cohort of directory shells. Cohort = real, managed organizer accounts only, the
+    // same rule the admin organizer counts use (adminController: isUnmanagedListing false).
+    const cohortWhere = { isUnmanagedListing: false };
+    const allOrganizers = await prisma.organizer.count({ where: cohortWhere });
     const betterOrganizers = await prisma.organizer.count({
-      where: { totalSales: { lt: organizer.totalSales } },
+      where: { ...cohortWhere, totalSales: { lt: organizer.totalSales } },
     });
     const percentileRank = allOrganizers > 0 ? Math.round((betterOrganizers / allOrganizers) * 100) : 50;
 

@@ -422,7 +422,7 @@ export default function HubManagePage() {
                   </p>
                   <Link
                     href={`/organizer/hubs/${hubId}/vendor-booths`}
-                    className="mt-4 inline-flex items-center justify-center min-h-[48px] w-full sm:w-auto px-5 py-3 text-base font-semibold rounded-lg bg-amber-700 hover:bg-amber-800 text-white"
+                    className="mt-4 inline-flex items-center justify-center min-h-[48px] w-full sm:w-auto px-5 py-3 text-base font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white"
                   >
                     Go to the vendor booths
                   </Link>

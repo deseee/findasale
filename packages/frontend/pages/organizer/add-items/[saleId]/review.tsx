@@ -569,6 +569,20 @@ const ReviewPage = () => {
     refetchOnMount: 'always',
   });
 
+  // 2026-10-23 (first-sale QA): approved items are only "live" when the sale itself is PUBLISHED.
+  // Same query key/shape as the Add Items page so the cache is shared.
+  const { data: sale } = useQuery({
+    queryKey: ['sale', saleId],
+    queryFn: async () => {
+      if (!saleId) return null;
+      const response = await api.get(`/sales/${saleId}`);
+      return response.data || null;
+    },
+    enabled: !!saleId,
+  });
+  // Unknown (still loading) counts as not live, so nothing claims "live" before we know.
+  const saleIsLive = sale?.status === 'PUBLISHED';
+
   // Consignors for the per-item picker: ONE shared query for the page (never per row), TEAMS only.
   // Same query key and endpoint as the Add Items page, so the cache is shared.
   const {
@@ -672,7 +686,7 @@ const ReviewPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
-      showToast('Items published successfully!', 'success');
+      showToast(saleIsLive ? 'Items published successfully!' : 'Items approved. They go live when you publish the sale.', 'success');
       // Fire eBay push for any published items that had the push toggle checked
       const ebayIds = items.map(i => i.id).filter(id => ebayPushItems[id]);
       if (ebayIds.length > 0 && ebayConnected && tier !== 'SIMPLE') {
@@ -1148,7 +1162,7 @@ const ReviewPage = () => {
         autosave.hold(item.id);
         await api.post(`/items/${item.id}/publish`);
         queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
-        showToast('Item published!', 'success');
+        showToast(saleIsLive ? 'Item published!' : 'Item approved. It goes live when you publish the sale.', 'success');
 
         // If eBay push is enabled for this item, flush the current price first,
         // then push. This ensures that a price typed in the review queue (priceInputs)
@@ -1523,7 +1537,7 @@ const ReviewPage = () => {
       await api.post(`/items/${item.id}/publish`);
       queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
       setApprovedIds(prev => new Set(prev).add(item.id));
-      showToast('Item published!', 'success');
+      showToast(saleIsLive ? 'Item published!' : 'Item approved. It goes live when you publish the sale.', 'success');
       // Fire eBay push if the organizer checked the push toggle for this item
       if (ebayPushItems[item.id] && ebayConnected && tier !== 'SIMPLE') {
         ebayPushMutation.mutate([item.id]);
@@ -1604,7 +1618,9 @@ const ReviewPage = () => {
     }
     queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
     if (toApprove.length > 0) {
-      showToast(`${toApprove.length} item${toApprove.length !== 1 ? 's' : ''} published!`, 'success');
+      showToast(saleIsLive
+        ? `${toApprove.length} item${toApprove.length !== 1 ? 's' : ''} published!`
+        : `${toApprove.length} item${toApprove.length !== 1 ? 's' : ''} approved. They go live when you publish the sale.`, 'success');
     }
     // Fire eBay push for any approved items that had the push toggle checked
     const ebayIds = toApprove.map(i => i.id).filter(id => ebayPushItems[id]);
@@ -1651,7 +1667,7 @@ const ReviewPage = () => {
     COMMON:    { bg: 'rgba(20,18,14,0.05)',   fg: 'rgba(26,24,20,0.62)',  darkBg: 'rgba(245,245,240,0.08)', darkFg: '#D0D0CC' },
     UNCOMMON:  { bg: 'rgba(63,122,75,0.10)',  fg: '#3F7A4B',              darkBg: 'rgba(63,122,75,0.20)',   darkFg: '#6BCF7F' },
     RARE:      { bg: 'rgba(58,110,180,0.12)', fg: '#3A6EB4',              darkBg: 'rgba(58,110,180,0.22)',  darkFg: '#7EB0F0' },
-    LEGENDARY: { bg: 'rgba(200,85,43,0.10)',  fg: '#B34A22',              darkBg: 'rgba(200,85,43,0.18)',   darkFg: '#E8775A' },
+    LEGENDARY: { bg: 'rgba(200,85,43,0.10)',  fg: '#C2410C',              darkBg: 'rgba(200,85,43,0.18)',   darkFg: '#E8775A' },
   };
 
   const conditionOptions = [
@@ -1700,7 +1716,7 @@ const ReviewPage = () => {
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-2xl border border-black/10 dark:border-[#3A3A3C] shadow-2xl overflow-hidden">
             <div className="p-7">
-              <p className="text-[10px] font-mono tracking-widest uppercase text-[#B34A22] dark:text-[#E97C4D] mb-2">Confirm publish</p>
+              <p className="text-[10px] font-mono tracking-widest uppercase text-[#C2410C] dark:text-[#E97C4D] mb-2">Confirm publish</p>
               <h2 className="text-xl font-semibold tracking-tight text-[#1A1814] dark:text-[#F5F5F0] mb-2">
                 Publish items to this sale?
               </h2>
@@ -1728,7 +1744,7 @@ const ReviewPage = () => {
               </button>
               <button
                 onClick={handleApproveAll}
-                className="px-4 py-2 rounded-lg bg-[#B34A22] text-white text-sm font-semibold hover:bg-[#9A3F1C] transition-colors"
+                className="px-4 py-2 rounded-lg bg-[#C2410C] text-white text-sm font-semibold hover:bg-[#9A3412] transition-colors"
               >
                 Publish priced items
               </button>
@@ -1795,7 +1811,7 @@ const ReviewPage = () => {
                 {itemsLoading
                   ? 'Loading queue…'
                   : queueEmpty
-                  ? `All ${totalCount} items are live`
+                  ? (saleIsLive ? `All ${totalCount} items are live` : `All ${totalCount} items are ready`)
                   : `Review ${pendingItems.length} item${pendingItems.length !== 1 ? 's' : ''} before they go live`}
               </h1>
               {!itemsLoading && pendingItems.length > 0 && (
@@ -1822,16 +1838,23 @@ const ReviewPage = () => {
               )}
             </div>
             <div className="flex items-center gap-2 sm:flex-shrink-0">
-              {saleId && (
+              {saleId && (saleIsLive ? (
                 <Link
                   href={`/sales/${saleId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3 py-2 text-sm text-[#B34A22] dark:text-[#E97C4D] hover:underline transition-colors"
+                  className="px-3 py-2 text-sm text-[#C2410C] dark:text-[#FB923C] hover:underline transition-colors"
                 >
                   View live sale →
                 </Link>
-              )}
+              ) : sale ? (
+                <Link
+                  href={`/organizer/edit-sale/${saleId}?publish=1`}
+                  className="px-3 py-2 text-sm text-[#C2410C] dark:text-[#FB923C] hover:underline transition-colors"
+                >
+                  Publish sale →
+                </Link>
+              ) : null)}
               <Link
                 href={`/organizer/add-items/${saleId}`}
                 className="px-3 py-2 rounded-lg border border-black/18 dark:border-[#3A3A3C] text-sm font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] hover:bg-black/5 dark:hover:bg-[#3A3A3C] transition-colors"
@@ -1883,7 +1906,7 @@ const ReviewPage = () => {
                 {/* Left: count + progress */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className="hidden sm:flex w-8 h-8 rounded-lg items-center justify-center flex-shrink-0 text-[#B34A22] dark:text-[#E97C4D]"
+                    className="hidden sm:flex w-8 h-8 rounded-lg items-center justify-center flex-shrink-0 text-[#C2410C] dark:text-[#E97C4D]"
                     style={{ background: 'rgba(200,85,43,0.10)' }}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -1924,7 +1947,7 @@ const ReviewPage = () => {
                   </Link>
                   <button
                     onClick={() => setShowApproveAllModal(true)}
-                    className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#B34A22] text-white text-xs font-semibold hover:bg-[#9A3F1C] transition-colors"
+                    className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#C2410C] text-white text-xs font-semibold hover:bg-[#9A3412] transition-colors"
                   >
                     Approve all
                   </button>
@@ -1958,7 +1981,7 @@ const ReviewPage = () => {
                         aria-expanded={bulkMode === 'price'}
                         className={`flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
                           bulkMode === 'price'
-                            ? 'border-[#C8552B] text-[#B34A22] dark:text-[#E97C4D] bg-[#C8552B]/5'
+                            ? 'border-[#C8552B] text-[#C2410C] dark:text-[#E97C4D] bg-[#C8552B]/5'
                             : 'border-black/18 dark:border-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C]'
                         }`}
                       >
@@ -1971,7 +1994,7 @@ const ReviewPage = () => {
                         aria-expanded={bulkMode === 'category'}
                         className={`flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
                           bulkMode === 'category'
-                            ? 'border-[#C8552B] text-[#B34A22] dark:text-[#E97C4D] bg-[#C8552B]/5'
+                            ? 'border-[#C8552B] text-[#C2410C] dark:text-[#E97C4D] bg-[#C8552B]/5'
                             : 'border-black/18 dark:border-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C]'
                         }`}
                       >
@@ -2010,7 +2033,7 @@ const ReviewPage = () => {
                         <button
                           type="submit"
                           disabled={bulkPriceValue === null || bulkBusy}
-                          className="px-3 py-2 rounded-lg bg-[#B34A22] text-white text-xs font-semibold hover:bg-[#9A3F1C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="px-3 py-2 rounded-lg bg-[#C2410C] text-white text-xs font-semibold hover:bg-[#9A3412] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           {bulkUpdateMutation.isPending ? 'Applying…' : bulkPriceButtonText(bulkPriceValue, selectedCount)}
                         </button>
@@ -2049,7 +2072,7 @@ const ReviewPage = () => {
                           type="button"
                           onClick={runBulkCategory}
                           disabled={!bulkCategoryPick || bulkBusy}
-                          className="px-3 py-2 rounded-lg bg-[#B34A22] text-white text-xs font-semibold hover:bg-[#9A3F1C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="px-3 py-2 rounded-lg bg-[#C2410C] text-white text-xs font-semibold hover:bg-[#9A3412] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           {bulkCategoryBusy ? 'Applying…' : bulkCategoryButtonText(selectedCount)}
                         </button>
@@ -2092,18 +2115,19 @@ const ReviewPage = () => {
                   className="text-2xl font-semibold tracking-tight text-[#1A1814] dark:text-[#F5F5F0] mb-3"
                   style={{ fontFamily: 'Inter Tight, sans-serif', letterSpacing: '-0.02em' }}
                 >
-                  All {totalCount} items are live
+                  {saleIsLive ? `All ${totalCount} items are live` : `All ${totalCount} items are ready`}
                 </h2>
                 <p className="text-sm text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-8 leading-relaxed">
-                  Smart-tagged items appear in saved-search alerts within the hour.
-                  You can edit any item from the manager.
+                  {saleIsLive
+                    ? 'Smart-tagged items appear in saved-search alerts within the hour. You can edit any item from the manager.'
+                    : 'They will go live when you publish the sale. You can edit any item from the manager.'}
                 </p>
                 <div className="flex gap-3 justify-center">
                   <Link
-                    href={`/sales/${saleId}`}
-                    className="px-4 py-2 rounded-lg bg-[#B34A22] text-white text-sm font-semibold hover:bg-[#9A3F1C] transition-colors"
+                    href={saleIsLive ? `/sales/${saleId}` : `/organizer/edit-sale/${saleId}?publish=1`}
+                    className="px-4 py-2 rounded-lg bg-[#C2410C] text-white text-sm font-semibold hover:bg-[#9A3412] transition-colors"
                   >
-                    View sale →
+                    {saleIsLive ? 'View sale →' : 'Publish sale →'}
                   </Link>
                   <Link
                     href={`/organizer/add-items/${saleId}`}
@@ -2122,7 +2146,7 @@ const ReviewPage = () => {
               <p className="text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-4">No items in this sale yet.</p>
               <Link
                 href={`/organizer/add-items/${saleId}`}
-                className="text-sm text-[#B34A22] dark:text-[#E97C4D] font-medium hover:underline"
+                className="text-sm text-[#C2410C] dark:text-[#E97C4D] font-medium hover:underline"
               >
                 ← Add items
               </Link>
@@ -2177,7 +2201,7 @@ const ReviewPage = () => {
                             Select
                           </label>
                         <span
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono tracking-widest uppercase text-[#B34A22] dark:text-[#E97C4D]"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono tracking-widest uppercase text-[#C2410C] dark:text-[#E97C4D]"
                           style={{ background: 'rgba(200,85,43,0.10)' }}
                         >
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none">
@@ -2226,7 +2250,7 @@ const ReviewPage = () => {
                             onClick={() => requestReanalyze(item, { forceGrounding: true })}
                             disabled={reanalyzingIds.has(item.id) || item.photoUrls.length === 0}
                             title={item.photoUrls.length === 0 ? 'Add a photo to identify precisely' : 'Look up this item\u2019s exact identity from its photos and markings'}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#C8552B]/30 dark:border-[#C8552B]/40 text-[11px] font-medium text-[#B34A22] dark:text-[#E08A5F] hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#C8552B]/30 dark:border-[#C8552B]/40 text-[11px] font-medium text-[#C2410C] dark:text-[#E08A5F] hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             aria-label="Identify item precisely"
                           >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -2313,7 +2337,7 @@ const ReviewPage = () => {
                           {/* Title */}
                           <div>
                             <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
-                              Title <span className="text-[#B34A22] dark:text-[#E97C4D]">· Smart</span>
+                              Title <span className="text-[#C2410C] dark:text-[#E97C4D]">· Smart</span>
                             </label>
                             <input
                               type="text"
@@ -2345,7 +2369,7 @@ const ReviewPage = () => {
                             </div>
                             <div>
                               <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
-                                Condition <span className="text-[#B34A22] dark:text-[#E97C4D]">· Smart</span>
+                                Condition <span className="text-[#C2410C] dark:text-[#E97C4D]">· Smart</span>
                               </label>
                               {/* Segmented control */}
                               <div className="inline-flex w-full bg-[rgba(20,18,14,0.05)] dark:bg-[#1C1C1E] p-0.5 rounded-lg border border-black/10 dark:border-[#3A3A3C]">
@@ -2371,7 +2395,7 @@ const ReviewPage = () => {
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                               <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
-                                Brand <span className="text-[#B34A22] dark:text-[#E97C4D]">· eBay</span>
+                                Brand <span className="text-[#C2410C] dark:text-[#E97C4D]">· eBay</span>
                               </label>
                               <input
                                 type="text"
@@ -2427,13 +2451,13 @@ const ReviewPage = () => {
                           {/* Tags row */}
                           <div>
                             <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1.5">
-                              Search tags <span className="text-[#B34A22] dark:text-[#E97C4D]">· Smart</span>
+                              Search tags <span className="text-[#C2410C] dark:text-[#E97C4D]">· Smart</span>
                             </label>
                             <div className="flex flex-wrap gap-1.5">
                               {currentTags.map(tag => (
                                 <span
                                   key={tag}
-                                  className="inline-flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full text-[11px] font-mono text-[#B34A22] dark:text-[#E97C4D]"
+                                  className="inline-flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full text-[11px] font-mono text-[#C2410C] dark:text-[#E97C4D]"
                                   style={{ background: 'rgba(200,85,43,0.10)' }}
                                 >
                                   {tag}
@@ -2469,7 +2493,7 @@ const ReviewPage = () => {
                           {/* Rarity picker */}
                           <div>
                             <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1.5">
-                              Rarity <span className="text-[#B34A22] dark:text-[#E97C4D]">· Smart</span>
+                              Rarity <span className="text-[#C2410C] dark:text-[#E97C4D]">· Smart</span>
                             </label>
                             <div className="flex gap-1.5">
                               {(['COMMON', 'UNCOMMON', 'RARE', 'LEGENDARY'] as const).map(r => {
@@ -2600,7 +2624,7 @@ const ReviewPage = () => {
                               type="button"
                               onClick={() => handleApproveItem(item)}
                               disabled={updateItemMutation.isPending}
-                              className="w-full py-2.5 rounded-lg bg-[#B34A22] text-white text-sm font-semibold hover:bg-[#9A3F1C] disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                              className="w-full py-2.5 rounded-lg bg-[#C2410C] text-white text-sm font-semibold hover:bg-[#9A3412] disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
                             >
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M5 12l4 4 10-10" />
@@ -2808,7 +2832,7 @@ const ReviewPage = () => {
                                   <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-1 block">
                                     Condition Grade
                                     {item.suggestedConditionGrade && (
-                                      <span className="ml-2 text-[#B34A22] dark:text-[#E97C4D] font-normal">Auto-suggests: {item.suggestedConditionGrade}</span>
+                                      <span className="ml-2 text-[#C2410C] dark:text-[#E97C4D] font-normal">Auto-suggests: {item.suggestedConditionGrade}</span>
                                     )}
                                   </label>
                                   <div className="flex gap-2">
@@ -2817,7 +2841,7 @@ const ReviewPage = () => {
                                         key={opt.value}
                                         type="button"
                                         onClick={() => handleConditionGradeChange(item, opt.value)}
-                                        className={`flex-1 min-h-[44px] py-1.5 px-1 text-xs font-bold rounded-lg border transition-colors ${current === opt.value ? 'bg-[#B34A22] text-white border-[#B34A22]' : 'bg-white dark:bg-[#3A3A3C] text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] border-black/18 dark:border-[#3A3A3C] hover:border-[#C8552B]'}`}
+                                        className={`flex-1 min-h-[44px] py-1.5 px-1 text-xs font-bold rounded-lg border transition-colors ${current === opt.value ? 'bg-[#C2410C] text-white border-[#C2410C]' : 'bg-white dark:bg-[#3A3A3C] text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] border-black/18 dark:border-[#3A3A3C] hover:border-[#C8552B]'}`}
                                         title={opt.title}
                                       >
                                         {opt.label}

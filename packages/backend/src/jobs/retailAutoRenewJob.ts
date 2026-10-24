@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
+import { triggerSaleAndCityRevalidation, triggerSaleTakedownRevalidation, citySlugFromCityState } from '../services/revalidationService';
 
 /**
  * Feature: Retail Mode Auto-Renewal Job
@@ -162,6 +163,15 @@ export const retailAutoRenew = async (): Promise<void> => {
           where: { id: oldSale.id },
           data: { status: 'ENDED' },
         });
+
+        // 2026-10-23: the old sale's cached page still showed it live with these items, and
+        // the moved items' pages still pointed at the old sale. Refresh both sales and the items.
+        triggerSaleTakedownRevalidation(
+          oldSale.id,
+          oldSale.items.map((i) => i.id),
+          citySlugFromCityState(oldSale.city, oldSale.state)
+        ).catch(() => {});
+        triggerSaleAndCityRevalidation([newSale.id], []).catch(() => {});
 
         console.log(
           `[retailAutoRenew] Renewed sale ${oldSale.id} → ${newSale.id} for organizer ${oldSale.organizerId} ` +

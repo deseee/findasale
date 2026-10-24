@@ -77,14 +77,14 @@ export const PushNeedsInfoNotice: React.FC<{
       <button
         type="button"
         onClick={onGoToPackage}
-        className="min-h-[44px] px-4 text-sm font-semibold rounded-lg bg-amber-700 hover:bg-amber-800 text-white"
+        className="min-h-[44px] px-4 text-sm font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white"
       >
         Go to package details
       </button>
     ) : fix === 'ebay-settings' ? (
       <Link
         href={EBAY_SETTINGS_HREF}
-        className="inline-flex items-center min-h-[44px] px-4 text-sm font-semibold rounded-lg bg-amber-700 hover:bg-amber-800 text-white"
+        className="inline-flex items-center min-h-[44px] px-4 text-sm font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white"
       >
         Open eBay settings
       </Link>

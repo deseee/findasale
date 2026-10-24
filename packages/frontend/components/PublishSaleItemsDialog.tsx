@@ -65,14 +65,18 @@ const PublishSaleItemsDialog: React.FC<PublishSaleItemsDialogProps> = ({
   const ready = readiness?.readyItems ?? [];
   const notReady = readiness?.notReadyItems ?? [];
   const readyCount = ready.length;
+  // 2026-10-23 (first-sale QA): items saved straight to PUBLISHED (Manual Entry) are part of what goes
+  // live too, so the confirm counts every item that will be visible: already-published plus ticked ready ones.
+  const publishedCount = readiness?.publishedItemCount ?? 0;
+  const visibleCount = publishedCount + (includeReady ? readyCount : 0);
   const handleClose = () => {
     if (!busy) onCancel();
   };
 
   const primaryText = busy
     ? 'Publishing…'
-    : readyCount > 0 && includeReady
-      ? `${confirmLabel} with ${plural(readyCount, 'item', 'items')}`
+    : visibleCount > 0
+      ? `${confirmLabel} with ${plural(visibleCount, 'item', 'items')}`
       : confirmLabel;
 
   const btnBase =
@@ -95,6 +99,13 @@ const PublishSaleItemsDialog: React.FC<PublishSaleItemsDialogProps> = ({
             ? `Your sale and items are saved as a draft. Publishing needs a verified email: open the link we sent${email ? ` to ${email}` : ''}, then publish. Check your spam folder too.`
             : message}
         </p>
+        {!needsVerification && publishedCount > 0 && (
+          <p className="mt-2 text-sm text-warm-700 dark:text-warm-300">
+            {publishedCount === 1
+              ? '1 item is already approved and shows on your sale page as soon as it goes live.'
+              : `${publishedCount} items are already approved and show on your sale page as soon as it goes live.`}
+          </p>
+        )}
 
         {needsVerification && (
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -167,7 +178,7 @@ const PublishSaleItemsDialog: React.FC<PublishSaleItemsDialogProps> = ({
             type="button"
             onClick={() => onConfirm(readyCount > 0 ? includeReady : true)}
             disabled={busy}
-            className={`${btnBase} bg-amber-700 hover:bg-amber-800 text-white`}
+            className={`${btnBase} bg-[#C2410C] hover:bg-[#9A3412] text-white`}
           >
             {primaryText}
           </button>

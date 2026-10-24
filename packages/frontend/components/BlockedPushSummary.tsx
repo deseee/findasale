@@ -39,7 +39,7 @@ export const BlockedPushSummary: React.FC<{
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Link
           href={reviewHref}
-          className="inline-flex items-center min-h-[44px] px-4 text-sm font-semibold rounded-lg bg-amber-700 hover:bg-amber-800 text-white"
+          className="inline-flex items-center min-h-[44px] px-4 text-sm font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white"
         >
           Fix these items
         </Link>

@@ -1445,7 +1445,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                           </button>
                           <button
                             onClick={qualityOverlay.onRetake}
-                            className="flex-1 bg-amber-700 hover:bg-amber-800 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+                            className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 rounded-lg text-sm transition-colors"
                           >
                             Retake
                           </button>

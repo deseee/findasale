@@ -928,6 +928,10 @@ const AddItemsDetailPage = () => {
     enabled: !!saleId,
   });
 
+  // 2026-10-23 (first-sale QA): an item can only be "live" when its sale is PUBLISHED. On a
+  // DRAFT sale, approved (PUBLISHED-status) items are shown as "Approved" and go live on publish.
+  const saleIsLive = sale?.status === 'PUBLISHED';
+
   // Consignor picker for individual item intake (TEAMS-tier only) -- lets the organizer
   // attach this item to a consignor at creation time instead of a separate edit trip.
   const {
@@ -2616,7 +2620,7 @@ const AddItemsDetailPage = () => {
                     ? `Showing ${filteredItems.length} of ${items.length} items`
                     : `${items.length} item${items.length !== 1 ? 's' : ''} `}
                   {' '}
-                  {publishedCount > 0 && `• ${publishedCount} published`}
+                  {publishedCount > 0 && (saleIsLive ? `• ${publishedCount} published` : `• ${publishedCount} approved (live when you publish the sale)`)}
                   {draftCount > 0 && `• ${draftCount} draft`}
                 </>
               )}
@@ -3734,7 +3738,7 @@ const AddItemsDetailPage = () => {
                               'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
                             }`}>
                               {/* Bug fix S1163: badge previously used draftStatus alone, so SOLD/RESERVED items still showed "Live" */}
-                              {item.status === 'SOLD' ? 'Sold' : item.status === 'RESERVED' ? 'Reserved' : draftStatus === 'PUBLISHED' ? 'Live' : draftStatus === 'PENDING_REVIEW' ? 'Ready' : 'Draft'}
+                              {item.status === 'SOLD' ? 'Sold' : item.status === 'RESERVED' ? 'Reserved' : draftStatus === 'PUBLISHED' ? (saleIsLive ? 'Live' : 'Approved') : draftStatus === 'PENDING_REVIEW' ? 'Ready' : 'Draft'}
                             </span>
                             {item.isActive === false && (
                               <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 whitespace-nowrap">

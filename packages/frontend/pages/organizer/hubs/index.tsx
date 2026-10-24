@@ -252,7 +252,7 @@ function CloseMarketDialog({
           {blocked ? (
             <Link
               href={`/organizer/hubs/${hub.id}/vendor-booths`}
-              className={`${ACTION_BUTTON} flex-1 bg-amber-700 hover:bg-amber-800 text-white`}
+              className={`${ACTION_BUTTON} flex-1 bg-amber-600 hover:bg-amber-700 text-white`}
             >
               Go to the vendor booths
             </Link>
@@ -628,7 +628,7 @@ export default function FleaMarketEventsPage() {
                       <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:shrink-0">
                         <Link
                           href={`/organizer/hubs/${event.id}/vendor-booths`}
-                          className={`${ACTION_BUTTON} w-full sm:w-auto bg-amber-700 hover:bg-amber-800 text-white`}
+                          className={`${ACTION_BUTTON} w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white`}
                         >
                           {(event.awaitingConfirmationCount ?? 0) > 0 ? 'Confirm booths' : 'Manage'}
                         </Link>

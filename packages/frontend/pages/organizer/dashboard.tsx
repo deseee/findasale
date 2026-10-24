@@ -167,6 +167,10 @@ const OrganizerDashboard = () => {
   // sale gets the server's 409, which opens "Publish without items?"; only a yes there publishes it.
   const guardedPublish = useGuardedPublish();
   const [publishingSaleId, setPublishingSaleId] = useState<string | null>(null);
+  // 2026-10-23 (first-sale QA): the card chip said "Publishing…" while the confirm dialog was still open
+  // and nothing had been published. The chip only shows the busy label while no publish dialog is open
+  // (the dialog shows its own "Publishing…" once the organizer confirms).
+  const isPublishingCard = (saleId: string) => publishingSaleId === saleId && !guardedPublish.isDialogOpen;
 
   const refreshAfterStatusChange = () => {
     queryClient.invalidateQueries({ queryKey: ['organizer-sales', user?.id] });
@@ -860,7 +864,8 @@ const OrganizerDashboard = () => {
 
           {/* Consolidated Action Bar: always visible */}
           <div className="flex flex-wrap gap-2 mb-4 relative">
-            <Link href="/organizer/create-sale" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
+            {/* 2026-10-23: the bar's primary action uses the brand CTA orange (#C2410C, hover #9A3412), not indigo. */}
+            <Link href="/organizer/create-sale" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition-colors">
               + New Sale
             </Link>
 
@@ -1364,7 +1369,7 @@ const OrganizerDashboard = () => {
                         className="text-sm px-3 py-1 min-h-[44px] inline-flex items-center bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-full hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors disabled:opacity-60"
                         title="Publish this sale so shoppers can see it"
                       >
-                        {publishingSaleId === activeSale.id ? 'Publishing…' : 'Publish Sale'}
+                        {isPublishingCard(activeSale.id) ? 'Publishing…' : 'Publish Sale'}
                       </button>
                     )}
                     <Link href={`/organizer/pos?saleId=${activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors flex items-center gap-1" title="Open Point of Sale to process in-person transactions">
@@ -1557,7 +1562,7 @@ const OrganizerDashboard = () => {
                           disabled={publishingSaleId === id}
                           className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 min-h-[44px] rounded-lg transition-colors text-sm flex-shrink-0 ml-4 disabled:opacity-60"
                         >
-                          {publishingSaleId === id ? 'Publishing…' : 'Publish Sale'}
+                          {isPublishingCard(id) ? 'Publishing…' : 'Publish Sale'}
                         </button>
                       </div>
                     </div>

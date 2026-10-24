@@ -10,6 +10,11 @@ interface SimilarItemsProps {
   category: string;
   /** Optional outbound eBay search link, rendered as a small subdued link at the bottom of the card. */
   ebaySearchUrl?: string;
+  /**
+   * 2026-10-23 (first-sale QA): on a sale page, items from that same sale are already listed right above,
+   * so recommending them (on a one or two item sale: the very item the shopper is looking at) is noise.
+   */
+  excludeSaleId?: string;
 }
 
 interface SimilarItem {
@@ -21,6 +26,8 @@ interface SimilarItem {
   saleId: string;
   saleName: string;
   city: string;
+  /** GET /items/:id/similar returns the sale as { title, city }; saleName/city above are derived from it. */
+  sale?: { title?: string; city?: string } | null;
 }
 
 interface SimilarItemsResponse {
@@ -43,7 +50,7 @@ const SimilarItemsSkeleton: React.FC = () => (
   </div>
 );
 
-const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category, ebaySearchUrl }) => {
+const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category, ebaySearchUrl, excludeSaleId }) => {
   const { data, isLoading, error } = useQuery<SimilarItemsResponse>({
     queryKey: ['similarItems', itemId],
     queryFn: async () => {
@@ -57,7 +64,12 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category, ebaySearc
       <SimilarItemsSkeleton />
     </section>
   );
-  if (!data?.items?.length || error) return null;
+  // Never recommend the seed item itself or (on a sale page) items already shown on that page. The API
+  // nests the sale as { title, city }; flatten it to the saleName/city this card renders.
+  const visibleItems: SimilarItem[] = (data?.items ?? [])
+    .filter((it) => it.id !== itemId && (!excludeSaleId || it.saleId !== excludeSaleId))
+    .map((it) => ({ ...it, saleName: it.saleName ?? it.sale?.title ?? '', city: it.city ?? it.sale?.city ?? '' }));
+  if (!visibleItems.length || error) return null;
 
   return (
     <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
@@ -66,7 +78,7 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category, ebaySearc
 
       {/* Desktop: 3-column grid */}
       <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {data.items.map((item) => (
+        {visibleItems.map((item) => (
           <Link key={item.id} href={`/items/${item.id}`}>
             <div className="cursor-pointer hover:shadow-lg transition-shadow rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700">
               <div className="relative w-full aspect-square bg-gray-200 dark:bg-gray-700 rounded-t-lg overflow-hidden">
@@ -108,7 +120,7 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category, ebaySearc
       {/* Mobile: horizontal scroll */}
       <div className="sm:hidden overflow-x-auto pb-4">
         <div className="flex gap-4 w-max">
-          {data.items.map((item) => (
+          {visibleItems.map((item) => (
             <Link key={item.id} href={`/items/${item.id}`}>
               <div className="cursor-pointer min-w-[220px] rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700">
                 <div className="relative w-full aspect-square bg-gray-200 dark:bg-gray-700 overflow-hidden">

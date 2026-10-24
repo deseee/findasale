@@ -51,6 +51,12 @@ const AddressAutocomplete = ({
   const [isFocused, setIsFocused] = useState(false);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  // 2026-10-23 (first-sale QA): the list stayed open over the City field and swallowed clicks there.
+  // Causes: a request still in flight when the organizer left the field re-opened the list after blur,
+  // and the list had no z-order above the next fields. focusedRef + requestSeq drop late responses;
+  // the list closes on blur, Escape and select; suggestion buttons keep focus on mousedown.
+  const focusedRef = useRef(false);
+  const requestSeq = useRef(0);
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -69,14 +75,17 @@ const AddressAutocomplete = ({
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
     if (!value || value.length < 3 || !isFocused) {
+      requestSeq.current += 1; // any response still in flight is now stale
       setSuggestions([]);
       setIsOpen(false);
+      setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
 
     debounceTimer.current = setTimeout(async () => {
+      const seq = ++requestSeq.current;
       try {
         const response = await api.get('/geocode/autocomplete', {
           params: { q: value, countrycodes: 'us' },
@@ -92,13 +101,15 @@ const AddressAutocomplete = ({
           zip: item.postcode || '',
         }));
 
+        if (seq !== requestSeq.current || !focusedRef.current) return; // left the field or typed again
         setSuggestions(suggestions.slice(0, 5)); // Limit to 5 suggestions
         setIsOpen(true);
       } catch (error) {
+        if (seq !== requestSeq.current) return;
         console.error('Autocomplete error:', error);
         setSuggestions([]);
       } finally {
-        setIsLoading(false);
+        if (seq === requestSeq.current) setIsLoading(false);
       }
     }, 300);
 
@@ -108,6 +119,7 @@ const AddressAutocomplete = ({
   }, [value, isFocused]);
 
   const handleSelectSuggestion = (suggestion: AddressSuggestion) => {
+    requestSeq.current += 1; // the value change from the parent's fill must not re-open the list
     onSuggestionSelected?.(suggestion);
     setSuggestions([]);
     setIsOpen(false);
@@ -121,8 +133,9 @@ const AddressAutocomplete = ({
         type="text"
         value={value}
         onChange={onChange}
-        onFocus={() => { setIsFocused(true); value.length >= 3 && setIsOpen(true); }}
-        onBlur={() => setIsFocused(false)}
+        onFocus={() => { focusedRef.current = true; setIsFocused(true); }}
+        onBlur={() => { focusedRef.current = false; setIsFocused(false); setIsOpen(false); }}
+        onKeyDown={(e) => { if (e.key === 'Escape') setIsOpen(false); }}
         placeholder={placeholder}
         required={required}
         disabled={disabled}
@@ -137,10 +150,15 @@ const AddressAutocomplete = ({
       )}
 
       {isOpen && suggestions.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 rounded-lg shadow-lg z-10">
+        <div role="listbox" className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 rounded-lg shadow-lg z-40">
           {suggestions.map((suggestion, idx) => (
             <button
               key={idx}
+              type="button"
+              role="option"
+              aria-selected={false}
+              // Keep focus in the input so blur does not close the list before the click lands.
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => handleSelectSuggestion(suggestion)}
               className="w-full text-left px-4 py-3 hover:bg-warm-50 dark:hover:bg-gray-700 border-b border-warm-100 dark:border-gray-700 last:border-b-0 transition"
             >
@@ -153,8 +171,8 @@ const AddressAutocomplete = ({
         </div>
       )}
 
-      {isOpen && value.length >= 3 && !isLoading && suggestions.length === 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 rounded-lg shadow-lg z-10">
+      {isOpen && isFocused && value.length >= 3 && !isLoading && suggestions.length === 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 rounded-lg shadow-lg z-40">
           <div className="px-4 py-3 text-sm text-warm-600 dark:text-warm-400">No addresses found. Try a different search.</div>
         </div>
       )}

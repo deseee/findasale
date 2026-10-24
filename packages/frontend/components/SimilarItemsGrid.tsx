@@ -104,7 +104,8 @@ const SimilarItemsGrid: React.FC<SimilarItemsGridProps> = ({
     );
   }
 
-  const items = data?.items ?? [];
+  // 2026-10-23: never recommend the item the shopper is already looking at.
+  const items = (data?.items ?? []).filter((i) => i.id !== currentItemId);
   if (items.length === 0) return null;
 
   const sameSale = items.filter((i) => i.saleId === currentSaleId).slice(0, 3);

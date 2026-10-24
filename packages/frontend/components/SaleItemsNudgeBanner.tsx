@@ -13,7 +13,9 @@
 import React, { forwardRef } from 'react';
 import Link from 'next/link';
 import { Package, Rocket, ClipboardCheck } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useSaleItemStatus, getSaleItemState, pluralItems, SaleItemState } from '../hooks/useSaleItemStatus';
+import { fetchSalePublishReadiness } from '../lib/publishSale';
 
 interface SaleItemsNudgeBannerProps {
   saleId: string;
@@ -33,6 +35,15 @@ const SaleItemsNudgeBanner = forwardRef<HTMLButtonElement, SaleItemsNudgeBannerP
   publishButtonRef,
 ) {
   const { isLoading, isError, findSale } = useSaleItemStatus();
+  // 2026-10-23 (first-sale QA): the "still need review" line must use the same ready / not-ready split as
+  // the publish dialog (PublishSaleItemsDialog), otherwise the banner said "2 items still need review" while
+  // the dialog called the same 2 items ready. Same endpoint, so both always agree.
+  const { data: readiness } = useQuery({
+    queryKey: ['sale-publish-readiness', saleId],
+    queryFn: () => fetchSalePublishReadiness(saleId),
+    enabled: !!saleId,
+    staleTime: 15_000,
+  });
 
   if (isLoading) return null;
 
@@ -125,11 +136,26 @@ const SaleItemsNudgeBanner = forwardRef<HTMLButtonElement, SaleItemsNudgeBannerP
           <div className="min-w-0">
             <p className="font-semibold text-warm-900 dark:text-warm-100">{heading}</p>
             <p className="text-sm text-warm-700 dark:text-warm-300">{body}</p>
-            {unreviewed > 0 && (
+            {unreviewed > 0 && readiness && readiness.readyItems.length > 0 && (
               <p className="text-sm text-warm-700 dark:text-warm-300">
-                {unreviewed === 1
-                  ? '1 item still needs review. You can publish now and review it after.'
-                  : `${unreviewed} items still need review. You can publish now and review them after.`}
+                {readiness.readyItems.length === 1
+                  ? '1 more item is ready and can go live when you publish.'
+                  : `${readiness.readyItems.length} more items are ready and can go live when you publish.`}
+              </p>
+            )}
+            {unreviewed > 0 && (readiness ? readiness.notReadyItems.length > 0 : true) && (
+              <p className="text-sm text-warm-700 dark:text-warm-300">
+                {(() => {
+                  if (!readiness) {
+                    return unreviewed === 1
+                      ? '1 item is not published yet. You can publish now and finish it after.'
+                      : `${unreviewed} items are not published yet. You can publish now and finish them after.`;
+                  }
+                  const n = readiness.notReadyItems.length;
+                  return n === 1
+                    ? '1 item isn’t ready yet (needs a title, price or photo, or is hidden). You can publish now and finish it after.'
+                    : `${n} items aren’t ready yet (they need a title, price or photo, or are hidden). You can publish now and finish them after.`;
+                })()}
               </p>
             )}
           </div>

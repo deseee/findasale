@@ -6,6 +6,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { triggerSaleTakedownRevalidation, citySlugFromCityState } from '../services/revalidationService'; // 2026-10-23: purge a taken-down sale's cached public pages
 import { runScrapeRun } from '../services/scraper';
 import { SOURCE_REGISTRY, VALID_SOURCE_IDS } from '../services/scraper/sourceRegistry';
 
@@ -199,10 +200,18 @@ export const emergencyTakedown = async (req: AuthRequest, res: Response): Promis
       return res.status(409).json({ error: 'Sale is already taken down' });
     }
 
-    await prisma.sale.update({
+    const takenDown = await prisma.sale.update({
       where: { id: saleId },
       data: { deletedAt: new Date() },
+      select: { id: true, city: true, state: true, items: { select: { id: true } } },
     });
+
+    // 2026-10-23: an emergency takedown must also drop the cached public pages immediately.
+    triggerSaleTakedownRevalidation(
+      takenDown.id,
+      takenDown.items.map((i) => i.id),
+      citySlugFromCityState(takenDown.city, takenDown.state)
+    ).catch(() => {});
 
     console.log(`[scraperController] Emergency takedown: sale ${saleId} soft-deleted`);
     return res.json({ message: `Sale ${saleId} taken down successfully` });

@@ -15,6 +15,7 @@ import { executeVerifiedSquareRefund } from '../services/squareRefundService'; /
 import { suppressionService } from '../services/suppressionService';
 import { handOffCrewsBeforeUserDeletion } from '../services/crewService'; // crew founder/memberCount handoff before user.delete (purgeUser)
 import { dropUserSockets } from '../lib/dropUserSockets';
+import { triggerSaleTakedownRevalidation, citySlugFromCityState } from '../services/revalidationService'; // 2026-10-23: purge a deleted sale's cached public pages
 
 // BUG #2: role display helper — the scalar `user.role` (deprecated) can drift out of
 // sync with the canonical `user.roles[]` array. Compute the highest-precedence role
@@ -978,10 +979,19 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
     // here left zero trace of what was removed if it ever happened outside this
     // guarded path -- soft-delete plus the new SaleAuditLog trigger (migration
     // z20261011120000_sale_audit_log) together close that gap.
-    await prisma.sale.update({
+    const deletedSale = await prisma.sale.update({
       where: { id: saleId },
       data: { deletedAt: new Date() },
+      select: { id: true, city: true, state: true, items: { select: { id: true } } },
     });
+
+    // 2026-10-23 (first-sale QA): purge the sale's cached /sales/[id], item and city pages,
+    // otherwise the ISR cache keeps serving the deleted sale for up to 7 days.
+    triggerSaleTakedownRevalidation(
+      deletedSale.id,
+      deletedSale.items.map((i) => i.id),
+      citySlugFromCityState(deletedSale.city, deletedSale.state)
+    ).catch(() => {});
 
     res.json({ message: 'Sale deleted successfully' });
   } catch (error) {

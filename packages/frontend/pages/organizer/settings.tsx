@@ -2782,7 +2782,7 @@ const OrganizerSettingsPage = () => {
                           showToast(msg, 'error');
                         }
                       }}
-                      className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-lg font-medium text-sm transition"
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-sm transition"
                     >
                       Download Sale & Item Data (ZIP)
                       <span className="block text-xs font-normal opacity-80">Limited to once per month</span>

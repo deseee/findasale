@@ -470,11 +470,26 @@ const EditSalePage = () => {
     }
   };
 
+  // 2026-10-23 (first-sale QA): the photo-confidence survey used to open together with the
+  // "You're live!" celebration, and closing one closed both. It now waits until the celebration is
+  // closed, and is skipped entirely when the sale has no photos (the question would make no sense).
+  const pendingPhotoSurveyRef = useRef(false);
+
   const onPublishedHere = () => {
     // Item counts and nudges change when ready items go live with the sale (2026-10-23).
     queryClient.invalidateQueries({ queryKey: ['organizer-sales'] });
+    // 2026-10-23 (first-sale QA): the header kept saying "Edit Sale (Draft)" after publishing until a
+    // reload, because this query never refetches on its own (refetchOnWindowFocus: false). The form is
+    // initialized once (formInitialized), so the refetch does not overwrite in-progress edits.
+    queryClient.invalidateQueries({ queryKey: ['sale', id] });
+    queryClient.invalidateQueries({ queryKey: ['sale-publish-readiness', id] });
+    queryClient.invalidateQueries({ queryKey: ['items', id] });
+    const salePhotos = Array.isArray(sale?.photoUrls) ? sale.photoUrls.length : 0;
+    const itemPhotos = Array.isArray(sale?.items)
+      ? sale.items.some((it: any) => Array.isArray(it?.photoUrls) && it.photoUrls.length > 0)
+      : false;
+    pendingPhotoSurveyRef.current = salePhotos > 0 || itemPhotos;
     setShowPublishCelebration(true);
-    showSurvey('OG-1');
   };
 
   // Every publish on this page goes through the guarded helper: the server answers 409
@@ -620,6 +635,16 @@ const EditSalePage = () => {
         setIsDeleting(true);
         try {
           const response = await api.delete(`/sales/${id}`);
+          // 2026-10-23 (first-sale QA): /organizer/sales kept listing the deleted sale until a reload.
+          // Drop it from every cached sale list before navigating there (global staleTime is 60s, so an
+          // invalidate alone still renders the cached list first), then refetch in the background.
+          for (const key of ['organizer-sales', 'organizer-sales-list']) {
+            queryClient.setQueriesData({ queryKey: [key] }, (old: unknown) =>
+              Array.isArray(old) ? old.filter((s: any) => s?.id !== id) : old
+            );
+            queryClient.invalidateQueries({ queryKey: [key] });
+          }
+          queryClient.removeQueries({ queryKey: ['sale', id] });
           if (response.data?.hadActivity) {
             showToast(
               "Sale deleted. It's hidden from your dashboard. Existing purchase and review records are kept.",
@@ -702,6 +727,11 @@ const EditSalePage = () => {
 
   const handlePublishCelebrationClose = () => {
     setShowPublishCelebration(false);
+    if (pendingPhotoSurveyRef.current) {
+      pendingPhotoSurveyRef.current = false;
+      // Opens after the celebration has closed, never stacked on top of it.
+      setTimeout(() => { showSurvey('OG-1'); }, 400);
+    }
     // Refetch and redirect after celebration
     setTimeout(() => {
       router.push(`/organizer/edit-sale/${id}`);
@@ -950,7 +980,9 @@ const EditSalePage = () => {
                   type="button"
                   onClick={() => handleToggleSaleStatus()}
                   disabled={isTogglingStatus}
-                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 min-h-[44px] rounded disabled:opacity-50 font-medium flex-shrink-0"
+                  // 2026-10-23: Publish / Reopen is the page's primary action, so it uses the brand CTA orange;
+                  // "Close Early" keeps the previous blue so it never looks like the go-live button.
+                  className={`text-sm ${sale.status === 'PUBLISHED' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-700'} text-white py-1 px-3 min-h-[44px] rounded disabled:opacity-50 font-medium flex-shrink-0`}
                 >
                   {isTogglingStatus ? 'Updating...' : (sale.status === 'PUBLISHED' ? 'Close Early' : sale.status === 'ENDED' ? 'Reopen' : 'Publish')}
                 </button>

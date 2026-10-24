@@ -1,6 +1,10 @@
 import cron from 'node-cron';
 import { prisma } from '../index';
 import { cronGuard } from '../utils/cronGuard';
+import { triggerSaleAndCityRevalidation } from '../services/revalidationService';
+
+// Same cap as saleAutoCloseCron's MAX_AUTOCLOSE_REVALIDATION_PATHS: one ISR write per path.
+const MAX_ARCHIVE_REVALIDATION_PATHS = 25;
 
 /**
  * Quarterly soft-delete of old sales and items.
@@ -64,18 +68,28 @@ export function expireStaleVenueCron(): void {
 
     console.log(`[expire-stale-venue-cron] Starting stale venue expiry sweep (now: ${now.toISOString()})`);
 
+    const staleWhere = {
+      endDate: { lt: now },
+      deletedAt: null,
+      status: 'PUBLISHED' as const,
+      saleType: { in: ['RETAIL' as const, 'FLEA_MARKET' as const] },
+      sourceName: { not: null },
+    };
+    const toArchive = await prisma.sale.findMany({ where: staleWhere, select: { id: true } });
+
     const expired = await prisma.sale.updateMany({
-      where: {
-        endDate: { lt: now },
-        deletedAt: null,
-        status: 'PUBLISHED',
-        saleType: { in: ['RETAIL', 'FLEA_MARKET'] },
-        sourceName: { not: null },
-      },
+      where: { ...staleWhere, id: { in: toArchive.map((s) => s.id) } },
       data: { status: 'ARCHIVED' },
     });
 
     console.log(`[expire-stale-venue-cron] Archived ${expired.count} stale venue records`);
+
+    // 2026-10-23: ARCHIVED sales 404 for the public, but their /sales/[id] pages stayed in the
+    // ISR cache (s-maxage up to 7 days) still rendering as live. Capped, fire-and-forget.
+    if (toArchive.length > 0) {
+      const ids = toArchive.map((s) => s.id).slice(0, MAX_ARCHIVE_REVALIDATION_PATHS);
+      triggerSaleAndCityRevalidation(ids, []).catch(() => {});
+    }
   }));
 
   console.log('[expire-stale-venue-cron] Registered daily stale venue expiry cron (03:00 UTC)');

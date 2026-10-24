@@ -31,8 +31,11 @@ module.exports = {
           400: '#FBBF24',
           500: '#F59E0B',
           600: '#C2410C',  // primary accent (was #F97316, 2.8:1 with white text)
-          700: '#B45309',
-          800: '#92400E',
+          // 700/800 re-pointed 2026-10-23 (first-sale QA): CTAs hover to amber-700 and some primary buttons
+          // use bg-amber-700, which still rendered Tailwind's yellow-brown #B45309 beside the #C2410C orange.
+          // Now the brand orange ramp: white text on 700 = 7.31:1, on 800 = 9.37:1; 700 text on amber-50 = 7.05:1.
+          700: '#9A3412',  // was #B45309
+          800: '#7C2D12',  // was #92400E
           900: '#78350F',
         },
         success: {

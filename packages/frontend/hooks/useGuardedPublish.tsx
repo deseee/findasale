@@ -118,7 +118,10 @@ export function useGuardedPublish() {
         const readiness = await fetchSalePublishReadiness(saleId);
         const unpublished = readiness ? readiness.readyItems.length + readiness.notReadyItems.length : 0;
         const hasNoItemsAtAll = !!readiness && unpublished === 0 && readiness.publishedItemCount === 0;
-        if (unpublished > 0 || (opts.confirm && !hasNoItemsAtAll)) {
+        // 2026-10-23 (first-sale QA): also confirm when every item is already published (Manual Entry saves
+        // items as PUBLISHED), so the organizer sees how many items go live instead of an instant publish.
+        const hasPublishedItems = !!readiness && readiness.publishedItemCount > 0;
+        if (unpublished > 0 || hasPublishedItems || (opts.confirm && !hasNoItemsAtAll)) {
           itemsHandlersRef.current = {
             onConfirm: async (publishReadyItems: boolean) => {
               await publish(saleId, { ...opts, publishReadyItems });

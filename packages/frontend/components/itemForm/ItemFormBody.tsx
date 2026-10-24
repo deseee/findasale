@@ -1438,6 +1438,12 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
     }
     if (item.draftStatus === 'DRAFT') return { label: 'Draft', className: amber };
     if (item.draftStatus === 'PENDING_REVIEW') return { label: 'Needs review', className: amber };
+    // 2026-10-23 (first-sale QA): an approved item is only live once its sale is published.
+    // item.sale.status comes from GET /items/:id; an item with no sale (inventory) keeps "Live".
+    const saleStatus = (item as any).sale?.status as string | undefined;
+    if (saleStatus && saleStatus !== 'PUBLISHED') {
+      return { label: saleStatus === 'ENDED' ? 'Sale ended' : 'Live when sale is published', className: green };
+    }
     return { label: 'Live', className: green };
   })();
 
@@ -1835,7 +1841,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                         onClick={() => requestReanalyzeItem(true)}
                         disabled={reanalyzing}
                         title="Look up this item's exact identity from its photos and markings"
-                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[#B34A22] dark:text-[#E08A5F] border border-[#C8552B]/30 dark:border-[#C8552B]/40 rounded-md hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[#C2410C] dark:text-[#E08A5F] border border-[#C8552B]/30 dark:border-[#C8552B]/40 rounded-md hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         Identify precisely
                       </button>

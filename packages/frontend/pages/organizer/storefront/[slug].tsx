@@ -252,7 +252,7 @@ const OrganizerStorefront = () => {
           <p className="text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] mb-6 text-sm">
             {error || 'This organizer storefront does not exist.'}
           </p>
-          <Link href="/" className="text-[#B34A22] dark:text-[#E97C4D] hover:underline font-medium text-sm">
+          <Link href="/" className="text-[#C2410C] dark:text-[#E97C4D] hover:underline font-medium text-sm">
             Back to home
           </Link>
         </div>
@@ -275,7 +275,7 @@ const OrganizerStorefront = () => {
     'Between sales';
   const statusColor =
     storefrontStatus === 'open' ? '#3F7A4B' :
-    storefrontStatus === 'upcoming' ? '#B34A22' :
+    storefrontStatus === 'upcoming' ? '#C2410C' :
     'rgba(26,24,20,0.4)';
 
   // Initials for logo placeholder
@@ -433,7 +433,7 @@ const OrganizerStorefront = () => {
                     />
                   ) : (
                     <span
-                      className="text-3xl font-semibold text-[#B34A22] dark:text-[#E97C4D]"
+                      className="text-3xl font-semibold text-[#C2410C] dark:text-[#E97C4D]"
                       style={{ fontFamily: "'Inter Tight', sans-serif" }}
                     >
                       {initials}
@@ -511,7 +511,7 @@ const OrganizerStorefront = () => {
                 </button>
                 <button
                   onClick={() => {}}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-[#B34A22] text-white hover:opacity-90 transition-opacity"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-[#C2410C] text-white hover:opacity-90 transition-opacity"
                 >
                   <Icon name="heart" size={14} />
                   Follow
@@ -653,7 +653,7 @@ const OrganizerStorefront = () => {
                               fontFamily: "'JetBrains Mono', monospace",
                               letterSpacing: '0.06em',
                               textTransform: 'uppercase',
-                              background: '#B34A22',
+                              background: '#C2410C',
                             }}
                           >
                             Pinned
@@ -698,7 +698,7 @@ const OrganizerStorefront = () => {
                               </span>
                             ) : (
                               <span
-                                className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-medium text-[#B34A22] dark:text-[#E97C4D]"
+                                className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-medium text-[#C2410C] dark:text-[#E97C4D]"
                                 style={{
                                   background: 'rgba(200,85,43,0.10)',
                                   fontFamily: "'JetBrains Mono', monospace",
@@ -742,7 +742,7 @@ const OrganizerStorefront = () => {
               lib/platformFees, the same one the backend charge path uses. */}
                           {sale.saleType === 'AUCTION' && (
                             <div
-                              className="inline-block text-xs font-medium px-2 py-0.5 rounded mb-2 text-[#B34A22] dark:text-[#E97C4D]"
+                              className="inline-block text-xs font-medium px-2 py-0.5 rounded mb-2 text-[#C2410C] dark:text-[#E97C4D]"
                               style={{
                                 background: 'rgba(200,85,43,0.10)',
                                 fontFamily: "'JetBrains Mono', monospace",
@@ -777,7 +777,7 @@ const OrganizerStorefront = () => {
                             </span>
                           ) : (
                             <span
-                              className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium text-[#B34A22] dark:text-[#E97C4D]"
+                              className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium text-[#C2410C] dark:text-[#E97C4D]"
                               style={{
                                 background: 'rgba(200,85,43,0.10)',
                                 fontFamily: "'JetBrains Mono', monospace",
@@ -832,7 +832,7 @@ const OrganizerStorefront = () => {
                       <div
                         key={shopper.id}
                         className="h-9 w-9 rounded-full flex items-center justify-center text-white text-xs font-semibold border-2 border-[#FBF8F2] dark:border-[#121826]"
-                        style={{ background: '#B34A22' }}
+                        style={{ background: '#C2410C' }}
                         title={shopper.name}
                       >
                         {shopper.name.charAt(0).toUpperCase()}
@@ -862,7 +862,7 @@ const OrganizerStorefront = () => {
             <div className="rounded-xl bg-[#FBF8F2] dark:bg-[#121826] border border-[rgba(20,18,14,0.10)] dark:border-[rgba(255,255,255,0.08)] p-5">
               <button
                 onClick={() => {}}
-                className="w-full py-2.5 rounded-lg bg-[#B34A22] text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+                className="w-full py-2.5 rounded-lg bg-[#C2410C] text-white font-semibold text-sm hover:opacity-90 transition-opacity"
               >
                 Follow {brandKit.businessName}
               </button>
@@ -947,7 +947,7 @@ const OrganizerStorefront = () => {
                   {brandKit.phone && (
                     <a
                       href={`tel:${brandKit.phone}`}
-                      className="flex items-center gap-2.5 text-sm text-[#B34A22] dark:text-[#E97C4D] hover:underline"
+                      className="flex items-center gap-2.5 text-sm text-[#C2410C] dark:text-[#E97C4D] hover:underline"
                     >
                       <Icon name="phone" size={14} />
                       {brandKit.phone}
@@ -958,7 +958,7 @@ const OrganizerStorefront = () => {
                       href={brandKit.website}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2.5 text-sm text-[#B34A22] dark:text-[#E97C4D] hover:underline"
+                      className="flex items-center gap-2.5 text-sm text-[#C2410C] dark:text-[#E97C4D] hover:underline"
                     >
                       <Icon name="web" size={14} />
                       Website
@@ -970,7 +970,7 @@ const OrganizerStorefront = () => {
                       href={brandKit.instagram}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#B34A22] dark:hover:text-[#E97C4D] transition-colors"
+                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="instagram" size={14} />
                       Instagram
@@ -981,7 +981,7 @@ const OrganizerStorefront = () => {
                       href={brandKit.facebook}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#B34A22] dark:hover:text-[#E97C4D] transition-colors"
+                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="facebook" size={14} />
                       Facebook
@@ -992,7 +992,7 @@ const OrganizerStorefront = () => {
                       href={brandKit.tiktokUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#B34A22] dark:hover:text-[#E97C4D] transition-colors"
+                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="tiktok" size={14} />
                       TikTok
@@ -1003,7 +1003,7 @@ const OrganizerStorefront = () => {
                       href={brandKit.youtubeUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#B34A22] dark:hover:text-[#E97C4D] transition-colors"
+                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="youtube" size={14} />
                       YouTube
@@ -1014,7 +1014,7 @@ const OrganizerStorefront = () => {
                       href={brandKit.pinterestUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#B34A22] dark:hover:text-[#E97C4D] transition-colors"
+                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="pinterest" size={14} />
                       Pinterest
@@ -1025,7 +1025,7 @@ const OrganizerStorefront = () => {
                       href={brandKit.twitterUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#B34A22] dark:hover:text-[#E97C4D] transition-colors"
+                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="twitter" size={14} />
                       Twitter / X
@@ -1036,7 +1036,7 @@ const OrganizerStorefront = () => {
                       href={brandKit.etsy}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#B34A22] dark:hover:text-[#E97C4D] transition-colors"
+                      className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="external" size={14} />
                       Etsy Shop
@@ -1132,7 +1132,7 @@ const OrganizerStorefront = () => {
             </span>
             <Link
               href="/"
-              className="text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#B34A22] dark:hover:text-[#E97C4D] transition-colors"
+              className="text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
             >
               Back to home
             </Link>
