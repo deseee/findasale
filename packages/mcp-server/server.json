@@ -4,12 +4,19 @@
   "title": "FindA.Sale",
   "description": "Find yard sales, garage sales, auctions, flea markets and resale shops, and search items for sale.",
   "version": "2.0.0",
+  "repository": {
+    "url": "https://github.com/deseee/findasale",
+    "source": "github",
+    "subfolder": "packages/mcp-server"
+  },
   "websiteUrl": "https://finda.sale",
   "icons": [
     {
       "src": "https://finda.sale/icons/icon-192x192.png",
       "mimeType": "image/png",
-      "sizes": ["192x192"]
+      "sizes": [
+        "192x192"
+      ]
     }
   ],
   "remotes": [
