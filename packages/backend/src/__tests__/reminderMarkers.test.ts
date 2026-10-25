@@ -672,6 +672,19 @@ describe('reminder email recipient: the account\'s own address only (2026-09-30)
     expect(outcomes.skipped_email_no_account).toBeUndefined();
   });
 
+  it('an account-holder reminder rides the Resend rail with a finda.sale From and one-click headers (2026-10-25)', async () => {
+    allSales = [sale([subscriber()])];
+    await processReminderPass('DAY_BEFORE', DAY_NOON, {});
+    // guestMail records every transactional-rail send, account-holder mail included
+    expect(guestMail).toHaveLength(1);
+    expect(guestMail[0].to).toBe('shopper@example.com');
+    expect(guestMail[0].from).toMatch(/@finda\.sale>?$/);
+    expect(guestMail[0].from).not.toMatch(/outreach\.finda\.sale/);
+    expect(guestMail[0].headers['List-Unsubscribe']).toMatch(/\/api\/unsubscribe\?token=tok/);
+    expect(guestMail[0].headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
+    expect(mockEmailSend).not.toHaveBeenCalled();
+  });
+
   it('a confirmed guest who opted out, and an unconfirmed guest, are never emailed', async () => {
     process.env.JWT_SECRET = 'test-secret-not-real';
     allSales = [

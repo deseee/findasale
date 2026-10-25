@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import twilio from 'twilio';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { verifyTwilioSignature } from '../services/smsComplianceService';
 import { maskPhone } from '../services/smsComplianceService';
 import { escapeHtml, safeHttpsUrl, sanitizeHeaderText } from '../utils/htmlEscape';
@@ -121,10 +121,11 @@ router.post('/voice-recording-complete', async (req: Request, res: Response) => 
   const callSid = sanitizeHeaderText((req.body?.CallSid as string) || '', 64);
 
   try {
-    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+    // 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox.
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale Alerts <alerts@finda.sale>';
     const toEmail = process.env.SUPPORT_EMAIL || 'support@finda.sale';
 
-    await emailService.emails.send({
+    const result = await transactionalEmailService.emails.send({
       from: fromEmail,
       to: toEmail,
       subject: `New voicemail from ${from}`,
@@ -136,6 +137,10 @@ router.post('/voice-recording-complete', async (req: Request, res: Response) => 
       `,
       jobName: 'twilio-voicemail-notification',
     });
+    if (!result.sent) {
+      console.warn(`[TwilioVoice] Voicemail notification email NOT sent for call ${callSid} (${result.reason})`);
+      return;
+    }
     console.log(`[TwilioVoice] Voicemail notification email sent for call ${callSid} from ${maskPhone(from)}`);
   } catch (err) {
     console.error('[TwilioVoice] Failed to send voicemail notification email:', err);

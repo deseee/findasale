@@ -1,11 +1,12 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from '../services/suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+// 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox.
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 
 // POST /api/sale-waitlist/:saleId/join
 export const joinSaleWaitlist = async (req: AuthRequest, res: Response) => {
@@ -84,17 +85,26 @@ export const notifySaleWaitlist = async (req: AuthRequest, res: Response) => {
       include: { user: true },
     });
     let notified = 0;
+    let deferred = 0; // refused by the Resend daily bulk budget; left un-notified so a later notify sends them
     for (const entry of waitlistEntries) {
+      let budgetDeferred = false;
       if (entry.user.email) {
         if (await suppressionService.isHardSuppressed(entry.user.email)) {
           console.log(`[saleWaitlist] Skipping hard-suppressed recipient: ${entry.user.email}`);
           continue;
         }
         try {
-          await emailService.emails.send({
+          const { buildUnsubscribeLinks } = await import('./unsubscribeController');
+          const { listUnsubscribeHeader } = await buildUnsubscribeLinks(entry.user.id, 'all');
+          const result = await transactionalEmailService.emails.send({
             from: FROM_EMAIL,
             to: entry.user.email,
             subject: `New items added to ${sale.title}`,
+            headers: { 'List-Unsubscribe': listUnsubscribeHeader, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+            jobName: 'saleWaitlistNewItems',
+            // Bulk fan-out (2026-10-25): refused once the day's Resend count reaches
+            // RESEND_DAILY_BULK_BUDGET, keeping headroom for transactional mail.
+            category: 'bulk',
             html: `
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#fafaf9;font-family:Arial,sans-serif;">
@@ -120,15 +130,26 @@ Browse before they sell out!
 </table>
 </body></html>`,
           });
-          notified++;
+          if (result.sent) {
+            notified++;
+          } else if (result.reason === 'daily_bulk_budget') {
+            budgetDeferred = true;
+            deferred++;
+          } else {
+            console.warn(`[saleWaitlist] Email NOT sent to ${entry.user.email} (${result.reason})`);
+          }
         } catch (emailErr) {
           console.error('Failed to send sale waitlist email:', emailErr);
         }
       }
+      if (budgetDeferred) continue;
       await prisma.saleWaitlist.update({ where: { id: entry.id }, data: { notified: true } });
     }
 
-    return res.json({ notified, total: waitlistEntries.length });
+    if (deferred > 0) {
+      console.warn(`[saleWaitlist] ${deferred} waitlist email(s) for sale ${saleId} deferred by the Resend daily bulk budget`);
+    }
+    return res.json({ notified, deferred, total: waitlistEntries.length });
   } catch (err) {
     console.error('notifySaleWaitlist error:', err);
     return res.status(500).json({ message: 'Failed to notify waitlist' });

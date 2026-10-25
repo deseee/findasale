@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService, isEmailDomainBlocked } from './suppressionService';
 import * as Sentry from '@sentry/node';
 
@@ -85,7 +85,9 @@ export async function createNotification(
       return;
     }
 
-    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+    // 2026-10-25: notification email (OUTBID, AUCTION_WON, payouts, sold alerts) moved off the
+    // Gmail outreach mailbox onto the aligned Resend rail (finda.sale, DKIM d=finda.sale).
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
     // Square migration Wave S2 #2 (2026-09-09) fix, found via knock-on grep: `link` is not
     // always a FindA.Sale-relative path -- services/auctionService.ts's closeAuction passes a
     // full absolute checkout URL (Stripe Checkout Session or, as of this dispatch, a Square
@@ -97,33 +99,32 @@ export async function createNotification(
     // prefixed with FRONTEND_URL exactly as before.
     const isAbsoluteLink = !!link && /^https?:\/\//i.test(link);
     const detailsUrl = link ? (isAbsoluteLink ? link : `${process.env.FRONTEND_URL}${link}`) : null;
-    const sendResult: any = await emailService.emails.send({
+    const sendResult = await transactionalEmailService.emails.send({
       from: fromEmail,
       to: recipient,
       subject: emailSubject || title,
       html: `<p>Hi ${user.name || 'there'},</p><p>${body}</p>${detailsUrl ? `<p><a href="${detailsUrl}">View Details</a></p>` : ''}`,
       jobName: `notification_${type}`,
     });
-    // 2026-09-29: emailService.emails.send returns undefined when the rail itself skipped the
-    // send (blocked domain / hard suppression) and the Gmail API response otherwise. Log which,
-    // with the Gmail message id, so "was it actually handed to Gmail?" is answerable from logs.
-    const gmailId = sendResult?.data?.id;
-    if (gmailId) {
-      console.log(`[notificationService] ${type} email handed to Gmail for user ${userId} (gmailMessageId=${gmailId})`);
+    // The Resend rail returns { sent:false, reason } when it skipped the send (hard suppression /
+    // blocked domain, or RESEND_API_KEY missing) and throws on a genuine Resend rejection. Log
+    // which, so "was it actually handed to the mail provider?" is answerable from logs.
+    if (sendResult?.sent) {
+      console.log(`[notificationService] ${type} email handed to Resend for user ${userId}`);
     } else {
-      console.warn(`[notificationService] ${type} email NOT sent for user ${userId}: email rail skipped it (blocked/suppressed)`);
+      console.warn(`[notificationService] ${type} email NOT sent for user ${userId}: email rail skipped it (${sendResult?.reason ?? 'unknown'})`);
       Sentry.captureMessage(`${type} email not sent: email rail skipped it`, {
         level: 'warning',
         tags: { kind: 'notification_email_skipped', notification_type: type, reason: 'rail_skip' },
-        extra: { userId },
+        extra: { userId, railReason: sendResult?.reason },
       });
     }
   } catch (emailError) {
     // Fail open: log but don't throw — email failure should not affect the in-app notification already created above.
     console.error('[notification] Failed to send notification email:', emailError instanceof Error ? emailError.message : emailError);
-    // 2026-09-29: errors thrown BEFORE the Gmail API call (quota guard, missing Gmail creds,
-    // suppression lookup) never reached emailService's own Sentry capture, so they were
-    // console-only and invisible. Capture them here with the notification type attached.
+    // 2026-09-29: errors thrown before or by the provider call (suppression lookup, Resend
+    // rejection) are captured here with the notification type attached so they are never
+    // console-only.
     Sentry.captureException(emailError, {
       tags: { kind: 'notification_email_failed', notification_type: type },
       extra: { userId },

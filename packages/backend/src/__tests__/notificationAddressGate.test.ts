@@ -221,13 +221,16 @@ describe('sale-day reminders', () => {
     ]);
     mockPrisma.pushSubscription.findMany.mockResolvedValue([{ userId: 'u1', endpoint: 'e' }]);
     await processReminderPass('DAY_BEFORE', RUN, {});
-    expect(mockEmailSend).toHaveBeenCalledTimes(1);
-    const html: string = mockEmailSend.mock.calls[0][0].html;
+    // 2026-10-25: account-holder reminders ride the Resend rail (finda.sale), never the Gmail outreach rail.
+    expect(mockTransactionalSend).toHaveBeenCalledTimes(1);
+    const msg = mockTransactionalSend.mock.calls[0][0];
+    expect(msg.from).toMatch(/@finda\.sale>?$/);
+    const html: string = msg.html;
     expect(html).toContain(`${STREET}, Paw Paw, MI 49079`);
     expect(html).not.toContain('Full address on the sale page');
     expect(mockSendPush).toHaveBeenCalledTimes(1);
     expect(mockSendPush.mock.calls[0][1].body).toContain(STREET);
-    expect(mockTransactionalSend).not.toHaveBeenCalled();
+    expect(mockEmailSend).not.toHaveBeenCalled();
   });
 });
 

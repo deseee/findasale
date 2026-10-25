@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
 import { isItemEmbargoedForViewer } from '../lib/saleLocationPrivacy';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from '../services/suppressionService';
 
 
@@ -216,10 +216,11 @@ export const joinPool = async (req: AuthRequest, res: Response) => {
           if (await suppressionService.isSuppressed(orgEmail)) {
             console.log(`[buyingPool] Skipping suppressed recipient: ${orgEmail}`);
           } else {
-          await emailService.emails.send({
-            from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'FindA.Sale <find@outreach.finda.sale>',
+          await transactionalEmailService.emails.send({
+            from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
             to: orgEmail,
             subject: `Buying Pool Filled: ${itemTitle}`,
+            jobName: 'buyingPoolFilled',
             html: `
               <h2>Pool Filled!</h2>
               <p>Hi ${orgName},</p>
@@ -343,10 +344,11 @@ export const cancelPool = async (req: AuthRequest, res: Response) => {
             console.log(`[buyingPool] Skipping suppressed recipient: ${participant.user.email}`);
             continue;
           }
-          await emailService.emails.send({
-            from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'FindA.Sale <find@outreach.finda.sale>',
+          await transactionalEmailService.emails.send({
+            from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
             to: participant.user.email,
             subject: `Buying Pool Cancelled: ${pool.item.title}`,
+            jobName: 'buyingPoolCancelled',
             html: `
               <h2>Pool Cancelled</h2>
               <p>Hi ${participant.user.name},</p>

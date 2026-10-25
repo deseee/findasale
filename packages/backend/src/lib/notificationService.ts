@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import { emailService } from './emailService';
+import { transactionalEmailService } from './transactionalEmailService';
 import { suppressionService, isEmailDomainBlocked } from '../services/suppressionService';
 
 interface CreateNotificationInput {
@@ -53,14 +53,19 @@ export const createNotification = async (input: CreateNotificationInput) => {
         } else if (await suppressionService.isSuppressed(recipient)) {
           console.log(`[notificationService] Skipping suppressed recipient: ${recipient}`);
         } else {
-          const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+          // 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox.
+          const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
           try {
-            await emailService.emails.send({
+            const result = await transactionalEmailService.emails.send({
               from: fromEmail,
               to: user.email,
               subject: emailSubject || title,
               html: `<p>Hi ${user.name},</p><p>${body}</p>${link ? `<p><a href="${process.env.FRONTEND_URL}${link}">View Details</a></p>` : ''}`,
+              jobName: `notification_${type}`,
             });
+            if (!result.sent) {
+              console.warn(`[notificationService] ${type} email NOT sent to user ${userId} (${result.reason})`);
+            }
           } catch (emailError) {
             // Fail open: log but don't throw
             console.error('Failed to send notification email:', emailError);

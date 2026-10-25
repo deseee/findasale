@@ -30,7 +30,7 @@ import {
 import { SOLD_VIA_FB_EMAIL_ORDER } from '../services/facebookMarketplaceEmailSoldDetection';
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
 import { getAutoQueueSettings, patchAutoQueueSettings } from '../controllers/extensionController';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from '../services/suppressionService';
 import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue, getEbayInsertionsForecast, getEbaySyncIssues, retryEbaySync } from '../controllers/platformStatsController';
 import { startStandardMigration, getHubOwnerStripeStatus, initiateHubOwnerStripeOnboarding } from '../controllers/stripeConnectController';
@@ -2315,10 +2315,12 @@ router.post('/:id/claim', publicDirectoryRateLimiter, async (req: Request, res: 
           console.log(`[organizers] Skipping suppressed claimant: ${claimantEmail}`);
           return;
         }
-        await emailService.emails.send({
-        from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
+        // 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox.
+        const sendResult = await transactionalEmailService.emails.send({
+        from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
         to: claimantEmail,
         subject: `Verify your claim request for ${foundOrganizer.businessName}`,
+        jobName: 'organizerClaimVerification',
         html: `
           <p>Hi ${claimantName},</p>
           <p>Thank you for submitting a claim request for <strong>${foundOrganizer.businessName}</strong>.</p>
@@ -2331,7 +2333,11 @@ router.post('/:id/claim', publicDirectoryRateLimiter, async (req: Request, res: 
         `,
       }).catch(emailError => {
         console.error('Failed to send claim verification email:', emailError);
+        return null;
       });
+        if (sendResult && !sendResult.sent) {
+          console.warn(`[organizers] Claim verification email NOT sent to ${claimantEmail} (${sendResult.reason})`);
+        }
       })();
     } catch (emailError) {
       console.error('Failed to send claim verification email (sync):', emailError);

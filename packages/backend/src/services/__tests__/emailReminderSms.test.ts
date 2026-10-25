@@ -24,6 +24,8 @@ const mockTwilioCreate = jest.fn();
 jest.mock('twilio', () => jest.fn(() => ({ messages: { create: (...a: unknown[]) => mockTwilioCreate(...a) } })));
 jest.mock('../../utils/webpush', () => ({ sendPushNotification: jest.fn() }));
 jest.mock('../emailTemplateService', () => ({ buildSaleDayReminderEmail: jest.fn(() => '<p>x</p>') }));
+// 2026-10-25: non-outreach mail (notifications, hold invoices, auction winners, reminders) rides the Resend rail.
+jest.mock('../../lib/transactionalEmailService', () => ({ transactionalEmailService: { emails: { send: jest.fn().mockResolvedValue({ sent: true }) } } }));
 jest.mock('../../lib/emailService', () => ({ emailService: { emails: { send: jest.fn() } } }));
 jest.mock('../suppressionService', () => ({ suppressionService: { isSuppressed: jest.fn().mockResolvedValue(false) } }));
 

@@ -5,7 +5,7 @@ import { prisma } from '../lib/prisma';
 import { publicItemWhere } from '../lib/publicSaleGate';
 import { sendPushNotification } from '../utils/webpush';
 import { buildEmail } from '../services/emailTemplateService';
-import { emailService, QuotaExceededError } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { createNotification } from '../lib/notificationService';
 
 
@@ -242,22 +242,28 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
             );
 
             try {
-              await emailService.emails.send({
-                from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
+              // 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox.
+              // The Gmail daily-quota abort (QuotaExceededError) does not apply on this rail.
+              const sendResult = await transactionalEmailService.emails.send({
+                from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
                 to: subscriber.email,
                 subject: emailTemplate.subject,
                 html: emailTemplate.html,
                 jobName: 'saleEndingSoonJob',
-                listUnsubscribe: listUnsubscribeHeader,
+                // Bulk fan-out (2026-10-25): refused once the day's Resend count reaches
+                // RESEND_DAILY_BULK_BUDGET, keeping headroom for transactional mail. Not retried:
+                // endingSoonNotified is set for the sale below either way, and the push still goes.
+                category: 'bulk',
+                headers: listUnsubscribeHeader ? { 'List-Unsubscribe': listUnsubscribeHeader, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : undefined,
               });
-              console.log(
-                `Sale ending soon email sent to ${subscriber.email} for sale ${sale.id}`
-              );
-            } catch (emailErr) {
-              if (emailErr instanceof QuotaExceededError) {
-                console.warn('[saleEndingSoonJob] Daily Gmail quota reached — aborting remaining sends');
-                return; // exit processSaleEndingSoonNotifications early
+              if (sendResult.sent) {
+                console.log(
+                  `Sale ending soon email sent to ${subscriber.email} for sale ${sale.id}`
+                );
+              } else {
+                console.warn(`[saleEndingSoonJob] Email NOT sent to ${subscriber.email} for sale ${sale.id} (${sendResult.reason})`);
               }
+            } catch (emailErr) {
               console.error(
                 `Failed to send sale ending soon email to ${subscriber.email}:`,
                 emailErr

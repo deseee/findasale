@@ -67,6 +67,8 @@ jest.mock('../services/squarePaymentService', () => {
   return { SquareOnboardingIncompleteError };
 });
 jest.mock('../lib/notificationService', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
+// 2026-10-25: non-outreach mail (notifications, hold invoices, auction winners, reminders) rides the Resend rail.
+jest.mock('../lib/transactionalEmailService', () => ({ transactionalEmailService: { emails: { send: jest.fn().mockResolvedValue({ sent: true }) } } }));
 jest.mock('../lib/emailService', () => ({ emailService: { emails: { send: jest.fn().mockResolvedValue({ sent: true }) } } }));
 jest.mock('../services/suppressionService', () => ({ suppressionService: { isHardSuppressed: jest.fn().mockResolvedValue(false) } }));
 jest.mock('../lib/socket', () => ({ getIO: jest.fn(() => ({ to: jest.fn().mockReturnValue({ emit: jest.fn() }) })) }));

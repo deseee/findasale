@@ -22,7 +22,7 @@
  * handoff rather than shipped.
  *
  * Reuses the FindA.Sale email design system (emailTemplateService) and the
- * SES/Gmail send rail (lib/emailService). Respects suppressionService.
+ * Resend rail (lib/transactionalEmailService, finda.sale) since 2026-10-25. Respects suppressionService.
  *
  * Throttle / idempotency: the generic EmailAutomationLog (automationKey
  * "abandoned_signup_1h"). One 1-hour nudge per organizer, ever. No schema changes.
@@ -38,10 +38,11 @@ import {
   buildCTARow,
   buildTextBlockModule,
 } from './emailTemplateService';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from './suppressionService';
 
-const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+// 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox.
+const FROM_EMAIL = process.env.ACTIVATION_NUDGE_FROM_EMAIL || 'The FindA.Sale Team <support@finda.sale>';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
 const SIGNUP_1H_KEY = 'abandoned_signup_1h';
@@ -146,14 +147,21 @@ export async function sendAbandonedSignup1h(organizerId: string): Promise<boolea
   });
 
   try {
-    await emailService.emails.send({
+    const result = await transactionalEmailService.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: `You're one step from going live`,
       html,
       jobName: 'abandonedSignup1h',
-      listUnsubscribe: listUnsubscribeHeader,
+      headers: { 'List-Unsubscribe': listUnsubscribeHeader, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
     });
+    if (!result.sent) {
+      // Rail-level hard suppression is permanent, so stamp it like the isSuppressed() skip above;
+      // a missing RESEND_API_KEY is not, so leave it unstamped for a later run.
+      if (result.reason === 'suppressed') await logSent(userId);
+      console.warn(`[abandonedSignup] 1h nudge NOT sent to organizer ${organizerId} (${result.reason})`);
+      return false;
+    }
     await logSent(userId);
     console.log(`[abandonedSignup] Sent 1h nudge to organizer ${organizerId} (${email})`);
     return true;

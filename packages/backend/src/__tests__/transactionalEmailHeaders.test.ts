@@ -47,6 +47,18 @@ describe('transactionalEmailService.send headers passthrough', () => {
     expect(Object.prototype.hasOwnProperty.call(mockResendSend.mock.calls[0][0], 'headers')).toBe(false);
   });
 
+  it('sends jobName as a sanitized Resend `job` tag and never leaks jobName into the payload (2026-10-25)', async () => {
+    await transactionalEmailService.emails.send({ to: 'a@example.com', subject: 'Hi', html: '<p>x</p>', jobName: 'twilio-voicemail notification:v1' });
+    const payload = mockResendSend.mock.calls[0][0];
+    expect(payload.tags).toEqual([{ name: 'job', value: 'twilio-voicemail_notification_v1' }]);
+    expect(Object.prototype.hasOwnProperty.call(payload, 'jobName')).toBe(false);
+  });
+
+  it('omits tags when no jobName is given', async () => {
+    await transactionalEmailService.emails.send({ to: 'a@example.com', subject: 'Hi', html: '<p>x</p>' });
+    expect(Object.prototype.hasOwnProperty.call(mockResendSend.mock.calls[0][0], 'tags')).toBe(false);
+  });
+
   it('omits an empty headers object', async () => {
     await transactionalEmailService.emails.send({ to: 'a@example.com', subject: 'Hi', html: '<p>x</p>', headers: {} });
     expect(Object.prototype.hasOwnProperty.call(mockResendSend.mock.calls[0][0], 'headers')).toBe(false);

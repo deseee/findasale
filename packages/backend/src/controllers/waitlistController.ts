@@ -1,12 +1,13 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from '../services/suppressionService';
 
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+// 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox.
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 
 // Send waitlist notification email
 const sendWaitlistNotificationEmail = async (
@@ -93,12 +94,19 @@ const sendWaitlistNotificationEmail = async (
 </html>`;
 
   try {
-    await emailService.emails.send({
+    const listUnsubscribeHeader = `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${FRONTEND_URL}/api/unsubscribe?token=${unsubToken}>`;
+    const result = await transactionalEmailService.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: `${itemTitle} is back in stock! 🎉`,
       html,
+      headers: { 'List-Unsubscribe': listUnsubscribeHeader, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+      jobName: 'waitlistBackInStock',
     });
+    if (!result.sent) {
+      console.warn(`[Waitlist] Notification email NOT sent to ${email} (${result.reason})`);
+      return;
+    }
     console.info(`✓ Waitlist notification email sent to ${email}`);
   } catch (err) {
     console.error(`✗ Failed to send waitlist notification email to ${email}:`, err);

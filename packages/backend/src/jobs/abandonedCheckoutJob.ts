@@ -2,12 +2,13 @@ import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { buildEmail } from '../services/emailTemplateService';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { bulkEmailEnabled } from '../utils/bulkEmailGate';
 import { suppressionService } from '../services/suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+// 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox.
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 
 // Send abandoned checkout recovery email to a single user
 const sendAbandonedCheckoutEmail = async (
@@ -51,13 +52,18 @@ const sendAbandonedCheckoutEmail = async (
   });
 
   try {
-    await emailService.emails.send({
+    const result = await transactionalEmailService.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: 'You left something behind at FindA.Sale 👀',
       html,
-      listUnsubscribe: listUnsubscribeHeader,
+      headers: listUnsubscribeHeader ? { 'List-Unsubscribe': listUnsubscribeHeader, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : undefined,
+      jobName: 'abandonedCheckout',
     });
+    if (!result.sent) {
+      console.warn(`[AbandonedCheckout] Recovery email NOT sent to ${email} (${result.reason})`);
+      return;
+    }
     console.log(`✓ Abandoned checkout recovery email sent to ${email}`);
   } catch (err) {
     console.error(`✗ Failed to send abandoned checkout recovery email to ${email}:`, err);

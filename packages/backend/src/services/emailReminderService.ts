@@ -7,7 +7,7 @@ import { prisma } from '../lib/prisma';
 import twilio from 'twilio';
 import { sendPushNotification } from '../utils/webpush';
 import { buildSaleDayReminderEmail } from './emailTemplateService';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from './suppressionService';
 import { checkQuietHours, resolveSendTimeZone } from './smsComplianceService';
 import { sendCompliantSms } from './compliantSms';
@@ -225,16 +225,23 @@ export const sendReminderEmail = async (reminder: ReminderEmail): Promise<boolea
     const listUnsubscribeHeader = `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/api/unsubscribe?token=${unsubToken}>`;
     try {
       // EM2: Retry up to 3 times with exponential backoff on transient Resend failures
-      await withRetry(() =>
-        emailService.emails.send({
-          from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
+      // 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox,
+      // same contract as sendGuestReminderEmail below.
+      const outcome = await withRetry(() =>
+        transactionalEmailService.emails.send({
+          from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
           to: reminder.to,
           subject,
           html,
-          listUnsubscribe: listUnsubscribeHeader,
+          headers: { 'List-Unsubscribe': listUnsubscribeHeader, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+          jobName: 'saleReminder',
         })
       );
-      console.log(`✓ Reminder email sent to ${maskEmail(reminder.to)} for ${sanitizeHeaderText(reminder.saleName, 80)}`);
+      if (!outcome.sent && outcome.reason !== 'suppressed') {
+        console.error(`✗ Reminder email to ${maskEmail(reminder.to)} not sent (${outcome.reason ?? 'unknown'})`);
+        return false;
+      }
+      console.log(`✓ Reminder email ${outcome.sent ? 'sent' : 'skipped (suppressed)'} to ${maskEmail(reminder.to)} for ${sanitizeHeaderText(reminder.saleName, 80)}`);
       return true;
     } catch (error) {
       console.error(`✗ Failed to send reminder email to ${maskEmail(reminder.to)} after retries:`, error);
@@ -266,14 +273,15 @@ export const sendGuestReminderEmail = async (reminder: Omit<ReminderEmail, 'user
       console.error('[emailReminder] No HMAC secret configured; refusing to send a guest reminder without an opt-out link.');
       return false;
     }
-    const { transactionalEmailService } = await import('../lib/transactionalEmailService');
     const { subject, html } = getEmailTemplate({ ...reminder, userId: '' }, '', urls.page);
     try {
       const outcome = await withRetry(() =>
         transactionalEmailService.emails.send({
+          from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
           to: reminder.to,
           subject,
           html,
+          jobName: 'saleReminderGuest',
           headers: {
             'List-Unsubscribe': `<${urls.oneClick}>`,
             'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',

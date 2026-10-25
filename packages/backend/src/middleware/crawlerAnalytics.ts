@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 
 const CRAWLER_PATTERNS: { pattern: RegExp; name: string }[] = [
   { pattern: /GPTBot/i, name: 'GPTBot' },
@@ -58,15 +58,17 @@ async function sendFirstCrawlNotification(saleId: string): Promise<void> {
     const email = sale?.organizer?.user?.email;
     if (!sale || !email) return;
 
-    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+    // 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox.
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
     const saleUrl = 'https://finda.sale/sales/' + saleId;
     const saleTitle = sale.title || 'Your sale';
     const recipientName = sale.organizer.user?.name ?? 'there';
 
-    await emailService.emails.send({
-      from: 'FindA.Sale <' + fromEmail + '>',
+    const result = await transactionalEmailService.emails.send({
+      from: fromEmail,
       to: email,
       subject: 'Your listing was found by search engines',
+      jobName: 'firstCrawlNotification',
       html:
         '<p>Hi ' + recipientName + ',</p>' +
         '<p>Your sale <strong>' + saleTitle + '</strong> on FindA.Sale was just discovered by a search engine.</p>' +
@@ -80,6 +82,9 @@ async function sendFirstCrawlNotification(saleId: string): Promise<void> {
         '<p><a href="' + saleUrl + '">View your listing &rarr;</a></p>' +
         '<p>The FindA.Sale Team</p>',
     });
+    if (!result.sent) {
+      console.warn('[crawlerAnalytics] First-crawl notification NOT sent for sale ' + saleId + ' (' + result.reason + ')');
+    }
   } catch (err) {
     // Never let email failures surface — log only
     console.error('[crawlerAnalytics] First-crawl notification failed:', err);

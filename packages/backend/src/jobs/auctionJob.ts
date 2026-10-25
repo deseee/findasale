@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from '../services/xpService'; // Explorer's Guild XP awards
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from '../services/suppressionService';
 import { createNotification } from '../services/notificationService';
 import { createSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // Square migration Wave S2 #2 (2026-09-09): auction-winner-pays-later replacement for the Stripe PaymentIntent below
@@ -349,7 +349,8 @@ export const endAuctions = async () => {
           if (await suppressionService.isHardSuppressed(result.highestBid.user.email)) {
             console.log(`[auctionJob] Skipping hard-suppressed winner: ${result.highestBid.user.email}`);
           } else {
-            const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+            // 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox.
+            const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
             // Square migration Wave S2 #2 (2026-09-09): a Square payment link is a fully
             // self-contained hosted checkout page -- no FindA.Sale frontend page is needed at
             // all, so the winner goes straight there.
@@ -389,10 +390,11 @@ export const endAuctions = async () => {
                       This seller hasn't finished payment setup yet. Please contact the organizer directly to arrange payment for this item.
                     </p>`;
             try {
-              await emailService.emails.send({
+              const sendResult = await transactionalEmailService.emails.send({
                 from: fromEmail,
                 to: result.highestBid.user.email,
                 subject: `You won: ${result.item.title}`,
+                jobName: 'auctionWinner',
                 html: `
                   <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
                     <h2>Congratulations, you won the auction!</h2>
@@ -404,6 +406,9 @@ export const endAuctions = async () => {
                   </div>
                 `,
               });
+              if (!sendResult.sent) {
+                console.warn(`[auctionJob] Winner email NOT sent for item ${result.item.id} (${sendResult.reason})`);
+              }
             } catch (emailErr) {
               console.error('Failed to send auction winner email:', emailErr);
             }

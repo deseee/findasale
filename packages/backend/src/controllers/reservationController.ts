@@ -26,7 +26,7 @@ import { applyCrewInvasionDiscount, releaseCrewInvasionRedemption, linkCrewInvas
 import { awardStamp } from '../services/loyaltyService'; // Feature #29: Sale Passport (ATTEND_SALE stamp on the second check-in path)
 import { checkQrScan, qrScanRejectionBody } from '../services/qrScanGuardService'; // 2026-09-30: the same anti-spoof guard saleController.checkInToSale uses (sale window, rate limits, radius, impossible speed)
 import { parseBodyLatitude, parseBodyLongitude, parseBodyAccuracyMeters } from '../utils/qrScanGuards';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from '../services/suppressionService';
 import { calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): CHECKOUT_LINK mode's Hold-to-Pay invoice is a hosted Square checkout completed by the buyer remotely -- ONLINE channel. RECORD-mode's cash commission already migrated separately, through cashFeeService.ts's resolveCashCommissionRate/cashCommissionOn (imported below).
 import { snapshotForCommissionOnly } from '../utils/feeCalculator'; // RECORD-mode cash fee (2026-08-17): Purchase fee snapshot
@@ -2362,10 +2362,12 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
             console.log(`[hold-invoice] Skipping hard-suppressed recipient: ${reservation.user.email}`);
             return;
           }
-          await emailService.emails.send({
-            from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
+          // 2026-10-25: aligned Resend rail (finda.sale) instead of the Gmail outreach mailbox.
+          const sendResult = await transactionalEmailService.emails.send({
+            from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
             to: reservation.user.email,
             subject: `Complete your purchase: ${itemListEmail}`,
+            jobName: 'holdInvoiceSquareCheckout',
             html: `
               <h2>Complete Your Purchase</h2>
               <p>Hi ${reservation.user.name},</p>
@@ -2375,6 +2377,9 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
               <p style="color: #6b7280; font-size: 14px;">This link expires at ${expiryTime} (in approximately ${Math.round((expiresAt.getTime() - Date.now()) / 3600000)} hours).</p>
             `,
           });
+          if (!sendResult.sent) {
+            console.warn(`[hold-invoice] Checkout email (Square) NOT sent to ${reservation.user.email} (${sendResult.reason})`);
+          }
         } catch (err) {
           console.warn('[hold-invoice] Failed to send checkout email (Square):', err);
         }
