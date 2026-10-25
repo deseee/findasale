@@ -48,6 +48,33 @@ import { postAI } from './posts/consignment-splits-statements-unsold-items-guide
 
 export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR, postS, postT, postU, postV, postW, postX, postY, postZ, postAA, postAB, postAC, postAD, postAE, postAF, postAG, postAH, postAI];
 
+// Today's date (YYYY-MM-DD) in America/New_York. Date-only comparison, so a post
+// dated D goes live at 00:00 Eastern on D.
+function todayEastern(now: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
+// A post is public only once its publishDate has arrived (future-dated = scheduled).
+export function isPublished(p: BlogPost, now: Date = new Date()): boolean {
+  return p.publishDate.slice(0, 10) <= todayEastern(now);
+}
+
+// All posts that are currently public. Use this everywhere posts are listed or rendered.
+export function publishedPosts(now: Date = new Date()): BlogPost[] {
+  return posts.filter((p) => isPublished(p, now));
+}
+
+// Returns the post only if it exists AND is published.
 export function getPostBySlug(slug: string): BlogPost | undefined {
+  return posts.find((p) => p.slug === slug && isPublished(p));
+}
+
+// Raw lookup ignoring publish date (to distinguish scheduled from nonexistent).
+export function getPostBySlugAny(slug: string): BlogPost | undefined {
   return posts.find((p) => p.slug === slug);
 }

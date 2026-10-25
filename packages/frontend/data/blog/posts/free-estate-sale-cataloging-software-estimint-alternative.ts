@@ -2,70 +2,80 @@ import { BlogPost } from '../index';
 
 export const postH: BlogPost = {
   slug: 'free-estate-sale-cataloging-software-estimint-alternative',
-  title: 'Free Estate Sale Cataloging Software: A Better Alternative to Subscription Tools',
-  metaDescription: 'Looking for free estate sale cataloging software? FindA.Sale offers Smart photo-to-listing tools plus a buyer marketplace, free to start.',
+  title: 'EstiMint Alternative: A Flat Monthly Plan vs. Paying Only When You Sell',
+  metaDescription: "How EstiMint's $29 to $149 monthly plans compare with FindA.Sale's free-to-publish, pay-when-you-sell model, with worked numbers for a small sale and a big one.",
   publishDate: '2026-07-02',
+  updatedDate: '2026-10-25',
   category: 'guides',
-  readingTimeMinutes: 4,
-  excerpt: 'Subscription cataloging tools charge $29\u2013$149/month for photo-to-listing automation. FindA.Sale does the same thing, puts your inventory in front of buyers too, and it\'s free to start.',
-  body: `Most cataloging software for secondary sales follows the same model. Pay a monthly subscription, upload your photos, get auto-generated titles and descriptions. The tools vary in quality, but the structure is the same: you're paying a recurring fee for an organizer-side workflow that stops the moment an item is listed.
+  readingTimeMinutes: 6,
+  excerpt: "EstiMint charges a flat monthly plan from $29 to $149. FindA.Sale is free to publish and charges one fee when something sells. Here are both models side by side, with worked numbers.",
+  body: `If you catalog items for estate sales, auctions, or a consignment shop, you have probably come across EstiMint. It turns item photos into titles, descriptions, tags, condition notes, and price estimates, and its higher plans add consignor tools, auction clerking, and settlements. It is a capable cataloging tool.
 
-That's a reasonable product if you already have a buyer channel and just need the listing work to go faster. But if you're also trying to grow your buyer base, cut down on setup time, and keep overhead low, the subscription-only model has some real gaps.
+FindA.Sale works differently, and the biggest difference is how you pay. This page lays out both models side by side, with real numbers, so you can pick the one that fits how you run sales. All EstiMint figures below come from EstiMint's own website, checked on October 25, 2026. Prices change, so confirm on their site before you decide.
 
-Here's what to compare before committing to any cataloging platform.
+## How EstiMint is priced
 
-## What subscription cataloging tools do well
+EstiMint sells monthly plans, billed month to month with no contract or setup fee:
 
-The photo-to-listing workflow genuinely works. You photograph an item, the software identifies it, generates a title and description, and suggests a price. For a well-lit photo of a recognizable item, a piece of pottery, a vintage appliance, a piece of furniture, the output is usable and fast.
+- **Free:** $0 for 30 days, 200 listings, up to 3 photos per item.
+- **Standard:** $29 a month, 300 listings per month, up to 12 photos per item.
+- **Pro:** $89 a month, 1,500 listings per month. Adds consignor tools and e-signatures.
+- **Auction Pro:** $149 a month, 3,500 listings per month. Adds live clerking, invoices, and settlements.
 
-That's a real time savings over typing every listing by hand. If you're running 200-item sales, the compounding effect adds up quickly.
+A few details worth knowing:
 
-Where most subscription tools stop is the listing itself. They're built for organizers who already know where their buyers are coming from. The tool makes the catalog. You handle discovery on your own.
+- **The free plan is a 30-day trial.** No card is needed. After 30 days your existing listings stay viewable and editable, but creating new ones needs a paid plan.
+- **The monthly price is set by listing volume, not by sales.** A slow month and a busy month cost the same, as long as you stay under your plan's listing cap.
+- **Card payments run through your own Stripe account.** EstiMint states it takes no cut of payments. Stripe's standard 2.9% plus $0.30 per payment applies, and in EstiMint's own sample invoice that fee comes out of the amount the seller receives.
 
-## What you don't get with an organizer-only tool
+## How FindA.Sale is priced
 
-A subscription cataloging tool is a production tool. It makes the listing faster. It doesn't help a buyer find your sale.
+FindA.Sale does not charge you to list. You pay when something sells through FindA.Sale, and the fee already includes card processing.
 
-That distinction matters more than it sounds. Estate sales, yard sales, auctions, flea markets, all of these depend on buyer turnout. The weekend you get 40 people through the door versus 20 usually isn't explained by how your catalog is formatted. It's explained by how many people knew about the sale in time to plan for it.
+- **Simple:** free. 8% in person, 9.5% online.
+- **PRO:** $29 a month. 6% in person, 7.5% online.
+- **TEAMS:** $79 a month. 6% in person, 7.5% online.
 
-Organizer-only platforms don't have a buyer side. There's no discovery map, no shopper-facing browse experience, no way for a buyer to save an item they want or follow an organizer they like. You list the inventory in their system, then go somewhere else entirely to reach buyers.
+What that means in practice:
 
-That means two platforms, two workflows, and two places where something can go wrong the morning of the sale.
+- **Simple is always free to publish.** There is no trial clock. It includes photo to listing, unlimited items per sale with 5 photos each, 100 auto tags a month, one active sale at a time, QR codes, and a built-in point of sale.
+- **One fee, card processing included.** There is no separate Stripe or Square charge on top. Card sales have a $0.75 minimum fee per transaction.
+- **No fee on sales made outside FindA.Sale.** If you sell something through your own card reader, Venmo, or a handshake and never run it through FindA.Sale, we don't charge you for it. Cash you ring up on the FindA.Sale register is a sale through the platform and carries the same percentage fee (with no $0.75 minimum).
+- **One big sale, no subscription.** From your second sale on, Simple organizers can add a one-time $9.99 upgrade to a single sale for 10 photos per item, 500 extra auto tags, the Flip Report, and the Virtual Queue. It is optional.
+- **Shoppers come with it.** Every published sale and item shows up for shoppers browsing sales near them, so the listing work also does the job of getting the word out.
 
-## What FindA.Sale does differently
+## The numbers on two real-world sales
 
-FindA.Sale is built for the full loop, from photo capture to buyer discovery, in a single platform.
+Here is what each model costs on two example sales. We assume all payments are by card, since that is where both models charge a processing fee.
 
-**Smart cataloging that works from your phone.** Take a photo during setup, and Smart Auto-tag generates a title, category, condition, and price suggestion automatically. You review it, adjust anything, and move on. The loop is fast by design. It was built for someone standing in a house at 7am, not sitting at a desk.
+**A small sale: $500 in card sales from 20 buyers**
 
-**A buyer-facing marketplace, built in.** Every item you catalog is discoverable on FindA.Sale's shopper map. Buyers browsing sales near them see your inventory before doors open. They can save items, follow your operation, and get notified when you list again. That's a buyer pipeline that builds over time, not a one-time listing that disappears after the sale ends.
+- EstiMint Standard: $29 subscription + Stripe (2.9% of $500 = $14.50, plus 20 x $0.30 = $6.00) = **$49.50**
+- FindA.Sale Simple, in person: 8% of $500 = **$40.00**, card processing included, no monthly bill
 
-**Works for every sale type.** Estate sales, yard sales, auctions, flea markets, consignment: FindA.Sale is built for all of them. The cataloging tools, the discovery features, and the checkout flow work the same way no matter how you run your sales.
+**A big sale: $15,000 in card sales from 300 buyers**
 
-**No app install required.** FindA.Sale is a PWA. It runs in the browser on any phone without downloading anything. Buyers and organizers both access it the same way.
+- EstiMint Pro: $89 subscription + Stripe (2.9% of $15,000 = $435.00, plus 300 x $0.30 = $90.00) = **$614.00**
+- FindA.Sale Simple, in person: 8% of $15,000 = **$1,200.00**
+- FindA.Sale PRO, in person: $29 + 6% of $15,000 = **$929.00**
 
-**Free to start.** There's no monthly subscription to access the cataloging tools or the marketplace. FindA.Sale charges one inclusive platform fee on completed sales (8% in person and 9.5% online on the free plan, with card processing included), so you pay only when you sell something, not upfront for software that may or may not deliver results.
+We would rather say this plainly: on a large, card-heavy sale, a flat subscription plus Stripe costs less in fees than a percentage. Where pay-when-you-sell comes out ahead is in the months you run small sales, the months you run none, and the sales where a good share of items sell outside the platform. You never pay for a month you didn't use.
 
-## The pay-per-sale model versus the subscription model
+## What else is different
 
-This is worth running the math on.
+The fees are only part of the picture. The two tools are built for different jobs.
 
-A $29/month subscription is $348/year before you sell a single item. At $149/month, that's $1,788, regardless of sale volume, regardless of whether turnout was good or bad, regardless of whether you ran two sales that month or eight.
+- **EstiMint is a cataloging and back-office tool.** It is strong on detailed item records, consignor paperwork, CSV export to auction platforms such as AuctionFlex, Proxibid, LiveAuctioneers, and HiBid, and (on Auction Pro) live clerking and settlements. Getting buyers to the sale is up to you.
+- **FindA.Sale covers cataloging, selling, and getting found.** Items go from photo to listing, sell through the built-in point of sale or online checkout, and appear for local shoppers browsing sales near them. It is built for estate sales, yard sales, auctions, flea markets, and consignment alike.
 
-A 9.5% online platform fee on $5,000 in monthly sales is $475. On a slow $2,000 month, it's $190. The cost scales with the result, not with the calendar.
+If your business lives on exporting catalogs into an auction platform, EstiMint's export tools may matter more to you than how fees are structured. If you want one place to list, sell, and reach shoppers without a monthly bill, FindA.Sale is worth a try.
 
-For organizers running variable volume, which is most organizers, the flat-fee model is lower risk. You're not subsidizing the platform's fixed costs during slow months.
+## Related reading
 
-## Before you decide
+- [Why a free trial is not the same as a free plan](/blog/that-free-cataloging-tool-has-a-30-day-clock)
+- [What a season of sales costs under each pricing model](/blog/flat-cataloging-fee-same-bill-slow-sale-or-big-one)
 
-A few things worth checking before committing to any cataloging platform:
+## Try it on your next sale
 
-- **Does it work on cell signal?** A lot of upload failures happen when you're not on the same reliable WiFi the developer tested on. Sale setups aren't always in well-connected spaces.
-- **How does it handle misidentified items?** Test it with something ambiguous: generic ceramics, unbranded tools, a mixed lot. How often is the suggested title actually usable?
-- **Where do buyers come from?** If the tool doesn't have an answer to this question, you're only solving half the problem.
-- **What does it cost per sale?** Include both the subscription and any per-transaction fees. Compare against a flat-fee model at your actual average sale volume.
-
-The cataloging workflow is table stakes now. Multiple tools do it well. The real question is whether the platform you choose also builds your buyer side, or hands that problem back to you.
-
-finda.sale is free to try.`,
+Publishing on Simple is free, so you can run one sale and see how it fits before you spend anything. Start at finda.sale.`,
 };

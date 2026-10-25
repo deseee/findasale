@@ -3,7 +3,7 @@ import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import { GetStaticProps, GetStaticPaths } from 'next';
-import { posts, getPostBySlug, BlogPost } from '../../data/blog/index';
+import { publishedPosts, getPostBySlug, getPostBySlugAny, BlogPost } from '../../data/blog/index';
 
 interface BlogPostPageProps {
   post: BlogPost;
@@ -11,7 +11,7 @@ interface BlogPostPageProps {
 }
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  const paths = posts.map((p) => ({ params: { slug: p.slug } }));
+  const paths = publishedPosts().map((p) => ({ params: { slug: p.slug } }));
   return { paths, fallback: 'blocking' };
 };
 
@@ -25,14 +25,16 @@ export const getStaticProps: GetStaticProps<BlogPostPageProps> = async ({ params
   const post = getPostBySlug(slug);
 
   if (!post) {
-    return { notFound: true };
+    // Scheduled (future-dated) posts 404 until their date; revalidate hourly so
+    // they go live on their publish day. Unknown slugs keep the long revalidate.
+    return getPostBySlugAny(slug) ? { notFound: true, revalidate: 3600 } : { notFound: true };
   }
 
   const relatedPosts = getRelatedPosts(post);
 
   return {
     props: sanitize({ post, relatedPosts }),
-    revalidate: 86400,
+    revalidate: 3600,
   };
 };
 
@@ -56,7 +58,7 @@ function keywordTokens(post: BlogPost): Set<string> {
 function getRelatedPosts(current: BlogPost, count = 3): BlogPost[] {
   const currentTokens = keywordTokens(current);
 
-  const scored = posts
+  const scored = publishedPosts()
     .filter((p) => p.slug !== current.slug)
     .map((p) => {
       const tokens = keywordTokens(p);
@@ -172,8 +174,21 @@ function parseMarkdown(body: string): RenderedBlock[] {
 
 function renderInline(text?: string): React.ReactNode {
   if (!text) return null;
-  const parts = text.split(/\*\*(.+?)\*\*/g);
-  return parts.map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
+  const parts = text.split(/(\*\*.+?\*\*|\[[^\]]+\]\((?:\/|https?:\/\/)[^)\s]+\))/g);
+  return parts.map((part, i) => {
+    const bold = part.match(/^\*\*(.+)\*\*$/);
+    if (bold) return <strong key={i}>{bold[1]}</strong>;
+    const link = part.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
+    if (link) {
+      const cls = 'text-amber-600 dark:text-amber-400 underline hover:no-underline';
+      return link[2].startsWith('/') ? (
+        <Link key={i} href={link[2]} className={cls}>{link[1]}</Link>
+      ) : (
+        <a key={i} href={link[2]} className={cls} target="_blank" rel="noopener noreferrer">{link[1]}</a>
+      );
+    }
+    return part;
+  });
 }
 
 function MarkdownBody({ body }: { body: string }) {

@@ -2,7 +2,7 @@ import React from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { GetStaticProps } from 'next';
-import { posts, BlogPost } from '../../data/blog/index';
+import { publishedPosts, BlogPost } from '../../data/blog/index';
 
 interface BlogIndexProps {
   posts: BlogPost[];
@@ -14,12 +14,12 @@ function sanitize<T>(obj: T): T {
 }
 
 export const getStaticProps: GetStaticProps<BlogIndexProps> = async () => {
-  const sorted = [...posts].sort(
+  const sorted = [...publishedPosts()].sort(
     (a, b) => new Date(a.publishDate).getTime() - new Date(b.publishDate).getTime()
   );
   return {
     props: sanitize({ posts: sorted }),
-    revalidate: 86400,
+    revalidate: 3600,
   };
 };
 

@@ -452,7 +452,7 @@ const PricingPage = () => {
                         {tier.id === 'SIMPLE' && (
                           <>
                             <span className="font-semibold">{FEE_SIMPLE}</span>, card processing included<br />
-                            <span className="text-warm-500 dark:text-warm-500 italic">Competitors typically charge 20–30%</span>
+                            <span className="text-warm-500 dark:text-warm-500 italic">Free to publish, no monthly fee</span>
                           </>
                         )}
                         {tier.id === 'PRO' && (

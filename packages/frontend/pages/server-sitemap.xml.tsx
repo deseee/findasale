@@ -1,6 +1,6 @@
 import { getServerSideSitemapLegacy as getServerSideSitemap } from 'next-sitemap';
 import api from '../lib/api';
-import { posts as blogPosts } from '../data/blog/index';
+import { publishedPosts } from '../data/blog/index';
 
 export async function getServerSideProps(ctx: any) {
   try {
@@ -279,7 +279,7 @@ export async function getServerSideProps(ctx: any) {
     }
 
     // Blog post URLs (data/blog/index.ts is a local static module — no API call needed)
-    const blogUrls = blogPosts.map((post) => ({
+    const blogUrls = publishedPosts().map((post) => ({
       loc: `${baseUrl}/blog/${post.slug}`,
       lastmod: post.updatedDate ?? post.publishDate,
       changefreq: 'weekly',
