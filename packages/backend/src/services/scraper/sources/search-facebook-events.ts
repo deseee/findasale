@@ -30,7 +30,7 @@ import * as cheerio from 'cheerio';
 import { ScrapedItem } from '../index';
 import { getRandomUserAgent, jitterDelay } from '../userAgents';
 import { fetchFacebookEventPage } from './facebook-events-page-fetch';
-import { looksLikeStreetAddress } from './facebook-address';
+import { looksLikeStreetAddress, normalizeRegionCode } from './facebook-address';
 import { GOOGLE_PLACES_METROS } from './scraperConfig';
 
 // ---------------------------------------------------------------------------
@@ -302,8 +302,12 @@ function classifySnippetDate(snippet: string): SnippetDateClassification {
       'january','february','march','april','may','june',
       'july','august','september','october','november','december',
     ];
+    // NOTE (2026-10-25): inside a template literal, `\s` / `\d` are NOT regex
+    // escapes -- they cook to plain "s" / "d", so the old pattern
+    // "(may)s+(d{1,2})..." never matched a real date and every SERP item fell
+    // through to the fabricated +7-day default. Escape the backslashes.
     const pattern = new RegExp(
-      `(${monthNames.join('|')})\s+(\d{1,2})(?:,?\s*(\d{4}))?`,
+      `(${monthNames.join('|')})\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`,
       'i'
     );
     const match = snippet.match(pattern);
@@ -528,7 +532,14 @@ function buildScrapedItem(
     scrapedMetadata: {
       metro:           `${metro.city}, ${metro.state}`,
       sourceApi,
+      sourceItemId:    `fb:events:${fbEventId}`,
       dateApproximate: parsedStart === null,
+      endSource:       'derived',
+      // 2026-10-25: provenance of city/state. Only a URL-slug parse comes from
+      // the event itself; otherwise it is the searched metro and the runner's
+      // filterFbEventItems drops it unless page-fetch enrichment confirms it.
+      cityStateSource: slugParsed ? 'slug' : 'metro-fallback',
+      geoConfidence:   slugParsed ? 'high' : 'metro-fallback',
     },
   };
 }
@@ -958,7 +969,14 @@ export async function scrapeFacebookEventsForMetro(
       const enrichment = await fetchFacebookEventPage(item.sourceUrl);
       if (enrichment?.startDate) {
         item.startDate = enrichment.startDate;
-        item.endDate = enrichment.endDate ?? item.endDate;
+        if (enrichment.endDate && enrichment.endDate.getTime() >= enrichment.startDate.getTime()) {
+          item.endDate = enrichment.endDate;
+          if (item.scrapedMetadata) item.scrapedMetadata.endSource = 'event';
+        } else {
+          // Keep the derived window anchored to the REAL start (the old code
+          // left the +7-day-guess end in place when the page had no end).
+          item.endDate = new Date(enrichment.startDate.getTime() + 86_400_000);
+        }
 
         // Address enrichment: apply ONLY a real street address, and ONLY when
         // it is strictly better than what the item already has (never clobber
@@ -1009,8 +1027,17 @@ export async function scrapeFacebookEventsForMetro(
           }
           // City/state/zip: fill the true values from the parsed address
           // (Quebec already excluded above, so this never mislabels a QC row).
-          if (enrichment.city) item.city = enrichment.city;
-          if (enrichment.state) item.state = enrichment.state;
+          // Only a city + a real US/CA state (code or spelled-out name) from the
+          // page counts as a confirmed location (2026-10-25).
+          const region = normalizeRegionCode(enrichment.state);
+          if (enrichment.city && region) {
+            item.city = enrichment.city;
+            item.state = region.code;
+            if (item.scrapedMetadata) {
+              item.scrapedMetadata.cityStateSource = 'page-fetch-place';
+              item.scrapedMetadata.geoConfidence = 'high';
+            }
+          }
           if (enrichment.zip) item.zip = enrichment.zip;
           if (item.scrapedMetadata && enrichment.country) {
             item.scrapedMetadata.country = enrichment.country;

@@ -763,6 +763,10 @@ export async function runNotifyMeSender(now: Date = new Date()): Promise<NotifyM
           'List-Unsubscribe': `<${unsubUrl}>`,
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         },
+        jobName: 'notifyMeSender',
+        // Bulk fan-out (2026-10-25). A 'daily_bulk_budget' refusal takes the release-and-abort
+        // branch below, so the claimed entries are retried by a later run.
+        category: 'bulk',
       });
       if (result.sent) {
         summary.emailed++;

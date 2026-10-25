@@ -55,6 +55,23 @@ const inMemoryFallback = {
     if (entry.expiresAt <= Date.now()) return null;
     return entry.value;
   },
+
+  // Single-threaded JS: read-modify-write here is atomic within this process.
+  async incrBy(key: string, by: number, ttlSeconds: number): Promise<number> {
+    const entry = store.get(key);
+    const live = entry && entry.expiresAt > Date.now() ? entry : undefined;
+    const current = live ? parseInt(live.value, 10) || 0 : 0;
+    const next = current + by;
+    store.set(key, { value: String(next), expiresAt: Date.now() + ttlSeconds * 1000 });
+    return next;
+  },
+
+  async setNx(key: string, ttlSeconds: number, value: string): Promise<boolean> {
+    const entry = store.get(key);
+    if (entry && entry.expiresAt > Date.now()) return false;
+    store.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
+    return true;
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -141,5 +158,35 @@ export const redis = {
       }
     }
     return inMemoryFallback.getDel(key);
+  },
+
+  /**
+   * Atomic counter increment (INCRBY) that also (re)sets the key's TTL. Returns the new value.
+   * Added 2026-10-25 for the Resend daily-quota counter (lib/transactionalEmailService.ts).
+   */
+  async incrBy(key: string, by: number, ttlSeconds: number): Promise<number> {
+    if (realClient && usingRealRedis) {
+      try {
+        const value = await realClient.incrBy(key, by);
+        await realClient.expire(key, ttlSeconds);
+        return value;
+      } catch (err: any) {
+        console.error('[Redis] incrBy error, falling back:', err.message);
+      }
+    }
+    return inMemoryFallback.incrBy(key, by, ttlSeconds);
+  },
+
+  /** SET key value EX ttl NX. Returns true when the key was set (it did not exist). */
+  async setNx(key: string, ttlSeconds: number, value: string): Promise<boolean> {
+    if (realClient && usingRealRedis) {
+      try {
+        const result = await realClient.set(key, value, { EX: ttlSeconds, NX: true });
+        return result === 'OK';
+      } catch (err: any) {
+        console.error('[Redis] setNx error, falling back:', err.message);
+      }
+    }
+    return inMemoryFallback.setNx(key, ttlSeconds, value);
   },
 };

@@ -46,7 +46,9 @@ import {
 import {
   looksLikeStreetAddress,
   deriveCityStateFromDisplay,
+  normalizeRegionCode,
 } from './facebook-address';
+import { checkEventWindow, isLocationConfirmed } from './facebook-events-quality';
 // Re-exported so existing importers of these guards from this module keep
 // working; the canonical definitions now live in facebook-address.ts.
 export { looksLikeStreetAddress, deriveCityStateFromDisplay };
@@ -56,7 +58,7 @@ export { looksLikeStreetAddress, deriveCityStateFromDisplay };
 // guards (facebook-address.ts) and never throws (returns null on any failure).
 // page-fetch imports only facebook-json / facebook-address / userAgents, so this
 // discovery -> page-fetch edge introduces NO import cycle.
-import { fetchFacebookEventPage } from './facebook-events-page-fetch';
+import { fetchFacebookEventPage, FbEventPageData } from './facebook-events-page-fetch';
 
 const FETCH_TIMEOUT_MS = 15_000;
 
@@ -82,6 +84,20 @@ const ADDR_FETCH_TIMEOUT_MS = 8_000;         // per-fetch timeout for this path
 // ---------------------------------------------------------------------------
 const DATE_RECOVERY_MAX_PER_METRO = 10;
 
+// ---------------------------------------------------------------------------
+// Location-recovery pass (2026-10-25). FB's events/search is NOT geo-scoped:
+// a query for "garage sale Elgin IL" returns events from anywhere, and every
+// event whose search-page stub had no parseable event_place used to be stored
+// under the QUERY METRO's city/state (126/225 rows on the 2026-10-25 retest,
+// e.g. Effingham IL stored as Elgin IL, Norwich UK as Coeur d'Alene ID). This
+// pass fetches the event's own page for its real place; anything still
+// unconfirmed is dropped by filterFbEventItems in the runner. Separate budget
+// from the address-only enrichment (whose 10-min clock starts at run start and
+// was exhausted after 77 fetches on that run). Fetches are cached run-wide.
+// ---------------------------------------------------------------------------
+const LOCATION_FETCH_MAX_PER_METRO = 15;
+const LOCATION_FETCH_MAX_PER_RUN = 250;
+
 /**
  * Shared, mutable enrichment context threaded through EVERY metro call in a run
  * so the cap (used) and wall-clock budget (startMs) are enforced run-globally.
@@ -94,16 +110,91 @@ export interface AddressEnrichCtx {
   used: number;
   startMs: number;
   skipUrls: Set<string>;
+  /** Run-wide page-fetch cache (url -> parsed page, or null on failure) so the
+   *  date-recovery, address and location passes never fetch one page twice. */
+  pageCache?: Map<string, FbEventPageData | null>;
+  /** sourceUrls already stored as Facebook Events sales -- ingest dedupes these,
+   *  so no page fetch is spent on them. */
+  existingUrls?: Set<string>;
+  /** Run-global count of location-recovery fetches. */
+  locationFetchUsed?: number;
 }
 
-// Reject events whose REAL parsed start is more than this far before "now".
-// Tightened from 30d -> ~2d grace (S1117): FB still serves old / recurring event
-// pages whose real start_timestamp is years past; a wide window let those ingest
-// and render as "live now". A 2-day grace still admits genuinely same-weekend /
-// multi-day-ongoing sales (e.g. a Fri start viewed on Sun). Applies ONLY to a
-// real timestamp -- never to the day_time_sentence "approximate" path, which only
-// ever yields now / today / tomorrow and is disclosed via the approximate badge.
-const STALE_PAST_GRACE_MS = 2 * 86_400_000;
+/** Fetch an event page once per run (cached when a ctx is supplied). Never
+ *  throws. Always fetched with requireDate:false so location data comes back
+ *  even when the page has no parseable date; callers needing a date check
+ *  page.startDate themselves. */
+async function fetchEventPageCached(
+  url: string,
+  ctx?: AddressEnrichCtx
+): Promise<FbEventPageData | null> {
+  if (ctx?.pageCache?.has(url)) return ctx.pageCache.get(url) ?? null;
+  let page: FbEventPageData | null = null;
+  try {
+    page = await fetchFacebookEventPage(url, ADDR_FETCH_TIMEOUT_MS, { requireDate: false });
+  } catch {
+    page = null;
+  }
+  if (ctx) {
+    if (!ctx.pageCache) ctx.pageCache = new Map();
+    ctx.pageCache.set(url, page);
+  }
+  return page;
+}
+
+/**
+ * Apply location data from an event's own page to an item. Pure (no I/O) and
+ * exported for unit testing. Rules:
+ *   - QC (by code or a spelled-out Quebec address) -> 'quebec' (caller drops).
+ *   - A real street address is applied only together with the page's own
+ *     city + state, or when the item's city/state is ALREADY confirmed from
+ *     the event (never a street address glued onto the query metro).
+ *   - A page city + state (code or spelled-out name) replaces an UNCONFIRMED
+ *     (metro-fallback / unresolved) city/state.
+ */
+export function applyPageLocation(
+  item: ScrapedItem,
+  page: FbEventPageData | null
+): 'street' | 'city' | 'quebec' | 'none' {
+  if (!page) return 'none';
+  const region = normalizeRegionCode(page.state);
+  if (region?.code === 'QC' || /\bqu[e\u00e9]bec\b/i.test(page.address || '')) return 'quebec';
+
+  const md: Record<string, any> = (item.scrapedMetadata = { ...(item.scrapedMetadata ?? {}) });
+  const confirmed = isLocationConfirmed(item);
+  const pageCity = typeof page.city === 'string' ? page.city.trim() : '';
+  const pageHasCityState = !!pageCity && !!region;
+  const pageStreet = !!page.address && looksLikeStreetAddress(page.address);
+  const country = page.country ?? region?.country;
+
+  const setCityState = (source: string): void => {
+    item.city = pageCity;
+    item.state = region!.code;
+    md.cityStateSource = source;
+    md.geoConfidence = 'high';
+    if (country) md.country = country;
+    delete md.rawPlaceAddress;
+  };
+
+  if (pageStreet && !looksLikeStreetAddress(item.address || '') && (pageHasCityState || confirmed)) {
+    if (item.address && !md.rawPlaceText) md.rawPlaceText = item.address;
+    item.address = page.address as string;
+    if (pageHasCityState) setCityState('page-fetch-address');
+    else md.geoConfidence = 'high';
+    return 'street';
+  }
+  if (!confirmed && pageHasCityState) {
+    setCityState('page-fetch-place');
+    return 'city';
+  }
+  if (!pageStreet && page.rawPlaceText && !md.rawPlaceText) md.rawPlaceText = page.rawPlaceText;
+  return 'none';
+}
+
+// Past / far-future date handling lives in checkEventWindow
+// (facebook-events-quality.ts) since 2026-10-25. It replaced the S1117
+// STALE_PAST_GRACE_MS rule (reject only when START was >2 days ago), which let
+// events that had already ENDED (start 10-23, no end) ingest as live.
 
 // ---------------------------------------------------------------------------
 // Sale-type sub-queries -- FB free-text search phrases (NOT site: SERP clauses)
@@ -457,18 +548,6 @@ function mapEventToScrapedItem(
   }
   const startDate = dateResolved.date;
 
-  // STALE-DATE REJECT (S1117) -- ONLY for a REAL parsed start_timestamp. FB keeps
-  // serving old / recurring event pages whose real start is years past; without
-  // this they ingest with dateApproximate:false and render as "live now". The
-  // day_time_sentence "approximate" path (now / today / tomorrow) is exempt --
-  // it is never in the past and is separately disclosed via the approximate badge.
-  if (
-    !dateResolved.approximate &&
-    startDate.getTime() < Date.now() - STALE_PAST_GRACE_MS
-  ) {
-    return rejectReason('stale-date');
-  }
-
   // endDate: prefer the event's OWN real end_timestamp when it is a valid UNIX
   // seconds value at/after the start (multi-day sales carry a genuine multi-day
   // window). Fall back to start + 1 day only when there is no usable end. NEVER
@@ -477,12 +556,20 @@ function mapEventToScrapedItem(
   const endTs = ev?.end_timestamp;
   const endFromEvent =
     typeof endTs === 'number' && endTs > 0 ? new Date(endTs * 1000) : null;
-  const endDate =
+  const realEnd =
     endFromEvent &&
     !isNaN(endFromEvent.getTime()) &&
     endFromEvent.getTime() >= startDate.getTime()
       ? endFromEvent
-      : new Date(startDate.getTime() + 86_400_000);
+      : null;
+  const endDate = realEnd ?? new Date(startDate.getTime() + 86_400_000);
+
+  // DATE-WINDOW REJECT (2026-10-25, replaces the S1117 2-day start grace):
+  // drop when the event's real end -- or its start, when FB gave no end -- is
+  // before today, or the start is >180 days out / not a sane timestamp. The
+  // reason ('ended-before-today' etc.) feeds the per-metro tally.
+  const windowReject = checkEventWindow(startDate, realEnd);
+  if (windowReject) return rejectReason(windowReject);
 
   const item = buildScrapedItemFromEvent(
     ev,
@@ -493,7 +580,8 @@ function mapEventToScrapedItem(
     startDate,
     endDate,
     dateResolved.approximate,
-    'search-page'
+    'search-page',
+    realEnd ? 'event' : 'derived'
   );
   if (!item) return rejectReason('quebec');
   return item;
@@ -518,7 +606,8 @@ function buildScrapedItemFromEvent(
   startDate: Date,
   endDate: Date,
   dateApproximate: boolean,
-  dateSource: 'search-page' | 'page-fetch-recovery'
+  dateSource: 'search-page' | 'page-fetch-recovery',
+  endSource: 'event' | 'derived' = 'derived'
 ): ScrapedItem | null {
   const rawName = typeof ev?.name === 'string' ? ev.name.trim() : '';
   const inferred = inferSaleType(rawName, typeHint);
@@ -579,7 +668,14 @@ function buildScrapedItemFromEvent(
     scrapedMetadata: {
       metro: `${metro.city}, ${metro.state}`,
       sourceApi: 'fb-proxy-discovery',
+      // Stored so dedupe.ts tier 2 (scrapedMetadata @> {sourceItemId}) can
+      // match this event even if its URL form ever changes.
+      sourceItemId: `fb:events:${fbEventId}`,
       dateApproximate,
+      // 'event' = endDate is the event's own end_timestamp; 'derived' = start
+      // + 1 day. filterFbEventItems uses the START for the past check when
+      // the end is derived.
+      endSource,
       // Provenance of the date itself: 'search-page' (normal path, resolveEventDate
       // found a real signal on the aggregate search result) vs 'page-fetch-recovery'
       // (search-page stub had zero date fields; recovered from the individual event
@@ -729,14 +825,30 @@ export async function scrapeFacebookEventsForMetroViaProxy(
     );
 
     let dateRecovered = 0;
+    let dateWindowRejected = 0;
     for (const candidate of recoveryCandidates) {
       // Already present (recovered via a different sub-query's duplicate, or
       // otherwise accepted) -- skip the redundant fetch.
       if (byEventId.has(`fb:events:${candidate.fbEventId}`)) continue;
 
       try {
-        const page = await fetchFacebookEventPage(candidate.sourceUrl, ADDR_FETCH_TIMEOUT_MS);
+        const page = await fetchEventPageCached(candidate.sourceUrl, enrichCtx);
         if (page?.startDate) {
+          const pageRealEnd =
+            page.endDate && page.endDate.getTime() >= page.startDate.getTime()
+              ? page.endDate
+              : null;
+          // Same date-window rule as the search-page path (2026-10-25): this
+          // path previously had NO past check, which is how 10-20..10-24 events
+          // were ingested on the retest run.
+          const recoveredReject = checkEventWindow(page.startDate, pageRealEnd);
+          if (recoveredReject) {
+            rejectReasons[`recovery-${recoveredReject}`] =
+              (rejectReasons[`recovery-${recoveredReject}`] ?? 0) + 1;
+            dateWindowRejected++;
+            await jitterDelay(800, 1500);
+            continue;
+          }
           const recoveredItem = buildScrapedItemFromEvent(
             candidate.ev,
             metro,
@@ -744,10 +856,21 @@ export async function scrapeFacebookEventsForMetroViaProxy(
             candidate.fbEventId,
             candidate.sourceUrl,
             page.startDate,
-            page.endDate ?? new Date(page.startDate.getTime() + 86_400_000),
+            pageRealEnd ?? new Date(page.startDate.getTime() + 86_400_000),
             /* dateApproximate */ false,
-            'page-fetch-recovery'
+            'page-fetch-recovery',
+            pageRealEnd ? 'event' : 'derived'
           );
+          // The search-page stub carries no event_place, so the item starts on
+          // the metro fallback -- take the location from the page we already
+          // fetched (2026-10-25). Quebec -> drop.
+          if (recoveredItem && applyPageLocation(recoveredItem, page) === 'quebec') {
+            await jitterDelay(800, 1500);
+            continue;
+          }
+          if (recoveredItem && page.dateOnly) {
+            recoveredItem.scrapedMetadata = { ...(recoveredItem.scrapedMetadata ?? {}), dateOnly: true };
+          }
           if (recoveredItem) {
             const key = recoveredItem.sourceItemId ?? recoveredItem.sourceUrl;
             if (!byEventId.has(key)) {
@@ -771,7 +894,8 @@ export async function scrapeFacebookEventsForMetroViaProxy(
 
     console.log(
       `[FB-Events-Discovery] ${metro.city}, ${metro.state} -- date-recovery: ` +
-        `${dateRecovered}/${recoveryCandidates.length} no-date candidates rescued via page-fetch`
+        `${dateRecovered}/${recoveryCandidates.length} no-date candidates rescued via page-fetch` +
+        (dateWindowRejected > 0 ? ` (${dateWindowRejected} rejected: past / out-of-range date)` : '')
     );
   }
 
@@ -793,6 +917,8 @@ export async function scrapeFacebookEventsForMetroViaProxy(
 
       // Fetch-once: skip URLs already enriched/attempted (DB-seeded or this run).
       if (enrichCtx.skipUrls.has(item.sourceUrl)) continue;
+      // Already stored -- ingest will skip it by sourceUrl; don't spend a fetch.
+      if (enrichCtx.existingUrls?.has(item.sourceUrl)) continue;
 
       enrichCtx.used++;
       enrichCtx.skipUrls.add(item.sourceUrl);
@@ -807,26 +933,15 @@ export async function scrapeFacebookEventsForMetroViaProxy(
       };
 
       try {
-        const page = await fetchFacebookEventPage(item.sourceUrl, ADDR_FETCH_TIMEOUT_MS);
+        const page = await fetchEventPageCached(item.sourceUrl, enrichCtx);
 
-        // GUARDED WRITE-BACK -- only when the page yielded a REAL street address.
-        // We only reach here because item.address was NOT already a street, so
-        // this can never downgrade an existing street address.
-        if (page?.address && looksLikeStreetAddress(page.address)) {
-          // QC drop parity with mapEventToScrapedItem's ingest-time reject.
-          if (page.state === 'QC' || /\bqu[eé]bec\b/i.test(page.address)) {
-            byEventId.delete(item.sourceItemId ?? item.sourceUrl);
-          } else {
-            item.address = page.address;
-            if (page.city) item.city = page.city;
-            if (page.state) item.state = page.state;
-            item.scrapedMetadata = {
-              ...(item.scrapedMetadata ?? {}),
-              cityStateSource: 'page-fetch-address',
-              geoConfidence: 'high',
-              ...(page.country ? { country: page.country } : {}),
-            };
-          }
+        // GUARDED WRITE-BACK (applyPageLocation): a real street address is only
+        // applied with the page's own city/state (or onto an already-confirmed
+        // city/state), and a page city/state replaces a metro fallback. The old
+        // inline version applied a street address but kept the METRO city when
+        // the page had no city, then marked it geoConfidence 'high'.
+        if (applyPageLocation(item, page) === 'quebec') {
+          byEventId.delete(item.sourceItemId ?? item.sourceUrl);
         }
       } catch (err) {
         // A single enrichment error never fails the run -- keep city-level.
@@ -844,6 +959,45 @@ export async function scrapeFacebookEventsForMetroViaProxy(
       `[FB-Events-Discovery] ${metro.city}, ${metro.state} -- address enrichment ` +
         `used ${enrichCtx.used}/${ADDR_FETCH_MAX_PER_RUN} fetches (run-global)`
     );
+  }
+
+  // ------------------------------------------------------------------
+  // LOCATION-RECOVERY PASS (2026-10-25) -- see LOCATION_FETCH_* above. Runs
+  // whenever the runner supplies a ctx (independent of the address-only flag),
+  // only for NEW items whose city/state is still the metro fallback. Items it
+  // cannot resolve stay flagged and are dropped by filterFbEventItems.
+  if (enrichCtx) {
+    let metroFetches = 0;
+    let resolved = 0;
+    let unresolved = 0;
+    for (const item of Array.from(byEventId.values())) {
+      if (isLocationConfirmed(item)) continue;
+      if (enrichCtx.existingUrls?.has(item.sourceUrl)) continue;
+      const cached = enrichCtx.pageCache?.has(item.sourceUrl);
+      if (!cached) {
+        if (metroFetches >= LOCATION_FETCH_MAX_PER_METRO) { unresolved++; continue; }
+        if ((enrichCtx.locationFetchUsed ?? 0) >= LOCATION_FETCH_MAX_PER_RUN) { unresolved++; continue; }
+        metroFetches++;
+        enrichCtx.locationFetchUsed = (enrichCtx.locationFetchUsed ?? 0) + 1;
+      }
+      const page = await fetchEventPageCached(item.sourceUrl, enrichCtx);
+      const outcome = applyPageLocation(item, page);
+      if (outcome === 'quebec') {
+        byEventId.delete(item.sourceItemId ?? item.sourceUrl);
+      } else if (isLocationConfirmed(item)) {
+        resolved++;
+      } else {
+        unresolved++;
+      }
+      if (!cached) await jitterDelay(800, 1500);
+    }
+    if (resolved + unresolved > 0) {
+      console.log(
+        `[FB-Events-Discovery] ${metro.city}, ${metro.state} -- location-recovery: ` +
+          `${resolved} resolved from event page, ${unresolved} still unconfirmed (will be dropped); ` +
+          `run-global fetches ${enrichCtx.locationFetchUsed ?? 0}/${LOCATION_FETCH_MAX_PER_RUN}`
+      );
+    }
   }
 
   return Array.from(byEventId.values());

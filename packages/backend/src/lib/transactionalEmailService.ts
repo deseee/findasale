@@ -2,6 +2,8 @@ import { Resend } from 'resend';
 import { suppressionService } from '../services/suppressionService';
 import { recordApiUsage } from './aiCostTracker';
 import * as Sentry from '@sentry/node';
+import { redis } from './redis';
+import { prisma } from './prisma';
 
 /**
  * Transactional email service — uses Resend API (NOT Gmail).
@@ -44,6 +46,152 @@ function resolveFrom(from?: string): string {
   return domainOf(candidate) === VERIFIED_RESEND_DOMAIN ? candidate : FROM_DEFAULT;
 }
 
+// ---------------------------------------------------------------------------
+// Daily headroom guard (2026-10-25)
+//
+// The Resend account is on the FREE plan: 100 emails/day, 3,000/month. Resend counts every
+// To/CC/BCC address as one email and the daily quota is a UTC calendar day (00:00-24:00 UTC,
+// resets at midnight UTC, not a rolling 24h window) -- per
+// https://resend.com/docs/knowledge-base/account-quotas-and-limits. The Friday weekly digest
+// alone (~100-120 recipients) hit 100% of the day's quota on 2026-10-16 and 2026-10-23, which
+// would leave password resets, verification, receipts, hold invoices and auction mail refused
+// by Resend for the rest of that UTC day.
+//
+// Every send is either 'transactional' (default) or 'bulk' (opt-in via `category: 'bulk'`).
+// A per-UTC-day counter of accepted recipients lives in Redis (lib/redis, falls back to an
+// in-memory store) under resend:daily-count:<YYYY-MM-DD> with a 2-day TTL. When the key is
+// missing (e.g. a restart with no Redis), it is seeded from the durable ApiUsageLog row
+// 'resend:transactional' for the same UTC day, which records the same quantity.
+//   - bulk sends are refused ({ sent:false, reason:'daily_bulk_budget' }) once the day's count
+//     would exceed RESEND_DAILY_BULK_BUDGET (default 70), leaving >= 30/day for transactional.
+//   - transactional sends are NEVER blocked by this guard (only Resend itself can refuse).
+// Limits are env-configurable: RESEND_DAILY_CAP (default 100), RESEND_DAILY_BULK_BUDGET
+// (default 70, clamped to the cap).
+// ---------------------------------------------------------------------------
+
+export type ResendSendCategory = 'transactional' | 'bulk';
+
+const RESEND_COUNT_KEY_PREFIX = 'resend:daily-count:';
+const RESEND_COUNT_TTL_SECONDS = 2 * 24 * 60 * 60;
+// Same quantity (accepted recipients per UTC day) recordApiUsage() already persists below.
+const RESEND_USAGE_SERVICE = 'resend:transactional';
+
+function nonNegativeIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/** Current limits from env (read per call so a Railway variable change applies on restart/redeploy). */
+export function getResendDailyLimits(): { cap: number; bulkBudget: number } {
+  const cap = nonNegativeIntEnv('RESEND_DAILY_CAP', 100);
+  const bulkBudget = Math.min(nonNegativeIntEnv('RESEND_DAILY_BULK_BUDGET', 70), cap);
+  return { cap, bulkBudget };
+}
+
+/** Resend's quota day: the UTC calendar date. */
+export function resendQuotaDay(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
+/** Pure budget rule: may a bulk send of `recipients` go out when `countBefore` were already sent today? */
+export function bulkBudgetAllows(countBefore: number, recipients: number, bulkBudget: number): boolean {
+  return countBefore + recipients <= bulkBudget;
+}
+
+function countKey(day: string): string {
+  return `${RESEND_COUNT_KEY_PREFIX}${day}`;
+}
+
+async function ensureCounterSeeded(day: string): Promise<void> {
+  const key = countKey(day);
+  if ((await redis.get(key)) !== null) return;
+  let seed = 0;
+  try {
+    const row = await prisma.apiUsageLog.findUnique({
+      where: { service_dateKey: { service: RESEND_USAGE_SERVICE, dateKey: day } },
+      select: { callCount: true },
+    });
+    seed = row?.callCount ?? 0;
+  } catch (err: any) {
+    console.warn('[transactionalEmailService] Could not seed Resend daily count from ApiUsageLog:', err?.message ?? err);
+  }
+  // NX: a concurrent send that seeded (and possibly incremented) first wins.
+  await redis.setNx(key, RESEND_COUNT_TTL_SECONDS, String(seed));
+}
+
+/** Today's (UTC) count of recipients accepted by Resend, as tracked by this guard. */
+export async function getResendDailyCount(now: Date = new Date()): Promise<number> {
+  const day = resendQuotaDay(now);
+  await ensureCounterSeeded(day);
+  return parseInt((await redis.get(countKey(day))) ?? '0', 10) || 0;
+}
+
+// One Sentry warning per UTC day per condition per process (breadcrumbs on every event).
+const warnedDays = new Set<string>();
+function warnOncePerDay(kind: 'bulk_budget_tripped' | 'daily_cap_reached', day: string, message: string, extra: Record<string, unknown>): void {
+  try {
+    Sentry.addBreadcrumb({ category: 'email.resend.quota', level: 'warning', message, data: extra });
+  } catch { /* Sentry not initialised (tests/dev) */ }
+  const flag = `${kind}:${day}`;
+  if (warnedDays.has(flag)) return;
+  warnedDays.add(flag);
+  try {
+    Sentry.captureMessage(message, { level: 'warning', tags: { email_rail: 'resend', kind }, extra });
+  } catch { /* Sentry not initialised (tests/dev) */ }
+}
+
+/**
+ * Reserve `recipients` units of today's bulk budget atomically. Returns reserved=false (and
+ * allowed=true) when the counter is unavailable: the guard fails open rather than silently
+ * dropping mail on a counter error.
+ */
+async function reserveBulkBudget(recipients: number, jobLabel: string): Promise<{ allowed: boolean; reserved: boolean }> {
+  const { cap, bulkBudget } = getResendDailyLimits();
+  const day = resendQuotaDay();
+  try {
+    await ensureCounterSeeded(day);
+    const after = await redis.incrBy(countKey(day), recipients, RESEND_COUNT_TTL_SECONDS);
+    const before = after - recipients;
+    if (bulkBudgetAllows(before, recipients, bulkBudget)) return { allowed: true, reserved: true };
+    await redis.incrBy(countKey(day), -recipients, RESEND_COUNT_TTL_SECONDS);
+    console.warn(
+      `[transactionalEmailService] Bulk send refused — daily bulk budget reached (${before}/${bulkBudget}, cap ${cap}, UTC day ${day}) | job: ${jobLabel}`,
+    );
+    warnOncePerDay('bulk_budget_tripped', day, `Resend daily bulk budget reached (${before}/${bulkBudget}); bulk mail deferred`, {
+      day, countBefore: before, bulkBudget, cap, jobName: jobLabel,
+    });
+    return { allowed: false, reserved: false };
+  } catch (err: any) {
+    console.warn('[transactionalEmailService] Resend daily counter unavailable — bulk guard failing open:', err?.message ?? err);
+    return { allowed: true, reserved: false };
+  }
+}
+
+async function releaseBulkReservation(recipients: number): Promise<void> {
+  try {
+    await redis.incrBy(countKey(resendQuotaDay()), -recipients, RESEND_COUNT_TTL_SECONDS);
+  } catch { /* best effort */ }
+}
+
+/** Count an accepted send that was not pre-reserved. Never throws. */
+async function recordAcceptedSend(recipients: number, jobLabel: string): Promise<void> {
+  try {
+    const day = resendQuotaDay();
+    await ensureCounterSeeded(day);
+    const after = await redis.incrBy(countKey(day), recipients, RESEND_COUNT_TTL_SECONDS);
+    const { cap } = getResendDailyLimits();
+    if (after >= cap) {
+      warnOncePerDay('daily_cap_reached', day, `Resend daily send count reached the plan cap (${after}/${cap}); Resend may refuse further mail until 00:00 UTC`, {
+        day, count: after, cap, jobName: jobLabel,
+      });
+    }
+  } catch (err: any) {
+    console.warn('[transactionalEmailService] Could not record Resend daily count:', err?.message ?? err);
+  }
+}
+
 export const transactionalEmailService = {
   emails: {
     // P0 fix (2026-08-25, Charge C investigation -- STATE.md S-PAYMENT-INVOICE-GAPS-2026-08-25):
@@ -69,8 +217,14 @@ export const transactionalEmailService = {
       // Resend dashboard. Added 2026-10-25 when the remaining non-outreach Gmail senders
       // moved to this rail.
       jobName?: string;
+      // 'transactional' (default): never blocked by the daily headroom guard.
+      // 'bulk': digests / fan-out alerts; refused with reason 'daily_bulk_budget' once today's
+      // Resend count reaches RESEND_DAILY_BULK_BUDGET. Callers must treat that as "try again
+      // after 00:00 UTC", not as a permanent failure. Added 2026-10-25.
+      category?: ResendSendCategory;
     }): Promise<{ sent: boolean; reason?: string }> {
       const jobLabel = options.jobName ?? 'unknown';
+      const category: ResendSendCategory = options.category ?? 'transactional';
       if (!process.env.RESEND_API_KEY) {
         // Soft failure in dev/test environments where Resend isn't configured.
         // In production Railway RESEND_API_KEY must be set — log as error so it
@@ -101,25 +255,42 @@ export const transactionalEmailService = {
         return { sent: false, reason: 'suppressed' };
       }
 
+      // Daily headroom guard (see top of file). Bulk only; checked after the suppression gate so
+      // a suppressed recipient never consumes budget.
+      let reservedBulk = false;
+      if (category === 'bulk') {
+        const gate = await reserveBulkBudget(recipients.length, jobLabel);
+        if (!gate.allowed) return { sent: false, reason: 'daily_bulk_budget' };
+        reservedBulk = gate.reserved;
+      }
+
       const resend = new Resend(process.env.RESEND_API_KEY);
 
-      const { error } = await resend.emails.send({
-        from: resolveFrom(options.from),
-        to: recipients,
-        subject: options.subject,
-        html: options.html,
-        ...(options.text ? { text: options.text } : {}),
-        ...(options.replyTo ? { replyTo: options.replyTo } : {}),
-        ...(options.headers && Object.keys(options.headers).length > 0
-          ? { headers: options.headers }
-          : {}),
-        // Resend tag values allow only ASCII letters, digits, '_' and '-'.
-        ...(options.jobName
-          ? { tags: [{ name: 'job', value: options.jobName.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 256) }] }
-          : {}),
-      });
+      let sendResult: Awaited<ReturnType<typeof resend.emails.send>>;
+      try {
+        sendResult = await resend.emails.send({
+          from: resolveFrom(options.from),
+          to: recipients,
+          subject: options.subject,
+          html: options.html,
+          ...(options.text ? { text: options.text } : {}),
+          ...(options.replyTo ? { replyTo: options.replyTo } : {}),
+          ...(options.headers && Object.keys(options.headers).length > 0
+            ? { headers: options.headers }
+            : {}),
+          // Resend tag values allow only ASCII letters, digits, '_' and '-'.
+          ...(options.jobName
+            ? { tags: [{ name: 'job', value: options.jobName.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 256) }] }
+            : {}),
+        });
+      } catch (sendErr) {
+        if (reservedBulk) await releaseBulkReservation(recipients.length);
+        throw sendErr;
+      }
+      const { error } = sendResult;
 
       if (error) {
+        if (reservedBulk) await releaseBulkReservation(recipients.length);
         console.error('[transactionalEmailService] Resend error:', error);
         Sentry.captureException(new Error(`Resend send rejected: ${error.message}`), {
           tags: { email_rail: 'resend', kind: 'resend_send_rejected' },
@@ -138,7 +309,9 @@ export const transactionalEmailService = {
       // via the existing recordApiUsage() helper, instead of adding a new table or
       // field. writeApiUsageRow() (inside recordApiUsage) already fails open and
       // never throws, so this can never block or fail a real transactional send.
-      await recordApiUsage('resend:transactional', 0, recipients.length);
+      await recordApiUsage(RESEND_USAGE_SERVICE, 0, recipients.length);
+      // Daily headroom counter: bulk sends were already counted by their reservation.
+      if (!reservedBulk) await recordAcceptedSend(recipients.length, jobLabel);
       if (options.jobName) {
         console.log(`[transactionalEmailService] Sent (${jobLabel}) to ${recipients.length} recipient(s)`);
       }

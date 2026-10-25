@@ -29,6 +29,7 @@ import {
   scrapeFacebookEventsForMetroViaProxy,
   AddressEnrichCtx,
 } from '../services/scraper/sources/facebook-events-discovery';
+import { filterFbEventItems } from '../services/scraper/sources/facebook-events-quality';
 import { jitterDelay } from '../services/scraper/userAgents';
 import { prisma } from '../lib/prisma';
 
@@ -129,8 +130,10 @@ async function main() {
         `${metros.length}/${SEARCH_METROS.length} metros, ingest URL: ${INGEST_URL}`
   );
 
-  const allItems: any[] = [];
-  const seenIds = new Set<string>();
+  // Every item from every metro is collected here; cross-metro dedupe by FB
+  // event id now happens in filterFbEventItems (below), which prefers the copy
+  // whose location was confirmed from the event itself.
+  const collected: any[] = [];
   let metroSuccess = 0;
   let metroFailed = 0;
 
@@ -143,7 +146,31 @@ async function main() {
     used: 0,
     startMs: Date.now(),
     skipUrls: new Set<string>(),
+    pageCache: new Map(),
+    existingUrls: new Set<string>(),
+    locationFetchUsed: 0,
   };
+
+  // Every sourceUrl already stored as a Facebook Events sale (any status). Used
+  // to (a) spend no page fetches on events ingest will skip anyway, and (b) let
+  // filterFbEventItems pass them through so ingest's duplicate path still
+  // refreshes lastScrapedAt. On failure we proceed with an empty set -- ingest's
+  // own sourceUrl dedupe still prevents duplicate rows.
+  try {
+    const rows = await prisma.$queryRaw<Array<{ sourceUrl: string | null }>>`
+      SELECT "sourceUrl" FROM "Sale"
+      WHERE "sourceName" = 'Facebook Events' AND "sourceUrl" IS NOT NULL
+    `;
+    for (const r of rows) {
+      if (r.sourceUrl) enrichCtx.existingUrls!.add(r.sourceUrl);
+    }
+    console.log(`[run-fb-events] Existing FB Events sourceUrls loaded: ${enrichCtx.existingUrls!.size}`);
+  } catch (err) {
+    console.warn(
+      '[run-fb-events] Existing-sourceUrl query failed -- proceeding with empty set:',
+      err instanceof Error ? err.message : String(err)
+    );
+  }
 
   // FETCH-ONCE skip-set: one indexed read (uses existing sourceName/sourceUrl +
   // scrapedMetadata GIN indexes) of every Facebook Events sale that already has a
@@ -185,17 +212,12 @@ async function main() {
             scaleSerpKey: SCALESERP_KEY,
           });
 
-      for (const item of items) {
-        if (item.sourceItemId && !seenIds.has(item.sourceItemId)) {
-          seenIds.add(item.sourceItemId);
-          allItems.push(item);
-        }
-      }
+      collected.push(...items);
 
       metroSuccess++;
       console.log(
         `[run-fb-events] ${metro.city}, ${metro.state}: ${items.length} items ` +
-        `(${allItems.length} total)`
+        `(${collected.length} collected so far)`
       );
     } catch (err) {
       metroFailed++;
@@ -211,9 +233,20 @@ async function main() {
     await jitterDelay(100, 300);
   }
 
+  // Final quality gate (2026-10-25): one item per FB event id across metros,
+  // drop events that ended before today / start >180 days out / bad dates, and
+  // drop events whose city/state could not be confirmed from the event itself.
+  const { kept: allItems, dropped } = filterFbEventItems(collected, {
+    existingSourceUrls: enrichCtx.existingUrls,
+  });
+  const droppedSummary = Object.entries(dropped)
+    .map(([reason, n]) => `${reason}=${n}`)
+    .join(', ');
+
   console.log(
     `[run-fb-events] Scraping done — ${metroSuccess} OK, ${metroFailed} failed, ` +
-    `${allItems.length} items collected`
+    `${collected.length} items collected, ${allItems.length} kept after quality gate` +
+    (droppedSummary ? ` (dropped: ${droppedSummary})` : '')
   );
 
   if (allItems.length === 0) {

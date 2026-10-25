@@ -726,6 +726,19 @@ const filterSalesWithinRadius = (
 
 const DIGEST_SEND_INTERVAL_MS = 600;
 
+/**
+ * Digest edition key (2026-10-25). One edition per week, named for the UTC date of its Friday:
+ * the Friday run and the Saturday/Sunday catch-up runs (jobs/notificationJob.ts) share it.
+ * A sent recipient gets an EmailAutomationLog row with this key, so a later run in the same
+ * edition sends only to the remainder (recipients deferred by the Resend daily bulk budget, or
+ * whose send failed). No schema change: EmailAutomationLog is the existing per-user send marker.
+ */
+export const weeklyDigestEditionKey = (now: Date = new Date()): string => {
+  const daysSinceFriday = (now.getUTCDay() - 5 + 7) % 7;
+  const friday = new Date(now.getTime() - daysSinceFriday * 24 * 60 * 60 * 1000);
+  return `weekly_digest:${friday.toISOString().slice(0, 10)}`;
+};
+
 // Send weekly digest email to all users with upcoming sales this weekend
 export const sendWeeklyDigest = async () => {
   try {
@@ -774,6 +787,7 @@ export const sendWeeklyDigest = async () => {
         email: true,
         name: true,
         notificationPrefs: true,
+        lastVisitDate: true,
         savedSearches: { select: { filters: true } },
       },
       where: {
@@ -783,35 +797,29 @@ export const sendWeeklyDigest = async () => {
           { email: { not: { endsWith: '@system.finda.sale' } } },
         ],
       },
+      orderBy: { id: 'asc' }, // stable order across the Friday run and its catch-up runs
       take: 5000, // cap digest at 5k users per run
     });
 
-    console.info(`Weekly digest: sending to ${users.length} users with ${upcomingSales.length} sales`);
+    // Resumable edition (2026-10-25): skip recipients this edition already reached.
+    const editionKey = weeklyDigestEditionKey(now);
+    const alreadySentRows = await prisma.emailAutomationLog.findMany({
+      where: { automationKey: editionKey },
+      select: { userId: true },
+    });
+    const alreadySent = new Set(alreadySentRows.map((r) => r.userId));
 
-    let sent = 0;
-    let failed = 0;
-    let skipped = 0; // rail-level skips (hard bounce / complaint / our own finda.sale zone)
-
-    // Lazy import (same pattern as suppressionService below): keeps Resend + cost tracker out of this
-    // controller's module-load path.
-    const { transactionalEmailService } = await import('../lib/transactionalEmailService');
-    const { suppressionService } = await import('../services/suppressionService');
-    const { buildUnsubscribeLinks } = await import('./unsubscribeController');
-
-    for (const user of users) {
-      try {
-        // Opt-out check
+    // Plan each pending recipient's content up front so the send order can put the most
+    // relevant first: recipients with sales near their saved-search location, then the most
+    // recently active (User.lastVisitDate), then user id. When the Resend daily bulk budget
+    // defers the tail of the list, it is the least relevant mail that waits a day.
+    const planned = users
+      .filter((user) => {
+        if (alreadySent.has(user.id)) return false;
         const prefs = (user.notificationPrefs as Record<string, unknown> | null) ?? {};
-        if (prefs['emailWeeklyDigest'] === false) continue;
-
-        // Suppression check
-        const suppressed = await suppressionService.isSuppressed(user.email);
-        if (suppressed) continue;
-
-        // Per-user unsubscribe URL + RFC 8058 List-Unsubscribe header (same
-        // UnsubscribeToken scheme, one token used for both).
-        const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(user.id, 'weekly'); // FIX (findasale-hacker 2026-09-05): 'emailWeeklyDigest' is a TYPE_TO_PREF_MAP *value*, not a key -- handleUnsubscribe looked it up as a key and always 400'd "Invalid unsubscribe type". 'weekly' is the correct key.
-
+        return prefs['emailWeeklyDigest'] !== false; // opt-out
+      })
+      .map((user) => {
         // Location-relevant selection: filter the sale superset to the user's
         // saved-search location (bounding box). Falls back to the global list
         // when we have no location or no nearby sales — audience is unchanged,
@@ -826,6 +834,47 @@ export const sendWeeklyDigest = async () => {
             nearYou = true;
           }
         }
+        return { user, salesForUser, nearYou };
+      })
+      .sort((a, b) => {
+        if (a.nearYou !== b.nearYou) return a.nearYou ? -1 : 1;
+        const visitA = a.user.lastVisitDate ? a.user.lastVisitDate.getTime() : 0;
+        const visitB = b.user.lastVisitDate ? b.user.lastVisitDate.getTime() : 0;
+        if (visitA !== visitB) return visitB - visitA;
+        return a.user.id < b.user.id ? -1 : a.user.id > b.user.id ? 1 : 0;
+      });
+
+    if (planned.length === 0) {
+      console.info(`Weekly digest (${editionKey}): nothing pending (${alreadySent.size} already sent this edition)`);
+      return;
+    }
+
+    console.info(
+      `Weekly digest (${editionKey}): sending to ${planned.length} pending users ` +
+        `(${alreadySent.size} already sent this edition) with ${upcomingSales.length} sales`,
+    );
+
+    let sent = 0;
+    let deferred = 0; // left for the next catch-up run by the Resend daily bulk budget
+    let failed = 0;
+    let skipped = 0; // rail-level skips (hard bounce / complaint / our own finda.sale zone)
+
+    // Lazy import (same pattern as suppressionService below): keeps Resend + cost tracker out of this
+    // controller's module-load path.
+    const { transactionalEmailService } = await import('../lib/transactionalEmailService');
+    const { suppressionService } = await import('../services/suppressionService');
+    const { buildUnsubscribeLinks } = await import('./unsubscribeController');
+
+    for (let index = 0; index < planned.length; index++) {
+      const { user, salesForUser, nearYou } = planned[index];
+      try {
+        // Suppression check
+        const suppressed = await suppressionService.isSuppressed(user.email);
+        if (suppressed) continue;
+
+        // Per-user unsubscribe URL + RFC 8058 List-Unsubscribe header (same
+        // UnsubscribeToken scheme, one token used for both).
+        const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(user.id, 'weekly'); // FIX (findasale-hacker 2026-09-05): 'emailWeeklyDigest' is a TYPE_TO_PREF_MAP *value*, not a key -- handleUnsubscribe looked it up as a key and always 400'd "Invalid unsubscribe type". 'weekly' is the correct key.
 
         const html = buildDigestHtml(user.name, salesForUser, frontendUrl, unsubUrl, nearYou, new Date());
 
@@ -839,6 +888,10 @@ export const sendWeeklyDigest = async () => {
             'List-Unsubscribe': listUnsubscribeHeader,
             'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
           },
+          jobName: 'weeklyDigest',
+          // Bulk: refused once the day's Resend count reaches RESEND_DAILY_BULK_BUDGET so
+          // transactional mail (resets, receipts, invoices) keeps headroom under the free-plan cap.
+          category: 'bulk' as const,
         };
 
         // Per-recipient failure handling: one retry after a short wait on a Resend rate-limit (429), then
@@ -852,8 +905,25 @@ export const sendWeeklyDigest = async () => {
           result = await transactionalEmailService.emails.send(digestMessage);
         }
 
-        if (result.sent) sent++;
-        else skipped++;
+        if (result.reason === 'daily_bulk_budget') {
+          // Every later bulk send today would be refused too: stop, and leave this recipient and
+          // the rest unmarked so the next catch-up run (after 00:00 UTC) sends to them.
+          deferred = planned.length - index;
+          console.warn(
+            `Weekly digest (${editionKey}): Resend daily bulk budget reached — ${deferred} recipient(s) deferred to the next run`,
+          );
+          break;
+        }
+
+        if (result.sent) {
+          sent++;
+          try {
+            await prisma.emailAutomationLog.create({ data: { userId: user.id, automationKey: editionKey } });
+          } catch (markErr) {
+            // Without the marker a catch-up run could send this user a second copy; log loudly.
+            console.error(`Weekly digest: sent to ${maskEmail(user.email)} but could not record the edition marker:`, markErr);
+          }
+        } else skipped++;
 
         // Pacing: Resend allows ~2 requests/second by default; 600ms between sends stays under it.
         await new Promise((resolve) => setTimeout(resolve, DIGEST_SEND_INTERVAL_MS));
@@ -863,7 +933,9 @@ export const sendWeeklyDigest = async () => {
       }
     }
 
-    console.info(`Weekly digest complete: ${sent} sent, ${skipped} skipped, ${failed} failed`);
+    console.info(
+      `Weekly digest (${editionKey}) complete: ${sent} sent, ${skipped} skipped, ${failed} failed, ${deferred} deferred to next run`,
+    );
   } catch (error) {
     console.error('Weekly digest job error:', error);
   }

@@ -43,6 +43,21 @@ export interface FbEventPageData {
   // fragment, placeholder). Preserved so the caller can keep it in
   // scrapedMetadata rather than writing junk into address.
   rawPlaceText?: string;
+  // true when startDate came from a date-only og:description ("on Saturday,
+  // October 24 2026") with no time of day. Such dates are anchored at 12:00 UTC
+  // (see parseDateFromOgDescription) so they fall on the same calendar day in
+  // every US timezone.
+  dateOnly?: boolean;
+}
+
+export interface FetchFacebookEventPageOptions {
+  /**
+   * Default true (original contract): return null when no start date could be
+   * parsed. Pass false to still get the page's location data (city/state/
+   * street) for an event whose date is already known -- used by the discovery
+   * location-recovery pass so an event is never stamped with the query metro.
+   */
+  requireDate?: boolean;
 }
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -172,7 +187,15 @@ function parseDateFromOgDescription(text: string, url?: string): Date | null {
   const m0 = text.match(p0);
   if (m0) {
     const [, month, day, year] = m0;
-    const d = new Date(`${month} ${day}, ${year}`);
+    // Date-only (no time of day): anchor at 12:00 UTC, NOT local midnight. The
+    // old `new Date("October 24, 2026")` parsed as 00:00 in the runner's zone
+    // (UTC on GitHub Actions), which renders as the PREVIOUS evening in every US
+    // timezone and made a same-day sale look already over. 12:00 UTC is the same
+    // calendar day from Hawaii (02:00) to the East Coast (08:00).
+    const monthNum = MONTHS_LONG[cap(month)];
+    const d = monthNum
+      ? new Date(Date.UTC(parseInt(year, 10), monthNum - 1, parseInt(day, 10), 12, 0, 0))
+      : new Date(NaN);
     if (!isNaN(d.getTime())) {
       console.log(`[FB-Events-PageFetch] Pattern0 date extracted: ${d.toISOString()} from ${url || 'unknown'}`);
       return d;
@@ -237,8 +260,10 @@ function parseDateFromOgDescription(text: string, url?: string): Date | null {
  */
 export async function fetchFacebookEventPage(
   url: string,
-  timeoutMs: number = FETCH_TIMEOUT_MS
+  timeoutMs: number = FETCH_TIMEOUT_MS,
+  options: FetchFacebookEventPageOptions = {}
 ): Promise<FbEventPageData | null> {
+  const requireDate = options.requireDate !== false;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -304,7 +329,18 @@ export async function fetchFacebookEventPage(
     // If JSON-LD didn't give us a date, try parsing it from og:description
     if (!result.startDate && og.description) {
       const ogDate = parseDateFromOgDescription(og.description, url);
-      if (ogDate) result.startDate = ogDate;
+      if (ogDate) {
+        result.startDate = ogDate;
+        // Pattern 0 (date-only) anchors at exactly 12:00:00.000 UTC.
+        if (
+          ogDate.getUTCHours() === 12 &&
+          ogDate.getUTCMinutes() === 0 &&
+          ogDate.getUTCSeconds() === 0 &&
+          !/\d{1,2}(?::\d{2})?\s*(AM|PM)/i.test(og.description)
+        ) {
+          result.dateOnly = true;
+        }
+      }
     }
 
     // ADR-081 address upgrade: the individual event PAGE embeds the same FB
@@ -354,6 +390,7 @@ export async function fetchFacebookEventPage(
     // No usable date extracted — treat as a failed enrichment, not a partial
     // success, since date accuracy is the primary reason this module exists.
     if (!result.startDate) {
+      if (!requireDate) return result;
       console.warn(
         `[FB-Events-PageFetch] No parseable date found for ${url} — falling back to SERP guess | og.title=${og.title} | og.description=${og.description?.substring(0, 300)}`
       );
