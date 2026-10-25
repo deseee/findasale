@@ -105,6 +105,42 @@ const SENDABLE_INTERNAL_ALLOWLIST: ReadonlySet<string> = new Set(
 );
 
 /**
+ * RFC 2606 / RFC 6761 reserved + special-use TLDs. These can never resolve to a real
+ * public mail server, so any send produces a guaranteed bounce (Resend 4% account-pause
+ * threshold incident 2026-10-25: weekly digest mailed @findasale.test QA accounts).
+ */
+export const RESERVED_TLDS: ReadonlySet<string> = new Set([
+  'test', 'invalid', 'example', 'localhost', 'local',
+]);
+
+/** RFC 2606 reserved second-level example domains (and all their subdomains). */
+export const RESERVED_EXAMPLE_DOMAINS: ReadonlySet<string> = new Set([
+  'example.com', 'example.net', 'example.org',
+]);
+
+/**
+ * Canonical "can this address never be delivered" check. Pure/synchronous. True for
+ * reserved TLDs (.test/.invalid/.example/.localhost/.local), example.com/.net/.org (and
+ * subdomains), and any domain without a dot. Does NOT apply business policy (competitor
+ * or own-zone blocks) -- see isEmailDomainBlocked for that. Used by the send rails AND
+ * MailerLite sync (mailerliteService.isTestOrSyntheticEmail) so there is one definition.
+ */
+export function isNonDeliverableEmail(email: string): boolean {
+  if (!email || typeof email !== 'string') return false;
+  const e = email.toLowerCase().trim();
+  const atIndex = e.lastIndexOf('@');
+  if (atIndex === -1) return false;
+  const domain = e.slice(atIndex + 1).replace(/\.$/, '');
+  if (!domain || !domain.includes('.')) return true;
+  const tld = domain.slice(domain.lastIndexOf('.') + 1);
+  if (RESERVED_TLDS.has(tld)) return true;
+  for (const d of RESERVED_EXAMPLE_DOMAINS) {
+    if (domain === d || domain.endsWith('.' + d)) return true;
+  }
+  return false;
+}
+
+/**
  * Returns true if we must NOT send to this address. Synchronous — no DB call.
  * Blocks our own finda.sale zone (no real user has an @finda.sale address — these are
  * scraped placeholders / internal-only), competitor domains, and placeholder domains.
@@ -116,8 +152,8 @@ export function isEmailDomainBlocked(email: string): boolean {
   if (atIndex === -1) return false;
   if (SENDABLE_INTERNAL_ALLOWLIST.has(e)) return false;
   const domain = e.slice(atIndex + 1);
-  // A domain with no dot cannot resolve to a real public mail server (e.g. "x@email").
-  if (!domain.includes('.')) return true;
+  // Reserved TLDs (.test/.invalid/...), example.*, and dotless domains never deliver.
+  if (isNonDeliverableEmail(e)) return true;
   // Never email our own domain zone (S937 — placeholder/bounce-flood guard).
   if (domain === 'finda.sale' || domain.endsWith('.finda.sale')) return true;
   if (BLOCKED_DOMAINS.has(domain)) return true;

@@ -12,6 +12,8 @@
  * Base URL: https://connect.mailerlite.com/api
  */
 
+import { isNonDeliverableEmail } from './suppressionService';
+
 const MAILERLITE_API_URL = 'https://connect.mailerlite.com/api';
 
 function getApiKey(): string | null {
@@ -49,6 +51,10 @@ export function isTestOrSyntheticEmail(email: string): boolean {
 
   const localPart = lower.slice(0, atIndex);
   const domain = lower.slice(atIndex + 1);
+
+  // Canonical reserved/non-deliverable domains (.test/.invalid/.example/.local/.localhost,
+  // example.com/.net/.org, dotless) -- single definition shared with the send rails.
+  if (isNonDeliverableEmail(lower)) return true;
 
   // Known test/synthetic domains
   if (domain === 'example.com' || domain === 'test.com') return true;
@@ -96,6 +102,11 @@ export async function markSalePublished(organizerEmail: string): Promise<void> {
 
   if (!organizerEmail) {
     console.warn('[mailerlite] markSalePublished called with empty email — skipping');
+    return;
+  }
+
+  if (isTestOrSyntheticEmail(organizerEmail)) {
+    console.debug('[mailerlite] Skipping test/non-deliverable address');
     return;
   }
 
@@ -156,6 +167,11 @@ export async function addShopperSubscriber(email: string, name: string): Promise
     return;
   }
 
+  if (isTestOrSyntheticEmail(email)) {
+    console.debug('[mailerlite] Skipping test/non-deliverable address');
+    return;
+  }
+
   try {
     const response = await fetch(`${MAILERLITE_API_URL}/subscribers`, {
       method: 'POST',
@@ -210,6 +226,11 @@ export async function addOrganizerSubscriber(email: string, name: string): Promi
 
   if (!email) {
     console.warn('[mailerlite] addOrganizerSubscriber called with empty email — skipping');
+    return;
+  }
+
+  if (isTestOrSyntheticEmail(email)) {
+    console.debug('[mailerlite] Skipping test/non-deliverable address');
     return;
   }
 
@@ -268,6 +289,11 @@ export async function syncLeadTierToMailerLite(
 ): Promise<void> {
   if (!email) {
     console.warn(`[mailerlite:leadSync] Skipping org:${orgId} — no contact email`);
+    return;
+  }
+
+  if (isNonDeliverableEmail(email)) {
+    console.debug(`[mailerlite:leadSync] Skipping org:${orgId} — non-deliverable address`);
     return;
   }
 
@@ -439,6 +465,7 @@ export async function batchSyncLeadTiersToMailerLite(
 
   for (const org of organizers) {
     if (!org.contactEmail) { skipped++; continue; }
+    if (isNonDeliverableEmail(org.contactEmail)) { skipped++; continue; }
     if (!org.leadTier || org.leadTier === 'ENTERPRISE') { skipped++; continue; }
     const groupId = groupIdMap[org.leadTier];
     if (!groupId) {
