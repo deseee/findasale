@@ -60,9 +60,17 @@ export const transactionalEmailService = {
       subject: string;
       html: string;
       text?: string;
+      // Optional Reply-To (e.g. contact-form submitter, so support can reply straight to them).
+      replyTo?: string;
       // Optional extra message headers (e.g. RFC 8058 List-Unsubscribe / List-Unsubscribe-Post).
       headers?: Record<string, string>;
+      // Optional caller label (same meaning as emailService's jobName). Logged on every
+      // outcome and sent to Resend as a `job` tag so per-path volume is visible in the
+      // Resend dashboard. Added 2026-10-25 when the remaining non-outreach Gmail senders
+      // moved to this rail.
+      jobName?: string;
     }): Promise<{ sent: boolean; reason?: string }> {
+      const jobLabel = options.jobName ?? 'unknown';
       if (!process.env.RESEND_API_KEY) {
         // Soft failure in dev/test environments where Resend isn't configured.
         // In production Railway RESEND_API_KEY must be set — log as error so it
@@ -88,6 +96,7 @@ export const transactionalEmailService = {
           '[transactionalEmailService] Send blocked — suppressed/domain-blocked recipients:',
           blockedRecipients.join(', '),
           '| subject:', options.subject,
+          '| job:', jobLabel,
         );
         return { sent: false, reason: 'suppressed' };
       }
@@ -100,8 +109,13 @@ export const transactionalEmailService = {
         subject: options.subject,
         html: options.html,
         ...(options.text ? { text: options.text } : {}),
+        ...(options.replyTo ? { replyTo: options.replyTo } : {}),
         ...(options.headers && Object.keys(options.headers).length > 0
           ? { headers: options.headers }
+          : {}),
+        // Resend tag values allow only ASCII letters, digits, '_' and '-'.
+        ...(options.jobName
+          ? { tags: [{ name: 'job', value: options.jobName.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 256) }] }
           : {}),
       });
 
@@ -109,7 +123,7 @@ export const transactionalEmailService = {
         console.error('[transactionalEmailService] Resend error:', error);
         Sentry.captureException(new Error(`Resend send rejected: ${error.message}`), {
           tags: { email_rail: 'resend', kind: 'resend_send_rejected' },
-          extra: { from: options.from ?? '(default)', subject: options.subject, toCount: recipients.length },
+          extra: { from: options.from ?? '(default)', subject: options.subject, toCount: recipients.length, jobName: jobLabel },
         });
         throw new Error(`Resend send failed: ${error.message}`);
       }
@@ -125,6 +139,9 @@ export const transactionalEmailService = {
       // field. writeApiUsageRow() (inside recordApiUsage) already fails open and
       // never throws, so this can never block or fail a real transactional send.
       await recordApiUsage('resend:transactional', 0, recipients.length);
+      if (options.jobName) {
+        console.log(`[transactionalEmailService] Sent (${jobLabel}) to ${recipients.length} recipient(s)`);
+      }
 
       return { sent: true };
     },

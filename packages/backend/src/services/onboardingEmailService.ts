@@ -24,11 +24,11 @@ import {
   buildSpacer,
   EMAIL_TOKENS as T,
 } from './emailTemplateService';
-import { emailService } from '../lib/emailService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from './suppressionService';
 
-const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+// Drip (5a/5b/5c) rides the Resend rail from the same support@ sender as the activation nudges.
+const DRIP_FROM = process.env.ACTIVATION_NUDGE_FROM_EMAIL || 'The FindA.Sale Team <support@finda.sale>';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
 // ─────────────────────────────────────────────────────────────────
@@ -86,13 +86,22 @@ export async function sendOnboardingEmail5a(organizer: {
   });
 
   try {
-    await emailService.emails.send({
-      from:    FROM_EMAIL,
+    // 2026-10-25: Resend rail (finda.sale, DKIM/SPF aligned) instead of the Gmail outreach mailbox, so drip mail
+    // does not share reputation with cold outreach and reaches Yahoo/AOL/iCloud/Outlook.
+    const result = await transactionalEmailService.emails.send({
+      from:    DRIP_FROM,
       to:      organizer.email,
       subject: `Welcome in! Here's your first step`,
       html,
-      listUnsubscribe: listUnsubscribeHeader,
+      headers: {
+        'List-Unsubscribe': listUnsubscribeHeader,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
     });
+    if (!result.sent) {
+      console.warn(`[onboarding] Email 5a NOT sent to ${organizer.email} (${result.reason})`);
+      return;
+    }
     console.log(`[onboarding] Email 5a sent to ${organizer.email}`);
   } catch (err) {
     console.error(`[onboarding] Failed to send 5a to ${organizer.email}:`, err);
@@ -164,13 +173,22 @@ export async function sendOnboardingEmail5b(organizer: {
   });
 
   try {
-    await emailService.emails.send({
-      from:    FROM_EMAIL,
+    // 2026-10-25: Resend rail (finda.sale, DKIM/SPF aligned) instead of the Gmail outreach mailbox, so drip mail
+    // does not share reputation with cold outreach and reaches Yahoo/AOL/iCloud/Outlook.
+    const result = await transactionalEmailService.emails.send({
+      from:    DRIP_FROM,
       to:      organizer.email,
       subject: `Quick question, ${firstName}`,
       html,
-      listUnsubscribe: listUnsubscribeHeader,
+      headers: {
+        'List-Unsubscribe': listUnsubscribeHeader,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
     });
+    if (!result.sent) {
+      console.warn(`[onboarding] Email 5b NOT sent to ${organizer.email} (${result.reason})`);
+      return;
+    }
     console.log(`[onboarding] Email 5b sent to ${organizer.email}`);
   } catch (err) {
     console.error(`[onboarding] Failed to send 5b to ${organizer.email}:`, err);
@@ -218,13 +236,22 @@ export async function sendOnboardingEmail5c(organizer: {
   });
 
   try {
-    await emailService.emails.send({
-      from:    FROM_EMAIL,
+    // 2026-10-25: Resend rail (finda.sale, DKIM/SPF aligned) instead of the Gmail outreach mailbox, so drip mail
+    // does not share reputation with cold outreach and reaches Yahoo/AOL/iCloud/Outlook.
+    const result = await transactionalEmailService.emails.send({
+      from:    DRIP_FROM,
       to:      organizer.email,
       subject: `One last nudge before we leave you alone`,
       html,
-      listUnsubscribe: listUnsubscribeHeader,
+      headers: {
+        'List-Unsubscribe': listUnsubscribeHeader,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
     });
+    if (!result.sent) {
+      console.warn(`[onboarding] Email 5c NOT sent to ${organizer.email} (${result.reason})`);
+      return;
+    }
     console.log(`[onboarding] Email 5c sent to ${organizer.email}`);
   } catch (err) {
     console.error(`[onboarding] Failed to send 5c to ${organizer.email}:`, err);

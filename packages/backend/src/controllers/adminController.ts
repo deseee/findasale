@@ -6,7 +6,7 @@ import { prisma } from '../lib/prisma';
 import { getMonthlyAICost, getMonthlyAICostFromLog, resetMonthlyAICost, getMonthlyWebDetectionCost, getEbayImageSearchUsage, getMonthlyGroundingCost } from '../lib/aiCostTracker';
 import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinaryUsage, resetTodayCloudinaryUsage } from '../lib/cloudinaryBandwidthTracker';
 import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { createNotification } from '../lib/notificationService';
 import { MAX_REMOVAL_SKIP_ATTEMPTS } from './extensionController';
 import { executeVerifiedRefund, RefundError } from '../services/refundService';
@@ -2026,7 +2026,8 @@ export const sendDirectMessageToUser = async (req: AuthRequest, res: Response) =
       });
     }
 
-    await emailService.emails.send({
+    // 2026-10-25: Resend rail. support@finda.sale via the Gmail outreach mailbox is not DMARC-aligned (Yahoo 5.7.9).
+    const dmResult = await transactionalEmailService.emails.send({
       from: 'FindA.Sale <support@finda.sale>',
       to: user.email,
       subject: subject.trim(),
@@ -2041,8 +2042,10 @@ export const sendDirectMessageToUser = async (req: AuthRequest, res: Response) =
           </p>
         </div>
       `,
-      jobName: 'admin-direct-message',
     });
+    if (!dmResult.sent) {
+      return res.status(502).json({ message: `Message not sent (${dmResult.reason ?? 'unknown'})` });
+    }
 
     res.json({ success: true, message: `Message sent to ${user.email}` });
   } catch (err: any) {

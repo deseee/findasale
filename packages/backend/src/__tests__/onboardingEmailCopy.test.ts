@@ -29,7 +29,7 @@ import {
 
 const gmailSend = (emailService as any).emails.send as jest.Mock;
 const resendSend = (transactionalEmailService as any).emails.send as jest.Mock;
-let send: jest.Mock = gmailSend;
+let send: jest.Mock = resendSend;
 const isSuppressed = (suppressionService as any).isSuppressed as jest.Mock;
 
 const base = { email: 'o@example.com', firstName: 'Pat', userId: 'u1' };
@@ -50,7 +50,7 @@ beforeEach(() => {
   gmailSend.mockClear();
   resendSend.mockClear();
   resendSend.mockResolvedValue({ sent: true });
-  send = gmailSend;
+  send = resendSend;
   isSuppressed.mockResolvedValue(false);
   jest.spyOn(console, 'log').mockImplementation(() => {});
 });
@@ -72,6 +72,23 @@ describe('onboarding emails 5a/5b/5c', () => {
     expect(lastSent().html).not.toMatch(/4&times;|under 7 minutes/);
     await sendOnboardingEmail5c(base);
     expect(lastSent().html).not.toMatch(/34 views/);
+  });
+});
+
+describe('drip 5a/5b/5c rail and sender (deliverability, 2026-10-25)', () => {
+  it.each([
+    ['5a', sendOnboardingEmail5a],
+    ['5b', sendOnboardingEmail5b],
+    ['5c', sendOnboardingEmail5c],
+  ])('%s goes out on the Resend rail from a finda.sale sender, never the Gmail outreach rail', async (_n, fn) => {
+    await fn(base);
+    expect(gmailSend).not.toHaveBeenCalled();
+    expect(resendSend).toHaveBeenCalledTimes(1);
+    const call = resendSend.mock.calls[0][0];
+    expect(call.from).toMatch(/@finda\.sale>?$/);
+    expect(call.from).not.toMatch(/outreach\.finda\.sale/);
+    expect(call.headers['List-Unsubscribe']).toBe('<x>');
+    expect(call.headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
   });
 });
 

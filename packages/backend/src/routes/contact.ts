@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from '../services/suppressionService';
 
 const router = Router();
@@ -31,11 +31,12 @@ router.post('/', contactLimiter, async (req: Request, res: Response) => {
     const { name, email, subject, message } = validatedData;
 
     const supportEmail = process.env.SUPPORT_EMAIL || 'support@finda.sale';
-    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+    // 2026-10-25: Resend rail, From resolved to the verified finda.sale default (noreply@finda.sale).
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 
     if (true) {
       // Forward to support inbox
-      await emailService.emails.send({
+      await transactionalEmailService.emails.send({
         from: fromEmail,
         to: supportEmail,
         replyTo: email,
@@ -57,7 +58,7 @@ router.post('/', contactLimiter, async (req: Request, res: Response) => {
       if (await suppressionService.isHardSuppressed(email)) {
         console.log(`[contact] Skipping hard-suppressed autoreply recipient: ${email}`);
       } else {
-      await emailService.emails.send({
+      await transactionalEmailService.emails.send({
         from: fromEmail,
         to: email,
         subject: 'We received your message. FindA.Sale',

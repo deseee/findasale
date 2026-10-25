@@ -21,6 +21,7 @@ import { actorCanPublish } from '../lib/publishGate'; // 2026-10-23: an account 
 import { pickStoredRemoteRef, extractRemoteId, resolveListingRef, listingRefFields } from '../services/marketplaceListingRef'; // 2026-10-18: best remote id + URL on every sync queue entry
 import { AUTO_QUEUE_FLAG_SELECT, toAutoQueueSettings, parseAutoQueuePatch, isPickupOnlyBlockedForAutoQueue, toAutoQueueLimits, parseAutoQueueLimitsPatch, applyAutoQueueLimits, isMissingTableError, NO_AUTO_QUEUE_LIMITS, AutoQueueLimits } from '../services/autoQueueSettings';
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
+import { postCapRetryEligible } from '../utils/removalRetryGate'; // 2026-10-25: past the hard stop, re-probe daily instead of never
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
 
 // Facebook Marketplace condition values: toFacebookCondition is now the shared facebookMarketplaceCondition
@@ -1428,7 +1429,9 @@ const RETRY_COOLDOWN_MS = 60 * 60 * 1000; // 1h between retries once past the fa
 // builds it the same way) is untouched by this cap -- remoteListingId being non-null routes it
 // around this check entirely, back to the normal cooldown-retry path above. Below
 // MAX_REMOVAL_SKIP_ATTEMPTS this never applies (existing fast-fail-then-cooldown owns 1..N-1).
-const REMOVAL_HARD_STOP_AFTER_ATTEMPTS = 10; // ~10 hourly cooldown retries past the fast-fail cap before giving up automated retry entirely
+// 2026-10-25: past this threshold the retry is no longer stopped outright; it drops to one re-probe per
+// HARD_STOP_REPROBE_MS (24h) -- see utils/removalRetryGate.ts for the Vinted item that a permanent stop stranded.
+const REMOVAL_HARD_STOP_AFTER_ATTEMPTS = 10; // ~10 hourly cooldown retries past the fast-fail cap before dropping to a daily re-probe
 
 // S-EXT-REMOVAL-RETRY-BRAKES (2026-09-30): reasons that repeat identically forever because nothing
 // about the marketplace changes between polls. Live: a Craigslist removal that kept reporting
@@ -1478,6 +1481,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   // uses (split back apart with lastIndexOf(':') -- item ids are cuids and contain no colon).
   const skipCountByItemPlatform = new Map<string, number>();
   const lastSkipReasonByItemPlatform = new Map<string, string | null>();
+  const lastSkipReasonAtByItemPlatform = new Map<string, Date>();
   const lastSkipAtByItemPlatform = new Map<string, Date>();
   // FEATURE 2026-08-22 (S-EXT-CROSS-PLATFORM-AUTOREMOVE, Patrick-directed: "it must be built for
   // all of them, that's part of the extension" -- extending Facebook's existing sold-elsewhere
@@ -1525,7 +1529,13 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
       const skipKey = j.itemId + ':' + j.platform;
       skipCountByItemPlatform.set(skipKey, (skipCountByItemPlatform.get(skipKey) || 0) + 1);
-      lastSkipReasonByItemPlatform.set(skipKey, j.lastErrorMessage ?? null);
+      // 2026-10-25: the reason is the NEWEST skip's (jobs are unordered); the retry gate keys off a
+      // trailing 'listing_not_found' (utils/removalRetryGate.ts), so iteration order must not decide it.
+      const reasonAt = j.lastAttemptAt || j.createdAt;
+      if (!lastSkipReasonAtByItemPlatform.has(skipKey) || reasonAt >= lastSkipReasonAtByItemPlatform.get(skipKey)!) {
+        lastSkipReasonAtByItemPlatform.set(skipKey, reasonAt);
+        lastSkipReasonByItemPlatform.set(skipKey, j.lastErrorMessage ?? null);
+      }
       // S1179: track the MOST RECENT skip per item+platform (jobs aren't guaranteed ordered) so we
       // can gate the cooldown off it -- a fresh retry is only offered once RETRY_COOLDOWN_MS has
       // elapsed since the last actual failure, not since it first crossed the cap.
@@ -1552,17 +1562,22 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     // on attempt 10. Still surfaced forever in needsManualReview below (skipCount >=
     // MAX_REMOVAL_SKIP_ATTEMPTS keeps flagging it) -- this only stops the automated retry loop,
     // it does not hide the item from the organizer/admin.
-    if (skipCount >= REMOVAL_HARD_STOP_AFTER_ATTEMPTS) {
-      const liveJob = latestByItemPlatform.get(skipKey);
-      if (!liveJob || !liveJob.remoteListingId) return false;
-    }
+    // 2026-10-25 (S-EXT-VINTED-HARD-STOP-REPROBE, utils/removalRetryGate.ts): past the hard stop
+    // the item is re-probed once a day instead of never, and hourly again once a probe reports
+    // 'listing_not_found' so the 3-report gone-listing confirmation can complete.
     // S1179: past the fast-fail cap, only retry again once the cooldown since the last
     // recorded skip has elapsed -- covers items that were dead-lettered before this fix
     // shipped (their lastAttemptAt is already well past the cooldown, so they're eligible
     // again on the very next poll) as well as future items that hit the cap going forward.
-    const lastSkipAt = lastSkipAtByItemPlatform.get(skipKey);
-    if (!lastSkipAt) return true; // no timestamp on record -- fail open rather than stuck forever
-    return now - lastSkipAt.getTime() >= RETRY_COOLDOWN_MS;
+    return postCapRetryEligible({
+      skipCount,
+      hardStopAfter: REMOVAL_HARD_STOP_AFTER_ATTEMPTS,
+      hasRemoteListingId: !!latestByItemPlatform.get(skipKey)?.remoteListingId,
+      lastSkipReason: lastSkipReasonByItemPlatform.get(skipKey),
+      lastSkipAt: lastSkipAtByItemPlatform.get(skipKey),
+      now,
+      cooldownMs: RETRY_COOLDOWN_MS,
+    });
   };
 
   // BUG FIX 2026-09-04 (S-EXT-GETPENDINGREMOVALS-CROSS-PLATFORM-MASKING, Patrick-directed live
@@ -1780,10 +1795,15 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
         const skipCount = complianceSkipCount.get(sk) || 0;
         if (isDeterministicSkipReason(complianceLastReason.get(sk)) && skipCount >= DETERMINISTIC_SKIP_STOP_AFTER) return false;
         if (skipCount < MAX_REMOVAL_SKIP_ATTEMPTS) return true;
-        if (skipCount >= REMOVAL_HARD_STOP_AFTER_ATTEMPTS && !latestAvailableByItemPlatform.get(sk)?.remoteListingId) return false;
-        const last = complianceLastSkipAt.get(sk);
-        if (!last) return true;
-        return now - last.getTime() >= RETRY_COOLDOWN_MS;
+        return postCapRetryEligible({
+          skipCount,
+          hardStopAfter: REMOVAL_HARD_STOP_AFTER_ATTEMPTS,
+          hasRemoteListingId: !!latestAvailableByItemPlatform.get(sk)?.remoteListingId,
+          lastSkipReason: complianceLastReason.get(sk),
+          lastSkipAt: complianceLastSkipAt.get(sk),
+          now,
+          cooldownMs: RETRY_COOLDOWN_MS,
+        });
       });
       if (retryablePlatforms.length === 0) continue;
       const refs: Record<string, string> = {};
@@ -1833,8 +1853,15 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     if (resync) return true;
     if (isDeterministicSkipReason(row.lastSkipReason) && row.skipCount >= DETERMINISTIC_SKIP_STOP_AFTER) return false;
     if (row.skipCount < MAX_REMOVAL_SKIP_ATTEMPTS) return true;
-    if (row.skipCount >= REMOVAL_HARD_STOP_AFTER_ATTEMPTS && !row.remoteListingId) return false;
-    return !row.lastSkipAt || now - row.lastSkipAt.getTime() >= RETRY_COOLDOWN_MS;
+    return postCapRetryEligible({
+      skipCount: row.skipCount,
+      hardStopAfter: REMOVAL_HARD_STOP_AFTER_ATTEMPTS,
+      hasRemoteListingId: !!row.remoteListingId,
+      lastSkipReason: row.lastSkipReason,
+      lastSkipAt: row.lastSkipAt,
+      now,
+      cooldownMs: RETRY_COOLDOWN_MS,
+    });
   });
   const deletedItemStuck = deletedItemRows.filter((row) => row.skipCount >= MAX_REMOVAL_SKIP_ATTEMPTS);
 
