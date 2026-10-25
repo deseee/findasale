@@ -19,6 +19,10 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
+    "globalSetup": "<rootDir>/jest.guard.js",
+    "setupFiles": [
+      "<rootDir>/jest.guard.js"
+    ],
     "testTimeout": 60000,
     "roots": [
       "<rootDir>/src"
