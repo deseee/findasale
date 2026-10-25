@@ -54,14 +54,18 @@ var mockEmailsSend = jest.fn().mockResolvedValue({ sent: true });
 // the first run it ever had. The mock is retargeted at the real rail; every assertion below
 // is unchanged because emailService.emails.send takes the same { from, to, subject, html }
 // payload shape the Resend mock did.
-// RAIL CORRECTION (2026-10-13): sendWeeklyDigest moved off the Gmail outreach rail (quota-exceeded
-// failures, shared reputation with cold outreach) onto Resend via transactionalEmailService, which
-// resolves the sender (RESEND_FROM_EMAIL) itself and returns { sent, reason? }. The mock follows the code.
-jest.mock('../lib/transactionalEmailService', () => ({
-  transactionalEmailService: {
-    emails: { send: mockEmailsSend },
-  },
-}));
+// RAIL CORRECTION (2026-10-25): per Patrick's decision (no Resend Pro) sendWeeklyDigest is back on the Gmail
+// rail (../lib/emailService, the same rail as the other opt-in digests). The mock follows the code; the
+// digest treats any truthy resolved value as "sent" and a thrown QuotaExceededError as "stop for today".
+jest.mock('../lib/emailService', () => {
+  class QuotaExceededError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'QuotaExceededError';
+    }
+  }
+  return { emailService: { emails: { send: mockEmailsSend } }, QuotaExceededError };
+});
 
 // Import after mocks are set up
 import { sendWeeklyDigest } from '../controllers/notificationController';
@@ -73,15 +77,18 @@ describe('Weekly Digest E2E', () => {
   let testSale: any;
 
   beforeAll(async () => {
-    process.env.RESEND_API_KEY = 'dummy-resend-key-digest-e2e';
-    process.env.SES_FROM_EMAIL = 'digest@finda.sale';
+    // sendWeeklyDigest skips itself when Gmail credentials are absent; the rail is mocked, so dummies suffice.
+    process.env.GMAIL_CLIENT_ID = 'dummy-gmail-client-id';
+    process.env.GMAIL_CLIENT_SECRET = 'dummy-gmail-client-secret';
+    process.env.GMAIL_REFRESH_TOKEN = 'dummy-gmail-refresh-token';
+    process.env.GMAIL_FROM_EMAIL = 'find@outreach.finda.sale';
     process.env.FRONTEND_URL = 'http://localhost:3000';
 
     // Organizer.userId carries a live FK to User.id -- the owning User must exist first.
     testOrganizerUser = await prisma.user.create({
       data: {
         id: 'test-user-org-digest-e2e',
-        email: 'organizer-digest-e2e@findasale.test',
+        email: 'organizer-digest-e2e@digest-e2e-qa.com',
         name: 'E2E Digest Test Organizer',
         password: 'hashed_password',
         role: 'ORGANIZER',
@@ -101,7 +108,7 @@ describe('Weekly Digest E2E', () => {
     testUser = await prisma.user.create({
       data: {
         id: 'test-digest-shopper-e2e',
-        email: 'digest-e2e@findasale.test',
+        email: 'digest-e2e@digest-e2e-qa.com',
         name: 'Digest E2E Shopper',
         password: 'hashed_password',
         role: 'USER',
@@ -139,8 +146,10 @@ describe('Weekly Digest E2E', () => {
     if (testUser) await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
     if (testOrganizer) await prisma.organizer.delete({ where: { id: testOrganizer.id } }).catch(() => {});
     if (testOrganizerUser) await prisma.user.delete({ where: { id: testOrganizerUser.id } }).catch(() => {});
-    delete process.env.RESEND_API_KEY;
-    delete process.env.SES_FROM_EMAIL;
+    delete process.env.GMAIL_CLIENT_ID;
+    delete process.env.GMAIL_CLIENT_SECRET;
+    delete process.env.GMAIL_REFRESH_TOKEN;
+    delete process.env.GMAIL_FROM_EMAIL;
     delete process.env.FRONTEND_URL;
     console.log('✓ Weekly digest test data cleaned up');
   });
@@ -150,10 +159,10 @@ describe('Weekly Digest E2E', () => {
   describe('when published sales exist within the 7-day window', () => {
     beforeAll(() => mockEmailsSend.mockClear());
 
-    it('should call Resend at least once', async () => {
+    it('should call the Gmail rail at least once', async () => {
       await sendWeeklyDigest();
       expect(mockEmailsSend).toHaveBeenCalled();
-      console.log(`✓ Resend called ${mockEmailsSend.mock.calls.length} time(s)`);
+      console.log(`✓ Gmail rail called ${mockEmailsSend.mock.calls.length} time(s)`);
     });
 
     it('should address an email to the test user', async () => {
@@ -162,12 +171,14 @@ describe('Weekly Digest E2E', () => {
       console.log(`✓ Email addressed to ${testUser.email}`);
     });
 
-    it('should leave the from address to the Resend rail and send one-click unsubscribe headers', async () => {
+    it('should send from the Workspace sender with a List-Unsubscribe value and retry on Gmail rate limits', async () => {
       const call = mockEmailsSend.mock.calls[0][0];
-      // No explicit from: transactionalEmailService resolves RESEND_FROM_EMAIL (noreply@finda.sale).
-      expect(call.from).toBeUndefined();
-      expect(call.headers['List-Unsubscribe']).toBeTruthy();
-      expect(call.headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
+      expect(call.from).toBe('find@outreach.finda.sale');
+      // emailService.buildRawMessage adds List-Unsubscribe-Post itself; the caller passes the header value.
+      expect(call.listUnsubscribe).toBeTruthy();
+      expect(call.jobName).toBe('weeklyDigest');
+      expect(call.retryOnRateLimit).toBe(true);
+      expect(call.category).toBeUndefined(); // 'bulk' is a Resend-rail concept; the digest no longer uses it
     });
 
     it('should use a subject that references the sale count and emoji', async () => {
@@ -240,7 +251,7 @@ describe('Weekly Digest E2E', () => {
       await prisma.sale.update({ where: { id: testSale.id }, data: { status: 'PUBLISHED' } });
     });
 
-    it('should not call Resend', async () => {
+    it('should not call the Gmail rail', async () => {
       await sendWeeklyDigest();
       expect(mockEmailsSend).not.toHaveBeenCalled();
       console.log('✓ Digest skipped — no published sales in window');
@@ -253,10 +264,10 @@ describe('Weekly Digest E2E', () => {
 
   // ─── Per-user send failure → continue ──────────────────────────────────────
 
-  describe('when one Resend send call fails', () => {
+  describe('when one Gmail send call fails', () => {
     beforeAll(() => {
       mockEmailsSend
-        .mockRejectedValueOnce(new Error('Resend: simulated delivery failure'))
+        .mockRejectedValueOnce(new Error('Gmail: simulated delivery failure'))
         .mockResolvedValue({ sent: true });
     });
 

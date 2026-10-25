@@ -725,12 +725,13 @@ const filterSalesWithinRadius = (
 };
 
 const DIGEST_SEND_INTERVAL_MS = 600;
+const DIGEST_FROM_EMAIL = () => process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
 /**
  * Digest edition key (2026-10-25). One edition per week, named for the UTC date of its Friday:
  * the Friday run and the Saturday/Sunday catch-up runs (jobs/notificationJob.ts) share it.
  * A sent recipient gets an EmailAutomationLog row with this key, so a later run in the same
- * edition sends only to the remainder (recipients deferred by the Resend daily bulk budget, or
+ * edition sends only to the remainder (recipients deferred by the Gmail daily quota stop, or
  * whose send failed). No schema change: EmailAutomationLog is the existing per-user send marker.
  */
 export const weeklyDigestEditionKey = (now: Date = new Date()): string => {
@@ -742,12 +743,14 @@ export const weeklyDigestEditionKey = (now: Date = new Date()): string => {
 // Send weekly digest email to all users with upcoming sales this weekend
 export const sendWeeklyDigest = async () => {
   try {
-    // 2026-10-13: the digest now goes out on the Resend rail (transactionalEmailService), NOT the Gmail
-    // outreach rail (find@outreach.finda.sale): ~80 sends/week hit Gmail's per-minute quota and shared
-    // reputation with cold outreach. Sender = RESEND_FROM_EMAIL (noreply@finda.sale, DKIM+SPF aligned).
-    // The OUTREACH_ENABLED gate stays in jobs/notificationJob.ts (bulkEmailEnabled), unchanged.
-    if (!process.env.RESEND_API_KEY) {
-      console.warn('Email service not configured (RESEND_API_KEY missing) - skipping weekly digest');
+    // 2026-10-25 (Patrick's decision: no Resend Pro): the digest is back on the Google Workspace Gmail
+    // rail (lib/emailService.ts), the same rail as the other opt-in digests (weeklyEmailService etc.),
+    // sent from GMAIL_FROM_EMAIL (default find@outreach.finda.sale). Daily volume is governed by the
+    // Gmail quota guard (EmailQuotaLog, GMAIL_DAILY_HARD_LIMIT); a QuotaExceededError stops the run and
+    // the Sat/Sun catch-up runs resume from the per-edition markers. The BULK_EMAIL_ENABLED gate
+    // stays in jobs/notificationJob.ts (bulkEmailEnabled), unchanged.
+    if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !process.env.GMAIL_REFRESH_TOKEN) {
+      console.warn('Email service not configured (Gmail credentials missing) - skipping weekly digest');
       return;
     }
 
@@ -811,7 +814,7 @@ export const sendWeeklyDigest = async () => {
 
     // Plan each pending recipient's content up front so the send order can put the most
     // relevant first: recipients with sales near their saved-search location, then the most
-    // recently active (User.lastVisitDate), then user id. When the Resend daily bulk budget
+    // recently active (User.lastVisitDate), then user id. When the Gmail daily quota
     // defers the tail of the list, it is the least relevant mail that waits a day.
     const planned = users
       .filter((user) => {
@@ -855,13 +858,13 @@ export const sendWeeklyDigest = async () => {
     );
 
     let sent = 0;
-    let deferred = 0; // left for the next catch-up run by the Resend daily bulk budget
+    let deferred = 0; // left for the next catch-up run by the Gmail daily quota stop
     let failed = 0;
-    let skipped = 0; // rail-level skips (hard bounce / complaint / our own finda.sale zone)
+    let skipped = 0; // rail-level skips (hard bounce / complaint / blocked or placeholder domain)
 
-    // Lazy import (same pattern as suppressionService below): keeps Resend + cost tracker out of this
+    // Lazy import (same pattern as suppressionService below): keeps googleapis out of this
     // controller's module-load path.
-    const { transactionalEmailService } = await import('../lib/transactionalEmailService');
+    const { emailService, QuotaExceededError } = await import('../lib/emailService');
     const { suppressionService } = await import('../services/suppressionService');
     const { buildUnsubscribeLinks } = await import('./unsubscribeController');
 
@@ -879,43 +882,38 @@ export const sendWeeklyDigest = async () => {
         const html = buildDigestHtml(user.name, salesForUser, frontendUrl, unsubUrl, nearYou, new Date());
 
         const digestMessage = {
-          // No explicit from: transactionalEmailService resolves RESEND_FROM_EMAIL (verified finda.sale root domain).
+          from: DIGEST_FROM_EMAIL(),
           to: user.email,
           subject: `🏷️ ${salesForUser.length} sale${salesForUser.length > 1 ? 's' : ''}${nearYou ? ' near you' : ''} this weekend`,
           html,
           // RFC 8058 one-click unsubscribe (same per-user token as the footer link in buildDigestHtml).
-          headers: {
-            'List-Unsubscribe': listUnsubscribeHeader,
-            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-          },
+          listUnsubscribe: listUnsubscribeHeader,
           jobName: 'weeklyDigest',
-          // Bulk: refused once the day's Resend count reaches RESEND_DAILY_BULK_BUDGET so
-          // transactional mail (resets, receipts, invoices) keeps headroom under the free-plan cap.
-          category: 'bulk' as const,
+          // Paced bulk job: on a Gmail per-minute 429, wait and retry this message instead of dropping
+          // the recipient (retries do not re-increment the daily quota).
+          retryOnRateLimit: true,
         };
 
-        // Per-recipient failure handling: one retry after a short wait on a Resend rate-limit (429), then
-        // any remaining error is thrown to the catch below, which counts it and moves on to the next user.
-        let result: { sent: boolean; reason?: string };
+        // Gmail rail: resolves to undefined when the rail dropped the recipient (hard bounce / complaint /
+        // blocked domain); throws QuotaExceededError at GMAIL_DAILY_HARD_LIMIT.
+        let result: unknown;
         try {
-          result = await transactionalEmailService.emails.send(digestMessage);
+          result = await emailService.emails.send(digestMessage);
         } catch (sendErr) {
-          if (!/rate.?limit|429|too many requests/i.test(String((sendErr as any)?.message ?? sendErr))) throw sendErr;
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          result = await transactionalEmailService.emails.send(digestMessage);
+          const msg = String((sendErr as any)?.message ?? sendErr);
+          if (sendErr instanceof QuotaExceededError || /daily user sending|sending limit exceeded/i.test(msg)) {
+            // Every later send today would be refused too: stop, and leave this recipient and the rest
+            // unmarked so the next catch-up run (after 00:00 UTC) sends to them.
+            deferred = planned.length - index;
+            console.warn(
+              `Weekly digest (${editionKey}): Gmail daily quota reached - ${deferred} recipient(s) deferred to the next run`,
+            );
+            break;
+          }
+          throw sendErr;
         }
 
-        if (result.reason === 'daily_bulk_budget') {
-          // Every later bulk send today would be refused too: stop, and leave this recipient and
-          // the rest unmarked so the next catch-up run (after 00:00 UTC) sends to them.
-          deferred = planned.length - index;
-          console.warn(
-            `Weekly digest (${editionKey}): Resend daily bulk budget reached — ${deferred} recipient(s) deferred to the next run`,
-          );
-          break;
-        }
-
-        if (result.sent) {
+        if (result) {
           sent++;
           try {
             await prisma.emailAutomationLog.create({ data: { userId: user.id, automationKey: editionKey } });
@@ -925,7 +923,7 @@ export const sendWeeklyDigest = async () => {
           }
         } else skipped++;
 
-        // Pacing: Resend allows ~2 requests/second by default; 600ms between sends stays under it.
+        // Pacing: 600ms between sends keeps the run well under Gmail's per-minute query-cost limit.
         await new Promise((resolve) => setTimeout(resolve, DIGEST_SEND_INTERVAL_MS));
       } catch (error) {
         console.error(`Weekly digest: failed to send to ${maskEmail(user.email)}:`, error);
