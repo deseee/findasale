@@ -142,7 +142,7 @@ describe('Auction close — configured premium & reserve parity', () => {
     });
     organizer = await prisma.organizer.create({
       data: {
-        businessName: 'Auction Premium Estate Sales',
+        businessName: 'ZZTEST Auction Premium Estate Sales',
         phone: '5551110099',
         address: '100 Test Ave',
         userId: organizerUser.id,

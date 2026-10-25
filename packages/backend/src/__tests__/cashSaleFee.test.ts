@@ -143,7 +143,7 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
     const organizer = await prisma.organizer.create({
       data: {
         userId: orgUser.id,
-        businessName: `Cash Fee Estate Sales ${key}`,
+        businessName: `ZZTEST Cash Fee Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: tier,
         // Stripe removed entirely (2026-09-12): the platform Stripe account is permanently

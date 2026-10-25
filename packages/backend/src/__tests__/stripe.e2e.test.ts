@@ -173,7 +173,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
     // Organizer profile with a pre-set Connect ID (simulates fully-onboarded state)
     testOrganizer = await prisma.organizer.create({
       data: {
-        businessName:   'Stripe E2E Estate Sales',
+        businessName:   'ZZTEST Stripe E2E Estate Sales',
         phone:          '5551110001',
         address:        '100 Test Ave',
         userId:         testOrganizerUser.id,

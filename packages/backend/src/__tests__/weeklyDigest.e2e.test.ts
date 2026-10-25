@@ -91,7 +91,7 @@ describe('Weekly Digest E2E', () => {
     // NOTE: Organizer has no city/state/zip columns (those live on Sale).
     testOrganizer = await prisma.organizer.create({
       data: {
-        businessName: 'E2E Digest Test Sales',
+        businessName: 'ZZTEST E2E Digest Test Sales',
         phone: '5559990001',
         address: '789 Elm St',
         userId: testOrganizerUser.id,

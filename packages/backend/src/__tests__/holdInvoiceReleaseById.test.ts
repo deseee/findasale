@@ -114,7 +114,7 @@ describe('releaseInvoiceById — reservation-less POS-cart HoldInvoice cancel pa
     organizerA = await prisma.organizer.create({
       data: {
         userId: orgAUser.id,
-        businessName: 'Organizer A Estate Sales',
+        businessName: 'ZZTEST Organizer A Estate Sales',
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         stripeConnectId: `acct_${KEY}A`,
       },
@@ -158,7 +158,7 @@ describe('releaseInvoiceById — reservation-less POS-cart HoldInvoice cancel pa
     organizerB = await prisma.organizer.create({
       data: {
         userId: orgBUser.id,
-        businessName: 'Organizer B Estate Sales',
+        businessName: 'ZZTEST Organizer B Estate Sales',
         address: '1 Other St, Kalamazoo, MI 49001',
       },
     });

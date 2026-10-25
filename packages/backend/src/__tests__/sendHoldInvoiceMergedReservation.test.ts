@@ -98,7 +98,7 @@ describe('sendHoldInvoice -- merged item commit + invoiceId stamp (ADR-113)', ()
     const organizer = await prisma.organizer.create({
       data: {
         userId: orgUser.id,
-        businessName: `ADR113 Estate Sales ${key}`,
+        businessName: `ZZTEST ADR113 Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: 'TEAMS',
         squareOnboarded: true,

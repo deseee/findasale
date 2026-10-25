@@ -192,6 +192,38 @@ Log "=========================================="
 # dangerous one on Windows -- it relied entirely on Get-Content to strip CRLF. A stray
 # \r or trailing space inside a token value produces a token that LOOKS present and
 # fails auth with no useful error. Everything below is now explicit.
+# FIX 2026-10-24: Railway invalidated every API token created before its 2026-10-22
+# security incident. The live project token was reissued 2026-10-23 into the gitignored
+# .railway-cli\railway.env (the file every other working Railway script/task sources),
+# but this script only read RAILWAY_TOKEN from .secrets.env, which still held the dead
+# pre-incident token -- so since 2026-10-22 every `railway vars` call returned "Invalid
+# RAILWAY_TOKEN" and RAILWAY-VARS wrote empty files (the DB dump only survived via the
+# static DATABASE_URL fallback). .railway-cli\railway.env is now the authoritative source
+# for RAILWAY_TOKEN: it is read FIRST, and the .secrets.env loop below never overrides a
+# key that is already set. The token value is never logged or written anywhere.
+$railwayEnvFile = "$projectRoot\.railway-cli\railway.env"
+if (-not $env:RAILWAY_TOKEN -and (Test-Path $railwayEnvFile)) {
+    foreach ($rawLine in (Get-Content $railwayEnvFile)) {
+        $line = $rawLine -replace '[\r\n]', ''
+        if ($line -match '^\s*(?:export\s+)?RAILWAY_TOKEN\s*=\s*(.*?)\s*$') {
+            $value = $matches[1]
+            if ($value.Length -ge 2 -and
+                (($value.StartsWith('"') -and $value.EndsWith('"')) -or
+                 ($value.StartsWith("'") -and $value.EndsWith("'")))) {
+                $value = $value.Substring(1, $value.Length - 2)
+            }
+            if ($value) {
+                $env:RAILWAY_TOKEN = $value
+                Log "  RAILWAY_TOKEN loaded from .railway-cli\railway.env (authoritative Railway token store)"
+            }
+            break
+        }
+    }
+}
+if (-not $env:RAILWAY_TOKEN) {
+    Log "  NOTE: no RAILWAY_TOKEN in .railway-cli\railway.env -- falling back to .secrets.env"
+}
+
 $secretsFile = "$projectRoot\.secrets.env"
 $loadedKeys = @()
 if (Test-Path $secretsFile) {

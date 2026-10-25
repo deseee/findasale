@@ -63,7 +63,7 @@ describe('consignor price tags on the card paths', () => {
     const organizer = await prisma.organizer.create({
       data: {
         userId: orgUser.id,
-        businessName: `Tag Sales ${key}`,
+        businessName: `ZZTEST Tag Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: 'TEAMS',
         squareOnboarded: true,

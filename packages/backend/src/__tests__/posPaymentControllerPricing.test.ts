@@ -96,7 +96,7 @@ describe('POS server-authoritative catalog pricing -- no-discount floor check (A
     const organizer = await prisma.organizer.create({
       data: {
         userId: orgUser.id,
-        businessName: `Pricing Estate Sales ${key}`,
+        businessName: `ZZTEST Pricing Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: 'TEAMS',
         squareOnboarded: true,

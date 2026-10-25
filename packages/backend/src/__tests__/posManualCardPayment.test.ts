@@ -86,7 +86,7 @@ describe('POS manual card entry -- manualCardPayment (Square rebuild)', () => {
     const organizer = await prisma.organizer.create({
       data: {
         userId: orgUser.id,
-        businessName: `Manual Card Estate Sales ${key}`,
+        businessName: `ZZTEST Manual Card Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: 'TEAMS',
         squareOnboarded: true,

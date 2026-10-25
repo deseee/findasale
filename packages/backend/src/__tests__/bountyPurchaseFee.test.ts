@@ -121,7 +121,7 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
     const organizer = await prisma.organizer.create({
       data: {
         userId: orgUser.id,
-        businessName: `Bounty Fee Estate Sales ${key}`,
+        businessName: `ZZTEST Bounty Fee Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: tier,
         squareOnboarded: true,

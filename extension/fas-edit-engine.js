@@ -626,31 +626,65 @@
       if (diagKeys) out.diag = { note: 'posh_applied', keys: diagKeys, requests: recentRequests() };
       return out;
     }
-    return fail('verify_mismatch', 'After POST the post shows price ' + C.poshmarkPriceVal(after) + ' qty ' + qNow + ', wanted ' + (W.price != null ? W.price : '-') + ' / ' + (W.qty != null ? W.qty : '-'), 'verify', 'price_amount.val / inventory.size_quantities[].quantity_available', scratch);
+    var pf = scratch && scratch.priceForm;
+    return fail('verify_mismatch', 'After ' + (scratch && scratch.formFallback ? 'the edit form' : 'POST') + ' the post shows price ' + C.poshmarkPriceVal(after) + ' qty ' + qNow + ', wanted ' + (W.price != null ? W.price : '-') + ' / ' + (W.qty != null ? W.qty : '-') + (pf ? ' (price window opened: ' + (pf.modalOpened ? 'yes' : 'no') + ', Done clicked: ' + (pf.doneClicked ? 'yes' : 'no') + ', form showed "' + pf.mainAfter + '")' : ''), 'verify', 'price_amount.val / inventory.size_quantities[].quantity_available', scratch, pf ? { diag: Object.assign(snapshot('fail:verify_mismatch'), { priceForm: pf }) } : undefined);
   }
   // Form fallback. verified-in-DOM 2026-10-13: price = #listing-price-modal-listing-price-input (aria "Listing Price") /
   // input[data-vv-name="listingPrice"]; quantity = "Single Item" (data-et-name=one) / "Multi Item" (data-et-name=multiple) buttons
   // plus the size "Done" (data-et-name=apply); save = "Update" (data-et-name=update). Verified by reload (poshUiVerify) or API re-GET.
+  // 1.0.64 (live DOM 2026-10-25, edit-listing/6a96050225362175cc1c723d): the edit page carries TWO price inputs. The main form's
+  // input[data-vv-name="listingPrice"] (visible, holds the live price) and #listing-price-modal-listing-price-input inside the
+  // .listing-price-suggestion-modal, which stays hidden (value "") until the main input is clicked. Clicking the main input opens
+  // the modal (its input then holds the price, focused) and the modal's own "Done" button (no data-et-name) writes it back.
+  // The old poshPriceInput() returned the hidden modal input first: the new price went into a hidden field, the modal's Done
+  // was never visible so never clicked, and Update saved the form with the old price ("verify_mismatch ... shows price 65").
+  function poshMainPriceInput() {
+    return qa('input[data-vv-name="listingPrice"]').filter(function (i) { return !(i.closest && i.closest('.modal')) && visible(i); })[0] || null;
+  }
+  function poshPriceModal() { return q('.listing-price-suggestion-modal'); }
+  function poshModalPriceInput() { var m = q('#listing-price-modal-listing-price-input'); return m && visible(m) ? m : null; }
+  // Read-back only (never written directly): the visible main-form price input, else any visible Listing Price input.
   function poshPriceInput() {
-    return q('#listing-price-modal-listing-price-input') || q('input[data-vv-name="listingPrice"]') || q('input[aria-label="Listing Price"]') ||
-      findInput(/\blisting price\b/i, /original/i);
+    return poshMainPriceInput() || poshModalPriceInput() || findInput(/\blisting price\b/i, /original/i);
+  }
+  // Open the price modal, type the price, click its Done, confirm the main form now shows the price. Returns a diag object.
+  async function poshSetPriceViaModal(value) {
+    var d = { modalOpened: false, doneClicked: false, via: '', mainBefore: '', mainAfter: '' };
+    var main = poshMainPriceInput();
+    d.mainBefore = main ? String(main.value || '') : '';
+    var mi = poshModalPriceInput();
+    if (!mi && main) { await realClick(main); await sleep(900); mi = await waitFor(poshModalPriceInput, 5000); }
+    if (mi) {
+      d.modalOpened = true; d.via = 'price_modal';
+      d.written = await writeField(mi, value);
+      var m = poshPriceModal();
+      var doneBtn = m && visible(m) ? findButton(/^done$/, m) : null;
+      if (doneBtn) { await realClick(doneBtn); d.doneClicked = true; await waitFor(function () { return !visible(poshPriceModal()); }, 4000); await sleep(400); }
+    } else if (main) {
+      // No modal opened: the main input is directly editable on this layout.
+      d.via = 'main_input';
+      d.written = await writeField(main, value);
+    } else {
+      d.via = 'none';
+    }
+    var after = poshMainPriceInput() || poshModalPriceInput();
+    d.mainAfter = after ? String(after.value || '') : '';
+    d.ok = !!after && C.pricesMatch('POSHMARK', C.parsePriceText(d.mainAfter), C.parsePriceText(value)) && (!d.modalOpened || d.doneClicked);
+    return d;
   }
   async function poshFormFallback(ctx, id, W, why, diagKeys) {
     var sc = { apiTried: true, remoteId: id, formFallback: true };
     await waitFor(function () { return q('[data-et-name="update"]') || poshPriceInput(); }, 12000);    // Vue SPA: inputs render after ~3s
     var price = poshPriceInput();
-    if (!price) {
-      // The price field sits behind a trigger input (placeholder "*Required"): open it once.
-      var trig = qa('input.form__text[placeholder="*Required"]').filter(visible)[0];
-      if (trig) { await realClick(trig); await sleep(900); price = poshPriceInput(); }
+    if (!price) return fail('form_fallback_price_not_found', 'Poshmark refused the API read/write (' + why + ') and no Listing Price input was found', 'form_fallback', 'input[data-vv-name="listingPrice"] (main form) | #listing-price-modal-listing-price-input', sc, { diag: snapshot('posh_form_fallback') });
+    var priceForm = null;
+    if (W.price != null && !C.pricesMatch('POSHMARK', C.parsePriceText(price.value), W.price)) {
+      priceForm = await poshSetPriceViaModal(C.formatPrice('POSHMARK', W.price));
+      sc.priceForm = priceForm;
+      tLog(priceForm.ok ? 'info' : 'warn', 'posh_price_modal', 'Price form: ' + (priceForm.modalOpened ? 'opened the Listing Price window' : 'no Listing Price window') + ', Done ' + (priceForm.doneClicked ? 'clicked' : 'NOT clicked') + ', form now shows "' + priceForm.mainAfter + '" (wanted ' + C.formatPrice('POSHMARK', W.price) + ')', priceForm);
+      // Never click Update on a form that does not hold the new price: that is the "Update on an unchanged form" pattern.
+      if (!priceForm.ok) return fail('price_value_did_not_stick', 'Listing Price form shows "' + priceForm.mainAfter + '" after ' + (priceForm.modalOpened ? 'the price window' + (priceForm.doneClicked ? ' and Done' : ' (Done not found)') : 'typing') + ', wanted ' + C.formatPrice('POSHMARK', W.price) + '; Update not clicked', 'form_fallback', '.listing-price-suggestion-modal Done', sc, { diag: Object.assign(snapshot('posh_price_modal'), { priceForm: priceForm }) });
     }
-    if (!price) return fail('form_fallback_price_not_found', 'Poshmark refused the API read/write (' + why + ') and no Listing Price input was found', 'form_fallback', '#listing-price-modal-listing-price-input | input[data-vv-name="listingPrice"]', sc, { diag: snapshot('posh_form_fallback') });
-    if (W.price != null && !C.pricesMatch('POSHMARK', price.value, W.price)) {
-      var ok = await writeField(price, C.formatPrice('POSHMARK', W.price));
-      if (!ok) return fail('price_value_did_not_stick', 'Listing Price input kept "' + price.value + '"', 'form_fallback', '#listing-price-modal-listing-price-input', sc);
-    }
-    var modalDone = findButton(/^(done|apply|save|ok)$/, qa('[role="dialog"], .modal, [class*="modal" i]').filter(visible).pop());
-    if (modalDone) { await realClick(modalDone); await sleep(600); }
     if (W.qty != null) {
       if (W.qty === 1) { var one = q('[data-et-name="one"]'); if (one && visible(one)) { await realClick(one); await sleep(500); } }
       else {
@@ -665,12 +699,12 @@
     if (!(btn && visible(btn) && !isDisabled(btn))) btn = findButton(/^(update|save)$/);
     if (!btn) return fail('save_control_not_found', 'API write refused (' + why + ') and no Update button ([data-et-name="update"])', 'form_fallback', '[data-et-name="update"]', sc);
     deferClick(btn);
-    return cont(3500, Object.assign({}, sc, { phase: 'posh_verify_only' }), { diag: { note: 'posh_form_fallback', why: why, keys: diagKeys, snap: snapshot('posh_form') } });
+    return cont(3500, Object.assign({}, sc, { phase: 'posh_verify_only' }), { diag: { note: 'posh_form_fallback', why: why, keys: diagKeys, priceForm: priceForm, snap: snapshot('posh_form') } });
   }
   async function poshUiVerify(id, W, S) {
     var price = await waitFor(poshPriceInput, 12000);
     if (!price) return fail('verify_price_input_not_found', 'Reloaded edit page has no Listing Price input to read back', 'verify', '#listing-price-modal-listing-price-input', S);
-    if (W.price == null || C.pricesMatch('POSHMARK', price.value, W.price)) return done({ readBack: { price: price.value }, via: 'reloaded_edit_form' }, S);
+    if (W.price == null || C.pricesMatch('POSHMARK', C.parsePriceText(price.value), W.price)) return done({ readBack: { price: price.value }, via: 'reloaded_edit_form' }, S);
     return fail('verify_mismatch', 'Reloaded edit form shows "' + price.value + '", wanted ' + C.formatPrice('POSHMARK', W.price), 'verify', '#listing-price-modal-listing-price-input', S);
   }
 
@@ -1462,5 +1496,5 @@
       return traceResult(ctx, { state: 'fail', code: 'engine_exception', reason: ((e && e.message) || String(e)).slice(0, 200), step: (ctx.scratch && ctx.scratch.phase) || '', diag: (function () { try { return snapshot('exception'); } catch (e2) { return null; } })() });
     }
   }
-  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7', _test: { poshCopyWrap: poshCopyWrap, poshCopyPre: poshCopyPre, clStep: clStep, clPageSig: clPageSig } };
+  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7', _test: { poshCopyWrap: poshCopyWrap, poshCopyPre: poshCopyPre, clStep: clStep, clPageSig: clPageSig, poshSetPriceViaModal: poshSetPriceViaModal, poshPriceInput: poshPriceInput } };
 })();

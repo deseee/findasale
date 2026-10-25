@@ -63,7 +63,7 @@ describe('Email & SMS Reminder System E2E', () => {
     // threw PrismaClientValidationError "Unknown argument `city`" on every run.
     testOrganizer = await prisma.organizer.create({
       data: {
-        businessName: 'Test Estate Sales',
+        businessName: 'ZZTEST Test Estate Sales',
         phone: '5551234567',
         address: '123 Main St',
         userId: testOrganizerUser.id,

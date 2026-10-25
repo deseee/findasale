@@ -66,7 +66,7 @@ describe('ADR-115 Phase 2 — buyShippingLabel', () => {
     organizer = await prisma.organizer.create({
       data: {
         userId: orgUser.id,
-        businessName: 'Ship Label Estate Sales',
+        businessName: 'ZZTEST Ship Label Estate Sales',
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         phone: '+12695550100',
       },
@@ -84,7 +84,7 @@ describe('ADR-115 Phase 2 — buyShippingLabel', () => {
     otherOrganizer = await prisma.organizer.create({
       data: {
         userId: otherOrgUser.id,
-        businessName: 'A Different Organizer',
+        businessName: 'ZZTEST A Different Organizer',
         address: '1 Other St, Other City, OH 43000',
       },
     });

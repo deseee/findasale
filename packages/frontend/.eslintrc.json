@@ -4,6 +4,13 @@
   "rules": {
     "react/no-unescaped-entities": "off",
     "react-hooks/rules-of-hooks": "error",
-    "@next/next/no-html-link-for-pages": "warn"
+    "@next/next/no-html-link-for-pages": "warn",
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "JSXElement[openingElement.name.name='Link'] > JSXElement[openingElement.name.name='a']",
+        "message": "next/link renders its own <a>. Put className/props on <Link> and remove the <a> child (Sentry FINDASALE-NEXTJS-1D)."
+      }
+    ]
   }
 }

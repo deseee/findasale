@@ -49,8 +49,16 @@ const NO_COUNT_MARKETS_NOTE = 'These listings can\'t take a stock count automati
  * now recorded as skipped (retried on the next rotation); only when the SAME item+market fails that way
  * TRANSIENT_STREAK_TO_REPORT checks in a row is it reported as failed. Non-transient failures (expired token, 4xx)
  * are reported immediately, as before.
+ *
+ * 2026-10-24 follow-up: the two events after that fix (10-24 01:17 "Kansas Song for America" item
+ * cmt3dxydz01wia4xvv1bfe08m, 10-25 00:46 "Monster Energy branded Flags" item cmv9o1nrj012ad4uz9tpnqnqv) were the same
+ * one-off pattern with a different code: GET inventory_item answered HTTP 404 errorId 25710 ("We didn't find the
+ * resource") for a SKU whose offer eBay had just returned as PUBLISHED in the same pass. A published offer cannot exist
+ * without its inventory item, and a direct read of both SKUs ("FAS-<id> <date>") on 2026-10-25 returned 200 with the
+ * listing live, so that 404 is eBay-side read inconsistency, not a missing listing. It now gets the same 3-in-a-row
+ * streak treatment. Any other 4xx (expired token, a real 404 on the offer itself, a rejected PUT) is still immediate.
  */
-const TRANSIENT_READ_FAILURE_RE = /\(HTTP (5\d\d|429)\)/;
+const TRANSIENT_READ_FAILURE_RE = /\(HTTP (5\d\d|429)\)|^eBay did not return the inventory item \(HTTP 404\).*\b25710\b/;
 const TRANSIENT_STREAK_TO_REPORT = 3;
 const transientStreaks = new Map<string, number>();
 

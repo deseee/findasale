@@ -1,45 +1,44 @@
 /**
  * NAA Find an Auctioneer directory scraper
- * Source: https://www.auctioneers.org/find-an-auctioneer
+ * Source: https://members.auctioneers.org/find-an-auctioneer
  * Public member directory -- no ToS prohibition found.
  * Run mode: national-once (crawls all member profiles, metro param is unused).
  * ADR-073: Directory Scraper Phase 1
  *
- * STRATEGY: Novi AMS JSON API (no Playwright required).
+ * STRATEGY: Novi AMS directory endpoint (no Playwright required).
  *
  * Investigation (2026-06-11):
- *   The /find-an-auctioneer landing page is JS-rendered via Knockout.js + Novi AMS
- *   platform. However the page source exposes a plain HTTP POST endpoint at
- *   /members/directory-customer-list that the frontend calls to populate member cards.
- *   This endpoint returns unauthenticated JSON with full structured member data:
- *   name, city, state, phone, email, website, lat/lng.
+ *   The find-an-auctioneer page is JS-rendered via Knockout.js + Novi AMS. The page
+ *   calls a plain HTTP POST endpoint at /members/directory-customer-list
+ *   (directoryID=7345) that returns unauthenticated JSON.
  *
- *   API parameters (from directory.js + page HTML):
- *     directoryID=7345  (NAA's Find an Auctioneer directory ID on Novi AMS)
- *     pageNumber=N      (1-based, 12 records per page)
- *     searchText=       (empty = all members)
- *     Total pages: ceil(2384 / 12) = 199
+ * Re-investigation (2026-10-24, scheduled run of 2026-10-01 failed):
+ *   NAA moved its public site to WordPress at www.auctioneers.org and the Novi AMS
+ *   member platform to members.auctioneers.org. The old endpoint on www now returns
+ *   HTTP 404 (the WordPress "Page not found" page), which is what failed the run.
+ *   On the new host the endpoint still exists, but the JSON "Members" array now only
+ *   carries IDs (plus lat/lng in map view). Name, address, phone and website are only
+ *   in the "Html" fragment. With mapView=true the fragment holds one badge per member
+ *   with the address split by <br /> into street and "City, ST ZIP" lines (the list
+ *   view has no address at all), 20 members per page, stable ordering across pages.
+ *   Personal emails are no longer exposed (only a secure-contact form link).
  *
- *   Prior approach (sitemap-driven profile fetch) was replaced because the Novi AMS
- *   platform redirects /find-an-auctioneer/<slug> back to the search landing page
- *   for non-member visitors -- individual profiles are no longer publicly accessible.
- *
- * ShippingCountry inconsistency: values include "United States", "USA", "United State"
- *   (typo in Novi AMS data), and "CAN". Filter by state code presence instead.
- * ShippingState inconsistency: occasionally a full state name ("Pennsylvania") instead
- *   of 2-letter code. Normalised via US_STATE_MAP.
+ * Address quirks: state is sometimes lower case ("ca") or a full name; a trailing
+ *   country line appears on some records ("United States", "United State of America",
+ *   "USA", "Canada"). Non-US members (Canadian provinces) are skipped.
  */
 
+import * as cheerio from 'cheerio';
 import { RateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
 import { ScrapeStats } from '../sourceRegistry';
 
-const NAA_BASE_URL = 'https://www.auctioneers.org';
+const NAA_BASE_URL = 'https://members.auctioneers.org';
 const DIRECTORY_ENDPOINT = `${NAA_BASE_URL}/members/directory-customer-list`;
 const DIRECTORY_ID = '7345';
-const PAGE_SIZE = 12; // Novi AMS returns 12 members per page
+const PAGE_SIZE = 20; // Novi AMS map view returns 20 members per page
 const SOURCE_NAME = 'NAAFindAnAuctioneer';
-const NAA_DOMAIN = 'www.auctioneers.org';
+const NAA_DOMAIN = 'members.auctioneers.org';
 
 /** US state name -> 2-letter code map for normalisation */
 const US_STATE_MAP: Record<string, string> = {
@@ -60,30 +59,36 @@ const US_STATE_MAP: Record<string, string> = {
 /** Set of valid 2-letter US state codes */
 const US_STATE_CODES = new Set(Object.values(US_STATE_MAP));
 
-interface NoviMember {
+/** Trailing country lines seen in the directory that still mean a US address */
+const US_COUNTRY_RE = /^(united states?( of america)?|usa?|u\.s\.a?\.?)$/i;
+
+interface NoviMapMember {
   ID: number;
-  Name: string;
-  ShippingCity: string | null;
-  ShippingState: string | null;
-  ShippingCountry: string | null;
-  ShippingLatitude: number | null;
-  ShippingLongitude: number | null;
-  Phone: string | null;
-  Email: string | null;
-  Website: string | null;
-  HideContactInformation: boolean;
-  HideAddress: boolean;
-  HideOnWebsite: boolean;
+  IsCompany?: boolean;
+  ShippingAddress?: { Lat: number | null; Long: number | null } | null;
 }
 
 interface NoviDirectoryResponse {
   Status: string;
-  Members: NoviMember[];
+  Html: string;
+  Members: NoviMapMember[];
   TotalCount: number;
 }
 
+/** One member as parsed from the directory's map-view HTML fragment */
+export interface NAAMemberRecord {
+  id: number;
+  name: string;
+  city: string | null;
+  state: string | null;
+  phone?: string;
+  website?: string;
+  lat?: number;
+  lng?: number;
+}
+
 /**
- * Normalise a ShippingState value to a 2-letter US code.
+ * Normalise a state value to a 2-letter US code.
  * Returns null if the value cannot be resolved (e.g. Canadian province).
  */
 function normaliseState(raw: string | null): string | null {
@@ -97,12 +102,82 @@ function normaliseState(raw: string | null): string | null {
 }
 
 /**
- * Fetch one page of the NAA directory via the Novi AMS JSON endpoint.
+ * Parse the address lines of one badge ("street<br />City, ST ZIP<br />Country")
+ * into a US city + state. Returns nulls when the address is missing or non-US.
+ */
+export function parseCityState(lines: string[]): { city: string | null; state: string | null } {
+  const clean = lines.map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  if (clean.length === 0) return { city: null, state: null };
+
+  let last = clean[clean.length - 1];
+  if (!/,/.test(last) && clean.length > 1) {
+    // Trailing country line: keep going only if it is a US spelling
+    if (!US_COUNTRY_RE.test(last)) return { city: null, state: null };
+    clean.pop();
+    last = clean[clean.length - 1];
+  }
+
+  // "City, ST 12345-6789" or "City, State Name 12345" or "City, ST"
+  const m = last.match(/^(.+?),\s*([A-Za-z][A-Za-z .]*?)\s*(\d{5}(?:-\d{4})?)?$/);
+  if (!m) return { city: null, state: null };
+  const state = normaliseState(m[2]);
+  const city = m[1].trim();
+  if (!state || !city) return { city: null, state: null };
+  return { city, state };
+}
+
+/** Parse the map-view HTML fragment into member records. */
+export function parseDirectoryHtml(html: string, members: NoviMapMember[]): NAAMemberRecord[] {
+  const $ = cheerio.load(html);
+  const coords = new Map<number, { lat?: number; lng?: number }>();
+  for (const m of members || []) {
+    const lat = m.ShippingAddress?.Lat;
+    const lng = m.ShippingAddress?.Long;
+    coords.set(m.ID, {
+      lat: typeof lat === 'number' && lat !== 0 ? lat : undefined,
+      lng: typeof lng === 'number' && lng !== 0 ? lng : undefined,
+    });
+  }
+
+  const out: NAAMemberRecord[] = [];
+  $('div[data-member-id]').each((_, el) => {
+    const badge = $(el);
+    const id = Number(badge.attr('data-member-id'));
+    const name = badge.find('.c-directory-map-view-member-badge__info-name').first().text().replace(/\s+/g, ' ').trim();
+
+    const addrHtml = badge.find('span.address').first().html() || '';
+    const lines = addrHtml
+      .split(/<br\s*\/?>/i)
+      .map((part) => cheerio.load(`<i>${part}</i>`)('i').text());
+    const { city, state } = parseCityState(lines);
+
+    const websiteHref = badge.find('a.icon.website').first().attr('href')?.trim();
+    const telHref = badge.find('a.icon.phone').first().attr('href')?.trim();
+    const phone = telHref && telHref.toLowerCase().startsWith('tel:') ? telHref.slice(4).trim() || undefined : undefined;
+
+    const c = coords.get(id) || {};
+    out.push({
+      id,
+      name,
+      city,
+      state,
+      phone,
+      website: websiteHref || undefined,
+      lat: c.lat,
+      lng: c.lng,
+    });
+  });
+  return out;
+}
+
+/**
+ * Fetch one page of the NAA directory (map view) via the Novi AMS endpoint.
+ * Returns null when the page is past the end (the server answers with an empty body).
  */
 async function fetchDirectoryPage(
   pageNumber: number,
   rateLimiter: RateLimiter
-): Promise<NoviDirectoryResponse> {
+): Promise<NoviDirectoryResponse | null> {
   await rateLimiter.waitBeforeRequest(NAA_DOMAIN);
 
   const body = new URLSearchParams({
@@ -113,6 +188,13 @@ async function fetchDirectoryPage(
     specialOffer: '',
     city: '',
     state: '',
+    zip: '',
+    county: '',
+    country: '',
+    mapView: 'true',
+    latitude: '',
+    longitude: '',
+    radius: '',
   });
 
   const response = await fetch(DIRECTORY_ENDPOINT, {
@@ -131,10 +213,18 @@ async function fetchDirectoryPage(
   });
 
   if (!response.ok) {
-    throw new Error(`[NAADirectory] HTTP ${response.status} on page ${pageNumber}`);
+    throw new Error(`[NAADirectory] HTTP ${response.status} on page ${pageNumber} (${DIRECTORY_ENDPOINT})`);
   }
 
-  const data = (await response.json()) as NoviDirectoryResponse;
+  const text = (await response.text()).trim();
+  if (!text) return null;
+
+  let data: NoviDirectoryResponse;
+  try {
+    data = JSON.parse(text) as NoviDirectoryResponse;
+  } catch {
+    throw new Error(`[NAADirectory] Non-JSON response on page ${pageNumber}: ${text.slice(0, 120)}`);
+  }
 
   if (data.Status !== 'OK') {
     throw new Error(`[NAADirectory] API status "${data.Status}" on page ${pageNumber}`);
@@ -160,10 +250,10 @@ export async function scrapeNAADirectory(
     itemsFailed: 0,
   };
 
-  console.log('[NAADirectory] Starting Novi AMS JSON API scrape');
+  console.log('[NAADirectory] Starting Novi AMS directory scrape (map view)');
 
   // Fetch page 1 to determine total count
-  let firstPage: NoviDirectoryResponse;
+  let firstPage: NoviDirectoryResponse | null;
   try {
     firstPage = await fetchDirectoryPage(1, rateLimiter);
   } catch (err) {
@@ -171,20 +261,26 @@ export async function scrapeNAADirectory(
     throw err;
   }
 
-  const totalCount = firstPage.TotalCount;
+  const totalCount = firstPage?.TotalCount ?? 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   console.log(`[NAADirectory] ${totalCount} members across ${totalPages} pages`);
 
-  if (totalCount === 0) {
+  if (!firstPage || totalCount === 0) {
     throw new Error('[NAADirectory] Zero members returned -- API endpoint or directoryID may have changed');
   }
 
+  const firstRecords = parseDirectoryHtml(firstPage.Html, firstPage.Members);
+  if (firstRecords.length === 0) {
+    // The JSON said there are members but no badge parsed: the HTML layout changed.
+    throw new Error('[NAADirectory] Page 1 returned members but no parsable member badges -- directory HTML layout may have changed');
+  }
+
   // Process page 1 members
-  await processMembers(firstPage.Members, stats);
+  await processMembers(firstRecords, stats);
 
   // Fetch remaining pages
   for (let page = 2; page <= totalPages; page++) {
-    let pageData: NoviDirectoryResponse;
+    let pageData: NoviDirectoryResponse | null;
     try {
       pageData = await fetchDirectoryPage(page, rateLimiter);
     } catch (err) {
@@ -192,8 +288,9 @@ export async function scrapeNAADirectory(
       stats.itemsFailed++;
       continue;
     }
+    if (!pageData) break; // past the end
 
-    await processMembers(pageData.Members, stats);
+    await processMembers(parseDirectoryHtml(pageData.Html, pageData.Members), stats);
 
     // Polite delay between pages (on top of RateLimiter's 1 req/sec floor)
     await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 400));
@@ -215,45 +312,34 @@ export async function scrapeNAADirectory(
 }
 
 /**
- * Ingest a batch of Novi AMS member records into the organizer table.
+ * Ingest a batch of parsed member records into the organizer table.
+ * The directory only lists members who chose to be public; members with a hidden
+ * address have no address line and are skipped (no city to dedup on).
  */
 async function processMembers(
-  members: NoviMember[],
+  members: NAAMemberRecord[],
   stats: ScrapeStats
 ): Promise<void> {
   for (const member of members) {
-    // Skip members who have opted out of public directory listing
-    if (member.HideOnWebsite || member.HideContactInformation) {
-      stats.itemsSkipped++;
-      continue;
-    }
-
-    const name = (member.Name || '').trim();
+    const name = (member.name || '').trim();
     if (!name) {
       stats.itemsSkipped++;
       continue;
     }
 
-    const city = (member.ShippingCity || '').trim() || null;
-    const state = normaliseState(member.ShippingState);
-
-    // Skip if we can't confirm US state (likely Canadian or invalid data)
-    if (!state) {
+    // Skip if we can't confirm a US state (Canadian, hidden or invalid address)
+    if (!member.state) {
       stats.itemsSkipped++;
       continue;
     }
 
     // Skip records with no city (insufficient for dedup)
-    if (!city) {
+    if (!member.city) {
       stats.itemsSkipped++;
       continue;
     }
 
-    const phone = member.HideAddress ? undefined : (member.Phone?.trim() || undefined);
-    const website = member.Website?.trim() || undefined;
-    const email = member.HideContactInformation ? undefined : (member.Email?.trim() || undefined);
-    const lat = member.ShippingLatitude ?? undefined;
-    const lng = member.ShippingLongitude ?? undefined;
+    const { city, state } = member;
 
     stats.itemsFound++;
 
@@ -268,11 +354,11 @@ async function processMembers(
         undefined, // foursquareVenueId
         undefined, // hereBusinessId
         'AUCTION_HOUSE',
-        email,
-        phone,
-        website,
-        lat,
-        lng
+        undefined, // email: the directory no longer exposes member emails
+        member.phone,
+        member.website,
+        member.lat,
+        member.lng
       );
 
       if (orgId === null) {

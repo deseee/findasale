@@ -296,6 +296,37 @@ describe('runInventoryReconcile', () => {
     expect(alerts).toHaveLength(1);
   });
 
+  it('treats eBay 404 errorId 25710 on the inventory item read (offer still published) as transient too (FINDASALE-NODEJS-96)', async () => {
+    const w = newWorld();
+    w.inStock['i1'] = 1;
+    w.failedMarkets['i1'] = 'ebay';
+    w.failedDetail = { i1: 'eBay did not return the inventory item (HTTP 404) {"errors":[{"errorId":25710,"domain":"API_INVENTORY","message":"We didn\'t find the resource/entity you are requesting"}]}' };
+    installSyncFake(w);
+    const { deps, alerts } = makeDeps({ orgA: [{ id: 'i1', title: 'Flags' }] });
+
+    const r1 = await runInventoryReconcile({}, deps);
+    expect(r1.failed).toEqual([]);
+    expect(r1.skipped.map((x) => x.itemId)).toEqual(['i1']);
+    expect(Sentry.captureMessage).not.toHaveBeenCalled();
+    expect(alerts).toHaveLength(0);
+
+    await runInventoryReconcile({}, deps);
+    const r3 = await runInventoryReconcile({}, deps);
+    expect(r3.failed.map((x) => x.itemId)).toEqual(['i1']);
+    expect(Sentry.captureMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('still reports any other eBay 4xx immediately (e.g. the offer read itself 404s)', async () => {
+    const w = newWorld();
+    w.inStock['i1'] = 1;
+    w.failedMarkets['i1'] = 'ebay';
+    w.failedDetail = { i1: 'eBay did not return the offer (HTTP 404) {"errors":[{"errorId":25713}]}' };
+    installSyncFake(w);
+    const { deps } = makeDeps({ orgA: [{ id: 'i1', title: 'Flags' }] });
+    const r1 = await runInventoryReconcile({}, deps);
+    expect(r1.failed.map((x) => x.itemId)).toEqual(['i1']);
+  });
+
   it('respects the per-run item cap and continues from a rotating cursor on the next run', async () => {
     process.env.INVENTORY_RECONCILE_MAX_ITEMS = '2';
     try {

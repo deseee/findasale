@@ -121,7 +121,7 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
     const organizer = await prisma.organizer.create({
       data: {
         userId: orgUser.id,
-        businessName: `Split Fee Estate Sales ${key}`,
+        businessName: `ZZTEST Split Fee Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: 'TEAMS',
         squareOnboarded: true,

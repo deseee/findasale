@@ -1678,7 +1678,11 @@ async function fasEditRunPlatform(platform, rawEntries) {
 // other silent automations (fasAutoRemoveMode === 'silent'). Result lines go to the popup "Price and stock sync" log.
 // Switch off with chrome.storage.local fasPoshShipNoDiscount = false.
 const FAS_POSH_SHIP_STATE_KEY = 'fasPoshShipState';   // { fails: { id: { n, until } }, backoffUntil, lastRun, lastCheck, more }
-const FAS_POSH_SHIP_PER_RUN = 12;
+// 1.0.64: smaller per-cycle cap, a rolling 24 h cap on edit attempts, and a flat 24 h per-listing back-off after any failure
+// (was 2 h, 4 h, ... -- a listing that kept failing verify was re-opened and Update-clicked many times a day).
+const FAS_POSH_SHIP_PER_RUN = 4;
+const FAS_POSH_SHIP_PER_DAY = 12;
+const FAS_POSH_SHIP_FAIL_BACKOFF_MS = 24 * 3600 * 1000;
 const FAS_POSH_SHIP_CHECK_EVERY_MS = 6 * 3600 * 1000;
 let fasPoshShipRunning = false;
 
@@ -1717,10 +1721,18 @@ async function fasPoshShipRun(force) {
     if (!scan) return 'scan_failed';
     if (scan.blocked) { st.backoffUntil = Date.now() + 6 * 3600 * 1000; await fasEditLogEntry('error', 'POSHMARK', null, scan.blocked, 'Shipping check stopped: Poshmark answered ' + scan.blocked + '. Will not touch Poshmark again for 6 hours.'); return 'blocked_' + scan.blocked; }
     st.lastCheck = Date.now();
-    const free = (scan.rows || []).filter((r) => r.status === 'published' && r.ship === 'free' && !(st.fails[r.id] && st.fails[r.id].until > Date.now()));
-    st.more = free.length > FAS_POSH_SHIP_PER_RUN;
-    await fasEditLogEntry('info', 'POSHMARK', null, 'shipping_scan', 'Closet scan: ' + (scan.rows || []).length + ' listings read, ' + free.length + ' on Free shipping' + (free.length ? ' -- changing to No Discount' : ''));
-    for (const r of free.slice(0, FAS_POSH_SHIP_PER_RUN)) {
+    // 1.0.64: r.nd comes from seller_shipping_discount.discount_amount (fas-posh-shipping.js shipState). shipping_discount_type reads
+    // "free" on every listing, including ones already on No Discount, so it is never used to decide.
+    const rows = scan.rows || [];
+    const unknown = rows.filter((r) => r.status === 'published' && r.nd === 'unknown').length;
+    const free = rows.filter((r) => r.status === 'published' && r.nd === 'discounted' && !(st.fails[r.id] && st.fails[r.id].until > Date.now()));
+    const dayStart = st.day && st.day.start && Date.now() - st.day.start < 24 * 3600 * 1000 ? st.day.start : Date.now();
+    st.day = { start: dayStart, n: dayStart === (st.day && st.day.start) ? (st.day.n || 0) : 0 };
+    const room = Math.max(0, Math.min(FAS_POSH_SHIP_PER_RUN, FAS_POSH_SHIP_PER_DAY - st.day.n));
+    st.more = free.length > room && room > 0;
+    await fasEditLogEntry('info', 'POSHMARK', null, 'shipping_scan', 'Closet scan: ' + rows.length + ' listings read, ' + free.length + ' with a seller-paid shipping discount' + (unknown ? ', ' + unknown + ' unreadable (left alone)' : '') + (free.length ? (room ? ' -- changing up to ' + room + ' to No Discount' : ' -- daily limit reached, resuming tomorrow') : ''));
+    for (const r of free.slice(0, room)) {
+      st.day.n++;
       await lock();
       let scratch = {}; let res = null; let errs = 0;
       await fasEditNavigate(tab.id, 'https://poshmark.com/edit-listing/' + r.id);
@@ -1742,9 +1754,10 @@ async function fasPoshShipRun(force) {
       }
       if (!res) res = { state: 'fail', code: 'too_many_steps', reason: 'no verified result' };
       const entry = { id: r.id, title: r.title };
-      if (res.state === 'done') { fixed++; delete st.fails[r.id]; await fasEditLogEntry('info', 'POSHMARK', entry, 'shipping_fixed', 'Shipping set to No Discount (verified on Poshmark)'); }
+      if (res.state === 'done' && res.details && res.details.already) { delete st.fails[r.id]; }
+      else if (res.state === 'done') { fixed++; delete st.fails[r.id]; await fasEditLogEntry('info', 'POSHMARK', entry, 'shipping_fixed', 'Shipping set to No Discount (verified on Poshmark)'); }
       else if (res.state === 'blocked') { stopped = res.code; st.backoffUntil = Date.now() + 6 * 3600 * 1000; await fasEditLogEntry('error', 'POSHMARK', entry, res.code, 'Shipping fix stopped: ' + res.reason + '. Will not touch Poshmark for 6 hours.'); break; }
-      else { failed++; const f = st.fails[r.id] || { n: 0 }; f.n++; f.until = Date.now() + Math.min(24, 2 * f.n) * 3600 * 1000; st.fails[r.id] = f; await fasEditLogEntry('error', 'POSHMARK', entry, res.code || 'failed', 'Shipping fix failed: ' + (res.reason || '') + ' (attempt ' + f.n + ', retry later)', { step: 'shipping', diag: res.diag }); }
+      else { failed++; const f = st.fails[r.id] || { n: 0 }; f.n++; f.until = Date.now() + FAS_POSH_SHIP_FAIL_BACKOFF_MS; st.fails[r.id] = f; await fasEditLogEntry('error', 'POSHMARK', entry, res.code || 'failed', 'Shipping fix failed: ' + (res.reason || '') + ' (attempt ' + f.n + ', not retried for 24 hours)', { step: 'shipping', diag: res.diag }); }
       await chrome.storage.local.set({ [FAS_POSH_SHIP_STATE_KEY]: st });
       await sleep(4000 + Math.random() * 5000);
     }

@@ -101,7 +101,7 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
     const organizer = await prisma.organizer.create({
       data: {
         userId: orgUser.id,
-        businessName: `Cash Split Estate Sales ${key}`,
+        businessName: `ZZTEST Cash Split Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: tier,
         squareOnboarded: true,

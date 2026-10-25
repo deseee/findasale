@@ -73,22 +73,23 @@ test('finish phase clicks both fragile packing acknowledgements and nothing else
 test('verify re-reads once before failing, and the failure carries diagnostics', async () => {
   const api = load({
     location: { pathname: '/listing/x' }, bodyText: () => '', qsa: () => [],
-    fetch: async () => ({ ok: true, status: 200, json: async () => ({ data: { shipping_discount_type: 'free', status: 'published' } }) }),
+    // 1.0.64: real shape of a listing that still has a seller-paid discount (Free = discount covers the whole label).
+    fetch: async () => ({ ok: true, status: 200, json: async () => ({ data: { shipping_discount_type: 'free', status: 'published', seller_shipping_discount: { id: 'x', discount_amount: { val: '6.49', currency_code: 'USD' }, label: 'Free Shipping' } } }) }),
   });
   const first = await api.step({ id: 'a'.repeat(24), phase: 'verify', finishClicks: [] });
   assert.strictEqual(first.state, 'continue');
   assert.strictEqual(first.scratch.reread, true);
   const second = await api.step({ id: 'a'.repeat(24), phase: 'verify', reread: true, finishClicks: [], picked: 'No Discount', modalDone: 'done' });
   assert.strictEqual(second.state, 'fail');
-  assert.strictEqual(second.code, 'verify_still_free');
+  assert.strictEqual(second.code, 'verify_still_discounted');
   assert.match(second.reason, /no Share Listing or packing step was found/);
   assert.strictEqual(second.diag.picked, 'No Discount');
 });
 
-test('verify passes when Poshmark no longer reports free shipping', async () => {
+test('verify passes on the real No Discount shape even though shipping_discount_type still reads "free"', async () => {
   const api = load({
     location: { pathname: '/listing/x' }, bodyText: () => '', qsa: () => [],
-    fetch: async () => ({ ok: true, status: 200, json: async () => ({ data: { shipping_discount_type: null } }) }),
+    fetch: async () => ({ ok: true, status: 200, json: async () => ({ data: { shipping_discount_type: 'free', seller_shipping_discount: { id: '5ff7647a5d29bbebfa25f9d0', discount_amount: { val: '0.0', currency_code: 'USD', currency_symbol: '$' }, label: 'Buyer Shipping: $6.49' } } }) }),
   });
   const r = await api.step({ id: 'a'.repeat(24), phase: 'verify' });
   assert.strictEqual(r.state, 'done');
