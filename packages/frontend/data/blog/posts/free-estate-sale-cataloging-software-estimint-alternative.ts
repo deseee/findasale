@@ -61,6 +61,8 @@ Here is what each model costs on two example sales. We assume all payments are b
 
 We would rather say this plainly: on a large, card-heavy sale, a flat subscription plus Stripe costs less in fees than a percentage. Where pay-when-you-sell comes out ahead is in the months you run small sales, the months you run none, and the sales where a good share of items sell outside the platform. You never pay for a month you didn't use.
 
+One more point on fees: FindA.Sale charges no fee on sales made outside the platform, even if you mark the item sold here to keep your inventory accurate. The platform fee applies to sales paid on the FindA.Sale website or rung up on the FindA.Sale POS.
+
 ## What else is different
 
 The fees are only part of the picture. The two tools are built for different jobs.

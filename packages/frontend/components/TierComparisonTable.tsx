@@ -331,7 +331,10 @@ const FeatureCheck: React.FC<{ included: boolean | string }> = ({ included }) =>
  */
 const TierComparisonTable: React.FC<TierComparisonTableProps> = ({ currentTier = 'SIMPLE' }) => {
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full">
+      <p className="sm:hidden text-xs text-gray-500 dark:text-gray-400 text-right mb-1" aria-hidden="true">Swipe sideways to see all plans &rarr;</p>
+      <div className="relative">
+      <div className="w-full overflow-x-auto">
       <table className="w-full border-collapse">
         {/* Header */}
         <thead>
@@ -385,6 +388,9 @@ const TierComparisonTable: React.FC<TierComparisonTableProps> = ({ currentTier =
           ))}
         </tbody>
       </table>
+      </div>
+      <div className="sm:hidden pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white dark:from-gray-800 to-transparent" aria-hidden="true" />
+      </div>
 
       {/* CTA Footer */}
       <div className="mt-8 flex flex-wrap gap-4 justify-center">

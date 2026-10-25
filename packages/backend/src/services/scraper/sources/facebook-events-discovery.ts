@@ -47,6 +47,7 @@ import {
   looksLikeStreetAddress,
   deriveCityStateFromDisplay,
   normalizeRegionCode,
+  pageLocationRejection,
 } from './facebook-address';
 import { checkEventWindow, isLocationConfirmed } from './facebook-events-quality';
 // Re-exported so existing importers of these guards from this module keep
@@ -151,16 +152,32 @@ async function fetchEventPageCached(
  *     the event (never a street address glued onto the query metro).
  *   - A page city + state (code or spelled-out name) replaces an UNCONFIRMED
  *     (metro-fallback / unresolved) city/state.
+ *   - 'rejected' (2026-10-25, run 40232424379): the page location contradicts
+ *     a state named in the title, is the proxy's own geolocation (Roseville /
+ *     Saint Paul MN) for an event found in another state, or contradicts an
+ *     already-confirmed state -- nothing is applied (pageLocationRejection).
  */
 export function applyPageLocation(
   item: ScrapedItem,
   page: FbEventPageData | null
-): 'street' | 'city' | 'quebec' | 'none' {
+): 'street' | 'city' | 'quebec' | 'rejected' | 'none' {
   if (!page) return 'none';
   const region = normalizeRegionCode(page.state);
   if (region?.code === 'QC' || /\bqu[e\u00e9]bec\b/i.test(page.address || '')) return 'quebec';
 
   const md: Record<string, any> = (item.scrapedMetadata = { ...(item.scrapedMetadata ?? {}) });
+
+  const rejection = pageLocationRejection(item, page);
+  if (rejection) {
+    md.pageLocationRejected = rejection;
+    md.rejectedPageLocation = [page.address, page.city, page.state].filter(Boolean).join(' | ');
+    console.warn(
+      `[FB-Events-Discovery] page location rejected (${rejection}) for ${item.sourceUrl}: ` +
+        `"${md.rejectedPageLocation}" vs title "${item.title}"`
+    );
+    return 'rejected';
+  }
+
   const confirmed = isLocationConfirmed(item);
   const pageCity = typeof page.city === 'string' ? page.city.trim() : '';
   const pageHasCityState = !!pageCity && !!region;

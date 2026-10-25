@@ -239,6 +239,66 @@ export function extractEventObjects(html: string): any[] {
 }
 
 /**
+ * Every `__typename:"Event"` object on the page whose `id` equals `eventId`,
+ * WITHOUT the by-id de-duplication extractEventObjects() applies.
+ *
+ * Why (2026-10-25, run 40232424379): an individual event page embeds the
+ * target event more than once (a lean header object and a richer one carrying
+ * `event_place`) PLUS unrelated "suggested / nearby" events chosen from the
+ * VIEWER's IP geolocation (the Cloudflare proxy egress -- Roseville / Saint
+ * Paul MN). extractEventObjects() keeps only the FIRST object per id, which can
+ * be the lean one, and the page-fetch caller then fell back to "any event with
+ * a place" -- i.e. a suggested event -- stamping 7 Texas events as Roseville /
+ * Saint Paul MN. Callers that need the target event's own data must use this.
+ * Never throws.
+ */
+export function extractEventObjectsForId(html: string, eventId: string): any[] {
+  const out: any[] = [];
+  if (!html || !eventId) return out;
+  const seen = new Set<any>();
+  const take = (ev: any): void => {
+    if (!ev || typeof ev !== 'object' || seen.has(ev)) return;
+    if (String(ev.id) !== String(eventId)) return;
+    seen.add(ev);
+    out.push(ev);
+  };
+  try {
+    let m: RegExpExecArray | null;
+    const re = new RegExp(SCRIPT_JSON_RE.source, 'g');
+    while ((m = re.exec(html)) !== null) {
+      const raw = m[1];
+      if (!raw || raw.indexOf(eventId) === -1) continue;
+      try {
+        for (const ev of findObjectsByTypename(JSON.parse(raw), 'Event')) take(ev);
+      } catch {
+        /* raw-string pass below */
+      }
+    }
+  } catch {
+    /* best-effort */
+  }
+  try {
+    const marker = '{"__typename":"Event"';
+    let from = 0;
+    for (let guard = 0; guard < 5000; guard++) {
+      const at = html.indexOf(marker, from);
+      if (at === -1) break;
+      const sliced = sliceBalancedObject(html, at);
+      from = sliced ? sliced.endIndex + 1 : at + marker.length;
+      if (!sliced || sliced.text.indexOf(eventId) === -1) continue;
+      try {
+        take(JSON.parse(sliced.text));
+      } catch {
+        /* skip malformed slice */
+      }
+    }
+  } catch {
+    /* best-effort */
+  }
+  return out;
+}
+
+/**
  * Given an index pointing at an opening `{`, return the balanced-object substring
  * (respecting string literals). Returns null if no balanced object is found.
  */

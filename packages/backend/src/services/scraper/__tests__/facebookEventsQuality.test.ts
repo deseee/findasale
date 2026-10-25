@@ -22,6 +22,13 @@ import {
   cleanCityToken,
 } from '../sources/facebook-address';
 import { applyPageLocation } from '../sources/facebook-events-discovery';
+import {
+  extractStatesFromTitle,
+  isProxyGeo,
+  pageLocationRejection,
+} from '../sources/facebook-address';
+import { extractEventObjectsForId } from '../sources/facebook-json';
+import { fetchFacebookEventPage } from '../sources/facebook-events-page-fetch';
 import type { ScrapedItem } from '../index';
 
 // Run time of the real retest: 2026-10-25 17:15 UTC.
@@ -233,5 +240,159 @@ describe('applyPageLocation', () => {
     expect(isLocationConfirmed(uk)).toBe(false);
     expect(applyPageLocation(metroItem(), { city: 'Montreal', state: 'QC' })).toBe('quebec');
     expect(applyPageLocation(metroItem(), null)).toBe('none');
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// 2026-10-25 run 40232424379: 7 rows stored as Roseville / Saint Paul MN with
+// cityStateSource 'page-fetch-address'. The event-page fetch took the place of
+// a "suggested / nearby" event (picked by FB from the proxy's IP geolocation)
+// whenever the target event had no event_place of its own.
+// ---------------------------------------------------------------------------
+
+const REAL_TITLES = [
+  'Estate Sale 407 NE 6th Street Hubbard, Texas 76648',
+  'Estate Sale | October 29–31 | Orange, TX',
+  'Estate Sale! Rochester, Tx',
+];
+const ROSEVILLE_PAGE = { address: '1145 Woodhill Dr, Roseville, MN', city: 'Roseville', state: 'MN' };
+const SAINT_PAUL_PAGE = {
+  address: '345 W. Kellogg Blvd., Saint Paul, MN, United States, Minnesota 55102',
+  city: 'Saint Paul',
+  state: 'MN',
+};
+
+describe('extractStatesFromTitle', () => {
+  test.each(REAL_TITLES)('finds TX in %s', (t) => {
+    expect(extractStatesFromTitle(t)).toEqual(['TX']);
+  });
+
+  test('ignores titles with no place and ordinary words', () => {
+    expect(extractStatesFromTitle('Yard Sale')).toEqual([]);
+    expect(extractStatesFromTitle('Garage Sale Trail')).toEqual([]);
+    expect(extractStatesFromTitle('MOVING SALE IN TOWN, OK?')).toEqual([]);
+    expect(extractStatesFromTitle('Garage Sale, Washington Ave')).toEqual([]);
+    expect(extractStatesFromTitle('Sale 6929 George Brown Dr TX 75043')).toEqual(['TX']);
+  });
+});
+
+describe('isProxyGeo', () => {
+  test('matches the observed proxy egress cities', () => {
+    expect(isProxyGeo('Roseville', 'MN')).toBe(true);
+    expect(isProxyGeo('Saint Paul', 'MN')).toBe(true);
+    expect(isProxyGeo('St. Paul', 'Minnesota')).toBe(true);
+    expect(isProxyGeo('Roseville', 'CA')).toBe(false);
+    expect(isProxyGeo('Houston', 'TX')).toBe(false);
+  });
+});
+
+describe('page location sanity guards (run 40232424379)', () => {
+  const houstonItem = (title: string): ScrapedItem =>
+    item({
+      title,
+      city: 'Houston',
+      state: 'TX',
+      md: { metro: 'Houston, TX', cityStateSource: 'metro-fallback', geoConfidence: 'metro-fallback' },
+    });
+
+  test.each(REAL_TITLES)('rejects Roseville MN for "%s"', (title) => {
+    const it = houstonItem(title);
+    expect(pageLocationRejection(it, ROSEVILLE_PAGE)).toBe('title-state-conflict');
+    expect(applyPageLocation(it, ROSEVILLE_PAGE)).toBe('rejected');
+    expect([it.address, it.city, it.state]).toEqual(['', 'Houston', 'TX']);
+    expect(it.scrapedMetadata!.pageLocationRejected).toBe('title-state-conflict');
+    expect(isLocationConfirmed(it)).toBe(false);
+  });
+
+  test('rejects the proxy geo for a placeless title found in another state', () => {
+    const it = item({
+      title: 'Yard Sale',
+      city: 'McAllen',
+      state: 'TX',
+      md: { metro: 'McAllen, TX', cityStateSource: 'metro-fallback', geoConfidence: 'metro-fallback' },
+    });
+    expect(applyPageLocation(it, SAINT_PAUL_PAGE)).toBe('rejected');
+    expect(it.scrapedMetadata!.pageLocationRejected).toBe('proxy-geo');
+    expect(it.city).toBe('McAllen');
+    expect(isLocationConfirmed(it)).toBe(false);
+  });
+
+  test('keeps a real Roseville MN event discovered for a Minnesota metro', () => {
+    const it = item({
+      title: 'Yard Sale',
+      city: 'Minneapolis',
+      state: 'MN',
+      md: { metro: 'Minneapolis, MN', cityStateSource: 'metro-fallback', geoConfidence: 'metro-fallback' },
+    });
+    expect(applyPageLocation(it, ROSEVILLE_PAGE)).toBe('street');
+    expect([it.city, it.state]).toEqual(['Roseville', 'MN']);
+  });
+
+  test('accepts a page location that agrees with the title', () => {
+    const it = houstonItem('Estate Sale | October 29–31 | Orange, TX');
+    expect(applyPageLocation(it, { address: '123 Main St', city: 'Orange', state: 'TX' })).toBe('street');
+    expect([it.address, it.city, it.state]).toEqual(['123 Main St', 'Orange', 'TX']);
+  });
+
+  test('never puts another state street on an already-confirmed city', () => {
+    const it = item({ title: 'Garage sale' }); // Effingham, IL confirmed
+    expect(applyPageLocation(it, { address: '1145 Woodhill Dr, Roseville, MN' })).toBe('rejected');
+    expect(it.address).toBe('');
+  });
+});
+
+describe('event-page place is scoped to the target event id', () => {
+  const TARGET = '1418365513787056';
+  const SUGGESTED = '999000111222333';
+  const pageHtml = (targetPlace: string | null): string =>
+    '<html><head><meta property="og:description" content="Event by Someone on Sunday, October 25 2026"></head><body>' +
+    '<script type="application/json">' +
+    JSON.stringify({
+      require: [
+        { __typename: 'Event', id: TARGET, name: REAL_TITLES[0] },
+        { __typename: 'Event', id: SUGGESTED, name: 'Garage sale', event_place: { __typename: 'FreeformPlace', contextual_name: '1145 Woodhill Dr, Roseville, MN' } },
+        ...(targetPlace
+          ? [{ __typename: 'Event', id: TARGET, name: REAL_TITLES[0], event_place: { __typename: 'FreeformPlace', contextual_name: targetPlace } }]
+          : []),
+      ],
+    }) +
+    '</script></body></html>';
+
+  const realFetch = global.fetch;
+  const savedProxy = [process.env.FB_EVENTS_PROXY_URL, process.env.FB_EVENTS_PROXY_TOKEN];
+  beforeAll(() => {
+    delete process.env.FB_EVENTS_PROXY_URL;
+    delete process.env.FB_EVENTS_PROXY_TOKEN;
+  });
+  afterAll(() => {
+    global.fetch = realFetch;
+    if (savedProxy[0] !== undefined) process.env.FB_EVENTS_PROXY_URL = savedProxy[0];
+    if (savedProxy[1] !== undefined) process.env.FB_EVENTS_PROXY_TOKEN = savedProxy[1];
+  });
+  const mockPage = (html: string): void => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, text: async () => html }) as any;
+  };
+
+  test('extractEventObjectsForId returns every object for the id, and only that id', () => {
+    const objs = extractEventObjectsForId(pageHtml('407 NE 6th Street, Hubbard, TX 76648'), TARGET);
+    expect(objs.length).toBeGreaterThanOrEqual(2);
+    expect(objs.every((o) => String(o.id) === TARGET)).toBe(true);
+  });
+
+  test('target event without a place -> no location (suggested event ignored)', async () => {
+    mockPage(pageHtml(null));
+    const page = await fetchFacebookEventPage(`https://www.facebook.com/events/${TARGET}/`, 5000, { requireDate: false });
+    expect(page).not.toBeNull();
+    expect(page!.address).toBeUndefined();
+    expect(page!.city).toBeUndefined();
+    expect(page!.state).toBeUndefined();
+  });
+
+  test('richer same-id object after a lean one supplies the real place', async () => {
+    mockPage(pageHtml('407 NE 6th Street, Hubbard, TX 76648'));
+    const page = await fetchFacebookEventPage(`https://www.facebook.com/events/${TARGET}/`, 5000, { requireDate: false });
+    expect(page!.address).toBe('407 NE 6th Street, Hubbard, TX 76648');
+    expect([page!.city, page!.state]).toEqual(['Hubbard', 'TX']);
   });
 });

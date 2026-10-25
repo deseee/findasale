@@ -403,7 +403,8 @@ function ChannelStatusDots({ channelStatus, pausedKeys }: { channelStatus?: Reco
       })}
       {pausedActive.length > 0 && (
         <span className="ml-1 text-[10px] text-gray-500 dark:text-gray-400" title={PAUSED_TOOLTIP}>
-          Paused: {pausedActive.map(c => c.label).join(', ')}
+          <span className="sm:hidden">Paused</span>
+          <span className="hidden sm:inline">Paused: {pausedActive.map(c => c.label).join(', ')}</span>
         </span>
       )}
     </div>
@@ -3655,7 +3656,7 @@ const AddItemsDetailPage = () => {
                           )}
                         </a>
                         {/* Title: plain text, no navigation link */}
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-[6rem]">
                           <span className="font-semibold text-amber-700 dark:text-amber-400 truncate inline-block max-w-full text-sm">
                             {item.title || 'Untitled'}
                           </span>

@@ -15,7 +15,7 @@ function sanitize<T>(obj: T): T {
 
 export const getStaticProps: GetStaticProps<BlogIndexProps> = async () => {
   const sorted = [...publishedPosts()].sort(
-    (a, b) => new Date(a.publishDate).getTime() - new Date(b.publishDate).getTime()
+    (a, b) => new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime()
   );
   return {
     props: sanitize({ posts: sorted }),

@@ -3,7 +3,7 @@ import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import { GetStaticProps, GetStaticPaths } from 'next';
-import { publishedPosts, getPostBySlug, getPostBySlugAny, BlogPost } from '../../data/blog/index';
+import { publishedPosts, getPostBySlug, getPostBySlugAny, isPublished, BlogPost } from '../../data/blog/index';
 
 interface BlogPostPageProps {
   post: BlogPost;
@@ -181,6 +181,12 @@ function renderInline(text?: string): React.ReactNode {
     const link = part.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
     if (link) {
       const cls = 'text-amber-600 dark:text-amber-400 underline hover:no-underline';
+      if (link[2].startsWith('/blog/')) {
+        // Scheduled (future-dated) posts 404 until their date: show plain text, not a dead link.
+        // The page revalidates hourly, so the link lights up on the publish date.
+        const target = getPostBySlugAny(link[2].slice('/blog/'.length).split(/[?#]/)[0].replace(/\/$/, ''));
+        if (target && !isPublished(target)) return link[1];
+      }
       return link[2].startsWith('/') ? (
         <Link key={i} href={link[2]} className={cls}>{link[1]}</Link>
       ) : (

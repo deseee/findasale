@@ -351,6 +351,9 @@ export default function WorkspacePage() {
 
   const acceptedMembers = workspace.members.filter((m) => m.acceptedAt !== null);
   const isOwner = workspace.ownerUserId === user?.id;
+  // The owner is also stored as an accepted OWNER member row and already has its own header entry, so exclude it from the member list and count to avoid a duplicate "Owner".
+  const nonOwnerMembers = acceptedMembers.filter((m) => !(m.role === 'OWNER' && m.organizerId === workspace.ownerId));
+  const teamMemberCount = nonOwnerMembers.length + 1;
   const createdDate = new Date(workspace.createdAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -410,9 +413,9 @@ export default function WorkspacePage() {
               </div>
 
               {/* Other Members */}
-              {acceptedMembers.length > 0 ? (
+              {nonOwnerMembers.length > 0 ? (
                 <div className="space-y-4">
-                  {acceptedMembers.map((member) => {
+                  {nonOwnerMembers.map((member) => {
                     const memberName = member.organizer?.businessName || (member as any).user?.name || member.organizer?.user?.email || (member as any).user?.email || 'Team Member';
                     return (
                       <div key={member.id} className="flex items-center gap-3">
@@ -930,7 +933,7 @@ export default function WorkspacePage() {
             <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
               <p className="text-sm text-warm-600 dark:text-warm-400 font-medium">Team Members</p>
               <p className="text-2xl font-bold text-warm-900 dark:text-warm-100 mt-1">
-                {acceptedMembers.length}
+                {teamMemberCount}
               </p>
             </div>
 

@@ -21,7 +21,7 @@
 
 import * as cheerio from 'cheerio';
 import { getRandomUserAgent, getRandomReferer } from '../userAgents';
-import { extractEventObjects, extractFbEventIdFromUrl } from './facebook-json';
+import { extractEventObjectsForId, extractFbEventIdFromUrl } from './facebook-json';
 import {
   looksLikeStreetAddress,
   extractPlaceFromEventObject,
@@ -315,7 +315,15 @@ export async function fetchFacebookEventPage(
 
     const html = await response.text();
 
-    const jsonLdEvent = extractJsonLdEvent(html);
+    const wantId = extractFbEventIdFromUrl(url);
+    let jsonLdEvent = extractJsonLdEvent(html);
+    // A JSON-LD Event that names a DIFFERENT event id (e.g. a suggested event)
+    // must not supply this event's date/location.
+    if (jsonLdEvent && wantId) {
+      const ldRef = String(jsonLdEvent.url ?? jsonLdEvent['@id'] ?? '');
+      const ldId = ldRef ? extractFbEventIdFromUrl(ldRef) : null;
+      if (ldId && ldId !== wantId) jsonLdEvent = null;
+    }
     let result: FbEventPageData = jsonLdEvent ? mapJsonLdToPageData(jsonLdEvent) : {};
 
     // Always extract OG tags — needed for both description fill and date parsing fallback
@@ -349,14 +357,25 @@ export async function fetchFacebookEventPage(
     // result only had a city-level Page label. Reuse the discovery guard +
     // geo-derivation (facebook-address.ts) so behaviour is identical. Pure,
     // best-effort: any failure leaves the JSON-LD/OG result untouched.
+    //
+    // SCOPED TO THE TARGET EVENT ID ONLY (2026-10-25, run 40232424379). The
+    // page also embeds unrelated "suggested / nearby" Event objects picked from
+    // the VIEWER's IP geolocation -- through the Cloudflare proxy that is
+    // Roseville / Saint Paul MN. The old fallback `events.find(e =>
+    // e.event_place) || events[0]` took one of THOSE whenever the target event
+    // had no event_place, storing 7 Texas events as "1145 Woodhill Dr,
+    // Roseville, MN" / "345 W. Kellogg Blvd., Saint Paul, MN". No id (or no
+    // place on the target event) now means NO page location at all.
     try {
-      const events = extractEventObjects(html);
-      if (events.length > 0) {
-        const wantId = extractFbEventIdFromUrl(url);
-        const chosen =
-          (wantId && events.find((e) => String(e?.id) === wantId && e?.event_place)) ||
-          events.find((e) => e?.event_place) ||
-          events[0];
+      const own = wantId ? extractEventObjectsForId(html, wantId) : [];
+      const chosen = own.find((e) => e?.event_place && typeof e.event_place === 'object');
+      if (!chosen && wantId) {
+        console.log(
+          `[FB-Events-PageFetch] event ${wantId} has no event_place of its own (${own.length} own object(s)) -- ` +
+            `page location left empty; other Event objects on the page are ignored`
+        );
+      }
+      if (chosen) {
         const place = extractPlaceFromEventObject(chosen);
         if (place.address) {
           // Guard-passed real street address -- strictly better than JSON-LD/OG.

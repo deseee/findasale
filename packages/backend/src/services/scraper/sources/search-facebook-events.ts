@@ -30,7 +30,7 @@ import * as cheerio from 'cheerio';
 import { ScrapedItem } from '../index';
 import { getRandomUserAgent, jitterDelay } from '../userAgents';
 import { fetchFacebookEventPage } from './facebook-events-page-fetch';
-import { looksLikeStreetAddress, normalizeRegionCode } from './facebook-address';
+import { looksLikeStreetAddress, normalizeRegionCode, pageLocationRejection } from './facebook-address';
 import { GOOGLE_PLACES_METROS } from './scraperConfig';
 
 // ---------------------------------------------------------------------------
@@ -989,8 +989,13 @@ export async function scrapeFacebookEventsForMetro(
         const enrichedIsQuebec =
           enrichment.state === 'QC' ||
           /\bqu[e\u00e9]bec\b/i.test(enrichedAddr || '');
+        // 2026-10-25 (run 40232424379): never apply a page location that
+        // contradicts the title's state or is the proxy's own geolocation.
+        const locationRejection = enrichedIsQuebec ? null : pageLocationRejection(item, enrichment);
 
-        if (enrichedIsQuebec) {
+        if (locationRejection) {
+          if (item.scrapedMetadata) item.scrapedMetadata.pageLocationRejected = locationRejection;
+        } else if (enrichedIsQuebec) {
           // Never apply a Quebec location. Leave the item as-is; keep the raw
           // text for downstream cleanup rather than writing it to address.
           if (

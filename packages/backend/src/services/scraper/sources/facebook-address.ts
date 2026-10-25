@@ -261,3 +261,160 @@ export function extractPlaceFromEventObject(ev: any): DerivedPlace {
 
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Page-location sanity guards (2026-10-25, run 40232424379)
+// ---------------------------------------------------------------------------
+//
+// Root cause of that run's bad rows was the page-fetch taking the place of a
+// "suggested / nearby" event (chosen by FB from the PROXY's IP geolocation)
+// instead of the target event -- fixed at the source in
+// facebook-events-page-fetch.ts. These guards are defence in depth: they reject
+// a page location that contradicts the event's own title, or that is the
+// proxy's own geolocation for an event discovered in another state.
+
+/**
+ * US states / CA provinces explicitly named in an event title, as 2-letter
+ * codes. Conservative to avoid false positives from ordinary words ("IN",
+ * "OK", "ME", "OR"): a 2-letter code counts only after a comma (", TX",
+ * ", Tx") or uppercase directly before a ZIP ("TX 75043"); a spelled-out name
+ * only after a comma or before a ZIP (", Texas", "Texas 76648"). Pure.
+ *   "Estate Sale 407 NE 6th Street Hubbard, Texas 76648" -> ["TX"]
+ *   "Estate Sale | October 29–31 | Orange, TX"           -> ["TX"]
+ *   "Estate Sale! Rochester, Tx"                          -> ["TX"]
+ *   "Yard Sale" / "Garage Sale Trail"                     -> []
+ */
+export function extractStatesFromTitle(title: string | undefined | null): string[] {
+  const out = new Set<string>();
+  if (!title || typeof title !== 'string') return [];
+  const isRegion = (c: string): boolean => US_STATE_CODES.has(c) || CA_PROVINCE_CODES.has(c);
+
+  // ", TX" / ", Tx" -- followed by end, whitespace, a ZIP or separator punctuation
+  // (not "?" / "!" / a letter, so "Sale, OK?" or ", Inc" never match).
+  const commaCode = /,\s*([A-Za-z]{2})(?=$|\s|\d|[)\]|\-–—.,;:\/])/g;
+  let m: RegExpExecArray | null;
+  while ((m = commaCode.exec(title)) !== null) {
+    const c = m[1].toUpperCase();
+    if (isRegion(c)) out.add(c);
+  }
+  // "TX 75043" (uppercase only)
+  const zipCode = /\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b/g;
+  while ((m = zipCode.exec(title)) !== null) {
+    if (isRegion(m[1])) out.add(m[1]);
+  }
+  // Spelled-out names after a comma (ending the place) or before a ZIP.
+  const lower = title.toLowerCase();
+  const names: Array<[string, string]> = [
+    ...Object.entries(US_STATE_NAME_TO_CODE),
+    ...Object.entries(CA_PROVINCE_NAME_TO_CODE),
+  ];
+  for (const [name, code] of names) {
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // ", Texas" must END the place (end / ZIP / punctuation) so ", Washington
+    // Ave" or ", Kansas City" never count as a state.
+    const re = new RegExp(
+      `(?:,\\s*${esc}(?=\\s*(?:$|\\d{5}|[)\\]|\\-\u2013\u2014.,;:!\\/]))|\\b${esc}\\s+\\d{5}\\b)`,
+      'i'
+    );
+    if (re.test(lower)) out.add(code);
+  }
+  return Array.from(out);
+}
+
+/**
+ * Known geolocation(s) of the Cloudflare page-fetch proxy egress, as
+ * "City, ST". FB fills logged-out event pages with suggested events near the
+ * viewer; through the proxy those are Roseville / Saint Paul MN (observed on
+ * run 40232424379). Override with FB_EVENTS_PROXY_GEO ("City, ST; City, ST").
+ */
+export const DEFAULT_PROXY_GEO = ['Roseville, MN', 'Saint Paul, MN'];
+
+function normCity(c: string): string {
+  return c
+    .toLowerCase()
+    .replace(/\./g, '')
+    .replace(/^saint\s+/, 'st ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function getProxyGeoList(env: string | undefined = process.env.FB_EVENTS_PROXY_GEO): string[] {
+  const raw = (env || '').trim();
+  if (!raw) return DEFAULT_PROXY_GEO;
+  return raw.split(';').map((s) => s.trim()).filter(Boolean);
+}
+
+/** True when (city, state) equals one of the proxy's known geolocations. Pure. */
+export function isProxyGeo(
+  city: string | undefined | null,
+  state: string | undefined | null,
+  list: string[] = getProxyGeoList()
+): boolean {
+  if (!city || !state) return false;
+  const st = normalizeRegionCode(state)?.code;
+  if (!st) return false;
+  const c = normCity(city);
+  return list.some((entry) => {
+    const idx = entry.lastIndexOf(',');
+    if (idx === -1) return false;
+    return normCity(entry.slice(0, idx)) === c && normalizeRegionCode(entry.slice(idx + 1))?.code === st;
+  });
+}
+
+export type PageLocationRejection =
+  | 'title-state-conflict'
+  | 'proxy-geo'
+  | 'confirmed-state-conflict';
+
+/**
+ * Decide whether an event page's location must NOT be applied to an item.
+ * Pure + exported for unit testing. Returns null when the page location is
+ * acceptable (or carries no city/state to judge).
+ *   - title-state-conflict: the title names a state/province and the page's
+ *     state is not one of them ("... Orange, TX" vs Roseville MN).
+ *   - proxy-geo: the page city/state is the proxy's own geolocation and the
+ *     event was discovered for a metro in a different state.
+ *   - confirmed-state-conflict: the item's city/state is already confirmed from
+ *     the event itself and the page names a different state.
+ */
+export function pageLocationRejection(
+  item: { title?: string; city?: string; state?: string; scrapedMetadata?: Record<string, any> | null },
+  page: { city?: string; state?: string; address?: string } | null | undefined,
+  proxyGeo: string[] = getProxyGeoList()
+): PageLocationRejection | null {
+  if (!page) return null;
+  let pageState = normalizeRegionCode(page.state)?.code;
+  let pageCity = typeof page.city === 'string' ? page.city.trim() : '';
+  if ((!pageState || !pageCity) && page.address) {
+    const d = deriveCityStateFromDisplay(page.address);
+    if (d) {
+      pageState = pageState || d.state;
+      pageCity = pageCity || d.city;
+    }
+  }
+  if (!pageState) return null;
+
+  const titleStates = extractStatesFromTitle(item.title);
+  if (titleStates.length > 0 && !titleStates.includes(pageState)) return 'title-state-conflict';
+
+  const md = item.scrapedMetadata ?? {};
+  if (pageCity && isProxyGeo(pageCity, pageState, proxyGeo)) {
+    const metroState = normalizeRegionCode(
+      typeof md.metro === 'string' ? md.metro.split(',').pop() : undefined
+    )?.code;
+    if (!titleStates.includes(pageState) && metroState !== pageState) return 'proxy-geo';
+  }
+
+  const confirmed =
+    !!item.city &&
+    !!item.state &&
+    !!md.cityStateSource &&
+    md.cityStateSource !== 'metro-fallback' &&
+    md.geoConfidence !== 'unresolved' &&
+    md.geoConfidence !== 'metro-fallback';
+  if (confirmed) {
+    const itemState = normalizeRegionCode(item.state)?.code;
+    if (itemState && itemState !== pageState) return 'confirmed-state-conflict';
+  }
+  return null;
+}
