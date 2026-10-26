@@ -50,6 +50,9 @@ export interface GuardedPublishOptions {
   allowEmpty?: boolean;
   /** The organizer's ready-items choice, when the caller already has it. Skips PublishSaleItemsDialog. */
   publishReadyItems?: boolean;
+  /** The organizer already chose to publish (e.g. "Publish free"). Skip the generic confirm; only the
+   *  ready-items choice is still asked, and only when there are unpublished items. */
+  intentConfirmed?: boolean;
   /** Ask before publishing even when there are no unpublished items (replaces a separate confirm). */
   confirm?: { title: string; message: string; confirmLabel?: string };
   onPublished?: (saleId: string, info?: PublishedInfo) => void | Promise<void>;
@@ -121,7 +124,7 @@ export function useGuardedPublish() {
         // 2026-10-23 (first-sale QA): also confirm when every item is already published (Manual Entry saves
         // items as PUBLISHED), so the organizer sees how many items go live instead of an instant publish.
         const hasPublishedItems = !!readiness && readiness.publishedItemCount > 0;
-        if (unpublished > 0 || hasPublishedItems || (opts.confirm && !hasNoItemsAtAll)) {
+        if (unpublished > 0 || (!opts.intentConfirmed && (hasPublishedItems || (opts.confirm && !hasNoItemsAtAll)))) {
           itemsHandlersRef.current = {
             onConfirm: async (publishReadyItems: boolean) => {
               await publish(saleId, { ...opts, publishReadyItems });

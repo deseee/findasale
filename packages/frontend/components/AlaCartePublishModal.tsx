@@ -69,10 +69,11 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       ariaLabelledBy="ala-carte-publish-modal-title"
+      contentClassName="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
     >
-      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-screen overflow-y-auto">
+      <div className="w-full">
         {/* Header */}
-        <div className="bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 px-6 py-8 border-b border-amber-200 dark:border-amber-700">
+        <div className="bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 px-4 sm:px-6 py-6 sm:py-8 border-b border-amber-200 dark:border-amber-700">
           <h2 id="ala-carte-publish-modal-title" className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
             Ready to publish "{saleName}"?
           </h2>
@@ -82,7 +83,7 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* Primary action: publish free. Never gated behind a payment. */}
           <div className="mb-8">
             <button
@@ -99,11 +100,11 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
           </div>
 
           {/* Options */}
-          <div className="grid md:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-8">
             {/* PRO Subscription */}
             <button
               onClick={handleProClick}
-              className="p-6 border-2 border-amber-200 dark:border-amber-700 rounded-lg hover:border-amber-400 dark:hover:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-all text-left"
+              className="p-4 sm:p-6 border-2 border-amber-200 dark:border-amber-700 rounded-lg hover:border-amber-400 dark:hover:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-all text-left"
             >
               <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                 Subscribe to PRO
@@ -132,7 +133,7 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
 
             {/* À La Carte */}
             <div
-              className={`p-6 border-2 rounded-lg transition-all text-left ${
+              className={`p-4 sm:p-6 border-2 rounded-lg transition-all text-left ${
                 selectedOption === 'ala-carte'
                   ? 'border-green-400 dark:border-green-600 bg-green-50 dark:bg-green-900/10'
                   : 'border-green-200 dark:border-green-700'

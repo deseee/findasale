@@ -501,11 +501,12 @@ const EditSalePage = () => {
   const emptyPublishConfirmedRef = useRef(false);
 
   // Direct publish used after the "Publish without items?" dialog.
-  const publishNow = async () => {
+  const publishNow = async (intentConfirmed = false) => {
     if (!id || typeof id !== 'string') return;
     try {
       await guardedPublish.publish(id, {
         allowEmpty: emptyPublishConfirmedRef.current,
+        intentConfirmed,
         onPublished: onPublishedHere,
         onError: (error) => handlePublishError(error),
       });
@@ -773,7 +774,7 @@ const EditSalePage = () => {
     setShowAlaCarteModal(false);
     setIsTogglingStatus(true);
     try {
-      await publishNow();
+      await publishNow(true);
     } finally {
       setIsTogglingStatus(false);
     }
