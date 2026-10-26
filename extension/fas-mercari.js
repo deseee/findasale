@@ -2415,31 +2415,51 @@
   // of checking once: up to ~8s, re-checking every ~400ms, bailing early if an interstitial shows
   // up mid-wait. This can only ever DELAY a false "doesn't look fillable" message, never change
   // success-path behavior for a page that was already ready in time.
+  // 1.0.65 (2026-10-26, live auto queue test): an 8s wait reported mercari_form_not_found while the Sell form rendered
+  // just after 8s. Now: up to MERC_FORM_WAIT_MS (30s), re-checking on every DOM change (MutationObserver) or at least
+  // every 400ms, so a fast page is still caught at once and a slow one gets real time. The interstitial rule is the same
+  // in spirit (a verification screen must persist ~1.2s before it is trusted) but time-based, since DOM-change wakeups
+  // can make polls much closer together than 400ms. run() adds one automatic reload on timeout (mercFormReloadDecision).
   async function waitForFormReady(maxWaitMs) {
-    // BUG FIX 2026-08-20 (S-EXT-BATCH-10, P0, Patrick-confirmed live 2026-08-20): this loop used to
-    // return 'interstitial' the INSTANT looksLikeInterstitial() was true on any single poll -- but
-    // Patrick confirmed live that this platform's Sell page can show verification/security-adjacent
-    // copy transiently for a second or two right after navigation (a loading skeleton, an interim
-    // state) before the real form settles, and that transient copy alone was enough to trip the old
-    // one-shot check and bail immediately, well before waitForFormReady's own multi-second poll
-    // window could give the page a chance to actually finish loading. 'ready' still wins the instant
-    // it's seen (never delayed) -- only 'interstitial' now requires the SAME reading on 3 consecutive
-    // polls (~1.2s) before being trusted, so a momentary false reading can no longer end the poll
-    // early, while a genuine, persistent lockout screen (which by definition doesn't clear itself)
-    // still gets caught correctly, just ~1.2s slower.
     const start = Date.now();
-    let interstitialStreak = 0;
+    let interstitialSince = 0;
     while (Date.now() - start < maxWaitMs) {
       if (looksLikeInterstitial()) {
-        interstitialStreak++;
-        if (interstitialStreak >= 3) return 'interstitial';
+        if (!interstitialSince) interstitialSince = Date.now();
+        if (Date.now() - interstitialSince >= 1200) return 'interstitial';
       } else {
-        interstitialStreak = 0;
+        interstitialSince = 0;
       }
       if (looksLikeSellForm()) return 'ready';
-      await sleep(400);
+      await waitForDomChange(Math.min(400, Math.max(0, maxWaitMs - (Date.now() - start))));
     }
-    return 'timeout';
+    return looksLikeSellForm() ? 'ready' : 'timeout';
+  }
+  // Resolves on the first DOM mutation or after ms, whichever comes first. Never hangs: the timer always fires.
+  function waitForDomChange(ms) {
+    return new Promise((resolve) => {
+      let done = false, mo = null;
+      const finish = () => { if (done) return; done = true; try { if (mo) mo.disconnect(); } catch (e) { /* ignore */ } resolve(); };
+      try {
+        if (typeof MutationObserver === 'function' && document && document.documentElement) {
+          mo = new MutationObserver(finish);
+          mo.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+        }
+      } catch (e) { mo = null; }
+      setTimeout(finish, ms);
+    });
+  }
+  const MERC_FORM_WAIT_MS = 30000;
+  const MERC_FORM_RELOAD_KEY = 'fasMercFormReload';
+  const MERC_FORM_RELOAD_WINDOW_MS = 10 * 60 * 1000;
+  // One automatic reload per item per tab within MERC_FORM_RELOAD_WINDOW_MS when the Sell form never appeared, then the
+  // normal "could not find the form" stop. marker = { itemId, at } kept in sessionStorage (per tab). Pure.
+  function mercFormReloadDecision(marker, itemId, now) {
+    const recent = !!marker && marker.itemId === itemId && typeof marker.at === 'number' && now - marker.at < MERC_FORM_RELOAD_WINDOW_MS;
+    return recent ? { reload: false, marker: marker } : { reload: true, marker: { itemId: itemId, at: now } };
+  }
+  function mercFormReloadMarker() {
+    try { return JSON.parse(sessionStorage.getItem(MERC_FORM_RELOAD_KEY) || 'null'); } catch (e) { return null; }
   }
 
 
@@ -2718,8 +2738,11 @@
     // see waitForFormReady()'s comment for the live-confirmed race (real Title label + file input
     // did not exist for the first ~couple seconds after navigation on a real Mercari page).
     T.step('Waiting for the Mercari Sell form to load', 'Mercari builds the page in the browser, so the fields appear a few seconds after the page opens.');
-    const formState = await waitForFormReady(8000);
-    if (formState === 'ready') T.ok('Sell form is ready');
+    const formState = await waitForFormReady(MERC_FORM_WAIT_MS);
+    if (formState === 'ready') {
+      T.ok('Sell form is ready');
+      try { sessionStorage.removeItem(MERC_FORM_RELOAD_KEY); } catch (e) { /* non-fatal */ }
+    }
     if (formState === 'interstitial') {
       T.problem({ code: 'mercari_challenge', title: 'Mercari wants you to verify something', what: 'Mercari is showing a verification or security screen instead of the Sell form.', why: 'FindA.Sale never tries to solve captchas or identity checks, that is a human step.', next: 'Complete the verification on the page, then reopen the extension to continue this item. Nothing was filled or published.' });
       T.end('Stopped: Mercari verification screen');
@@ -2728,7 +2751,18 @@
       return;
     }
     if (formState === 'timeout') {
-      T.problem({ code: 'mercari_form_not_found', title: 'Could not find the Mercari Sell form', what: 'No Title field or photo upload box appeared within 8 seconds.', why: 'Either this is not the new-listing page, the page is still loading, or Mercari changed its layout.', next: 'Nothing was filled. Fill this listing by hand, or reload the Sell page and reopen the extension. Details were sent automatically; nothing is needed from you.' });
+      const rl = mercFormReloadDecision(mercFormReloadMarker(), item && item.id, Date.now());
+      if (rl.reload) {
+        let saved = false;
+        try { sessionStorage.setItem(MERC_FORM_RELOAD_KEY, JSON.stringify(rl.marker)); saved = true; } catch (e) { saved = false; }
+        if (saved) {
+          T.warn('mercari_form_slow', 'Sell form not there after ' + (MERC_FORM_WAIT_MS / 1000) + ' seconds; reloading the page once and trying again', { waitedMs: MERC_FORM_WAIT_MS });
+          T.end('Reloading the Sell page once');
+          location.reload();
+          return;
+        }
+      }
+      T.problem({ code: 'mercari_form_not_found', title: 'Could not find the Mercari Sell form', what: 'No Title field or photo upload box appeared within ' + (MERC_FORM_WAIT_MS / 1000) + ' seconds, even after reloading the page once.', why: 'Either this is not the new-listing page, the page is still loading, or Mercari changed its layout.', next: 'Nothing was filled. Fill this listing by hand, or reload the Sell page and reopen the extension. Details were sent automatically; nothing is needed from you.' });
       T.end('Stopped: Sell form not found');
       overlayWarn('This doesn\'t look like a fillable Mercari Sell form yet (no Title field or photo dropzone found after waiting). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();

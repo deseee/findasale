@@ -20,6 +20,7 @@ import { loadListingExtras, listingExtraFields, organizerListableScope, stockRem
 import { actorCanPublish } from '../lib/publishGate'; // 2026-10-23: an account that cannot publish gets empty listing queues
 import { pickStoredRemoteRef, extractRemoteId, resolveListingRef, listingRefFields } from '../services/marketplaceListingRef'; // 2026-10-18: best remote id + URL on every sync queue entry
 import { AUTO_QUEUE_FLAG_SELECT, toAutoQueueSettings, parseAutoQueuePatch, isPickupOnlyBlockedForAutoQueue, toAutoQueueLimits, parseAutoQueueLimitsPatch, applyAutoQueueLimits, isMissingTableError, NO_AUTO_QUEUE_LIMITS, AutoQueueLimits } from '../services/autoQueueSettings';
+import { recordExtensionHeartbeat, loadExtensionHeartbeat, parseHeldParam, parseVersionParam, heartbeatStatus } from '../services/extensionHeartbeat'; // 2026-10-26: extension heartbeat + held-back items
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { postCapRetryEligible } from '../utils/removalRetryGate'; // 2026-10-25: past the hard stop, re-probe daily instead of never
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
@@ -2759,6 +2760,10 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
+  // 2026-10-26: a successful poll is the extension's heartbeat (services/extensionHeartbeat.ts). Recorded before any
+  // early return so an empty queue still counts. recordExtensionHeartbeat never throws, so this cannot fail the poll.
+  await recordExtensionHeartbeat(organizer.id, { held: parseHeldParam(req.query?.held), version: parseVersionParam(req.query?.v) });
+
   const emptyQueues: Record<AutoListPlatform, unknown[]> = {
     CRAIGSLIST: [], FACEBOOK: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
   };
@@ -3300,14 +3305,48 @@ export const setPausedMarketplaces = async (req: AuthRequest, res: Response): Pr
 const autoQueueResponse = async (organizerId: string) => {
   const org = await prisma.organizer.findUnique({ where: { id: organizerId }, select: { ...(AUTO_QUEUE_FLAG_SELECT as any), pausedMarketplaces: true } as any });
   const { limits, available } = await loadAutoQueueLimits(organizerId);
+  const settings = toAutoQueueSettings(org as any);
   return {
     ok: true,
-    settings: toAutoQueueSettings(org as any),
+    settings,
     paused: sanitizePausedPlatforms((org as any)?.pausedMarketplaces),
     limits,
     limitsAvailable: available,
+    extension: await extensionStatusFor(organizerId, Object.values(settings).some((v) => v === true)),
   };
 };
+
+// 2026-10-26: what the web card shows about the browser extension itself: when it last polled successfully, whether
+// that is stale (auto queue on and silent for 24h+, usually a signed-out Chrome), and which items it is holding back
+// from the Poshmark auto queue because Poshmark flagged them (oversized / prohibited, 30-day hold by design). Held items
+// are resolved to titles only within this organizer's own items; unknown or foreign ids are dropped. Never throws.
+async function extensionStatusFor(organizerId: string, anyAutoQueueOn: boolean) {
+  const hb = await loadExtensionHeartbeat(organizerId);
+  const status = heartbeatStatus(hb.lastPollAt, anyAutoQueueOn);
+  let heldFlagged: Array<{ itemId: string; title: string; kind: string; at: string; platform: 'POSHMARK' }> = [];
+  if (hb.held.length) {
+    try {
+      const rows = await prisma.item.findMany({
+        where: { id: { in: hb.held.map((h) => h.itemId) }, OR: organizerListableScope(organizerId) },
+        select: { id: true, title: true },
+      });
+      const titleById = new Map(rows.map((r) => [r.id, r.title]));
+      heldFlagged = hb.held
+        .filter((h) => titleById.has(h.itemId))
+        .map((h) => ({ itemId: h.itemId, title: titleById.get(h.itemId) || 'Item', kind: h.kind, at: h.at, platform: 'POSHMARK' as const }));
+    } catch {
+      heldFlagged = [];
+    }
+  }
+  return {
+    lastPollAt: hb.lastPollAt ? hb.lastPollAt.toISOString() : null,
+    stale: status.stale,
+    neverSeen: status.neverSeen,
+    staleAfterHours: 24,
+    version: hb.version,
+    heldFlagged,
+  };
+}
 
 export const getAutoQueueSettings = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;

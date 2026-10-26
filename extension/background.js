@@ -120,7 +120,10 @@ async function apiFetch(path, opts = {}, _retried = false, _token = null) {
     const fresh = await refreshAccessToken();
     if (fresh) return apiFetch(path, opts, true, fresh);
   }
-  if (!token) return { ok: false, status: 401, error: 'not_signed_in', detail: fasLastRefreshFailure || 'no_accessToken_cookie_and_no_refresh_attempted' };
+  if (!token) {
+    fasNoteAuthState(false);
+    return { ok: false, status: 401, error: 'not_signed_in', detail: fasLastRefreshFailure || 'no_accessToken_cookie_and_no_refresh_attempted' };
+  }
   // FIX 2026-10-04: this call authenticates with the Bearer header only, so ambient finda.sale
   // cookies are never wanted. Backend csrf.ts skips the double-submit check for a Bearer request
   // ONLY when no accessToken/refreshToken cookie is present; if Chrome attached the refreshToken
@@ -147,7 +150,61 @@ async function apiFetch(path, opts = {}, _retried = false, _token = null) {
   }
   let data = null;
   try { data = await res.json(); } catch (e) {}
+  if (res.ok) fasNoteAuthState(true);
+  else if (res.status === 401 && _retried) fasNoteAuthState(false); // refreshed and still refused: really signed out
   return { ok: res.ok, status: res.status, data, error: res.ok ? null : (data && data.message) || 'request_failed' };
+}
+
+// ---- Signed-out warning (1.0.65, 2026-10-26) ----
+// The extension authenticates with the finda.sale cookies in this Chrome profile. When that session expires every poll
+// returns not_signed_in, and before 1.0.65 nothing said so: the auto queue, removals and price syncs all just stopped
+// (live: silent from 2026-10-25 15:58). Now: the toolbar icon shows a red "!" badge and a "Sign in to FindA.Sale" tooltip
+// the moment a call fails signed-out, and after FAS_SIGNIN_NOTIFY_AFTER_MS of continuous signed-out state a desktop
+// notification (clicking it opens the sign-in page), repeated at most every FAS_SIGNIN_RENOTIFY_MS. The first successful
+// call clears all of it. The server side has its own signal (no heartbeat for 24h -> in-app notice; backend
+// services/extensionHeartbeat.ts). Never throws; never blocks the caller.
+const FAS_SIGNIN_NOTIFY_AFTER_MS = 30 * 60 * 1000;
+const FAS_SIGNIN_RENOTIFY_MS = 12 * 60 * 60 * 1000;
+const FAS_SIGNIN_URL = 'https://finda.sale/login';
+const FAS_SIGNED_OUT_NOTIF = 'fasSignedOut';
+let fasAuthStateMem = null; // 'in' | 'out' | null (unknown since worker start)
+function fasSignedOutShouldNotify(state, now) {
+  if (!state || typeof state.since !== 'number') return false;
+  if (now - state.since < FAS_SIGNIN_NOTIFY_AFTER_MS) return false;
+  return !state.notifiedAt || now - state.notifiedAt >= FAS_SIGNIN_RENOTIFY_MS;
+}
+async function fasNoteAuthState(signedIn) {
+  try {
+    if (signedIn && fasAuthStateMem === 'in') return;
+    const now = Date.now();
+    const st = (await chrome.storage.local.get('fasSignedOut')).fasSignedOut || null;
+    if (signedIn) {
+      fasAuthStateMem = 'in';
+      if (!st) return;
+      await chrome.storage.local.remove('fasSignedOut');
+      try { chrome.action.setBadgeText({ text: '' }); chrome.action.setTitle({ title: 'FindA.Sale Marketplace Autofill' }); } catch (e) { /* best-effort */ }
+      try { chrome.notifications.clear(FAS_SIGNED_OUT_NOTIF); } catch (e) { /* best-effort */ }
+      return;
+    }
+    fasAuthStateMem = 'out';
+    const next = st && typeof st.since === 'number' ? st : { since: now, notifiedAt: 0 };
+    try {
+      chrome.action.setBadgeBackgroundColor({ color: '#B91C1C' });
+      chrome.action.setBadgeText({ text: '!' });
+      chrome.action.setTitle({ title: 'Sign in to FindA.Sale: the extension is signed out, so nothing is being queued, posted or updated.' });
+    } catch (e) { /* best-effort */ }
+    if (fasSignedOutShouldNotify(next, now)) {
+      try {
+        chrome.notifications.create(FAS_SIGNED_OUT_NOTIF, {
+          type: 'basic', iconUrl: 'icon128.png', title: 'Sign in to FindA.Sale',
+          message: 'The extension is signed out of finda.sale, so your auto queue, removals and price updates are paused. Click here to sign in; it picks up again on its own.',
+          priority: 2,
+        });
+      } catch (e) { /* best-effort */ }
+      next.notifiedAt = now;
+    }
+    await chrome.storage.local.set({ fasSignedOut: next });
+  } catch (e) { /* the warning must never break an API call */ }
 }
 
 // Extension Runtime Log (2026-09-28): fire-and-forget shipping of background-worker activity
@@ -2505,8 +2562,67 @@ function fasAutoQueueApplyLimit(items, plan) {
   return out;
 }
 
+// ---- Abandoned posting queues (1.0.65, 2026-10-26) ----
+// Before 1.0.65 a non-Facebook queue whose index never reached its length counted as an active run forever
+// (skipped_active), so one leftover item from an old run (live: a Mercari item whose Sell form timed out) blocked every
+// later auto queue pull for that marketplace indefinitely. Now each marketplace's queue has a "last touched" time,
+// recorded by the storage listener below whenever its queue or index key changes (set by the popup, the auto queue, or
+// a content script advancing it). A queue untouched for FAS_AUTOLIST_ABANDON_MS (6 hours) is treated as abandoned and
+// replaced by the new auto queue pull. Why 6h: a real run advances on every item (each Mercari/Poshmark item is a
+// person reviewing and clicking within minutes), so 6h with no progress is far past any live run, including a long
+// manual run with breaks, while still freeing a stuck queue the same day. Facebook keeps its own 30-minute rule
+// (FAS_QUEUE_STALE_MS, applied at its read site), mirrored here so the auto queue also refills it.
+// Abandoned items are only dropped from the local queue: nothing is marked listed. The server re-offers any of them
+// that are still unlisted and eligible on the same poll. Each abandonment is logged (FAS_AUTOQUEUE_ABANDONED).
+// No touched time yet (queues written before 1.0.65): the time the auto queue loaded that same queue is used when known
+// (fasAutoQueued), otherwise the clock starts now.
+const FAS_AUTOLIST_ABANDON_MS = 6 * 60 * 60 * 1000;
+const FAS_FB_QUEUE_STALE_MS = 30 * 60 * 1000; // same value as FAS_QUEUE_STALE_MS in the getQueueItem handler
+const FAS_QUEUE_TOUCHED_KEY = 'fasQueueTouchedAt';
+function fasAutoQueueRunState(queueLen, index, touchedAt, now, staleMs) {
+  if (!queueLen || index >= queueLen) return 'idle';
+  if (typeof touchedAt !== 'number' || !(touchedAt > 0)) return 'unknown_age';
+  return now - touchedAt > staleMs ? 'abandoned' : 'active';
+}
+// Poshmark items held back because Poshmark's own checker flagged them in the last 30 days, as the `held` query
+// parameter the server records with the heartbeat (itemId~kind~atMs,...). The web page lists them so the hold is visible.
+function fasPoshHeldParam(flagged, now) {
+  const cutoff = now - 30 * 24 * 3600 * 1000;
+  const out = [];
+  for (const id of Object.keys(flagged || {})) {
+    const f = flagged[id];
+    if (!f || !(f.at > cutoff) || (f.kind !== 'oversized' && f.kind !== 'prohibited')) continue;
+    if (!/^[A-Za-z0-9_-]{8,40}$/.test(id)) continue;
+    out.push(id + '~' + f.kind + '~' + f.at);
+  }
+  return out.slice(-50).join(',');
+}
+try {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    const touched = [];
+    for (const platform of Object.keys(FAS_AUTOLIST_QUEUE_CFG)) {
+      const cfg = FAS_AUTOLIST_QUEUE_CFG[platform];
+      if (changes[cfg.queue] || changes[cfg.index]) touched.push(platform);
+    }
+    if (!touched.length) return;
+    chrome.storage.local.get(FAS_QUEUE_TOUCHED_KEY).then((st) => {
+      const m = st[FAS_QUEUE_TOUCHED_KEY] || {};
+      const now = Date.now();
+      for (const p of touched) m[p] = now;
+      return chrome.storage.local.set({ [FAS_QUEUE_TOUCHED_KEY]: m });
+    }).catch(() => {});
+  });
+} catch (e) { /* tests / no storage */ }
+
 async function checkAutoListQueue() {
-  const resp = await apiFetch('/extension/autolist-queue');
+  let pollPath = '/extension/autolist-queue';
+  try {
+    const flagged = (await chrome.storage.local.get('fasPoshFlagged')).fasPoshFlagged || {};
+    const held = fasPoshHeldParam(flagged, Date.now());
+    pollPath += '?v=' + encodeURIComponent((chrome.runtime.getManifest() || {}).version || '') + (held ? '&held=' + encodeURIComponent(held) : '');
+  } catch (e) { /* the report is informational only */ }
+  const resp = await apiFetch(pollPath);
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
   const queues = (resp.data && resp.data.queues) || {};
   const outcomes = [];
@@ -2536,13 +2652,38 @@ async function checkAutoListQueue() {
     const cfg = FAS_AUTOLIST_QUEUE_CFG[platform];
     const readKeys = [cfg.queue, cfg.index];
     if (cfg.autoPublish) readKeys.push(cfg.autoPublish);
+    // 1.0.63: max new listings per check, across all platforms in this poll. (1.0.65: checked before the run-state
+    // check so an abandoned queue is only logged and replaced when something will actually replace it.)
+    if (limitPlan.budget <= 0) { outcomes.push(platform + ':limit_reached'); continue; }
+    if (cfg.setAt) readKeys.push(cfg.setAt);
+    readKeys.push(FAS_QUEUE_TOUCHED_KEY, 'fasAutoQueued');
     const st = await chrome.storage.local.get(readKeys);
     const curQueue = st[cfg.queue] || [];
     const curIndex = st[cfg.index] || 0;
-    const isIdle = curQueue.length === 0 || curIndex >= curQueue.length;
-    if (!isIdle) { outcomes.push(platform + ':skipped_active'); continue; }
-    // 1.0.63: max new listings per check, across all platforms in this poll.
-    if (limitPlan.budget <= 0) { outcomes.push(platform + ':limit_reached'); continue; }
+    // 1.0.65: last progress on this queue (see FAS_AUTOLIST_ABANDON_MS above). Facebook uses its own fasQueueSetAt clock.
+    const touchedMap = st[FAS_QUEUE_TOUCHED_KEY] || {};
+    let touchedAt = cfg.setAt ? st[cfg.setAt] : touchedMap[platform];
+    if (!(touchedAt > 0)) {
+      const aq = (st.fasAutoQueued || {})[platform];
+      if (aq && aq.at > 0 && curQueue[0] && aq.firstId === curQueue[0].id) touchedAt = aq.at;
+    }
+    const runState = fasAutoQueueRunState(curQueue.length, curIndex, touchedAt, Date.now(), cfg.setAt ? FAS_FB_QUEUE_STALE_MS : FAS_AUTOLIST_ABANDON_MS);
+    if (runState === 'unknown_age') {
+      // Start the clock; this queue is treated as active until it has been untouched for the full window.
+      touchedMap[platform] = Date.now();
+      await chrome.storage.local.set({ [FAS_QUEUE_TOUCHED_KEY]: touchedMap });
+      outcomes.push(platform + ':skipped_active'); continue;
+    }
+    if (runState === 'active') { outcomes.push(platform + ':skipped_active'); continue; }
+    if (runState === 'abandoned') {
+      const left = curQueue.slice(curIndex);
+      const idleHours = Math.round(((Date.now() - touchedAt) / 3600000) * 10) / 10;
+      fasLog('warn', 'FAS_AUTOQUEUE_ABANDONED', platform + ': replaced a queue untouched for ' + idleHours + 'h (' + left.length + ' unfinished item(s), not marked listed)',
+        { platform: platform, idleHours: idleHours, index: curIndex, length: curQueue.length, leftoverIds: left.slice(0, 10).map((q) => q && q.id), leftoverTitles: left.slice(0, 3).map((q) => String((q && q.title) || '').slice(0, 60)) },
+        { platform: platform, itemId: left[0] && left[0].id });
+      fasT('warn', 'autoqueue_abandoned', 'Replaced an old ' + platform + ' queue nobody had touched for ' + idleHours + ' hours (nothing was marked listed)', { platform: platform, flow: 'autoqueue', itemId: left[0] && left[0].id, title: left[0] && left[0].title });
+      outcomes.push(platform + ':abandoned_' + left.length);
+    }
     items = fasAutoQueueApplyLimit(items, limitPlan);
     if (limitPlan.budget !== Infinity) limitPlan.budget -= items.length;
     // Same write path/shape as the manual setXQueue handlers above (queue + index reset to 0).
@@ -2935,6 +3076,11 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
   throttledCheckPendingRemovals();
 });
 chrome.notifications.onClicked.addListener((notifId) => {
+  if (notifId === FAS_SIGNED_OUT_NOTIF) {
+    chrome.notifications.clear(notifId);
+    chrome.tabs.create({ url: FAS_SIGNIN_URL, active: true }, () => { void chrome.runtime.lastError; });
+    return;
+  }
   if (notifId === 'fasPendingRemovals') {
     chrome.notifications.clear(notifId);
     // Per-marketplace pause: a stale notification must not open Facebook.

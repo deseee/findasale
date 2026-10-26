@@ -15,13 +15,19 @@ import Skeleton from './Skeleton';
  * paused marketplace never gets a queue even with its toggle on, and holds the optional test limits (most new
  * listings per check, only these items) used for a supervised few-item live test.
  *
+ * 2026-10-26: also shows when the extension last checked in, a red notice when auto queue is on but the extension has
+ * been silent for 24h+ (usually a signed-out Chrome), and the items held back from Poshmark because Poshmark flagged
+ * them (30-day hold, by design). Data: the `extension` block of the same GET.
+ *
  * Types are local on purpose (a @findasale/shared import breaks the Vercel build).
  */
 
 type Platform = 'FACEBOOK' | 'CRAIGSLIST' | 'POSHMARK' | 'MERCARI' | 'GRAILED' | 'GUMTREE_AU';
 type Settings = Record<Platform, boolean>;
 type Limits = { maxNewPerRun: number | null; onlyItemIds: string[] };
-type AutoQueueData = { settings: Settings; paused: string[]; limits: Limits; limitsAvailable: boolean };
+type HeldItem = { itemId: string; title: string; kind: string; at: string; platform: string };
+type ExtensionStatus = { lastPollAt: string | null; stale: boolean; neverSeen: boolean; heldFlagged: HeldItem[] };
+type AutoQueueData = { settings: Settings; paused: string[]; limits: Limits; limitsAvailable: boolean; extension: ExtensionStatus };
 
 const PLATFORMS: { key: Platform; label: string }[] = [
   { key: 'FACEBOOK', label: 'Facebook Marketplace' },
@@ -43,7 +49,25 @@ const toData = (d: any): AutoQueueData => ({
     onlyItemIds: Array.isArray(d?.limits?.onlyItemIds) ? d.limits.onlyItemIds : [],
   },
   limitsAvailable: d?.limitsAvailable !== false,
+  extension: {
+    lastPollAt: typeof d?.extension?.lastPollAt === 'string' ? d.extension.lastPollAt : null,
+    stale: d?.extension?.stale === true,
+    neverSeen: d?.extension?.neverSeen === true,
+    heldFlagged: Array.isArray(d?.extension?.heldFlagged) ? d.extension.heldFlagged : [],
+  },
 });
+
+// 2026-10-26: when the extension last checked in, as "Oct 26, 3:58 PM". Empty string when unknown.
+const formatWhen = (iso: string | null): string => {
+  if (!iso) return '';
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return '';
+  return t.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+};
+const HELD_KIND_LABEL: Record<string, string> = {
+  oversized: 'Poshmark flagged it as possibly oversized',
+  prohibited: 'Poshmark flagged it as possibly prohibited',
+};
 
 const AutoQueueCard: React.FC = () => {
   const queryClient = useQueryClient();
@@ -143,6 +167,40 @@ const AutoQueueCard: React.FC = () => {
           </div>
         )}
 
+        {!isLoading && !isError && data && data.extension.stale && (
+          <div
+            className="mb-4 rounded-md border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/30 p-3 text-sm text-red-900 dark:text-red-100"
+            role="alert"
+            id="auto-queue-extension-silent"
+          >
+            {data.extension.neverSeen ? (
+              <>
+                <p className="font-semibold">The browser extension has not checked in yet.</p>
+                <p className="mt-1">
+                  Auto queue only works while the FindA.Sale extension is installed in Chrome and you are signed in at
+                  finda.sale in that same Chrome.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold">
+                  The browser extension has not checked in since {formatWhen(data.extension.lastPollAt)}.
+                </p>
+                <p className="mt-1">
+                  Nothing new is being queued or posted. This usually means Chrome was signed out of finda.sale. Open
+                  Chrome, sign in at finda.sale, and the extension picks up again on its own.
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {!isLoading && !isError && data && !data.extension.stale && data.extension.lastPollAt && (
+          <p className="mb-4 text-xs text-warm-600 dark:text-gray-400">
+            Extension last checked in {formatWhen(data.extension.lastPollAt)}.
+          </p>
+        )}
+
         {!isLoading && !isError && data && (
           <ul className="divide-y divide-warm-200 dark:divide-gray-700">
             {PLATFORMS.map(({ key, label }) => {
@@ -190,6 +248,30 @@ const AutoQueueCard: React.FC = () => {
               );
             })}
           </ul>
+        )}
+
+        {!isLoading && !isError && data && data.extension.heldFlagged.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-warm-200 dark:border-gray-700" id="auto-queue-held">
+            <h4 className="text-sm font-semibold text-warm-900 dark:text-gray-100">
+              Held back from Poshmark ({data.extension.heldFlagged.length})
+            </h4>
+            <p className="text-xs text-warm-600 dark:text-gray-400 mt-1 mb-3 leading-relaxed">
+              Poshmark&apos;s own listing check flagged these items, so the auto queue does not offer them to Poshmark
+              again for 30 days from the flag. Other marketplaces are not affected. You can still list one on Poshmark by
+              hand if you are sure it is allowed.
+            </p>
+            <ul className="divide-y divide-warm-200 dark:divide-gray-700">
+              {data.extension.heldFlagged.map((h) => (
+                <li key={h.itemId} className="py-2 text-sm">
+                  <span className="font-medium text-warm-900 dark:text-gray-100">{h.title}</span>
+                  <span className="block text-xs text-warm-600 dark:text-gray-400">
+                    {HELD_KIND_LABEL[h.kind] || 'Poshmark flagged it'}
+                    {formatWhen(h.at) ? ' on ' + formatWhen(h.at) : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {toggle.isError && (

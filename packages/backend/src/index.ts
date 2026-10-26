@@ -295,6 +295,7 @@ import { scheduleVendorBoothFeeRetryCron } from './jobs/vendorBoothFeeRetryCron'
 import { scheduleArchivalCron, expireStaleVenueCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly) + daily stale venue expiry
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
 import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature: Automatic Markdown Cycles (PRO Tier)
+import { scheduleExtensionHeartbeatAlertJob } from './jobs/extensionHeartbeatAlertJob'; // 2026-10-26: notify when the browser extension stops polling (signed out)
 import { scheduleMarkdownRetagAlertJob } from './jobs/markdownRetagAlertJob'; // 2026-09-29: daily staff alert for items waiting on a physical re-tag
 import { scheduleGoogleMerchantFeedCron } from './jobs/googleMerchantFeedCron'; // Feature #463: Google Merchant Center feed
 import { scheduleQuotaResetCron, scheduleCircuitBreakerRecoveryCron } from './jobs/pricingEngineCron'; // Phase S574: Pricing engine quota + recovery
@@ -1139,6 +1140,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   scheduleMarkdownCron();
   scheduleMarkdownCycleCron();
   scheduleMarkdownRetagAlertJob();
+  scheduleExtensionHeartbeatAlertJob();
 
   // Creator Program: weekly in-app summary for creators who opted in (Mondays 15:07 UTC)
   scheduleCreatorWeeklySummaryJob();
