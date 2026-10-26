@@ -4,7 +4,7 @@ import { suppressionService, isEmailDomainBlocked } from './suppressionService';
 import type { Statement } from './consignorLedgerService';
 
 
-const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 const siteUrl = process.env.FRONTEND_URL || 'https://finda.sale';
 
 /**

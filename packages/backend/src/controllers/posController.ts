@@ -280,7 +280,7 @@ export async function createPaymentLinkInternal(opts: {
         accentColor: '#10b981',
       });
       await transactionalEmailService.emails.send({
-        from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
+        from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
         to: buyerEmail,
         subject: `Payment link: $${amount.toFixed(2)}`,
         html,
@@ -1600,7 +1600,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       let squareEmailWarning: string | null = null;
       try {
         const { buildEmail } = await import('../services/emailTemplateService');
-        const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+        const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 
         // 2026-09-29: item and line titles and the shopper name are free text (organizer- and
         // shopper-controlled) going into the HTML body, which buildEmail does NOT escape (it escapes
@@ -1818,7 +1818,7 @@ export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
 
     const { buildEmail } = await import('../services/emailTemplateService');
 
-    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 
     // Stored amount, integer cents. buildEmail treats headline as HTML and ctaUrl is escaped by the template;
     // body is HTML, so every dynamic piece is escaped here.

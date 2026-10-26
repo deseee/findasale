@@ -52,7 +52,7 @@ import { suppressionService } from './suppressionService';
 import { createNotification } from './notificationService';
 import { prisma } from '../lib/prisma';
 
-const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
 export type BoothSaleNotifyResult = { sent: boolean; reason?: string };

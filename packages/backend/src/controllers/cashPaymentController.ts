@@ -556,7 +556,7 @@ export async function processCashSaleCore(params: {
     try {
       const { buildEmail } = await import('../services/emailTemplateService');
 
-      const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 
       // ADR-136 Addendum A: a bulk lot line shows the cards and the price per 1,000, not just a dollar figure.
       const itemsList = chargedItems

@@ -76,7 +76,7 @@ function notifyExistingOwnerOfRegistrationAttempt(existing: { email: string; nam
     if (registerNoticeSentAt.size > 5000) {
       for (const [k, t] of registerNoticeSentAt) if (now - t >= REGISTER_NOTICE_WINDOW_MS) registerNoticeSentAt.delete(k);
     }
-    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
     const base = process.env.FRONTEND_URL || 'https://finda.sale';
     // Not awaited: response time must not depend on whether the address has an account.
     void Promise.resolve(transactionalEmailService.emails.send({
@@ -824,7 +824,7 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
     // Send password reset email (non-blocking)
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
     try {
-      const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 
       await transactionalEmailService.emails.send({
         from: fromEmail,

@@ -323,7 +323,7 @@ router.post('/forgot-password', forgotPasswordLimiter, forgotPasswordEmailLimite
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 
     try {
       // 2026-09-29: not awaited. Awaiting only for existing accounts made the response measurably slower for a

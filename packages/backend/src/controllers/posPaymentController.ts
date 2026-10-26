@@ -3187,7 +3187,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     if (buyerEmail && buyerEmail.trim()) {
       try {
         const { buildEmail } = await import('../services/emailTemplateService');
-        const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+        const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
         const itemsList = chargedItems
           .map((i) => {
             const lotPlan = i.itemId ? bulkPlans.get(i.itemId) : undefined;

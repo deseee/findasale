@@ -895,6 +895,7 @@ export const createSale = async (req: AuthRequest, res: Response) => {
         where: {
           organizerId,
           status: 'PUBLISHED',
+          deletedAt: null, // a deleted sale must not hold a concurrent-sale slot
           endDate: { gt: new Date() }
         }
       });
@@ -1451,6 +1452,7 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
           where: {
             organizerId: organizerProfile.id,
             status: 'PUBLISHED',
+            deletedAt: null, // a deleted sale must not hold a concurrent-sale slot
             endDate: { gt: new Date() },
             id: { not: id } // Exclude current sale from count
           }

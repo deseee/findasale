@@ -190,7 +190,7 @@ const sendReceiptEmail = async (purchase: {
   discountAmount?: number;
 }) => {
   
-  const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
   // Stripe dead-link fix (2026-09-09, findasale-dev BUG MODE): /shopper/purchases is not
   // a real route (404s). purchase.id is a parameter of this very function -- use it to
   // build the real persistent purchase page URL.
@@ -2294,7 +2294,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       // Fire async job: send "Tier Lapsed" email
       setImmediate(() => {
         if (organizer.user?.email) {
-          const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+          const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
           transactionalEmailService.emails.send({
             from: fromEmail,
             to: organizer.user.email,
@@ -2334,7 +2334,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       // Fire async job: send "Payment Failed" email with retry link
       setImmediate(() => {
         if (organizer.user?.email) {
-          const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+          const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
           const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
           transactionalEmailService.emails.send({
             from: fromEmail,

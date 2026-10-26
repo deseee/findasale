@@ -146,7 +146,7 @@ export function sendRefundConfirmationEmail(params: {
   const surchargeRefund = Number(params.surchargeRefundAmount) > 0 ? Number(params.surchargeRefundAmount) : 0;
   const totalRefund = params.refundAmount + surchargeRefund;
 
-  const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'support@finda.sale';
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <support@finda.sale>';
   const itemTitle = params.itemTitle || 'your purchase';
   const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
   const purchaseHistoryUrl = params.purchaseId

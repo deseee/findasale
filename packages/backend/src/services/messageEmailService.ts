@@ -7,7 +7,7 @@ import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from './suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 
 interface NewMessageNotification {
   recipientEmail: string;

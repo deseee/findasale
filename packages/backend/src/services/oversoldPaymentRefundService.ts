@@ -272,7 +272,7 @@ export async function notifyOversoldSettlement(params: NotifyOversoldParams): Pr
   if (shopper.email) {
     try {
       const { transactionalEmailService } = await import('../lib/transactionalEmailService');
-      const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
       await transactionalEmailService.emails.send({
         from: fromEmail,
         to: shopper.email,

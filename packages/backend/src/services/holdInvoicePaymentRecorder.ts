@@ -1316,7 +1316,7 @@ export async function markHoldInvoicePaid(
 
   // Send confirmation emails (fire-and-forget)
   setImmediate(() => {
-    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
     // 2026-09-30: after an oversold partial settlement, name only the kept items and the amount kept.
     const keptItems = oversoldCtx.settlement ? bundledItems.filter((it) => sellableItemIds.includes(it.id)) : bundledItems;
     const itemList = keptItems.length > 1

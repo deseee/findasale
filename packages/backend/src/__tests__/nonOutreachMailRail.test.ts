@@ -133,3 +133,30 @@ describe('behaviour on the Resend rail', () => {
     expect(mockPrisma.emailAutomationLog.create).not.toHaveBeenCalled();
   });
 });
+
+describe('no transactionalEmailService caller builds a From from the Gmail/outreach rail', () => {
+  const walk = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) return e.name === '__tests__' || e.name === 'node_modules' ? [] : walk(full);
+      return e.name.endsWith('.ts') ? [full] : [];
+    });
+  const stripComments = (code: string) => code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  const callers = walk(SRC).filter((f) => {
+    const rel = path.relative(SRC, f).split(path.sep).join('/');
+    if (rel === 'lib/transactionalEmailService.ts' || rel === 'lib/emailService.ts') return false;
+    return /transactionalEmailService\.emails\.send\(/.test(fs.readFileSync(f, 'utf8'));
+  });
+
+  it('finds the Resend callers', () => {
+    expect(callers.length).toBeGreaterThan(10);
+  });
+
+  it.each(callers.map((f) => path.relative(SRC, f).split(path.sep).join('/')))(
+    '%s never passes GMAIL_FROM_EMAIL / SES_FROM_EMAIL / an outreach.finda.sale From to Resend',
+    (rel) => {
+      const code = stripComments(fs.readFileSync(path.join(SRC, rel), 'utf8'));
+      expect(code).not.toMatch(/GMAIL_FROM_EMAIL|SES_FROM_EMAIL|outreach\.finda\.sale/);
+    },
+  );
+});

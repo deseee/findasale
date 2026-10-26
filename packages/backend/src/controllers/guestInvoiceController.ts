@@ -416,7 +416,7 @@ export const createGuestInvoice = async (req: AuthRequest, res: Response) => {
     let emailWarning: string | null = null;
     try {
       const { buildEmail } = await import('../services/emailTemplateService');
-      const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>';
 
       let itemsList = `<strong>${normalizedTitle}</strong> - $${amount.toFixed(2)}`;
       if (lineItems && lineItems.length > 0) {
