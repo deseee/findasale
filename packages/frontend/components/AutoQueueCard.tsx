@@ -19,6 +19,10 @@ import Skeleton from './Skeleton';
  * been silent for 24h+ (usually a signed-out Chrome), and the items held back from Poshmark because Poshmark flagged
  * them (30-day hold, by design). Data: the `extension` block of the same GET.
  *
+ * 1.0.67 (2026-10-26): "Try again on Poshmark" per held item and "Try all again" release a hold
+ * (POST .../auto-queue-settings/release-holds). The extension drops the hold on its next check and offers the item to
+ * Poshmark again; if Poshmark flags it again, it is held again the same way.
+ *
  * Types are local on purpose (a @findasale/shared import breaks the Vercel build).
  */
 
@@ -26,7 +30,8 @@ type Platform = 'FACEBOOK' | 'CRAIGSLIST' | 'POSHMARK' | 'MERCARI' | 'GRAILED' |
 type Settings = Record<Platform, boolean>;
 type Limits = { maxNewPerRun: number | null; onlyItemIds: string[] };
 type HeldItem = { itemId: string; title: string; kind: string; at: string; platform: string };
-type ExtensionStatus = { lastPollAt: string | null; stale: boolean; neverSeen: boolean; heldFlagged: HeldItem[] };
+type ReleasePending = { itemId: string; title: string; at: string };
+type ExtensionStatus = { lastPollAt: string | null; stale: boolean; neverSeen: boolean; heldFlagged: HeldItem[]; releasePending: ReleasePending[] };
 type AutoQueueData = { settings: Settings; paused: string[]; limits: Limits; limitsAvailable: boolean; extension: ExtensionStatus };
 
 const PLATFORMS: { key: Platform; label: string }[] = [
@@ -54,6 +59,7 @@ const toData = (d: any): AutoQueueData => ({
     stale: d?.extension?.stale === true,
     neverSeen: d?.extension?.neverSeen === true,
     heldFlagged: Array.isArray(d?.extension?.heldFlagged) ? d.extension.heldFlagged : [],
+    releasePending: Array.isArray(d?.extension?.releasePending) ? d.extension.releasePending : [],
   },
 });
 
@@ -97,6 +103,18 @@ const AutoQueueCard: React.FC = () => {
       if (ctx?.previous) queryClient.setQueryData(QUERY_KEY, ctx.previous);
     },
     onSuccess: (next) => queryClient.setQueryData(QUERY_KEY, next),
+  });
+
+  // 1.0.67: release Poshmark-flag holds so the extension offers those items to Poshmark again on its next check.
+  const [releaseError, setReleaseError] = useState('');
+  const releaseHolds = useMutation({
+    mutationFn: async (body: { itemIds: string[] } | { all: true }) =>
+      toData((await api.post(ENDPOINT + '/release-holds', body)).data),
+    onSuccess: (next) => {
+      setReleaseError('');
+      queryClient.setQueryData(QUERY_KEY, next);
+    },
+    onError: (err: any) => setReleaseError(err?.response?.data?.message || 'That did not save. Try again.'),
   });
 
   // Test limits form (local draft, saved with the button).
@@ -277,25 +295,58 @@ const AutoQueueCard: React.FC = () => {
 
         {!isLoading && !isError && data && data.extension.heldFlagged.some((h) => h.kind !== 'edit') && (
           <div className="mt-6 pt-4 border-t border-warm-200 dark:border-gray-700" id="auto-queue-held">
-            <h4 className="text-sm font-semibold text-warm-900 dark:text-gray-100">
-              Held back from Poshmark ({data.extension.heldFlagged.filter((h) => h.kind !== 'edit').length})
-            </h4>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold text-warm-900 dark:text-gray-100">
+                Held back from Poshmark ({data.extension.heldFlagged.filter((h) => h.kind !== 'edit').length})
+              </h4>
+              <button
+                type="button"
+                onClick={() => releaseHolds.mutate({ all: true })}
+                disabled={releaseHolds.isPending}
+                className="rounded-md border border-warm-300 dark:border-gray-600 px-3 py-1.5 text-xs font-medium text-warm-800 dark:text-gray-200 disabled:opacity-60"
+              >
+                Try all again
+              </button>
+            </div>
             <p className="text-xs text-warm-600 dark:text-gray-400 mt-1 mb-3 leading-relaxed">
               Poshmark&apos;s own listing check flagged these items, so the auto queue does not offer them to Poshmark
-              again for 30 days from the flag. Other marketplaces are not affected. You can still list one on Poshmark by
-              hand if you are sure it is allowed.
+              again for 30 days from the flag. Other marketplaces are not affected. If an item is fine for Poshmark, use
+              Try again and the extension offers it to Poshmark on its next check. If Poshmark flags it again, the
+              extension leaves that tab open for you to decide, and holds it again if you skip it.
             </p>
+            {releaseError && (
+              <p className="text-xs text-red-600 dark:text-red-400 mb-2" role="alert">{releaseError}</p>
+            )}
             <ul className="divide-y divide-warm-200 dark:divide-gray-700">
               {data.extension.heldFlagged.filter((h) => h.kind !== 'edit').map((h) => (
-                <li key={h.itemId} className="py-2 text-sm">
-                  <span className="font-medium text-warm-900 dark:text-gray-100">{h.title}</span>
-                  <span className="block text-xs text-warm-600 dark:text-gray-400">
-                    {HELD_KIND_LABEL[h.kind] || 'Poshmark flagged it'}
-                    {formatWhen(h.at) ? ' on ' + formatWhen(h.at) : ''}
+                <li key={h.itemId} className="py-2 text-sm flex items-start justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="font-medium text-warm-900 dark:text-gray-100">{h.title}</span>
+                    <span className="block text-xs text-warm-600 dark:text-gray-400">
+                      {HELD_KIND_LABEL[h.kind] || 'Poshmark flagged it'}
+                      {formatWhen(h.at) ? ' on ' + formatWhen(h.at) : ''}
+                    </span>
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => releaseHolds.mutate({ itemIds: [h.itemId] })}
+                    disabled={releaseHolds.isPending}
+                    className="shrink-0 text-xs font-medium text-amber-600 hover:underline disabled:opacity-60"
+                  >
+                    Try again on Poshmark
+                  </button>
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {!isLoading && !isError && data && data.extension.releasePending.length > 0 && (
+          <div className="mt-4 rounded-md border border-warm-200 dark:border-gray-700 p-3" id="auto-queue-release-pending">
+            <p className="text-xs text-warm-700 dark:text-gray-300 leading-relaxed">
+              Trying again on Poshmark at the extension&apos;s next check ({data.extension.releasePending.length}):{' '}
+              {data.extension.releasePending.map((r) => r.title).join(', ')}
+            </p>
           </div>
         )}
 

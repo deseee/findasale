@@ -29,7 +29,7 @@ import {
 } from '../services/organizerEmailForwardingService';
 import { SOLD_VIA_FB_EMAIL_ORDER } from '../services/facebookMarketplaceEmailSoldDetection';
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
-import { getAutoQueueSettings, patchAutoQueueSettings } from '../controllers/extensionController';
+import { getAutoQueueSettings, patchAutoQueueSettings, releaseHeldPoshmarkItems } from '../controllers/extensionController';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from '../services/suppressionService';
 import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue, getEbayInsertionsForecast, getEbaySyncIssues, retryEbaySync } from '../controllers/platformStatsController';
@@ -145,6 +145,8 @@ router.patch('/me/ebay-queue-settings', authenticate, updateEbayQueueSettings);
 // organizer-only, PRO-gated as before; the controller resolves the organizer from the session (own settings only).
 router.get('/me/auto-queue-settings', authenticate, requireOrganizer, requireTier('PRO'), getAutoQueueSettings);
 router.patch('/me/auto-queue-settings', authenticate, requireOrganizer, requireTier('PRO'), patchAutoQueueSettings);
+// 1.0.67 (2026-10-26): "Try again on Poshmark" for items the extension holds back after a Poshmark flag (own held items only).
+router.post('/me/auto-queue-settings/release-holds', authenticate, requireOrganizer, requireTier('PRO'), releaseHeldPoshmarkItems);
 router.post('/me/ebay-queue', authenticate, addToEbayQueue);
 router.delete('/me/ebay-queue/:itemId', authenticate, removeFromEbayQueue);
 // ADR ebay-renewal-forecasting (2026-09-15): real free-insertion usage + projected GTC-renewal forecast

@@ -2733,6 +2733,23 @@ function fasPoshHeldParam(flagged, now, editHolds) {
   }
   return out.slice(-50).join(',');
 }
+// 1.0.67 (2026-10-26): the autolist-queue response can carry
+//   releaseHolds -- Poshmark-flag holds the organizer asked to try again from the web card ("Try again on Poshmark");
+//   dropHolds    -- holds for items that are sold, deleted, unpublished or already on Poshmark (live: Samurai Shodown II
+//                   sold on Mercari stayed on the held list).
+// Both are removed from fasPoshFlagged. Released ids are acked on the next poll (?released=) so the server clears them.
+// If Poshmark flags a released item again, the post flow holds it exactly as before (overlay, never certifies). Pure.
+function fasPoshApplyHoldChanges(flagged, releaseIds, dropIds) {
+  const out = Object.assign({}, flagged || {});
+  const idOk = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{8,40}$/.test(id);
+  const release = (Array.isArray(releaseIds) ? releaseIds : []).filter(idOk).slice(0, 50);
+  const drop = (Array.isArray(dropIds) ? dropIds : []).filter(idOk).slice(0, 50);
+  const removed = [];
+  for (const id of release.concat(drop)) {
+    if (out[id]) { delete out[id]; removed.push(id); }
+  }
+  return { flagged: out, changed: removed.length > 0, removed: removed, ack: release };
+}
 try {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
@@ -2767,9 +2784,25 @@ async function checkAutoListQueue() {
     } catch (e) { /* informational */ }
     const held = fasPoshHeldParam(flagged, Date.now(), editHolds);
     pollPath += '?v=' + encodeURIComponent((chrome.runtime.getManifest() || {}).version || '') + (held ? '&held=' + encodeURIComponent(held) : '');
+    // 1.0.67: ack the releases applied after the previous poll so the server stops sending them.
+    const ack = (await chrome.storage.local.get('fasPoshReleaseAck')).fasPoshReleaseAck;
+    if (Array.isArray(ack) && ack.length) pollPath += '&released=' + encodeURIComponent(ack.slice(0, 50).join(','));
   } catch (e) { /* the report is informational only */ }
   const resp = await apiFetch(pollPath);
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
+  // 1.0.67: apply released / stale holds BEFORE the Poshmark filter below, so a released item is offered in this same poll.
+  try {
+    const rel = (resp.data && resp.data.releaseHolds) || [];
+    const drp = (resp.data && resp.data.dropHolds) || [];
+    const cur = (await chrome.storage.local.get('fasPoshFlagged')).fasPoshFlagged || {};
+    const r = fasPoshApplyHoldChanges(cur, rel, drp);
+    if (r.changed) await chrome.storage.local.set({ fasPoshFlagged: r.flagged });
+    await chrome.storage.local.set({ fasPoshReleaseAck: r.ack });
+    if (r.removed.length) {
+      const nRel = r.removed.filter((id) => r.ack.indexOf(id) !== -1).length;
+      fasT('info', 'posh_holds_cleared', (nRel ? nRel + ' Poshmark hold(s) released by you and offered to Poshmark again' : '') + (nRel && r.removed.length - nRel ? '; ' : '') + (r.removed.length - nRel ? (r.removed.length - nRel) + ' hold(s) dropped because the item sold, was removed, or is already on Poshmark' : ''), { platform: 'POSHMARK', flow: 'autoqueue', ctx: { released: nRel, dropped: r.removed.length - nRel } });
+    }
+  } catch (e) { /* best-effort; the server keeps the release until it is acked */ }
   const queues = (resp.data && resp.data.queues) || {};
   const outcomes = [];
   const pausedForQueue = await fasGetPausedPlatforms();

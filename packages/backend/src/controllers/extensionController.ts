@@ -20,7 +20,7 @@ import { loadListingExtras, listingExtraFields, organizerListableScope, stockRem
 import { actorCanPublish } from '../lib/publishGate'; // 2026-10-23: an account that cannot publish gets empty listing queues
 import { pickStoredRemoteRef, extractRemoteId, resolveListingRef, listingRefFields } from '../services/marketplaceListingRef'; // 2026-10-18: best remote id + URL on every sync queue entry
 import { AUTO_QUEUE_FLAG_SELECT, toAutoQueueSettings, parseAutoQueuePatch, isPickupOnlyBlockedForAutoQueue, toAutoQueueLimits, parseAutoQueueLimitsPatch, applyAutoQueueLimits, isMissingTableError, NO_AUTO_QUEUE_LIMITS, AutoQueueLimits } from '../services/autoQueueSettings';
-import { recordExtensionHeartbeat, loadExtensionHeartbeat, parseHeldParam, parseVersionParam, heartbeatStatus, heldStillUnlisted } from '../services/extensionHeartbeat'; // 2026-10-26: extension heartbeat + held-back items
+import { recordExtensionHeartbeat, loadExtensionHeartbeat, parseHeldParam, parseVersionParam, heartbeatStatus, heldStillUnlisted, parseIdListParam, staleFlagHoldIds, loadHeldItemState, addHeldReleases } from '../services/extensionHeartbeat'; // 2026-10-26: extension heartbeat + held-back items (+ 1.0.67 release / stale-hold drop)
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { postCapRetryEligible } from '../utils/removalRetryGate'; // 2026-10-25: past the hard stop, re-probe daily instead of never
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
@@ -2764,10 +2764,22 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   // early return so an empty queue still counts. recordExtensionHeartbeat never throws, so this cannot fail the poll.
   // Only the extension counts: it always sends its version (?v=). Any other caller of this route (e.g. a cookie GET
   // from the web) carries no v and must not record a heartbeat or wipe the held list / version the extension reported.
+  // 1.0.67 (2026-10-26): dropHolds = reported Poshmark-flag holds the extension should forget (item sold / deleted /
+  // unpublished / already on Poshmark; live: Samurai Shodown II sold on Mercari stayed held); releaseHolds = holds the
+  // organizer asked to try again from the web card. The extension acks releases with ?released= on its next poll.
   const pollVersion = parseVersionParam(req.query?.v);
+  let releaseHolds: string[] = [];
+  let dropHolds: string[] = [];
   if (pollVersion) {
-    await recordExtensionHeartbeat(organizer.id, { held: parseHeldParam(req.query?.held), version: pollVersion });
+    const reportedHeld = parseHeldParam(req.query?.held);
+    dropHolds = await staleFlagHoldIds(organizer.id, reportedHeld);
+    releaseHolds = await recordExtensionHeartbeat(organizer.id, {
+      held: reportedHeld.filter((h) => !dropHolds.includes(h.itemId)),
+      version: pollVersion,
+      acked: parseIdListParam(req.query?.released),
+    });
   }
+  const holdChanges = { releaseHolds, dropHolds };
 
   const emptyQueues: Record<AutoListPlatform, unknown[]> = {
     CRAIGSLIST: [], FACEBOOK: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
@@ -2788,7 +2800,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   enabledPlatforms.push(...activePlatforms);
 
   if (enabledPlatforms.length === 0) {
-    res.json({ ok: true, queues: emptyQueues, pausedMarketplaces: pausedForQueue });
+    res.json({ ok: true, queues: emptyQueues, pausedMarketplaces: pausedForQueue, ...holdChanges });
     return;
   }
 
@@ -2828,7 +2840,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   });
 
   if (items.length === 0) {
-    res.json({ ok: true, queues: emptyQueues });
+    res.json({ ok: true, queues: emptyQueues, ...holdChanges });
     return;
   }
 
@@ -2972,7 +2984,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   // request (fail closed: never hand out an unlimited queue when a limit may be set).
   const { limits } = await loadAutoQueueLimits(organizer.id);
   const limited = applyAutoQueueLimits(queues as unknown as Record<string, Array<{ id: string }>>, limits, enabledPlatforms);
-  res.json({ ok: true, queues: limited, pausedMarketplaces: pausedForQueue, limits });
+  res.json({ ok: true, queues: limited, pausedMarketplaces: pausedForQueue, limits, ...holdChanges });
 };
 
 // Auto queue test limits (2026-10-23). { limits, available }: available=false only when the OrganizerAutoQueueLimit
@@ -3329,23 +3341,25 @@ async function extensionStatusFor(organizerId: string, anyAutoQueueOn: boolean) 
   const hb = await loadExtensionHeartbeat(organizerId);
   const status = heartbeatStatus(hb.lastPollAt, anyAutoQueueOn);
   let heldFlagged: Array<{ itemId: string; title: string; kind: string; at: string; platform: 'POSHMARK' }> = [];
-  if (hb.held.length) {
+  // 1.0.67: held items the organizer asked to try again, waiting for the extension's next check to pick them up.
+  let releasePending: Array<{ itemId: string; title: string; at: string }> = [];
+  const ids = Array.from(new Set([...hb.held.map((h) => h.itemId), ...hb.release.map((r) => r.itemId)]));
+  if (ids.length) {
     try {
-      const rows = await prisma.item.findMany({
-        where: { id: { in: hb.held.map((h) => h.itemId) }, OR: organizerListableScope(organizerId) },
-        select: { id: true, title: true },
-      });
-      const titleById = new Map(rows.map((r) => [r.id, r.title]));
-      // 2026-10-26: an item that has since been listed on Poshmark is not held any more (heldStillUnlisted).
-      const poshJobs = await prisma.marketplaceListingJob.findMany({
-        where: { itemId: { in: rows.map((r) => r.id) }, platform: 'POSHMARK' },
-        select: { itemId: true, action: true, status: true, createdAt: true },
-      });
-      heldFlagged = heldStillUnlisted(hb.held, poshJobs)
-        .filter((h) => titleById.has(h.itemId))
+      // Own items only (OR: organizerListableScope(organizerId) inside loadHeldItemState); unknown or foreign ids drop out.
+      const { titleById, eligibleIds, poshJobs } = await loadHeldItemState(organizerId, ids);
+      const releasing = new Set(hb.release.map((r) => r.itemId));
+      // 2026-10-26: an item that has since been listed on Poshmark, or is no longer listable (sold, deleted, unpublished),
+      // is not held any more (heldStillUnlisted with eligibleIds).
+      heldFlagged = heldStillUnlisted(hb.held, poshJobs, eligibleIds)
+        .filter((h) => titleById.has(h.itemId) && !(h.kind !== 'edit' && releasing.has(h.itemId)))
         .map((h) => ({ itemId: h.itemId, title: titleById.get(h.itemId) || 'Item', kind: h.kind, at: h.at, platform: 'POSHMARK' as const }));
+      releasePending = hb.release
+        .filter((r) => eligibleIds.has(r.itemId))
+        .map((r) => ({ itemId: r.itemId, title: titleById.get(r.itemId) || 'Item', at: r.at }));
     } catch {
       heldFlagged = [];
+      releasePending = [];
     }
   }
   return {
@@ -3355,8 +3369,41 @@ async function extensionStatusFor(organizerId: string, anyAutoQueueOn: boolean) 
     staleAfterHours: 24,
     version: hb.version,
     heldFlagged,
+    releasePending,
   };
 }
+
+// POST /api/organizers/me/auto-queue-settings/release-holds (cookie session + CSRF, routes/organizers.ts; organizer, PRO)
+//   body: { itemIds: string[] } or { all: true }
+// 1.0.67 (2026-10-26, Patrick: "the rest are all things that aren't oversized"): the organizer's "Try again on Poshmark"
+// for items the extension holds back because Poshmark flagged them (oversized / prohibited). Only items currently on this
+// organizer's own held list are accepted (resolved from the session, never the body); anything else is ignored, and a
+// request that matches nothing is a 400. The release rides on the next autolist-queue poll as releaseHolds. Edit holds
+// (kind "edit") are not released here. If Poshmark flags the item again, the extension holds it again exactly as before.
+export const releaseHeldPoshmarkItems = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  const body = req.body as Record<string, unknown> | null | undefined;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) { res.status(400).json({ message: 'Body must be an object' }); return; }
+  const all = body.all === true;
+  const requested = Array.isArray(body.itemIds) ? (body.itemIds as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+  if (!all && (!requested.length || requested.length > 50)) { res.status(400).json({ message: 'Send itemIds (1 to 50) or all: true' }); return; }
+  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+  const status = await extensionStatusFor(organizer.id, false);
+  const releasable = status.heldFlagged.filter((h) => h.kind === 'oversized' || h.kind === 'prohibited').map((h) => h.itemId);
+  const ids = all ? releasable : releasable.filter((id) => requested.includes(id));
+  if (!ids.length) { res.status(400).json({ message: 'None of those items are held back from Poshmark right now.' }); return; }
+  try {
+    const ok = await addHeldReleases(organizer.id, ids);
+    if (!ok) { res.status(400).json({ message: 'None of those items are held back from Poshmark right now.' }); return; }
+  } catch (err) {
+    console.warn('[releaseHeldPoshmarkItems] failed:', (err as Error)?.message || err);
+    res.status(500).json({ message: 'That did not save. Try again.' });
+    return;
+  }
+  res.json({ ...(await autoQueueResponse(organizer.id)), released: ids });
+};
 
 export const getAutoQueueSettings = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;

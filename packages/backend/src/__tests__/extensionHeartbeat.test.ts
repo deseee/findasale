@@ -14,6 +14,8 @@ const mockLogFindMany = jest.fn();
 const mockLogUpdate = jest.fn();
 const mockLogCreate = jest.fn();
 const mockOrganizerFindMany = jest.fn();
+const mockItemFindMany = jest.fn();
+const mockJobFindMany = jest.fn();
 const mockCreateNotification = jest.fn();
 
 jest.mock('../lib/prisma', () => ({
@@ -25,6 +27,8 @@ jest.mock('../lib/prisma', () => ({
       create: (...a: unknown[]) => mockLogCreate(...a),
     },
     organizer: { findMany: (...a: unknown[]) => mockOrganizerFindMany(...a) },
+    item: { findMany: (...a: unknown[]) => mockItemFindMany(...a) },
+    marketplaceListingJob: { findMany: (...a: unknown[]) => mockJobFindMany(...a) },
   },
 }));
 jest.mock('../lib/notificationService', () => ({ createNotification: (...a: unknown[]) => mockCreateNotification(...a) }));
@@ -34,6 +38,7 @@ jest.mock('node-cron', () => ({ __esModule: true, default: { schedule: jest.fn()
 import {
   parseHeldParam, parseVersionParam, heartbeatStatus, shouldAlertHeartbeat,
   recordExtensionHeartbeat, loadExtensionHeartbeat, mergeHeartbeatContext, heldStillUnlisted, HEARTBEAT_SOURCE, HEARTBEAT_STALE_MS,
+  parseIdListParam, isHoldEligibleItem, staleFlagHoldIds, addReleasesToContext, addHeldReleases, RELEASE_TTL_MS,
 } from '../services/extensionHeartbeat';
 import { runExtensionHeartbeatAlert, EXTENSION_SILENT_TITLE, EXTENSION_SILENT_BODY, EXTENSION_SILENT_LINK } from '../jobs/extensionHeartbeatAlertJob';
 
@@ -42,7 +47,7 @@ const NOW = Date.parse('2026-10-26T12:00:00Z');
 const read = (p: string) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
 
 beforeEach(() => {
-  [mockLogFindFirst, mockLogFindMany, mockLogUpdate, mockLogCreate, mockOrganizerFindMany, mockCreateNotification].forEach((m) => m.mockReset());
+  [mockLogFindFirst, mockLogFindMany, mockLogUpdate, mockLogCreate, mockOrganizerFindMany, mockCreateNotification, mockItemFindMany, mockJobFindMany].forEach((m) => m.mockReset());
 });
 
 describe('pure helpers', () => {
@@ -96,9 +101,9 @@ describe('record / load', () => {
 
   it('never throws (a heartbeat must not break the queue response)', async () => {
     mockLogFindFirst.mockRejectedValueOnce(new Error('db down'));
-    await expect(recordExtensionHeartbeat('org1', { held: [], version: '1.0.66' })).resolves.toBeUndefined();
+    await expect(recordExtensionHeartbeat('org1', { held: [], version: '1.0.66' })).resolves.toEqual([]);
     mockLogFindFirst.mockRejectedValueOnce(new Error('db down'));
-    await expect(loadExtensionHeartbeat('org1')).resolves.toEqual({ lastPollAt: null, held: [], alertedAt: null, version: null });
+    await expect(loadExtensionHeartbeat('org1')).resolves.toEqual({ lastPollAt: null, held: [], alertedAt: null, version: null, release: [] });
   });
 
   it('2026-10-26 retest: a poll without an extension version (e.g. a cookie GET from the web) records nothing', async () => {
@@ -162,7 +167,7 @@ describe('held list', () => {
     const src = read('controllers/extensionController.ts');
     const fn = src.slice(src.indexOf('async function extensionStatusFor'), src.indexOf('async function extensionStatusFor') + 2000);
     expect(fn).toMatch(/platform: 'POSHMARK'/);
-    expect(fn).toMatch(/heldFlagged = heldStillUnlisted\(hb\.held, poshJobs\)/);
+    expect(fn).toMatch(/heldFlagged = heldStillUnlisted\(hb\.held, poshJobs, eligibleIds\)/);
   });
 });
 
@@ -222,14 +227,18 @@ describe('wiring (source pins)', () => {
     const src = read('controllers/extensionController.ts');
     const start = src.indexOf('export const getAutolistQueue');
     const seg = src.slice(start, src.indexOf('if (enabledPlatforms.length === 0)', start));
-    expect(seg).toMatch(/const pollVersion = parseVersionParam\(req\.query\?\.v\);\s*if \(pollVersion\) \{\s*await recordExtensionHeartbeat\(organizer\.id/);
+    expect(seg).toMatch(/if \(pollVersion\) \{[\s\S]*?releaseHolds = await recordExtensionHeartbeat\(organizer\.id/);
+    expect(seg).toMatch(/const pollVersion = parseVersionParam\(req\.query\?\.v\);/);
   });
 
   it('the settings response carries the extension block, held titles scoped to the organizer\'s own items', () => {
     const src = read('controllers/extensionController.ts');
     expect(src).toMatch(/extension: await extensionStatusFor\(organizerId,/);
     const fn = src.slice(src.indexOf('async function extensionStatusFor'), src.indexOf('async function extensionStatusFor') + 1500);
-    expect(fn).toMatch(/OR: organizerListableScope\(organizerId\)/);
+    expect(fn).toMatch(/await loadHeldItemState\(organizerId, ids\)/);
+    const svc = read('services/extensionHeartbeat.ts');
+    const lf = svc.slice(svc.indexOf('export async function loadHeldItemState'), svc.indexOf('export async function loadHeldItemState') + 900);
+    expect(lf).toMatch(/OR: organizerListableScope\(organizerId\)/);
   });
 
   it('the job is registered at startup', () => {
@@ -241,5 +250,113 @@ describe('wiring (source pins)', () => {
     expect(card).toContain('auto-queue-extension-silent');
     expect(card).toContain('Held back from Poshmark');
     expect(card).not.toMatch(/—/);
+  });
+});
+
+describe('1.0.67 stale holds and organizer release (2026-10-26)', () => {
+  const SOLD = 'cmu5oob4s001rrd9bl67f2nt9'; // Samurai Shodown II, sold on Mercari 2026-10-24
+  const STRAP = 'cmuobqqyg00g1qcr4e3qyxnk3';
+  const POSTED = 'cmtk2knjk0egs3bwwrde12qwr';
+  const at = new Date(NOW).toISOString();
+  const held = [
+    { itemId: SOLD, kind: 'prohibited' as const, at },
+    { itemId: STRAP, kind: 'oversized' as const, at },
+    { itemId: POSTED, kind: 'oversized' as const, at },
+  ];
+
+  it('heldStillUnlisted drops an item that is no longer listable (sold), of any kind, when eligibleIds is given', () => {
+    const eligible = new Set([STRAP, POSTED]);
+    expect(heldStillUnlisted(held, [], eligible).map((h) => h.itemId)).toEqual([STRAP, POSTED]);
+    const edit = [{ itemId: SOLD, kind: 'edit' as const, at }];
+    expect(heldStillUnlisted(edit, [], eligible)).toEqual([]);
+    // without eligibleIds the old behaviour is unchanged
+    expect(heldStillUnlisted(held, []).length).toBe(3);
+  });
+
+  it('isHoldEligibleItem: AVAILABLE + PUBLISHED + not deleted only', () => {
+    expect(isHoldEligibleItem({ status: 'AVAILABLE', draftStatus: 'PUBLISHED', deletedAt: null })).toBe(true);
+    expect(isHoldEligibleItem({ status: 'SOLD', draftStatus: 'PUBLISHED', deletedAt: null })).toBe(false);
+    expect(isHoldEligibleItem({ status: 'AVAILABLE', draftStatus: 'DRAFT', deletedAt: null })).toBe(false);
+    expect(isHoldEligibleItem({ status: 'AVAILABLE', draftStatus: 'PUBLISHED', deletedAt: new Date() })).toBe(false);
+  });
+
+  it('staleFlagHoldIds: sold, foreign/unknown and already-on-Poshmark items are dropped; edit holds are left alone', async () => {
+    mockItemFindMany.mockResolvedValueOnce([
+      { id: SOLD, title: 'Samurai Shodown II', status: 'SOLD', draftStatus: 'PUBLISHED', deletedAt: null },
+      { id: STRAP, title: 'Guitar Strap', status: 'AVAILABLE', draftStatus: 'PUBLISHED', deletedAt: null },
+      { id: POSTED, title: 'Tony Mottola LP', status: 'AVAILABLE', draftStatus: 'PUBLISHED', deletedAt: null },
+    ]);
+    mockJobFindMany.mockResolvedValueOnce([{ itemId: POSTED, action: 'POST', status: 'POSTED', createdAt: new Date(NOW) }]);
+    const reported = [...held, { itemId: 'zzzzzzzz99', kind: 'oversized' as const, at }, { itemId: 'eeeeeeee11', kind: 'edit' as const, at }];
+    const drop = await staleFlagHoldIds('org1', reported);
+    expect(drop.sort()).toEqual([SOLD, POSTED, 'zzzzzzzz99'].sort());
+    expect(mockItemFindMany.mock.calls[0][0].where.id.in).not.toContain('eeeeeeee11');
+  });
+
+  it('staleFlagHoldIds never throws (drops nothing on a DB error)', async () => {
+    mockItemFindMany.mockRejectedValueOnce(new Error('db down'));
+    await expect(staleFlagHoldIds('org1', held)).resolves.toEqual([]);
+  });
+
+  it('parseIdListParam keeps valid ids only, de-duplicated', () => {
+    expect(parseIdListParam(STRAP + ',' + STRAP + ',../x,' + SOLD)).toEqual([STRAP, SOLD]);
+    expect(parseIdListParam(undefined)).toEqual([]);
+  });
+
+  it('a release is added to the context, survives an un-acked poll, and is removed by the ack', () => {
+    const ctx1 = addReleasesToContext({ v: '1.0.66', held }, [STRAP], NOW);
+    expect(ctx1.release).toEqual([{ itemId: STRAP, at }]);
+    const ctx2 = mergeHeartbeatContext(ctx1, { held, version: '1.0.67', acked: [] }, NOW);
+    expect(ctx2.release).toEqual([{ itemId: STRAP, at }]);
+    const ctx3 = mergeHeartbeatContext(ctx2, { held: [], version: '1.0.67', acked: [STRAP] }, NOW);
+    expect(ctx3.release).toBeUndefined();
+  });
+
+  it('an un-acked release (old extension) expires after RELEASE_TTL_MS', () => {
+    const ctx1 = addReleasesToContext({}, [STRAP], NOW - RELEASE_TTL_MS - 1000);
+    expect(mergeHeartbeatContext(ctx1, { held: [], version: '1.0.66' }, NOW).release).toBeUndefined();
+  });
+
+  it('recordExtensionHeartbeat returns the releases still pending after the ack', async () => {
+    mockLogFindFirst.mockResolvedValueOnce({ id: 'row1', context: { v: '1.0.66', held, release: [{ itemId: STRAP, at }, { itemId: SOLD, at }] } });
+    await expect(recordExtensionHeartbeat('org1', { held, version: '1.0.67', acked: [SOLD] }, )).resolves.toEqual([STRAP]);
+  });
+
+  it('addHeldReleases writes only the context (last-poll time unchanged); false when there is no heartbeat row', async () => {
+    mockLogFindFirst.mockResolvedValueOnce({ id: 'row1', context: { v: '1.0.66', held } });
+    await expect(addHeldReleases('org1', [STRAP], NOW)).resolves.toBe(true);
+    const upd = mockLogUpdate.mock.calls[0][0];
+    expect(upd.where).toEqual({ id: 'row1' });
+    expect(upd.data.createdAt).toBeUndefined();
+    expect(upd.data.context.release).toEqual([{ itemId: STRAP, at }]);
+    mockLogFindFirst.mockResolvedValueOnce(null);
+    await expect(addHeldReleases('org1', [STRAP], NOW)).resolves.toBe(false);
+  });
+
+  it('wiring: autolist-queue drops stale holds, acks releases, and returns releaseHolds + dropHolds on every response', () => {
+    const src = read('controllers/extensionController.ts');
+    const start = src.indexOf('export const getAutolistQueue');
+    const fn = src.slice(start, src.indexOf('\n};', start));
+    expect(fn).toMatch(/dropHolds = await staleFlagHoldIds\(organizer\.id, reportedHeld\)/);
+    expect(fn).toMatch(/acked: parseIdListParam\(req\.query\?\.released\)/);
+    const jsons = fn.match(/res\.json\(\{[^\n]*\}\)/g) || [];
+    expect(jsons.length).toBe(3);
+    for (const j of jsons) expect(j).toContain('...holdChanges');
+  });
+
+  it('wiring: the release endpoint is organizer-only, PRO, own held flag items only, and the card has the buttons', () => {
+    const routes = read('routes/organizers.ts');
+    expect(routes).toMatch(/router\.post\('\/me\/auto-queue-settings\/release-holds', authenticate, requireOrganizer, requireTier\('PRO'\), releaseHeldPoshmarkItems\)/);
+    const src = read('controllers/extensionController.ts');
+    const fn = src.slice(src.indexOf('export const releaseHeldPoshmarkItems'), src.indexOf('export const releaseHeldPoshmarkItems') + 2200);
+    expect(fn).toMatch(/where: \{ userId \}/);
+    expect(fn).toMatch(/h\.kind === 'oversized' \|\| h\.kind === 'prohibited'/);
+    expect(fn).toMatch(/releasable\.filter\(\(id\) => requested\.includes\(id\)\)/);
+    const card = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'frontend', 'components', 'AutoQueueCard.tsx'), 'utf8');
+    expect(card).toContain('Try again on Poshmark');
+    expect(card).toContain('Try all again');
+    expect(card).toContain("ENDPOINT + '/release-holds'");
+    expect(card).not.toMatch(/—/);
+    expect(card).not.toMatch(/\bAI\b/);
   });
 });
