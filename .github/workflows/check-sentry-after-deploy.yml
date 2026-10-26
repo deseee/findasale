@@ -16,10 +16,10 @@ name: Sentry Post-Deploy Regression Check
 # Billing note: this workflow runs curl + jq only — typically <1 minute billed time.
 
 on:
-  workflow_run:
-    workflows: ["CI Typecheck & Tests"]
-    types: [completed]
-    branches: [main]
+  # 2026-10-26: triggered by Railway's GitHub deployment status (after the backend is LIVE) instead of
+  # workflow_run on CI. The old trigger attached a 30-minute check run to the commit, and Railway's
+  # "wait for CI" gate waited on it, delaying every backend deploy ~30 min.
+  deployment_status:
 
 concurrency:
   group: sentry-postdeploy-${{ github.ref }}
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run when CI passed — no point checking Sentry if the commit was already
     # known-broken. Also skip if SENTRY_TOKEN is not configured.
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.deployment_status.state == 'success' && contains(github.event.deployment.environment, 'production') && startsWith(github.event.deployment.creator.login, 'railway') }}
     timeout-minutes: 35  # S1137 fix: job sleeps 1800s (30min) by design before checking Sentry -- a 5min timeout guaranteed a Cancelled result on every single run, which Railway's deploy gate was reading as a failed check suite and blocking/stalling every backend deploy (2026-07-18)
 
     steps:
@@ -45,7 +45,7 @@ jobs:
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           # Timestamp of when CI finished (workflow_run.updated_at) — used as window start.
-          CI_FINISHED_AT: ${{ github.event.workflow_run.updated_at }}
+          CI_FINISHED_AT: ${{ github.event.deployment_status.created_at }}
         run: |
           # Bail gracefully if secrets are not configured yet
           if [ -z "$SENTRY_TOKEN" ] || [ -z "$SENTRY_ORG" ] || [ -z "$SENTRY_PROJECT" ]; then
