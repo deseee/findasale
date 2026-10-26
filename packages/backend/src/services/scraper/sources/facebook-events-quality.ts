@@ -17,6 +17,7 @@
  */
 
 import type { ScrapedItem } from '../index';
+import { deriveCityStateFromTitle } from './facebook-address';
 
 /** Events starting further out than this are dropped (parse error or a
  *  listing far too early to be useful to a shopper). */
@@ -92,6 +93,38 @@ export function isLocationConfirmed(item: Pick<ScrapedItem, 'city' | 'state' | '
   return true;
 }
 
+/**
+ * A metro-fallback city/state is the QUERY METRO, not the sale's location, so it
+ * must never be stored as confirmed. When the event's own title names a city +
+ * state (or state + ZIP) -- e.g. "Garage Sale Dallas Texas 75227" found while
+ * searching Plano, TX -- take the city/state from the title instead. Returns a
+ * COPY of the item with provenance cityStateSource='title' / geoConfidence=
+ * 'medium', or null when the title does not name a usable city + state.
+ * Items with a real street address on a metro-fallback city are NOT rescued
+ * (the address may belong to somewhere else; geoConfidence 'unresolved').
+ */
+export function rescueLocationFromTitle(item: ScrapedItem): ScrapedItem | null {
+  if (item.address && item.address.trim().length > 0) return null;
+  const derived = deriveCityStateFromTitle(item.title);
+  if (!derived) return null;
+  if (derived.state === 'QC') return null;
+  const md: Record<string, any> = {
+    ...(item.scrapedMetadata ?? {}),
+    cityStateSource: 'title',
+    geoConfidence: 'medium',
+    metroFallbackCity: item.city,
+    metroFallbackState: item.state,
+  };
+  if (derived.country) md.country = derived.country;
+  return {
+    ...item,
+    city: derived.city,
+    state: derived.state,
+    zip: item.zip || derived.zip || '',
+    scrapedMetadata: md,
+  };
+}
+
 /** Numeric FB event id from sourceItemId ("fb:events:<id>") or the URL. */
 export function fbEventKey(item: Pick<ScrapedItem, 'sourceItemId' | 'sourceUrl'>): string {
   const fromItemId = item.sourceItemId?.match(/^fb:events:(\d+)$/);
@@ -125,7 +158,10 @@ export interface FbEventFilterResult {
  *   2. drop events that ended before today, start > 180 days out, or carry an
  *      invalid date window;
  *   3. drop events whose location could not be confirmed from the event
- *      itself (never publish them under the searched metro).
+ *      itself (never publish them under the searched metro) -- unless the
+ *      title names a city + state/ZIP, in which case the city/state are taken
+ *      from the title (cityStateSource='title'). Applies to already-stored
+ *      sourceUrls too. 'location-from-title' in `dropped` counts rescues, not drops.
  */
 export function filterFbEventItems(
   items: ScrapedItem[],
@@ -152,22 +188,33 @@ export function filterFbEventItems(
   }
 
   const kept: ScrapedItem[] = [];
-  for (const item of byKey.values()) {
+  for (let item of byKey.values()) {
+    const isExisting = !!item.sourceUrl && existing.has(item.sourceUrl);
     // Already ingested: ingest skips it by sourceUrl; keep the freshness touch.
-    if (item.sourceUrl && existing.has(item.sourceUrl)) {
+    // The LOCATION rule still applies (2026-10-26, run 40252537776): a stored
+    // sale whose row was later removed/re-created must not smuggle a
+    // metro-fallback city back in through this pass-through.
+    if (isExisting && isLocationConfirmed(item)) {
       kept.push(item);
       continue;
     }
-    const md = item.scrapedMetadata ?? {};
-    const realEnd = md.endSource === 'event' ? item.endDate : null;
-    const windowReject = checkEventWindow(item.startDate, realEnd, now);
-    if (windowReject) {
-      bump(windowReject);
-      continue;
+    if (!isExisting) {
+      const md0 = item.scrapedMetadata ?? {};
+      const realEnd = md0.endSource === 'event' ? item.endDate : null;
+      const windowReject = checkEventWindow(item.startDate, realEnd, now);
+      if (windowReject) {
+        bump(windowReject);
+        continue;
+      }
     }
     if (!isLocationConfirmed(item)) {
-      bump('location-unconfirmed');
-      continue;
+      const rescued = rescueLocationFromTitle(item);
+      if (!rescued || !isLocationConfirmed(rescued)) {
+        bump(isExisting ? 'location-unconfirmed-existing' : 'location-unconfirmed');
+        continue;
+      }
+      item = rescued;
+      bump('location-from-title');
     }
     kept.push(item);
   }

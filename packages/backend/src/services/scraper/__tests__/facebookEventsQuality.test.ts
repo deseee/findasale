@@ -12,6 +12,7 @@ import {
   checkEventWindow,
   startOfTodayCutoff,
   isLocationConfirmed,
+  rescueLocationFromTitle,
   filterFbEventItems,
   fbEventKey,
   FB_EVENT_MAX_FUTURE_DAYS,
@@ -24,6 +25,7 @@ import {
 import { applyPageLocation } from '../sources/facebook-events-discovery';
 import {
   extractStatesFromTitle,
+  deriveCityStateFromTitle,
   isProxyGeo,
   pageLocationRejection,
 } from '../sources/facebook-address';
@@ -394,5 +396,101 @@ describe('event-page place is scoped to the target event id', () => {
     const page = await fetchFacebookEventPage(`https://www.facebook.com/events/${TARGET}/`, 5000, { requireDate: false });
     expect(page!.address).toBe('407 NE 6th Street, Hubbard, TX 76648');
     expect([page!.city, page!.state]).toEqual(['Hubbard', 'TX']);
+  });
+});
+
+
+describe('deriveCityStateFromTitle', () => {
+  test.each([
+    ['Garage Sale Dallas Texas 75227', 'Dallas', 'TX', '75227'],
+    ['Estate Sale Marshall, MI', 'Marshall', 'MI', undefined],
+    ['Moving Sale - Sugar Land TX 77479', 'Sugar Land', 'TX', '77479'],
+    ['Huge Estate Sale New Braunfels, TX', 'New Braunfels', 'TX', undefined],
+    ['Yard Sale, Kansas City, MO', 'Kansas City', 'MO', undefined],
+    ['Estate Sale Kansas City, MO', 'Kansas City', 'MO', undefined],
+    ['Friday Garage Sale Fort Worth, Texas', 'Fort Worth', 'TX', undefined],
+  ])('%s -> %s, %s', (title, city, state, zip) => {
+    const d = deriveCityStateFromTitle(title);
+    expect(d).not.toBeNull();
+    expect(d!.city).toBe(city);
+    expect(d!.state).toBe(state);
+    expect(d!.zip).toBe(zip);
+  });
+
+  test.each([
+    'Garage Sale',
+    'Estate Sale IN progress',
+    'Moving Sale OR best offer',
+    'Yard Sale this weekend',
+    'Estate Sale 75227',
+    'Garage Sale Texas',
+    '',
+  ])('returns null when the title names no city+state: %s', (title) => {
+    expect(deriveCityStateFromTitle(title)).toBeNull();
+  });
+});
+
+describe('metro-fallback location is never kept as the metro city (run 40252537776)', () => {
+  const plano = (over: Partial<ScrapedItem> & { md?: Record<string, any> } = {}) =>
+    item({
+      title: 'Garage Sale Dallas Texas 75227',
+      city: 'Plano',
+      state: 'TX',
+      sourceItemId: 'fb:events:1626642612248999',
+      sourceUrl: 'https://www.facebook.com/events/1626642612248999/',
+      md: { metro: 'Plano, TX', cityStateSource: 'metro-fallback', geoConfidence: 'metro-fallback' },
+      ...over,
+    });
+
+  test('Dallas title on a Plano metro-fallback is stored as Dallas, TX (title source)', () => {
+    const r = rescueLocationFromTitle(plano())!;
+    expect(r.city).toBe('Dallas');
+    expect(r.state).toBe('TX');
+    expect(r.zip).toBe('75227');
+    expect(r.scrapedMetadata!.cityStateSource).toBe('title');
+    expect(r.scrapedMetadata!.metroFallbackCity).toBe('Plano');
+    expect(isLocationConfirmed(r)).toBe(true);
+  });
+
+  test('"Estate Sale Marshall, MI" found via Worcester, MA becomes Marshall, MI', () => {
+    const w = item({
+      title: 'Estate Sale Marshall, MI',
+      city: 'Worcester',
+      state: 'MA',
+      sourceItemId: 'fb:events:1988999475115600',
+      sourceUrl: 'https://www.facebook.com/events/1988999475115600/',
+      md: { metro: 'Worcester, MA', cityStateSource: 'metro-fallback', geoConfidence: 'metro-fallback' },
+    });
+    const { kept, dropped } = filterFbEventItems([w], { now: NOW });
+    expect(kept).toHaveLength(1);
+    expect(kept[0].city).toBe('Marshall');
+    expect(kept[0].state).toBe('MI');
+    expect(dropped['location-from-title']).toBe(1);
+    // the input object is not mutated
+    expect(w.city).toBe('Worcester');
+  });
+
+  test('metro-fallback with a title that names no place is still dropped', () => {
+    const { kept, dropped } = filterFbEventItems([plano({ title: 'Garage Sale' })], { now: NOW });
+    expect(kept).toHaveLength(0);
+    expect(dropped['location-unconfirmed']).toBe(1);
+  });
+
+  test('a metro-fallback item with a street address is not rescued from the title', () => {
+    const { kept } = filterFbEventItems(
+      [plano({ address: '12 Main St', md: { cityStateSource: 'metro-fallback', geoConfidence: 'unresolved' } })],
+      { now: NOW }
+    );
+    expect(kept).toHaveLength(0);
+  });
+
+  test('already-stored sourceUrl does NOT bypass the location rule', () => {
+    const noPlace = plano({ title: 'Garage Sale' });
+    const r1 = filterFbEventItems([noPlace], { now: NOW, existingSourceUrls: new Set([noPlace.sourceUrl]) });
+    expect(r1.kept).toHaveLength(0);
+    expect(r1.dropped['location-unconfirmed-existing']).toBe(1);
+    const withPlace = plano();
+    const r2 = filterFbEventItems([withPlace], { now: NOW, existingSourceUrls: new Set([withPlace.sourceUrl]) });
+    expect(r2.kept[0].city).toBe('Dallas');
   });
 });

@@ -321,6 +321,96 @@ export function extractStatesFromTitle(title: string | undefined | null): string
   return Array.from(out);
 }
 
+// Words that precede a city in sale titles but are never part of the city name.
+const TITLE_CITY_STOPWORDS = new Set([
+  'sale', 'sales', 'garage', 'yard', 'estate', 'moving', 'rummage', 'tag', 'barn', 'flea',
+  'market', 'auction', 'huge', 'big', 'giant', 'multi', 'family', 'community', 'neighborhood',
+  'church', 'online', 'in', 'at', 'the', 'and', 'of', 'near', 'sat', 'sun', 'saturday', 'sunday',
+  'friday', 'monday', 'tuesday', 'wednesday', 'thursday', 'weekend', 'annual', 'spring', 'fall',
+  'estate-sale', 'liquidation', 'downsizing', 'inside', 'indoor', 'outdoor', 'entire', 'house',
+  'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec',
+  'january', 'february', 'march', 'april', 'june', 'july', 'august', 'september', 'october',
+  'november', 'december', 'sale!', 'sale:', 'sale-',
+]);
+
+/**
+ * Derive the event's OWN city + state from its title when the title names them
+ * ("Estate Sale Marshall, MI", "Garage Sale Dallas Texas 75227",
+ * "Moving Sale - Sugar Land TX 77479"). Used to replace a query-metro fallback
+ * city so it is never stored (or dropped) as if it were the sale's location.
+ *
+ * Conservative: requires a valid US/CA region AND at least one capitalised
+ * city token directly before it. Accepts, in order:
+ *   1. "<City>, ST" (comma + exact uppercase code)
+ *   2. "<City> ST <ZIP>" (uppercase code + 5-digit ZIP)
+ *   3. "<City>[,] <Spelled State Name>" ending the place / before a ZIP
+ * A bare "<City> ST" with no comma and no ZIP is rejected (matches words like
+ * "IN"/"OR"/"ME"). Returns null when unsure. Pure + exported for tests.
+ */
+export function deriveCityStateFromTitle(
+  title: string | undefined | null
+): { city: string; state: string; country: 'US' | 'CA'; zip?: string } | null {
+  if (!title || typeof title !== 'string') return null;
+  const t = title.replace(/[\u2013\u2014|]/g, ' - ').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+
+  const cityBefore = (prefix: string): string | null => {
+    const toks = prefix.replace(/[,\s]+$/, '').split(' ').filter(Boolean);
+    const out: string[] = [];
+    for (let i = toks.length - 1; i >= 0 && out.length < 3; i--) {
+      const w = toks[i].replace(/^[("'\u2018\u201c]+/, '');
+      if (!/^[A-Z][A-Za-z.'\u2019-]*$/.test(w)) break;
+      if (TITLE_CITY_STOPWORDS.has(w.toLowerCase().replace(/[.!:]+$/, ''))) break;
+      out.unshift(w);
+      if (/,$/.test(toks[i - 1] ?? '')) break; // a comma before this token ends the city
+    }
+    if (out.length === 0) return null;
+    const city = out.join(' ').replace(/[.,]+$/, '');
+    return city.length >= 3 ? city : null;
+  };
+  const result = (prefix: string, region: { code: string; country: 'US' | 'CA' }, zip?: string) => {
+    const city = cityBefore(prefix);
+    return city ? { city, state: region.code, country: region.country, ...(zip ? { zip } : {}) } : null;
+  };
+
+  let m: RegExpExecArray | null;
+  // 1. "<City>, ST" (optionally followed by ZIP)
+  const re1 = /,\s*([A-Z]{2})(?:\s+(\d{5})(?:-\d{4})?)?(?=$|[\s)\]\-.,;:!/])/g;
+  while ((m = re1.exec(t)) !== null) {
+    if (!US_STATE_CODES.has(m[1]) && !CA_PROVINCE_CODES.has(m[1])) continue;
+    const region = normalizeRegionCode(m[1]);
+    const r = region && result(t.slice(0, m.index), region, m[2]);
+    if (r) return r;
+  }
+  // 2. "<City> ST <ZIP>"
+  const re2 = /([A-Za-z][A-Za-z .'\u2019-]*?)\s+([A-Z]{2})\s+(\d{5})(?:-\d{4})?\b/;
+  m = re2.exec(t);
+  if (m && (US_STATE_CODES.has(m[2]) || CA_PROVINCE_CODES.has(m[2]))) {
+    const region = normalizeRegionCode(m[2]);
+    const r = region && result(m[1], region, m[3]);
+    if (r) return r;
+  }
+  // 3. "<City>[,] <State Name>" ending the place or before a ZIP
+  const names: Array<[string, string]> = [
+    ...Object.entries(US_STATE_NAME_TO_CODE),
+    ...Object.entries(CA_PROVINCE_NAME_TO_CODE),
+  ].sort((a, b) => b[0].length - a[0].length);
+  const norm = t.replace(/,/g, ', ').replace(/\s+/g, ' ').replace(/ ,/g, ',');
+  for (const [name] of names) {
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re3 = new RegExp(
+      `^(.*?)\\s+${esc}(?:\\s+(\\d{5})(?:-\\d{4})?\\b|(?=\\s*(?:$|[)\\]\\-.,;:!/])))`,
+      'i'
+    );
+    const mm = re3.exec(norm);
+    if (!mm) continue;
+    const region = normalizeRegionCode(name);
+    const r = region && result(mm[1], region, mm[2]);
+    if (r) return r;
+  }
+  return null;
+}
+
 /**
  * Known geolocation(s) of the Cloudflare page-fetch proxy egress, as
  * "City, ST". FB fills logged-out event pages with suggested events near the
