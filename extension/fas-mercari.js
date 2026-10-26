@@ -256,6 +256,25 @@
       'font-weight:600;font-size:13px;background:' + (primary ? '#3c8c5a' : '#3a4842') + ';color:#fff">' + label + '</button>';
   }
   function closeBtnHandler() { const c = document.getElementById('fas-merc-close'); if (c) c.onclick = () => bar && bar.remove(); }
+  // 1.0.66 (2026-10-26 retest): every item-level stop and the review screen offer "Skip this item". Before, the only way
+  // forward was "I posted", which would falsely mark an unposted item listed, so a stuck item blocked the queue. Skip
+  // advances the queue WITHOUT marking listed; background.js logs it with the reason (FAS_AUTOQUEUE_ITEM_SKIPPED).
+  function skipButton(index, total) {
+    return button('fas-merc-skip', ((index + 1) < total) ? 'Skip this item (not posted) &#9654;' : 'Skip this item (not posted)', false);
+  }
+  function wireSkip(item, index, total, reason) {
+    const b = document.getElementById('fas-merc-skip');
+    if (!b || !item) return;
+    b.onclick = async () => {
+      b.disabled = true;
+      const more = (index + 1) < total;
+      T.info('item_skipped', 'You skipped this item. It was NOT marked listed on Mercari.', { reason: reason });
+      try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: item.id, skipped: reason }); } catch (e) { T.warn('queue_advance_failed', 'advanceMercariQueue (skip) failed: ' + ((e && e.message) || e)); }
+      if (more) { location.href = SELL_URL_HINT; return; }
+      overlayInfo('Skipped <b>' + escapeHtml(item.title) + '</b>. It was not marked listed. That was the last item in the queue.' + button('fas-merc-close', 'Close', false));
+      closeBtnHandler();
+    };
+  }
 
   // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): fieldByLabel/openerByLabel below only recognize a
   // real <label> tag (for=/wrapping) or an aria-label attribute. Live-confirmed 2026-08-19
@@ -2470,6 +2489,7 @@
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/weight are UNVERIFIED guesses), double-check the <b>Smart Pricing floor price</b> we set, then click Mercari\'s own <b>List this item</b> yourself -- this extension never publishes for you and never auto-relists on Mercari.</div>' +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       button('fas-merc-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
+      skipButton(index, total) +
       button('fas-merc-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     const next = document.getElementById('fas-merc-next');
@@ -2490,6 +2510,7 @@
       T.end('Posted on Mercari: ' + item.title + (more ? ' (next item loading)' : ' (queue finished)'));
       if (more) { location.href = SELL_URL_HINT; } else { bar && bar.remove(); }
     };
+    wireSkip(item, index, total, 'review_skipped');
     closeBtnHandler();
   }
 
@@ -2764,7 +2785,8 @@
       }
       T.problem({ code: 'mercari_form_not_found', title: 'Could not find the Mercari Sell form', what: 'No Title field or photo upload box appeared within ' + (MERC_FORM_WAIT_MS / 1000) + ' seconds, even after reloading the page once.', why: 'Either this is not the new-listing page, the page is still loading, or Mercari changed its layout.', next: 'Nothing was filled. Fill this listing by hand, or reload the Sell page and reopen the extension. Details were sent automatically; nothing is needed from you.' });
       T.end('Stopped: Sell form not found');
-      overlayWarn('This doesn\'t look like a fillable Mercari Sell form yet (no Title field or photo dropzone found after waiting). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-merc-close', 'Close', false));
+      overlayWarn('This doesn\'t look like a fillable Mercari Sell form yet (no Title field or photo dropzone found after waiting). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + skipButton(index, total) + button('fas-merc-close', 'Close', false));
+      wireSkip(item, index, total, 'form_not_found');
       closeBtnHandler();
       return;
     }
@@ -2779,7 +2801,8 @@
     if (fillResult.navigatedAwayFrom) {
       T.problem({ code: 'mercari_navigated_away', title: 'Mercari left the Sell page', what: 'The page changed to ' + location.pathname + ' while filling ' + fillResult.navigatedAwayFrom + '.', why: 'Something on the page was probably clicked that should not have been (for example Save draft), so the fill was stopped.', next: 'Fields before that point may be filled; nothing after was attempted. Check your Mercari drafts and finish this listing by hand.', ctx: { field: fillResult.navigatedAwayFrom } });
       T.end('Stopped: Mercari navigated away');
-      overlayWarn('Mercari navigated away from the Sell page (now on <b>' + escapeHtml(location.pathname) + '</b>) while filling <b>' + escapeHtml(fillResult.navigatedAwayFrom) + '</b> -- fields before that point may have filled, but nothing after it was attempted. This usually means something on the page got clicked that shouldn\'t have (e.g. a Save/List button) -- check your Mercari drafts list and finish this listing manually.' + button('fas-merc-close', 'Close', false));
+      overlayWarn('Mercari navigated away from the Sell page (now on <b>' + escapeHtml(location.pathname) + '</b>) while filling <b>' + escapeHtml(fillResult.navigatedAwayFrom) + '</b> -- fields before that point may have filled, but nothing after it was attempted. This usually means something on the page got clicked that shouldn\'t have (e.g. a Save/List button) -- check your Mercari drafts list and finish this listing manually.' + skipButton(index, total) + button('fas-merc-close', 'Close', false));
+      wireSkip(item, index, total, 'navigated_away');
       closeBtnHandler();
       return;
     }
@@ -2796,7 +2819,8 @@
       const cm = fillResult.categoryMismatch;
       T.problem({ code: 'mercari_category_mismatch', title: 'Mercari category is not the one FindA.Sale picked', what: 'For "' + cm.title + '" (item ' + cm.itemId + ') FindA.Sale expected "' + cm.expectedPath + '" but the Mercari draft Category shows "' + cm.shown + '".', why: 'The exact category pick did not work (' + cm.reason + '), so Mercari ended up on a different category or none. FindA.Sale stopped instead of leaving this listing in the wrong category.', next: 'On this draft set Category to "' + cm.expectedPath + '" by hand, then finish the remaining fields and click Mercari\'s own List button. Nothing after Category was filled.', ctx: cm.ctx });
       T.end('Stopped: Mercari category mismatch');
-      overlayWarn('Category mismatch for <b>' + escapeHtml(cm.title) + '</b>: FindA.Sale expected <b>' + escapeHtml(cm.expectedPath) + '</b> but Mercari shows <b>' + escapeHtml(cm.shown) + '</b> (' + escapeHtml(cm.reason) + '). Filling stopped before Brand. Please set the Category by hand on this draft, then finish the remaining fields.' + button('fas-merc-close', 'Close', false));
+      overlayWarn('Category mismatch for <b>' + escapeHtml(cm.title) + '</b>: FindA.Sale expected <b>' + escapeHtml(cm.expectedPath) + '</b> but Mercari shows <b>' + escapeHtml(cm.shown) + '</b> (' + escapeHtml(cm.reason) + '). Filling stopped before Brand. Please set the Category by hand on this draft, then finish the remaining fields.' + skipButton(index, total) + button('fas-merc-close', 'Close', false));
+      wireSkip(item, index, total, 'category_mismatch');
       closeBtnHandler();
       return;
     }
@@ -2808,7 +2832,8 @@
     if (fillResult.shippingLabelFailedReason) {
       T.problem({ code: 'mercari_shipping_incomplete', title: 'Shipping section needs you', what: String(fillResult.shippingLabelFailedReason).slice(0, 300), why: 'Mercari will not accept the listing until the shipping section is complete, so FindA.Sale stopped before the end instead of leaving it half done.', next: 'Finish the Shipping section on this draft, then click Mercari\'s own List button.' });
       T.end('Stopped: shipping section incomplete');
-      overlayWarn(escapeHtml(fillResult.shippingLabelFailedReason) + ' Please finish the Shipping section on this draft yourself, then use Mercari\'s own List button.' + button('fas-merc-close', 'Close', false));
+      overlayWarn(escapeHtml(fillResult.shippingLabelFailedReason) + ' Please finish the Shipping section on this draft yourself, then use Mercari\'s own List button.' + skipButton(index, total) + button('fas-merc-close', 'Close', false));
+      wireSkip(item, index, total, 'shipping_incomplete');
       closeBtnHandler();
       return;
     }
@@ -3086,7 +3111,8 @@
     } catch (e) {
       T.problem({ code: 'mercari_unexpected_error', title: 'Something went wrong filling this listing', what: (e && e.message) || 'Unknown error', why: 'An unexpected error stopped the fill.', next: 'Nothing was published. Complete this listing yourself, or reopen the extension to try again. Details were sent automatically; nothing is needed from you.' });
       T.end('Stopped: unexpected error');
-      overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + button('fas-merc-close', 'Close', false));
+      overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + skipButton(queued.index, queued.total) + button('fas-merc-close', 'Close', false));
+      wireSkip(queued.item, queued.index, queued.total, 'fill_error');
       closeBtnHandler();
     }
   }

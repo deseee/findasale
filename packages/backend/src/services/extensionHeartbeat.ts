@@ -10,7 +10,10 @@
 //                can list them instead of the hold being silent;
 //   v         -- extension version;
 //   alertedAt -- set by jobs/extensionHeartbeatAlertJob.ts when it has already notified about the current silence.
-//                A new successful poll replaces the context, which re-arms the alert for the next silence.
+//                A new successful poll clears it, which re-arms the alert for the next silence.
+// Only an extension poll (one that sends ?v=) records a heartbeat (2026-10-26 retest: a cookie GET from the web replaced
+// the whole context and the page showed held 0 / version null). A poll merges into the existing context: held and v are
+// the extension's current report, alertedAt is cleared, and any other keys are kept.
 // Pure helpers are exported for unit tests.
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
@@ -20,7 +23,10 @@ export const HEARTBEAT_SOURCE = 'AUTOQUEUE_HEARTBEAT';
 export const HEARTBEAT_STALE_MS = 24 * 60 * 60 * 1000;
 export const HEARTBEAT_HELD_MAX = 50;
 
-export type HeldKind = 'oversized' | 'prohibited';
+// 'edit' (2026-10-26): a price/stock EDIT on an already-live Poshmark listing that Poshmark flagged (certify) and that its own Edit
+// Listing form did not take either. The extension holds it (never retries, never certifies) and the web card says "Poshmark needs you to
+// confirm this edit". The item IS listed on Poshmark, so heldStillUnlisted keeps it.
+export type HeldKind = 'oversized' | 'prohibited' | 'edit';
 export type HeldItem = { itemId: string; kind: HeldKind; at: string };
 export type HeartbeatRecord = { lastPollAt: Date | null; held: HeldItem[]; alertedAt: Date | null; version: string | null };
 
@@ -38,7 +44,7 @@ export function parseHeldParam(raw: unknown, now: number = Date.now()): HeldItem
   for (const part of raw.split(',').slice(0, HEARTBEAT_HELD_MAX * 2)) {
     const [itemId, kind, atRaw] = part.split('~');
     if (!itemId || !ITEM_ID_RE.test(itemId) || seen.has(itemId)) continue;
-    if (kind !== 'oversized' && kind !== 'prohibited') continue;
+    if (kind !== 'oversized' && kind !== 'prohibited' && kind !== 'edit') continue;
     const at = Number(atRaw);
     if (!Number.isFinite(at) || at <= 0 || at > now + 60 * 60 * 1000) continue;
     seen.add(itemId);
@@ -50,6 +56,25 @@ export function parseHeldParam(raw: unknown, now: number = Date.now()): HeldItem
 
 export function parseVersionParam(raw: unknown): string | null {
   return typeof raw === 'string' && VERSION_RE.test(raw) ? raw : null;
+}
+
+/**
+ * Held items that are still not listed on Poshmark (2026-10-26 retest: an item flagged in the morning and published there
+ * the same evening stayed on the held list). jobs: that item's Poshmark MarketplaceListingJob rows. Same "latest row per
+ * item wins, a failed removal (REMOVE/SKIPPED) does not end a listing" rule as getAutolistQueue's isAlreadyListed. Pure.
+ */
+export function heldStillUnlisted(held: HeldItem[], jobs: Array<{ itemId: string; action: string; status: string; createdAt: Date }>): HeldItem[] {
+  const latest = new Map<string, { action: string; status: string; createdAt: Date }>();
+  for (const j of jobs) {
+    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
+    const cur = latest.get(j.itemId);
+    if (!cur || j.createdAt > cur.createdAt) latest.set(j.itemId, j);
+  }
+  return held.filter((h) => {
+    if (h.kind === 'edit') return true;   // an edit hold is about a listing that is live; "listed" does not end it
+    const l = latest.get(h.itemId);
+    return !(l && l.action === 'POST' && l.status === 'POSTED');
+  });
 }
 
 /** Heartbeat status for the web card. stale = auto queue is on and no successful poll within HEARTBEAT_STALE_MS. */
@@ -75,22 +100,38 @@ function toRecord(row: { createdAt: Date; context: unknown } | null): HeartbeatR
   const ctx = (row.context && typeof row.context === 'object' ? row.context : {}) as Record<string, unknown>;
   const held = Array.isArray(ctx.held)
     ? (ctx.held as unknown[]).filter((h): h is HeldItem => !!h && typeof h === 'object'
-      && typeof (h as HeldItem).itemId === 'string' && ((h as HeldItem).kind === 'oversized' || (h as HeldItem).kind === 'prohibited')
+      && typeof (h as HeldItem).itemId === 'string' && ((h as HeldItem).kind === 'oversized' || (h as HeldItem).kind === 'prohibited' || (h as HeldItem).kind === 'edit')
       && typeof (h as HeldItem).at === 'string')
     : [];
   const alertedAt = typeof ctx.alertedAt === 'string' && !Number.isNaN(Date.parse(ctx.alertedAt)) ? new Date(ctx.alertedAt) : null;
   return { lastPollAt: row.createdAt, held, alertedAt, version: typeof ctx.v === 'string' ? ctx.v : null };
 }
 
-/** Record a successful poll. Never throws (a heartbeat write must never break the queue response). */
+/**
+ * Merge an extension poll into an existing heartbeat context: keep unrelated keys, set the extension's current held list
+ * and version, and drop alertedAt (a successful poll ends the silence). Pure; exported for unit tests.
+ */
+export function mergeHeartbeatContext(existing: unknown, info: { held: HeldItem[]; version: string | null }): Record<string, unknown> {
+  const base = (existing && typeof existing === 'object' && !Array.isArray(existing) ? { ...(existing as Record<string, unknown>) } : {}) as Record<string, unknown>;
+  delete base.alertedAt;
+  base.held = info.held;
+  if (info.version) base.v = info.version;
+  return base;
+}
+
+/**
+ * Record a successful extension poll. Never throws (a heartbeat write must never break the queue response).
+ * A poll with no extension version is not the extension and is ignored (see the header).
+ */
 export async function recordExtensionHeartbeat(organizerId: string, info: { held: HeldItem[]; version: string | null }): Promise<void> {
+  if (!info.version) return;
   try {
-    const context = { held: info.held, v: info.version } as unknown as Prisma.InputJsonValue;
     const existing = await prisma.extensionRuntimeLog.findFirst({
       where: { organizerId, source: HEARTBEAT_SOURCE },
       orderBy: { createdAt: 'desc' },
-      select: { id: true },
+      select: { id: true, context: true },
     });
+    const context = mergeHeartbeatContext(existing?.context, info) as unknown as Prisma.InputJsonValue;
     if (existing) {
       await prisma.extensionRuntimeLog.update({ where: { id: existing.id }, data: { createdAt: new Date(), context } });
     } else {

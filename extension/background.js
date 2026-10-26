@@ -1133,6 +1133,33 @@ const FAS_EDIT_PENDING_KEY = 'fasEditPending';   // { PLATFORM: [raw backend ent
 // is left open and focused instead of being closed; this remembers it so the next run can close the stale one first.
 const FAS_EDIT_NEEDS_USER_CODES = ['login_required', 'captcha_or_verification', 'poshmark_flagged'];
 const FAS_EDIT_KEPT_TAB_KEY = 'fasEditKeptTab';
+// 1.0.66: Poshmark price/stock edits its API refused with a certify flag (fragile / oversized / prohibited) AND its own Edit Listing form
+// then failed on. Held per item: { itemId: { at, price, qty, reason, code, title } }. Never retried automatically (certifying is the
+// seller's call) until the wanted price/quantity changes, the item leaves the drift queue, or 30 days pass. Reported to the web page
+// (kind "edit" in the poll's held parameter) as "Poshmark needs you to confirm this edit".
+const FAS_POSH_EDIT_HOLD_KEY = 'fasPoshEditHold';
+async function fasPoshEditHoldSync(entries, now) {
+  const holds = (await chrome.storage.local.get(FAS_POSH_EDIT_HOLD_KEY))[FAS_POSH_EDIT_HOLD_KEY] || {};
+  if (!Object.keys(holds).length) return new Set();
+  const r = FAS_EDIT_CORE.prunePoshHolds(holds, entries, now);
+  if (r.changed) await chrome.storage.local.set({ [FAS_POSH_EDIT_HOLD_KEY]: r.holds });
+  return new Set(r.heldIds);
+}
+// -> true when this is a NEW hold (the organizer has not been told about this item+change yet).
+async function fasPoshEditHoldRecord(entry, res) {
+  const holds = (await chrome.storage.local.get(FAS_POSH_EDIT_HOLD_KEY))[FAS_POSH_EDIT_HOLD_KEY] || {};
+  const hold = FAS_EDIT_CORE.poshHoldFor(entry, res, Date.now());
+  const isNew = !FAS_EDIT_CORE.isPoshEditHeld(holds[entry.id], entry, Date.now());
+  holds[entry.id] = isNew ? hold : holds[entry.id];
+  await chrome.storage.local.set({ [FAS_POSH_EDIT_HOLD_KEY]: holds });
+  return isNew;
+}
+async function fasPoshEditHoldClear(itemId) {
+  const holds = (await chrome.storage.local.get(FAS_POSH_EDIT_HOLD_KEY))[FAS_POSH_EDIT_HOLD_KEY] || {};
+  if (!holds[itemId]) return;
+  delete holds[itemId];
+  await chrome.storage.local.set({ [FAS_POSH_EDIT_HOLD_KEY]: holds });
+}
 async function fasEditCloseKeptTab() {
   try {
     const st = await chrome.storage.local.get([FAS_EDIT_KEPT_TAB_KEY]);
@@ -1621,7 +1648,13 @@ async function fasEditRunPlatform(platform, rawEntries) {
     const c = await fasEditConfirm(platform, e);
     await fasEditLogEntry(c.ok ? 'info' : 'warn', platform, e, c.ok ? 'quantity_not_applicable' : 'confirm_failed', c.ok ? 'One unit per listing here; stock number acknowledged, nothing to edit' : 'Could not acknowledge stock: ' + (c.error || c.status));
   }
-  const work = all.filter((e) => Core.hasWork(e) && (e.priceDrift || Core.wantsQuantity(platform, e))).filter((e) => Core.shouldAttempt(state.items[platform + ':' + e.id], now));
+  // 1.0.66: Poshmark items whose edit Poshmark flagged (certify) and whose own Edit Listing form also failed stay held until the wanted price changes.
+  let poshHeldIds = new Set();
+  if (platform === 'POSHMARK') {
+    try { poshHeldIds = await fasPoshEditHoldSync(all, now); } catch (e) { /* hold is best-effort */ }
+    if (poshHeldIds.size) fasTOnce('skip_posh_hold', 30 * 60 * 1000, 'info', 'posh_edit_held', poshHeldIds.size + ' Poshmark edit(s) are held for you to confirm on Poshmark and are not retried automatically', { platform: platform, flow: 'edit', ctx: { held: poshHeldIds.size } });
+  }
+  const work = all.filter((e) => Core.hasWork(e) && (e.priceDrift || Core.wantsQuantity(platform, e))).filter((e) => !poshHeldIds.has(e.id)).filter((e) => Core.shouldAttempt(state.items[platform + ':' + e.id], now));
   if (!work.length) {
     if (trivial.length) fasT('info', 'stock_acknowledged', trivial.length + ' stock-only change(s) acknowledged on ' + platform + ' (one unit per listing, nothing to edit)', { platform: platform, flow: 'edit', ctx: { count: trivial.length } });
     else if (all.length) fasTOnce('skip_notdue_' + platform, 30 * 60 * 1000, 'info', 'run_skipped', platform + ': ' + all.length + ' item(s) queued but none are due yet (retry backoff)', { platform: platform, flow: 'edit', ctx: { queued: all.length } });
@@ -1675,7 +1708,12 @@ async function fasEditRunPlatform(platform, rawEntries) {
         fasReportDiscoveredRemoteId(platform, entry.id, found, state);
       }
 
+      // 1.0.66: Poshmark flagged the API save (certify) and the Edit Listing form path failed too -> hold this item+change (see FAS_POSH_EDIT_HOLD_KEY).
+      let poshHoldNew = false;
+      const poshHeld = FAS_EDIT_CORE.poshHoldEligible(platform, res);
+      if (poshHeld) { try { poshHoldNew = await fasPoshEditHoldRecord(entry, res); delete state.items[key]; } catch (e) { /* best-effort */ } }
       if (res.state === 'done') {
+        if (platform === 'POSHMARK') { try { await fasPoshEditHoldClear(entry.id); } catch (e) { /* best-effort */ } }
         const c = await fasEditConfirm(platform, entry);
         applied++;
         delete state.items[key];
@@ -1685,6 +1723,12 @@ async function fasEditRunPlatform(platform, rawEntries) {
         if (res.details && res.details.collateral && res.details.collateral.length) await fasEditLogEntry('warn', platform, entry, 'collateral_change', 'Poshmark echoed different values after the save for: ' + res.details.collateral.join(', ') + ' -- check the listing', { step: 'verify' });
         if (res.details && res.details.quantityControl === false && Core.wantsQuantity(platform, entry)) await fasEditLogEntry('warn', platform, entry, 'no_quantity_control', 'Price applied; the Facebook edit form has no quantity control (single-unit listing), so quantity was left alone', { step: 'form' });
         await fasEditAddDiag(platform, diagRecord);
+      } else if (poshHeld && res.state === 'fail') {
+        failed++;
+        await fasEditLogEntry('warn', platform, entry, 'poshmark_needs_confirm', 'Poshmark needs you to confirm this edit (it flagged the change as "' + String((res.scratch && res.scratch.apiFlagged) || 'flagged') + '" and its own Edit Listing form did not take it: ' + (res.reason || res.code) + '). It will not be retried automatically; change it on Poshmark yourself, or change the price here again.', { step: res.step, selector: res.selector });
+        await fasEditAddDiag(platform, diagRecord);
+        await fasEditForwardDiag(platform, diagRecord);
+        if (poshHoldNew) { try { chrome.notifications.create('fasPoshEditHold', { type: 'basic', iconUrl: 'icon128.png', title: 'FindA.Sale needs you', message: 'Poshmark needs you to confirm this edit: "' + String(entry.title || 'an item').slice(0, 50) + '". It will not be retried automatically.', priority: 1 }); } catch (e) { /* best-effort */ } }
       } else if (res.state === 'blocked') {
         const cnt = ((state.platformBackoff[platform] && state.platformBackoff[platform].count) || 0) + 1;
         state.platformBackoff[platform] = { until: Date.now() + Core.backoffMs(cnt, Math.random()), count: cnt };
@@ -2584,11 +2628,103 @@ function fasAutoQueueRunState(queueLen, index, touchedAt, now, staleMs) {
   if (typeof touchedAt !== 'number' || !(touchedAt > 0)) return 'unknown_age';
   return now - touchedAt > staleMs ? 'abandoned' : 'active';
 }
+// 1.0.66 (2026-10-26 retest): a queue written before 1.0.65 had no touched time, and its 6h clock only started on the
+// first 1.0.65 poll that had something new for that marketplace, so a leftover Mercari item (live: one Cecil Fielder
+// item) sat forever whenever the server queue was empty. Two fixes:
+// (a) on install/update every unfinished non-Facebook queue without a touched time gets one right away (the time the
+//     auto queue loaded it when that is known, otherwise now), so legacy queues have a real clock immediately. Pure.
+function fasLegacyQueueStamps(st, now) {
+  const map = Object.assign({}, (st && st[FAS_QUEUE_TOUCHED_KEY]) || {});
+  const aqAll = (st && st.fasAutoQueued) || {};
+  let changed = false;
+  for (const platform of Object.keys(FAS_AUTOLIST_QUEUE_CFG)) {
+    const cfg = FAS_AUTOLIST_QUEUE_CFG[platform];
+    if (cfg.setAt) continue; // Facebook keeps its own fasQueueSetAt clock
+    const q = (st && st[cfg.queue]) || [];
+    const idx = (st && st[cfg.index]) || 0;
+    if (!q.length || idx >= q.length || map[platform] > 0) continue;
+    const aq = aqAll[platform];
+    map[platform] = aq && aq.at > 0 && aq.at <= now && q[0] && aq.firstId === q[0].id ? aq.at : now;
+    changed = true;
+  }
+  return changed ? map : null;
+}
+async function fasStampLegacyQueues() {
+  try {
+    const keys = [FAS_QUEUE_TOUCHED_KEY, 'fasAutoQueued'];
+    for (const p of Object.keys(FAS_AUTOLIST_QUEUE_CFG)) keys.push(FAS_AUTOLIST_QUEUE_CFG[p].queue, FAS_AUTOLIST_QUEUE_CFG[p].index);
+    const map = fasLegacyQueueStamps(await chrome.storage.local.get(keys), Date.now());
+    if (map) await chrome.storage.local.set({ [FAS_QUEUE_TOUCHED_KEY]: map });
+  } catch (e) { /* best-effort; the poll still starts the clock as before */ }
+}
+try { chrome.runtime.onInstalled.addListener(fasStampLegacyQueues); } catch (e) { /* tests */ }
+// (b) the abandonment check runs on every poll, also when the server has nothing new for that marketplace (or the
+//     per-check limit is used up). An abandoned queue with nothing to replace it is cleared (nothing is marked listed;
+//     the server re-offers any still-unlisted eligible item later) and logged as abandoned. Facebook is left to its own
+//     30-minute rule at its read site. Returns the poll outcome string for this platform.
+async function fasAutoQueueSweepStale(platform, fallbackOutcome) {
+  const cfg = FAS_AUTOLIST_QUEUE_CFG[platform];
+  if (!cfg || cfg.setAt) return platform + ':' + fallbackOutcome;
+  try {
+    const st = await chrome.storage.local.get([cfg.queue, cfg.index, FAS_QUEUE_TOUCHED_KEY, 'fasAutoQueued']);
+    const curQueue = st[cfg.queue] || [];
+    const curIndex = st[cfg.index] || 0;
+    const touchedMap = st[FAS_QUEUE_TOUCHED_KEY] || {};
+    let touchedAt = touchedMap[platform];
+    if (!(touchedAt > 0)) {
+      const aq = (st.fasAutoQueued || {})[platform];
+      if (aq && aq.at > 0 && curQueue[0] && aq.firstId === curQueue[0].id) touchedAt = aq.at;
+    }
+    const runState = fasAutoQueueRunState(curQueue.length, curIndex, touchedAt, Date.now(), FAS_AUTOLIST_ABANDON_MS);
+    if (runState === 'unknown_age') {
+      touchedMap[platform] = Date.now();
+      await chrome.storage.local.set({ [FAS_QUEUE_TOUCHED_KEY]: touchedMap });
+      return platform + ':' + fallbackOutcome;
+    }
+    if (runState !== 'abandoned') return platform + ':' + fallbackOutcome;
+    const left = curQueue.slice(curIndex);
+    const idleHours = Math.round(((Date.now() - touchedAt) / 3600000) * 10) / 10;
+    fasLog('warn', 'FAS_AUTOQUEUE_ABANDONED', platform + ': cleared a queue untouched for ' + idleHours + 'h (' + left.length + ' unfinished item(s), not marked listed, nothing new to replace it)',
+      { platform: platform, idleHours: idleHours, index: curIndex, length: curQueue.length, replaced: false, leftoverIds: left.slice(0, 10).map((q) => q && q.id), leftoverTitles: left.slice(0, 3).map((q) => String((q && q.title) || '').slice(0, 60)) },
+      { platform: platform, itemId: left[0] && left[0].id });
+    fasT('warn', 'autoqueue_abandoned', 'Cleared an old ' + platform + ' queue nobody had touched for ' + idleHours + ' hours (nothing was marked listed)', { platform: platform, flow: 'autoqueue', itemId: left[0] && left[0].id, title: left[0] && left[0].title });
+    await chrome.storage.local.set({ [cfg.queue]: [], [cfg.index]: 0 });
+    return platform + ':abandoned_cleared_' + left.length;
+  } catch (e) {
+    return platform + ':' + fallbackOutcome;
+  }
+}
+// 1.0.66: "Skip this item" on the Mercari / Poshmark overlay advances the queue WITHOUT marking the item listed and
+// records why. Reasons are a short fixed vocabulary from the content scripts; anything else reads as no skip. Pure.
+function fasSkipReason(raw) {
+  return typeof raw === 'string' && /^[a-z_]{3,40}$/.test(raw) ? raw : null;
+}
+async function fasPoshUnflag(itemId) {
+  try {
+    if (typeof itemId !== 'string' || !itemId) return;
+    const f = (await chrome.storage.local.get('fasPoshFlagged')).fasPoshFlagged || {};
+    if (!f[itemId]) return;
+    delete f[itemId];
+    await chrome.storage.local.set({ fasPoshFlagged: f });
+  } catch (e) { /* best-effort */ }
+}
+function fasLogQueueSkip(platform, item, reason) {
+  const id = item && item.id;
+  fasLog('info', 'FAS_AUTOQUEUE_ITEM_SKIPPED', platform + ': skipped "' + String((item && item.title) || '').slice(0, 60) + '" (' + reason + '), not marked listed',
+    { platform: platform, reason: reason, itemId: id || null }, { platform: platform, itemId: id });
+  fasT('info', 'queue_item_skipped', 'Skipped an item in the ' + platform + ' queue (' + reason + '); it was not marked listed', { platform: platform, flow: 'autoqueue', itemId: id, title: item && item.title });
+}
 // Poshmark items held back because Poshmark's own checker flagged them in the last 30 days, as the `held` query
 // parameter the server records with the heartbeat (itemId~kind~atMs,...). The web page lists them so the hold is visible.
-function fasPoshHeldParam(flagged, now) {
+function fasPoshHeldParam(flagged, now, editHolds) {
   const cutoff = now - 30 * 24 * 3600 * 1000;
   const out = [];
+  // 1.0.66: Poshmark edits held for the organizer to confirm (fasPoshEditHold) ride along as kind "edit".
+  for (const id of Object.keys(editHolds || {})) {
+    const h = editHolds[id];
+    if (!h || !(h.at > cutoff) || !/^[A-Za-z0-9_-]{8,40}$/.test(id)) continue;
+    out.push(id + '~edit~' + h.at);
+  }
   for (const id of Object.keys(flagged || {})) {
     const f = flagged[id];
     if (!f || !(f.at > cutoff) || (f.kind !== 'oversized' && f.kind !== 'prohibited')) continue;
@@ -2619,7 +2755,17 @@ async function checkAutoListQueue() {
   let pollPath = '/extension/autolist-queue';
   try {
     const flagged = (await chrome.storage.local.get('fasPoshFlagged')).fasPoshFlagged || {};
-    const held = fasPoshHeldParam(flagged, Date.now());
+    let editHolds = (await chrome.storage.local.get(FAS_POSH_EDIT_HOLD_KEY))[FAS_POSH_EDIT_HOLD_KEY] || {};
+    try {
+      // A held edit whose item has left the drift queue (changed on Poshmark by hand and confirmed, or the price changed again) is no longer reported.
+      const pend = (await chrome.storage.local.get(FAS_EDIT_PENDING_KEY))[FAS_EDIT_PENDING_KEY] || {};
+      if (Object.keys(editHolds).length && Array.isArray(pend.POSHMARK)) {
+        const pr = FAS_EDIT_CORE.prunePoshHolds(editHolds, pend.POSHMARK.map((r) => FAS_EDIT_CORE.normalizeEntry(r, 'POSHMARK')), Date.now());
+        editHolds = pr.holds;
+        if (pr.changed) await chrome.storage.local.set({ [FAS_POSH_EDIT_HOLD_KEY]: pr.holds });
+      }
+    } catch (e) { /* informational */ }
+    const held = fasPoshHeldParam(flagged, Date.now(), editHolds);
     pollPath += '?v=' + encodeURIComponent((chrome.runtime.getManifest() || {}).version || '') + (held ? '&held=' + encodeURIComponent(held) : '');
   } catch (e) { /* the report is informational only */ }
   const resp = await apiFetch(pollPath);
@@ -2646,7 +2792,7 @@ async function checkAutoListQueue() {
     }
     // Per-marketplace pause: never fill a paused platform's posting queue.
     if (pausedForQueue.indexOf(platform) !== -1) { outcomes.push(platform + ':paused'); continue; }
-    if (!Array.isArray(items) || !items.length) { outcomes.push(platform + ':empty'); continue; }
+    if (!Array.isArray(items) || !items.length) { outcomes.push(await fasAutoQueueSweepStale(platform, 'empty')); continue; }
     // S-EXT-FB-ACCOUNT-UNAVAILABLE: never queue auto-posts for an unavailable account.
     if (await getPlatformUnavailable(platform)) { outcomes.push(platform + ':account_unavailable'); continue; }
     const cfg = FAS_AUTOLIST_QUEUE_CFG[platform];
@@ -2654,7 +2800,7 @@ async function checkAutoListQueue() {
     if (cfg.autoPublish) readKeys.push(cfg.autoPublish);
     // 1.0.63: max new listings per check, across all platforms in this poll. (1.0.65: checked before the run-state
     // check so an abandoned queue is only logged and replaced when something will actually replace it.)
-    if (limitPlan.budget <= 0) { outcomes.push(platform + ':limit_reached'); continue; }
+    if (limitPlan.budget <= 0) { outcomes.push(await fasAutoQueueSweepStale(platform, 'limit_reached')); continue; }
     if (cfg.setAt) readKeys.push(cfg.setAt);
     readKeys.push(FAS_QUEUE_TOUCHED_KEY, 'fasAutoQueued');
     const st = await chrome.storage.local.get(readKeys);
@@ -3663,6 +3809,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // failure-only log (service worker console persists past any tab's lifecycle, unlike
         // logging from the content-script side) so a regression here is visible again.
         if (!markListedResp.ok && !markListedResp.deduped) console.log('[FAS markListed FAILED]', JSON.stringify({ itemId: msg.itemId, platform: msg.platform, resp: markListedResp }));
+        // 1.0.66 (2026-10-26 retest): an item Poshmark flagged earlier and that is now listed there (live: a marquee
+        // flagged at 12:25 and published at 18:52 the same day) is no longer held back, so it stops being reported as held.
+        if (msg.platform === 'POSHMARK' && (markListedResp.ok || markListedResp.deduped)) await fasPoshUnflag(msg.itemId);
         sendResponse(markListedResp);
       } else if (msg.type === 'setRemoteListingId') {
         // S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23), generalized ADR-mercari-remote-listing-id-
@@ -4132,7 +4281,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } else {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasPoshmarkIndex: next });
-          await fasRecordPostTime('POSHMARK');
+          // 1.0.66: a skip (the person's "Skip this item") is logged with its reason and is not a post.
+          if (fasSkipReason(msg.skipped)) fasLogQueueSkip('POSHMARK', curItem, fasSkipReason(msg.skipped));
+          else await fasRecordPostTime('POSHMARK');
           const item = queue[next] || null;
           // BUG FIX 2026-08-31 (Patrick live report: Poshmark/Mercari never show the queue-advance
           // countdown Craigslist/FB do): humanQueueDelay() only sends its 'fasQueueDelayStarted'
@@ -4190,7 +4341,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } else {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasMercariIndex: next });
-          await fasRecordPostTime('MERCARI');
+          // 1.0.66: a skip (the person's "Skip this item") is logged with its reason and is not a post.
+          if (fasSkipReason(msg.skipped)) fasLogQueueSkip('MERCARI', curItem, fasSkipReason(msg.skipped));
+          else await fasRecordPostTime('MERCARI');
           const item = queue[next] || null;
           // BUG FIX 2026-08-31 (Patrick live report, same root cause as the Poshmark branch above):
           // no tabId was passed, so humanQueueDelay() never sent its countdown notification for

@@ -421,9 +421,12 @@
     else tWarn('mark_listed_failed', 'Could not tell FindA.Sale this item is listed on Poshmark (the item may be offered again later)', ctx);
     return res;
   }
-  async function fasPoshAdvance(itemId) {
+  async function fasPoshAdvance(itemId, skipped) {
     let res = null, err = null;
-    try { res = await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: itemId }); } catch (e) { err = (e && e.message) || String(e); }
+    // 1.0.66: `skipped` (a short reason) marks a "Skip this item" advance; background.js logs it and does not count it as a post.
+    const msg = { type: 'advancePoshmarkQueue', itemId: itemId };
+    if (skipped) msg.skipped = skipped;
+    try { res = await chrome.runtime.sendMessage(msg); } catch (e) { err = (e && e.message) || String(e); }
     if (res && res.ok) tInfo('queue_advanced', 'Moved the queue to the next item', { alreadyAdvanced: !!res.alreadyAdvanced, index: res.index, total: res.total, hasNext: !!res.item });
     else tWarn('queue_advance_failed', 'Could not advance the Poshmark queue', { error: (res && res.error) || err || 'no_response' });
     return res;
@@ -2053,12 +2056,21 @@
       notesHtml +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       button('fas-posh-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
+      button('fas-posh-review-skip', more ? 'Skip this item (not posted) &#9654;' : 'Skip this item (not posted)', false) +
       button('fas-posh-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     const next = document.getElementById('fas-posh-next');
     if (next) next.onclick = async () => {
       await fasPoshMarkListed(item.id, await fasPoshCaptureFromCloset(item, await fasListingRef('POSHMARK', 0)));
       await fasPoshAdvance(item.id);
+      if (more) { await navigateToPoshmarkCreateListing(); } else { clearPoshNavRetryState(); clearPoshPublishAttemptState(); bar && bar.remove(); }
+    };
+    // 1.0.66: advance WITHOUT marking listed (the only other way forward was "I posted", which would mark it listed).
+    const skip = document.getElementById('fas-posh-review-skip');
+    if (skip) skip.onclick = async () => {
+      skip.disabled = true;
+      tInfo('item_skipped', 'You skipped this item. It was NOT marked listed on Poshmark.', { reason: 'review_skipped' });
+      await fasPoshAdvance(item.id, 'review_skipped');
       if (more) { await navigateToPoshmarkCreateListing(); } else { clearPoshNavRetryState(); clearPoshPublishAttemptState(); bar && bar.remove(); }
     };
     closeBtnHandler();
@@ -2370,7 +2382,7 @@
         } else if (decision === 'skip') {
           tInfo('flag_skipped', 'Skipped the flagged item and moved on', { kind: flagKind });
           try { sessionStorage.removeItem(POSH_FLAG_RETRY_KEY); } catch (e) {}
-          await fasPoshAdvance(item.id);
+          await fasPoshAdvance(item.id, flagKind === 'prohibited' ? 'flag_prohibited' : 'flag_oversized');
           if ((index + 1) < total) {
             overlayInfo('Skipped <b>' + escapeHtml(item.title) + '</b>. Moving to the next item...');
             await humanPause(600, 1200);

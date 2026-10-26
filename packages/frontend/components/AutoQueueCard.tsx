@@ -67,6 +67,7 @@ const formatWhen = (iso: string | null): string => {
 const HELD_KIND_LABEL: Record<string, string> = {
   oversized: 'Poshmark flagged it as possibly oversized',
   prohibited: 'Poshmark flagged it as possibly prohibited',
+  edit: 'Poshmark needs you to confirm this edit',
 };
 
 const AutoQueueCard: React.FC = () => {
@@ -250,10 +251,34 @@ const AutoQueueCard: React.FC = () => {
           </ul>
         )}
 
-        {!isLoading && !isError && data && data.extension.heldFlagged.length > 0 && (
+        {!isLoading && !isError && data && data.extension.heldFlagged.some((h) => h.kind === 'edit') && (
+          <div className="mt-6 pt-4 border-t border-warm-200 dark:border-gray-700" id="auto-queue-edit-confirm">
+            <h4 className="text-sm font-semibold text-warm-900 dark:text-gray-100">
+              Poshmark needs you to confirm this edit ({data.extension.heldFlagged.filter((h) => h.kind === 'edit').length})
+            </h4>
+            <p className="text-xs text-warm-600 dark:text-gray-400 mt-1 mb-3 leading-relaxed">
+              Poshmark flagged the price change on these live listings and would not take it, even through its own Edit
+              Listing form. The extension does not retry them or confirm the flag for you. Open the listing on Poshmark and
+              change the price there if you are sure, or change the price here again to try a new edit.
+            </p>
+            <ul className="divide-y divide-warm-200 dark:divide-gray-700">
+              {data.extension.heldFlagged.filter((h) => h.kind === 'edit').map((h) => (
+                <li key={h.itemId} className="py-2 text-sm">
+                  <span className="font-medium text-warm-900 dark:text-gray-100">{h.title}</span>
+                  <span className="block text-xs text-warm-600 dark:text-gray-400">
+                    {HELD_KIND_LABEL.edit}
+                    {formatWhen(h.at) ? ' on ' + formatWhen(h.at) : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {!isLoading && !isError && data && data.extension.heldFlagged.some((h) => h.kind !== 'edit') && (
           <div className="mt-6 pt-4 border-t border-warm-200 dark:border-gray-700" id="auto-queue-held">
             <h4 className="text-sm font-semibold text-warm-900 dark:text-gray-100">
-              Held back from Poshmark ({data.extension.heldFlagged.length})
+              Held back from Poshmark ({data.extension.heldFlagged.filter((h) => h.kind !== 'edit').length})
             </h4>
             <p className="text-xs text-warm-600 dark:text-gray-400 mt-1 mb-3 leading-relaxed">
               Poshmark&apos;s own listing check flagged these items, so the auto queue does not offer them to Poshmark
@@ -261,7 +286,7 @@ const AutoQueueCard: React.FC = () => {
               hand if you are sure it is allowed.
             </p>
             <ul className="divide-y divide-warm-200 dark:divide-gray-700">
-              {data.extension.heldFlagged.map((h) => (
+              {data.extension.heldFlagged.filter((h) => h.kind !== 'edit').map((h) => (
                 <li key={h.itemId} className="py-2 text-sm">
                   <span className="font-medium text-warm-900 dark:text-gray-100">{h.title}</span>
                   <span className="block text-xs text-warm-600 dark:text-gray-400">

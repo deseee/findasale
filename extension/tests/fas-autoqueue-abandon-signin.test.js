@@ -55,7 +55,7 @@ test('the stale Mercari leftover from the live test (one item, index 0, untouche
 test('every queue write is timestamped by a storage listener, and an unknown-age queue starts the clock instead of being dropped', () => {
   assert.ok(/chrome\.storage\.onChanged\.addListener/.test(bg));
   assert.ok(/changes\[cfg\.queue\] \|\| changes\[cfg\.index\]/.test(bg));
-  const i = bg.indexOf("if (runState === 'unknown_age')");
+  const i = bg.indexOf("if (runState === 'unknown_age')", bg.indexOf('async function checkAutoListQueue()'));
   assert.ok(i > 0);
   const block = bg.slice(i, i + 400);
   assert.ok(/touchedMap\[platform\] = Date\.now\(\)/.test(block));

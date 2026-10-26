@@ -42,5 +42,5 @@ test('checkAutoListQueue reads limits from the server response and spends one bu
   const body = bg.slice(i, i + 6000);
   assert.ok(/fasAutoQueueLimitPlan\(resp\.data && resp\.data\.limits\)/.test(body));
   assert.ok(/limitPlan\.budget -= items\.length/.test(body));
-  assert.ok(/:limit_reached/.test(body));
+  assert.ok(/fasAutoQueueSweepStale\(platform, 'limit_reached'\)/.test(body)); // 1.0.66: outcome comes from the stale-queue sweep
 });

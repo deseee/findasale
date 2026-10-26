@@ -597,7 +597,7 @@
         // 1.0.43: Patrick's rule -- the extension does the edit, not him. Poshmark's own message points at its listing form, so the first time
         // this happens for an item the edit goes through the normal Edit Listing form (the same path a person uses). If the form hits the
         // same check again, or shows a certify/verification prompt, the run stops and the tab stays open (never clicks through a check).
-        if (!S.formFallback) return poshFormFallback(ctx, id, W, 'api_flagged:' + String(errP).slice(0, 60), diagKeys);
+        if (!S.formFallback) return poshFormFallback(ctx, id, W, 'api_flagged:' + String(errP).slice(0, 60), diagKeys, C.poshCertifyReason(String(errP) + ' ' + rt) || 'flagged');
         return blocked('poshmark_flagged', 'Poshmark flagged this price change even through its own edit form, so Poshmark edits are paused and the tab is left open.', 'api');
       }
       if (!res.ok || errP) {
@@ -672,8 +672,11 @@
     d.ok = !!after && C.pricesMatch('POSHMARK', C.parsePriceText(d.mainAfter), C.parsePriceText(value)) && (!d.modalOpened || d.doneClicked);
     return d;
   }
-  async function poshFormFallback(ctx, id, W, why, diagKeys) {
+  async function poshFormFallback(ctx, id, W, why, diagKeys, flagReason) {
     var sc = { apiTried: true, remoteId: id, formFallback: true };
+    // 1.0.66: set when Poshmark's API refused this save with a certify flag (fragile / oversized / prohibited). If this form path then fails too,
+    // background.js HOLDS the item+change (never retried automatically, shown to the organizer) instead of retrying it every cycle.
+    if (flagReason) sc.apiFlagged = String(flagReason).slice(0, 24);
     await waitFor(function () { return q('[data-et-name="update"]') || poshPriceInput(); }, 12000);    // Vue SPA: inputs render after ~3s
     var price = poshPriceInput();
     if (!price) return fail('form_fallback_price_not_found', 'Poshmark refused the API read/write (' + why + ') and no Listing Price input was found', 'form_fallback', 'input[data-vv-name="listingPrice"] (main form) | #listing-price-modal-listing-price-input', sc, { diag: snapshot('posh_form_fallback') });

@@ -20,7 +20,7 @@ import { loadListingExtras, listingExtraFields, organizerListableScope, stockRem
 import { actorCanPublish } from '../lib/publishGate'; // 2026-10-23: an account that cannot publish gets empty listing queues
 import { pickStoredRemoteRef, extractRemoteId, resolveListingRef, listingRefFields } from '../services/marketplaceListingRef'; // 2026-10-18: best remote id + URL on every sync queue entry
 import { AUTO_QUEUE_FLAG_SELECT, toAutoQueueSettings, parseAutoQueuePatch, isPickupOnlyBlockedForAutoQueue, toAutoQueueLimits, parseAutoQueueLimitsPatch, applyAutoQueueLimits, isMissingTableError, NO_AUTO_QUEUE_LIMITS, AutoQueueLimits } from '../services/autoQueueSettings';
-import { recordExtensionHeartbeat, loadExtensionHeartbeat, parseHeldParam, parseVersionParam, heartbeatStatus } from '../services/extensionHeartbeat'; // 2026-10-26: extension heartbeat + held-back items
+import { recordExtensionHeartbeat, loadExtensionHeartbeat, parseHeldParam, parseVersionParam, heartbeatStatus, heldStillUnlisted } from '../services/extensionHeartbeat'; // 2026-10-26: extension heartbeat + held-back items
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { postCapRetryEligible } from '../utils/removalRetryGate'; // 2026-10-25: past the hard stop, re-probe daily instead of never
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
@@ -2762,7 +2762,12 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
 
   // 2026-10-26: a successful poll is the extension's heartbeat (services/extensionHeartbeat.ts). Recorded before any
   // early return so an empty queue still counts. recordExtensionHeartbeat never throws, so this cannot fail the poll.
-  await recordExtensionHeartbeat(organizer.id, { held: parseHeldParam(req.query?.held), version: parseVersionParam(req.query?.v) });
+  // Only the extension counts: it always sends its version (?v=). Any other caller of this route (e.g. a cookie GET
+  // from the web) carries no v and must not record a heartbeat or wipe the held list / version the extension reported.
+  const pollVersion = parseVersionParam(req.query?.v);
+  if (pollVersion) {
+    await recordExtensionHeartbeat(organizer.id, { held: parseHeldParam(req.query?.held), version: pollVersion });
+  }
 
   const emptyQueues: Record<AutoListPlatform, unknown[]> = {
     CRAIGSLIST: [], FACEBOOK: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
@@ -3331,7 +3336,12 @@ async function extensionStatusFor(organizerId: string, anyAutoQueueOn: boolean) 
         select: { id: true, title: true },
       });
       const titleById = new Map(rows.map((r) => [r.id, r.title]));
-      heldFlagged = hb.held
+      // 2026-10-26: an item that has since been listed on Poshmark is not held any more (heldStillUnlisted).
+      const poshJobs = await prisma.marketplaceListingJob.findMany({
+        where: { itemId: { in: rows.map((r) => r.id) }, platform: 'POSHMARK' },
+        select: { itemId: true, action: true, status: true, createdAt: true },
+      });
+      heldFlagged = heldStillUnlisted(hb.held, poshJobs)
         .filter((h) => titleById.has(h.itemId))
         .map((h) => ({ itemId: h.itemId, title: titleById.get(h.itemId) || 'Item', kind: h.kind, at: h.at, platform: 'POSHMARK' as const }));
     } catch {

@@ -63,6 +63,60 @@
     return next;
   }
 
+  // ---- Poshmark "needs you to confirm this edit" hold (1.0.66, 2026-10-26) ------------------------------------------------
+  // Poshmark answers some price/stock saves with PostValidationError { certify_action:true, certify_reason:"fragile"|"oversized"|"prohibited" }.
+  // The engine tries Poshmark's own Edit Listing form once; when that also fails, the item+change is HELD: never retried automatically
+  // (certifying is the seller's call, never the extension's) until the wanted price/quantity changes again, the item leaves the drift
+  // queue, or POSH_HOLD_MS passes. A hold is { at, price, qty, reason, code, title }.
+  var POSH_HOLD_MS = 30 * 24 * 60 * 60 * 1000;
+  var POSH_HOLD_INFRA_CODES = ['tab_closed', 'inject_failed', 'no_result', 'login_required', 'captcha_or_verification'];
+  function poshCertifyReason(text) {
+    var m = /certify_reason["'\s:=]+([a-z_]+)/i.exec(String(text || ''));
+    return m ? m[1].toLowerCase() : '';
+  }
+  function cents(n) { var v = Number(n); return isFinite(v) ? Math.round(v * 100) : null; }
+  // res: a non-done result of one item's edit. Held only when the API refusal was a certify flag (scratch.apiFlagged) and the form path
+  // then failed for a reason about the listing, not about the browser (closed tab, sign-in).
+  function poshHoldEligible(platform, res) {
+    if (platform !== 'POSHMARK' || !res || res.state === 'done') return false;
+    if (!res.scratch || !res.scratch.apiFlagged) return false;
+    if (res.state === 'blocked') return res.code === 'poshmark_flagged';
+    return res.state === 'fail' && POSH_HOLD_INFRA_CODES.indexOf(res.code) === -1;
+  }
+  function poshHoldFor(entry, res, now) {
+    var e = entry || {};
+    return {
+      at: typeof now === 'number' ? now : Date.now(),
+      price: e.priceDrift ? cents(e.price) : null,
+      qty: e.quantityDrift && e.quantity != null ? Number(e.quantity) : null,
+      reason: String((res && res.scratch && res.scratch.apiFlagged) || 'flagged').slice(0, 24),
+      code: String((res && res.code) || '').slice(0, 40),
+      title: String(e.title || '').slice(0, 80)
+    };
+  }
+  // True while this exact change (same wanted price and quantity) is held.
+  function isPoshEditHeld(hold, entry, now) {
+    if (!hold || !entry) return false;
+    var t = typeof now === 'number' ? now : Date.now();
+    if (!(hold.at > 0) || t - hold.at >= POSH_HOLD_MS) return false;
+    var wantPrice = entry.priceDrift ? cents(entry.price) : null;
+    var wantQty = entry.quantityDrift && entry.quantity != null ? Number(entry.quantity) : null;
+    return (hold.price == null ? null : hold.price) === wantPrice && (hold.qty == null ? null : hold.qty) === wantQty;
+  }
+  // holds: { itemId: hold }; entries: the platform's normalized drift queue. Drops a hold whose item left the queue, whose wanted
+  // price/quantity changed, or that expired. Returns { holds, heldIds, changed }.
+  function prunePoshHolds(holds, entries, now) {
+    var t = typeof now === 'number' ? now : Date.now();
+    var src = holds && typeof holds === 'object' ? holds : {};
+    var byId = {}; (entries || []).forEach(function (e) { if (e && e.id) byId[e.id] = e; });
+    var out = {}, heldIds = [], changed = false;
+    Object.keys(src).forEach(function (id) {
+      var e = byId[id];
+      if (e && isPoshEditHeld(src[id], e, t)) { out[id] = src[id]; heldIds.push(id); } else changed = true;
+    });
+    return { holds: out, heldIds: heldIds, changed: changed };
+  }
+
   // ---- Caps ----------------------------------------------------------------------------------------------------------
   function pruneHourly(stamps, now) {
     var t = typeof now === 'number' ? now : Date.now();
@@ -602,6 +656,7 @@
     LIMITS: LIMITS, PLATFORM_ORDER: PLATFORM_ORDER, LABELS: LABELS, QTY_PLATFORMS: QTY_PLATFORMS,
     MAX_ATTEMPTS: MAX_ATTEMPTS, BACKOFF_BASE_MS: BACKOFF_BASE_MS, BACKOFF_CAP_MS: BACKOFF_CAP_MS, PARK_MS: PARK_MS,
     backoffMs: backoffMs, shouldAttempt: shouldAttempt, recordFailure: recordFailure,
+    POSH_HOLD_MS: POSH_HOLD_MS, poshCertifyReason: poshCertifyReason, poshHoldEligible: poshHoldEligible, poshHoldFor: poshHoldFor, isPoshEditHeld: isPoshEditHeld, prunePoshHolds: prunePoshHolds,
     pruneHourly: pruneHourly, allowance: allowance, jitterDelay: jitterDelay,
     normalizeEntry: normalizeEntry, normalizeTitleGroup: normalizeTitleGroup, resolveDuplicateTitleId: resolveDuplicateTitleId,
     copyStart: copyStart, copyAdvance: copyAdvance, copySummaryLine: copySummaryLine, isListingGone: isListingGone, hasWork: hasWork, wantsQuantity: wantsQuantity,

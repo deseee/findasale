@@ -22,7 +22,7 @@ test('flag branch records the flag without advancing, then skips with advance + 
   const seg = src.slice(i, i + 1800);
   assert.ok(/holdForPoshmarkFlagDecision\(item, flagKind, index, total\)/.test(seg));
   assert.ok(/decision === 'published'/.test(seg) && /published = true/.test(seg));
-  assert.ok(/decision === 'skip'/.test(seg) && /fasPoshAdvance\(item\.id\)/.test(seg) && /navigateToPoshmarkCreateListing\(\)/.test(seg));
+  assert.ok(/decision === 'skip'/.test(seg) && /fasPoshAdvance\(item\.id, flagKind === 'prohibited' \? 'flag_prohibited' : 'flag_oversized'\)/.test(seg) && /navigateToPoshmarkCreateListing\(\)/.test(seg));
 });
 
 test('background: flagOnly records the refusal and does not advance the queue index', () => {
