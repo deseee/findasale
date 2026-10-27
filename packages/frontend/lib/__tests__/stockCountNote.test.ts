@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { joinPlatformLabels, platformsWithoutQuantity, stockCountNoteText } from '../stockCountNote';
+import { joinPlatformLabels, platformsRepostingAfterSale, platformsWithoutQuantity, stockCountNoteText } from '../stockCountNote';
 import type { MarketplaceStatus, PlatformEntry } from '../itemMarketplaceApi';
 
 function entry(platform: string, label: string, status: string, supportsQuantity?: boolean): PlatformEntry {
@@ -45,4 +45,28 @@ test('joinPlatformLabels', () => {
   assert.equal(joinPlatformLabels(['A']), 'A');
   assert.equal(joinPlatformLabels(['A', 'B']), 'A and B');
   assert.equal(joinPlatformLabels(['A', 'B', 'C']), 'A, B and C');
+});
+
+test('one-unit markets with the auto queue on get the repost sentence, not the manual-count one (2026-10-27)', () => {
+  const s = status({
+    reverb: entry('REVERB', 'Reverb', 'live', false),
+    mercari: { ...entry('MERCARI', 'Mercari', 'listed_needs_manual_update', false), autoRepostAfterSale: true },
+    grailed: { ...entry('GRAILED', 'Grailed', 'eligible', false), autoRepostAfterSale: true },
+  });
+  assert.deepEqual(platformsWithoutQuantity(s), ['Reverb']);
+  assert.deepEqual(platformsRepostingAfterSale(s), ['Mercari']);
+  assert.equal(
+    stockCountNoteText(s, 4),
+    "FindA.Sale can't set the count on Reverb. Sales there lower your in stock number automatically, but that listing keeps its own count and may need a manual update. Mercari lists one unit at a time. When it sells there and stock is left, the auto queue posts a fresh listing."
+  );
+});
+
+test('repost sentence alone, plural, and hidden at stock 1', () => {
+  const s = status({
+    mercari: { ...entry('MERCARI', 'Mercari', 'listed_needs_manual_update', false), autoRepostAfterSale: true },
+    facebook: { ...entry('FACEBOOK', 'Facebook', 'listed_needs_manual_update', false), autoRepostAfterSale: true },
+  });
+  assert.equal(stockCountNoteText(s, 2), 'Mercari and Facebook list one unit at a time. When it sells there and stock is left, the auto queue posts a fresh listing.');
+  assert.equal(stockCountNoteText(s, 1), null);
+  assert.deepEqual(platformsRepostingAfterSale(undefined), []);
 });

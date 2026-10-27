@@ -2808,6 +2808,11 @@ async function checkAutoListQueue() {
   try { await chrome.storage.local.remove('fasPoshCertifyOk'); } catch (e) { /* best-effort */ }
   const queues = (resp.data && resp.data.queues) || {};
   const outcomes = [];
+  // 1.0.73: the server holds Mercari items back at the account's active-listing cap and says so in notes.MERCARI.
+  try {
+    const mNote = resp.data && resp.data.notes && resp.data.notes.MERCARI;
+    if (mNote) fasTOnce('mercari_at_limit', 6 * 60 * 60 * 1000, 'info', 'mercari_listing_cap', String(mNote).slice(0, 200), { platform: 'MERCARI', flow: 'autoqueue', ctx: resp.data.mercari || null });
+  } catch (e) { /* informational only */ }
   const pausedForQueue = await fasGetPausedPlatforms();
   const limitPlan = fasAutoQueueLimitPlan(resp.data && resp.data.limits);
   for (const platform of Object.keys(FAS_AUTOLIST_QUEUE_CFG)) {
@@ -2886,7 +2891,11 @@ async function checkAutoListQueue() {
       prior[platform] = { count: items.length, firstId: items[0] && items[0].id, at: Date.now() };
       await chrome.storage.local.set({ fasAutoQueued: prior });
     } catch (e) { /* the notice is informational only */ }
-    outcomes.push(platform + ':queued_' + items.length);
+    // 2026-10-27 (repost on single-quantity marketplaces): entries the server marked repostAfterSale replace a one-unit listing
+    // that sold on this marketplace while stock remains (Mercari, Grailed, Facebook). One fresh listing per item, never copies.
+    const reposts = items.filter((q) => q && q.repostAfterSale === true);
+    if (reposts.length) fasT('info', 'autoqueue_repost_after_sale', reposts.length + ' item(s) queued again on ' + platform + ' because the last listing there sold and stock is left', { platform: platform, flow: 'autoqueue', itemId: reposts[0].id, title: reposts[0].title, ctx: { count: reposts.length, items: reposts.slice(0, 10).map((q) => ({ id: q.id, stock: q.stockRemaining })) } });
+    outcomes.push(platform + ':queued_' + items.length + (reposts.length ? '_reposts_' + reposts.length : ''));
   }
   return outcomes.join(',') || 'no_platforms_configured';
 }

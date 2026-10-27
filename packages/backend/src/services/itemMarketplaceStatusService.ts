@@ -35,6 +35,8 @@ import {
 } from './itemChannelStatusService';
 import { isPlatformPaused, sanitizePausedPlatforms } from './pausedMarketplaces';
 import { NOT_INFORMATIONAL_PUSH_WHERE, isInformationalPushCode } from '../lib/ebayPushInformational';
+import { isSoldOnPlatformRow, unitsLeftOnQuantityListing, QUANTITY_LISTING_PLATFORMS, SINGLE_UNIT_REPOST_PLATFORMS } from './singleUnitRepost';
+import { toAutoQueueSettings } from './autoQueueSettings';
 
 export const EXTENSION_PLATFORMS = ['FACEBOOK', 'CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI', 'VINTED'] as const;
 export type ExtensionPlatform = (typeof EXTENSION_PLATFORMS)[number];
@@ -45,6 +47,9 @@ export type MarketplaceJobRow = {
   action: string;
   status: string;
   createdAt: Date;
+  /** Optional (2026-10-27): lets a Poshmark Multi Item listing that sold some units still read as listed. */
+  lastErrorMessage?: string | null;
+  syncedQuantity?: number | null;
 };
 
 /**
@@ -62,11 +67,19 @@ export function latestJobByItemPlatform<T extends MarketplaceJobRow>(rows: reado
   return latest;
 }
 
-/** Per item, the extension platforms whose newest row is POST/POSTED (listed and not removed). */
+/**
+ * Per item, the extension platforms whose newest row is POST/POSTED (listed and not removed). 2026-10-27: also a Poshmark
+ * Multi Item listing whose newest row is a unit sale there (sold_on_poshmark) while units are still showing on it
+ * (services/singleUnitRepost.ts). Needs lastErrorMessage + syncedQuantity on the rows; without them the old rule applies.
+ */
 export function listedExtensionPlatformsByItemId(rows: readonly MarketplaceJobRow[]): PublishedExtensionPlatformsByItemId {
   const result: PublishedExtensionPlatformsByItemId = new Map();
+  const stillLive = (job: MarketplaceJobRow): boolean => {
+    if (!QUANTITY_LISTING_PLATFORMS.includes(job.platform) || !isSoldOnPlatformRow(job, job.platform)) return false;
+    return unitsLeftOnQuantityListing(rows.filter((r) => r.itemId === job.itemId && r.platform === job.platform), job.platform) > 0;
+  };
   for (const job of latestJobByItemPlatform(rows).values()) {
-    if (job.action !== 'POST' || job.status !== 'POSTED') continue;
+    if ((job.action !== 'POST' || job.status !== 'POSTED') && !stillLive(job)) continue;
     if (!result.has(job.itemId)) result.set(job.itemId, new Set());
     result.get(job.itemId)!.add(job.platform as ExtensionPlatform);
   }
@@ -107,6 +120,11 @@ export interface PlatformStatusEntry {
    * and Shopify). False for markets that only report 'manual' while more than one unit is in stock.
    */
   supportsQuantity: boolean;
+  /**
+   * 2026-10-27 (services/singleUnitRepost.ts): true when this market's listing is one unit and the organizer's auto queue is on
+   * for it (not paused), so a sale there with stock remaining is followed by a fresh listing. Absent otherwise.
+   */
+  autoRepostAfterSale?: boolean;
 }
 
 export interface ItemMarketplaceStatus {
@@ -222,6 +240,8 @@ export interface StatusInputs {
   /** Job rows for this item (any status). */
   jobs: readonly MarketplaceJobRow[];
   pausedMarketplaces: unknown;
+  /** Organizer auto queue switches by platform (toAutoQueueSettings). Optional: absent = every switch off. */
+  autoQueueEnabled?: Partial<Record<string, boolean>>;
   etsyListingState?: string | null;
   etsyListingId?: string | null;
   recentPushRows: Array<Parameters<typeof toLastPush>[0]>;
@@ -294,7 +314,8 @@ export function buildItemMarketplaceStatus(inputs: StatusInputs): ItemMarketplac
       status = 'listed_needs_manual_update';
       ineligible = base === 'PUBLISHED_INELIGIBLE';
     } else status = base === 'ELIGIBLE' ? 'eligible' : 'none';
-    ext[EXT_KEYS[platform]] = entry(platform, status, {}, ineligible ? { ineligible: true } : {});
+    const autoRepost = !isPaused && SINGLE_UNIT_REPOST_PLATFORMS.includes(platform) && inputs.autoQueueEnabled?.[platform] === true;
+    ext[EXT_KEYS[platform]] = entry(platform, status, {}, { ...(ineligible ? { ineligible: true } : {}), ...(autoRepost ? { autoRepostAfterSale: true } : {}) });
   }
 
   return {
@@ -342,6 +363,7 @@ export const ITEM_STATUS_SELECT = {
   packageWidthIn: true,
   packageHeightIn: true,
   aiPackageDimsJson: true, // 2026-10-27: Poshmark's label note (length plus girth) falls back to the photo estimate
+  ebayShippingOverride: true, // 2026-10-27: pickup-only is ineligible on Poshmark, Mercari, Vinted and Grailed (live listing flagged for removal)
 } as const;
 
 /** Longest the status endpoint waits for eBay's condition policy; the lookup keeps running and fills its cache. */
@@ -382,6 +404,9 @@ export async function getItemMarketplaceStatus(args: {
         shopifyEnabled: true,
         subscriptionTier: true,
         pausedMarketplaces: true,
+        // 2026-10-27: the auto queue switches (autoRepostAfterSale per one-unit marketplace). Same columns as AUTO_QUEUE_FLAG_SELECT.
+        craigslistAutoListEnabled: true, facebookAutoListEnabled: true, gumtreeAuAutoListEnabled: true,
+        grailedAutoListEnabled: true, poshmarkAutoListEnabled: true, mercariAutoListEnabled: true,
         marketplaceAccounts: {
           where: { platform: { in: ['DISCOGS', 'REVERB', 'ETSY'] }, status: 'ACTIVE' },
           select: { id: true, platform: true },
@@ -390,7 +415,7 @@ export async function getItemMarketplaceStatus(args: {
     }),
     prisma.marketplaceListingJob.findMany({
       where: { itemId: item.id, platform: { in: [...EXTENSION_PLATFORMS] } },
-      select: { itemId: true, platform: true, action: true, status: true, createdAt: true },
+      select: { itemId: true, platform: true, action: true, status: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true },
     }),
     prisma.marketplaceListingJob.findMany({
       where: {
@@ -463,6 +488,7 @@ export async function getItemMarketplaceStatus(args: {
     extensionPlatformsUsed,
     jobs,
     pausedMarketplaces: organizer?.pausedMarketplaces ?? [],
+    autoQueueEnabled: toAutoQueueSettings(organizer as unknown as Record<string, unknown> | null),
     etsyListingState: etsyRow?.state ?? null,
     etsyListingId: etsyRow?.etsyListingId ?? null,
     recentPushRows: pushRows,

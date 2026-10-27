@@ -35,7 +35,9 @@ type Limits = { maxNewPerRun: number | null; onlyItemIds: string[] };
 type HeldItem = { itemId: string; title: string; kind: string; at: string; platform: string };
 type ReleasePending = { itemId: string; title: string; at: string };
 type ExtensionStatus = { lastPollAt: string | null; stale: boolean; neverSeen: boolean; heldFlagged: HeldItem[]; releasePending: ReleasePending[] };
-type AutoQueueData = { settings: Settings; paused: string[]; limits: Limits; limitsAvailable: boolean; extension: ExtensionStatus };
+// 2026-10-27: Mercari's active-listing cap as the server counts it (null when it could not be counted).
+type MercariCapacity = { cap: number; live: number; free: number; atLimit: boolean; note: string | null };
+type AutoQueueData = { settings: Settings; paused: string[]; limits: Limits; limitsAvailable: boolean; extension: ExtensionStatus; mercari: MercariCapacity | null };
 
 const PLATFORMS: { key: Platform; label: string }[] = [
   { key: 'FACEBOOK', label: 'Facebook Marketplace' },
@@ -64,6 +66,16 @@ const toData = (d: any): AutoQueueData => ({
     heldFlagged: Array.isArray(d?.extension?.heldFlagged) ? d.extension.heldFlagged : [],
     releasePending: Array.isArray(d?.extension?.releasePending) ? d.extension.releasePending : [],
   },
+  mercari:
+    d?.mercari && typeof d.mercari.cap === 'number' && typeof d.mercari.live === 'number'
+      ? {
+          cap: d.mercari.cap,
+          live: d.mercari.live,
+          free: typeof d.mercari.free === 'number' ? d.mercari.free : Math.max(d.mercari.cap - d.mercari.live, 0),
+          atLimit: d.mercari.atLimit === true,
+          note: typeof d.mercari.note === 'string' ? d.mercari.note : null,
+        }
+      : null,
 });
 
 // 2026-10-26: when the extension last checked in, as "Oct 26, 3:58 PM". Empty string when unknown.
@@ -270,6 +282,14 @@ const AutoQueueCard: React.FC = () => {
               );
             })}
           </ul>
+        )}
+
+        {!isLoading && !isError && data && data.mercari && data.settings.MERCARI && (
+          <p className="mt-3 text-xs text-warm-600 dark:text-gray-400" data-testid="auto-queue-mercari-cap">
+            {data.mercari.atLimit && data.mercari.note
+              ? data.mercari.note
+              : `Mercari: ${data.mercari.live} of ${data.mercari.cap} listings live. The auto queue adds at most ${data.mercari.free} more, items that just sold there first.`}
+          </p>
         )}
 
         {!isLoading && !isError && data && data.extension.heldFlagged.some((h) => h.kind === 'edit') && (

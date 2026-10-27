@@ -41,6 +41,8 @@ export interface PlatformEntry {
   ineligible?: boolean;
   /** True when FindA.Sale can set this market's unit count automatically (eBay, Etsy, Shopify). Missing means unknown. */
   supportsQuantity?: boolean;
+  /** One-unit market with the organizer's auto queue on: a sale there with stock left is followed by a fresh listing. */
+  autoRepostAfterSale?: boolean;
 }
 
 export interface EbayHold {

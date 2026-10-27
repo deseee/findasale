@@ -25,6 +25,8 @@ import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPa
 import { postCapRetryEligible } from '../utils/removalRetryGate'; // 2026-10-25: past the hard stop, re-probe daily instead of never
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
 import { poshmarkLabelInfo } from '../services/poshmarkLabelSurcharge'; // 2026-10-27: Poshmark label deduction (never blocks)
+import { listingStateForAutoQueue, blocksAutoQueue, unitsLeftOnQuantityListing, isSoldOnPlatformRow, QUANTITY_LISTING_PLATFORMS, type ListingJobRow } from '../services/singleUnitRepost'; // 2026-10-27: repost after a sale on one-unit marketplaces
+import { loadMercariCapacity, applyMercariCap, type MercariCapacity } from '../services/mercariListingCap'; // 2026-10-27: Mercari active-listing cap
 
 // 2026-10-27 (Patrick): what the extension shows about Poshmark's label cost for one item. Computed from the raw
 // package fields (organizer data first, then the photo estimates), the same inputs as the eligibility note; it is
@@ -531,7 +533,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   const jobs = itemIds.length
     ? await prisma.marketplaceListingJob.findMany({
         where: { itemId: { in: itemIds } },
-        select: { itemId: true, action: true, status: true, platform: true, createdAt: true },
+        select: { itemId: true, action: true, status: true, platform: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true },
       })
     : [];
   const postedByItem = new Set<string>();
@@ -568,8 +570,26 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       latestByItemPlatform.set(key, { itemId: j.itemId, action: j.action, status: j.status, createdAt: j.createdAt });
     }
   }
+  // 2026-10-27 (services/singleUnitRepost.ts): a Poshmark Multi Item listing that sold some units still shows the rest on
+  // Poshmark. Its latest row is the unit sale's sold_on_poshmark REMOVE row, but it is still listed (the content script's
+  // duplicate guard reads marketplaceListedPoshmark, and the auto queue must not post a second copy).
+  const quantityRowsByKey = new Map<string, ListingJobRow[]>();
+  for (const j of jobs) {
+    if (!QUANTITY_LISTING_PLATFORMS.includes(String(j.platform))) continue;
+    const key = `${j.itemId}:${j.platform}`;
+    const row: ListingJobRow = { action: j.action, status: j.status, createdAt: j.createdAt, lastErrorMessage: (j as any).lastErrorMessage ?? null, syncedQuantity: (j as any).syncedQuantity ?? null };
+    const list = quantityRowsByKey.get(key);
+    if (list) list.push(row); else quantityRowsByKey.set(key, [row]);
+  }
+  const multiUnitListingLive = (key: string, latest: { action: string; status: string; createdAt: Date }): boolean => {
+    const platform = key.slice(key.lastIndexOf(':') + 1);
+    const rows = quantityRowsByKey.get(key);
+    if (!rows) return false;
+    const latestRow = rows.find((r) => r.action === latest.action && r.status === latest.status && new Date(r.createdAt).getTime() === latest.createdAt.getTime());
+    return isSoldOnPlatformRow(latestRow, platform) && unitsLeftOnQuantityListing(rows, platform) > 0;
+  };
   for (const [key, latest] of latestByItemPlatform) {
-    if (latest.action === 'POST' && latest.status === 'POSTED') {
+    if ((latest.action === 'POST' && latest.status === 'POSTED') || multiUnitListingLive(key, latest)) {
       postedByItem.add(latest.itemId);
       postedByItemPlatform.add(key);
     } else if (latest.action === 'REMOVE' && latest.status === 'REMOVED') {
@@ -1761,6 +1781,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
         id: true, title: true, category: true, ebayCategoryName: true, ebayCategoryId: true, draftStatus: true,
         packageWeightOz: true, aiPackageWeightOz: true,
         packageLengthIn: true, packageWidthIn: true, packageHeightIn: true,
+        ebayShippingOverride: true, // 2026-10-27: pickup-only is ineligible on shipping-only marketplaces, so live ones are pulled
       },
     });
     for (const it of candidateItems) {
@@ -2876,27 +2897,25 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   const itemIds = items.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, platform: true, createdAt: true, lastErrorMessage: true },
+    select: { itemId: true, action: true, status: true, platform: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true },
   });
-  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; lastErrorMessage: string | null }>();
+  // Every row per item+platform (REMOVE/SKIPPED included; listingStateForAutoQueue ignores them: 2026-09-22
+  // S-EXT-REMOVAL-SKIP-ENDS-LISTING, a failed removal attempt never ends a live listing).
+  const rowsByItemPlatform = new Map<string, ListingJobRow[]>();
   for (const j of jobs) {
-    // 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): ignore REMOVE/SKIPPED (failed removal attempt,
-    // listing still live) -- otherwise isAlreadyListed returned false and auto-list re-posted it.
-    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
     const key = `${j.itemId}:${j.platform}`;
-    const existing = latestByItemPlatform.get(key);
-    if (!existing || j.createdAt > existing.createdAt) {
-      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, lastErrorMessage: j.lastErrorMessage ?? null });
-    }
+    const list = rowsByItemPlatform.get(key);
+    const row: ListingJobRow = { action: j.action, status: j.status, createdAt: j.createdAt, lastErrorMessage: j.lastErrorMessage ?? null, syncedQuantity: (j as any).syncedQuantity ?? null };
+    if (list) list.push(row); else rowsByItemPlatform.set(key, [row]);
   }
-  // 'resync:*' = the organizer's Resync found this listing already gone and closed the record. Do NOT
-  // auto-relist it (organizer decision 2026-09-30): the item shows on the Add Items page as
-  // not-listed, and is relisted deliberately. A later POST row supersedes the hold automatically.
-  const isAlreadyListed = (itemId: string, platform: AutoListPlatform): boolean => {
-    const latest = latestByItemPlatform.get(`${itemId}:${platform}`);
-    if (latest && latest.action === 'REMOVE' && latest.status === 'REMOVED' && (latest.lastErrorMessage || '').startsWith('resync:')) return true;
-    return !!latest && latest.action === 'POST' && latest.status === 'POSTED';
-  };
+  // The latest row per item+platform decides (services/singleUnitRepost.ts):
+  //  - POST/POSTED = listed; 'resync:*' REMOVE = the organizer's Resync found the listing gone and closed the record, never
+  //    auto-relisted (organizer decision 2026-09-30, relisted deliberately from Add Items);
+  //  - 2026-10-27 repost on single-quantity marketplaces: a sold_on_<platform> REMOVE row on a one-unit marketplace (Mercari,
+  //    Grailed, Facebook) with stock remaining is offered again as ONE fresh listing (repostAfterSale on the entry); a Poshmark
+  //    Multi Item listing that still shows units after a sale is still listed (no duplicate); no stock left = nothing to post.
+  const autoQueueState = (itemId: string, platform: AutoListPlatform, stockRemaining: number) =>
+    listingStateForAutoQueue(rowsByItemPlatform.get(`${itemId}:${platform}`) ?? [], platform, stockRemaining);
 
   // Same package-weight/dimension trust gate getExtensionItems applies (2026-09-14 fix) --
   // never surface an unconfirmed AI/SEED package estimate to a content script as if it were
@@ -2980,8 +2999,10 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   };
   for (const it of items) {
     const eligibilityItem = { ...buildListingEligibilityItem(it, { forNewListing: true }), originZip: saleLocationById.get(it.saleId || '')?.zip || null };
+    const stockLeft = listingExtras.get(it.id)?.stockRemaining ?? 1;
     for (const platform of enabledPlatforms) {
-      if (isAlreadyListed(it.id, platform)) continue;
+      const state = autoQueueState(it.id, platform, stockLeft);
+      if (blocksAutoQueue(state)) continue;
       // 2026-10-21: same pickup-only rule the popup applies (Mercari and Poshmark have no local pickup option).
       if (isPickupOnlyBlockedForAutoQueue(platform, isLocalPickupOnlyItem(it))) continue;
       // TOCTOU-safe: re-run fresh on every call, never cached -- a category/title edit between
@@ -2994,7 +3015,23 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
       // filter now has, not just the manual popup.js path.
       const eligibility = checkEligibility(platform, eligibilityItem);
       if (!eligibility.eligible) continue;
-      queues[platform].push(shapeItem(it));
+      // repostAfterSale: the previous listing on this marketplace sold and stock remains (trace + extension log only).
+      queues[platform].push(state === 'repost_after_sale' ? { ...shapeItem(it), repostAfterSale: true } : shapeItem(it));
+    }
+  }
+
+  // 2026-10-27 Mercari active-listing cap (services/mercariListingCap.ts): at most (cap - live) Mercari items, reposts after a
+  // sale first. A database error while counting fails closed (no Mercari items this poll, the next poll retries).
+  let mercari: MercariCapacity | null = null;
+  const notes: Record<string, string> = {};
+  if (enabledPlatforms.includes('MERCARI')) {
+    try {
+      mercari = await loadMercariCapacity(organizer.id);
+      queues.MERCARI = applyMercariCap(queues.MERCARI as Array<{ repostAfterSale?: boolean }>, mercari.free).kept;
+      if (mercari.note) notes.MERCARI = mercari.note;
+    } catch (err: any) {
+      console.warn('[autolist-queue] Mercari listing count failed, no Mercari items this poll:', err?.message);
+      queues.MERCARI = [];
     }
   }
 
@@ -3003,7 +3040,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   // request (fail closed: never hand out an unlimited queue when a limit may be set).
   const { limits } = await loadAutoQueueLimits(organizer.id);
   const limited = applyAutoQueueLimits(queues as unknown as Record<string, Array<{ id: string }>>, limits, enabledPlatforms);
-  res.json({ ok: true, queues: limited, pausedMarketplaces: pausedForQueue, limits, ...holdChanges });
+  res.json({ ok: true, queues: limited, pausedMarketplaces: pausedForQueue, limits, ...(mercari ? { mercari } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...holdChanges });
 };
 
 // Auto queue test limits (2026-10-23). { limits, available }: available=false only when the OrganizerAutoQueueLimit
@@ -3036,7 +3073,7 @@ type PriceSyncPlatform = Exclude<AutoListPlatform, 'FACEBOOK'>;
  * (autoRenewDueItems in background.js), not an immediate one, and Grailed/Poshmark/Mercari have
  * no renewal automation either, so a markdown on an item live there could go stale indefinitely
  * with nothing to ever notice. Reuses the exact same "latest MarketplaceListingJob row per
- * item+platform wins" signal getAutolistQueue's isAlreadyListed already computes, generalized
+ * item+platform wins" signal getAutolistQueue uses (now via singleUnitRepost.ts), generalized
  * via the new priceSyncedAt column (per (item, platform) job row, not a single Item-level
  * scalar, since these 5 platforms need to be tracked independently of each other and of
  * Facebook) -- a platform needs a sync when its latest POST/POSTED row's priceSyncedAt is null
@@ -3349,6 +3386,8 @@ const autoQueueResponse = async (organizerId: string) => {
     limits,
     limitsAvailable: available,
     extension: await extensionStatusFor(organizerId, Object.values(settings).some((v) => v === true)),
+    // 2026-10-27: Mercari active-listing cap for the web card (null when it could not be counted; the card then says nothing).
+    mercari: await loadMercariCapacity(organizerId).catch(() => null),
   };
 };
 

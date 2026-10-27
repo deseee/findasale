@@ -115,6 +115,40 @@ export interface EligibilityCheckItem {
    * export and send guards cover those paths).
    */
   isBulkLot?: boolean | null;
+
+  /**
+   * 2026-10-27 (Patrick: "take them off Poshmark and do the pull when marked pickup"): the raw Item.ebayShippingOverride.
+   * 'LOCAL_PICKUP_ONLY' makes the item ineligible on every PICKUP_INCOMPATIBLE_PLATFORMS marketplace (they only sell with
+   * shipping), for new listings AND for the getPendingRemovals takedown sweep, so a live listing is pulled within one
+   * poll of the organizer ticking "Local pickup only". Optional: callers that omit it change nothing.
+   */
+  ebayShippingOverride?: string | null;
+}
+
+/**
+ * Marketplaces with no local pickup option: every sale ships through the marketplace's own label flow.
+ *   POSHMARK: every sale ships with the Poshmark prepaid label; there is no pickup or meetup option.
+ *   MERCARI: every sale ships (Mercari label or ship-on-your-own); no buyer pickup.
+ *   VINTED: the buyer always pays for shipping at checkout; no pickup option (see S-VINTED-PICKUP-ONLY, 2026-10-05).
+ *   GRAILED: every sale ships with tracking (Grailed label or own label); no pickup option.
+ * Facebook, Craigslist, Gumtree AU, eBay (local pickup policy) and Reverb (local pickup) all support pickup, so they stay
+ * eligible. Depop is shipping-only too but is not a FindA.Sale marketplace. Mirrors extension popup.js
+ * PICKUP_INCOMPATIBLE_PLATFORMS (VINTED, MERCARI, POSHMARK; GRAILED is covered there by the eligibility map).
+ */
+export const PICKUP_INCOMPATIBLE_PLATFORMS: readonly EligibilityPlatform[] = ['POSHMARK', 'MERCARI', 'VINTED', 'GRAILED'];
+
+const PICKUP_PLATFORM_LABEL: Partial<Record<EligibilityPlatform, string>> = {
+  POSHMARK: 'Poshmark', MERCARI: 'Mercari', VINTED: 'Vinted', GRAILED: 'Grailed',
+};
+
+/** Plain reason shown when a pickup-only item is checked against a shipping-only marketplace. */
+export function pickupOnlyEligibilityReason(platform: EligibilityPlatform): string {
+  return 'Marked pickup only, and ' + (PICKUP_PLATFORM_LABEL[platform] || platform) + ' only sells with shipping.';
+}
+
+/** True when the item is marked local pickup only and the marketplace cannot do pickup. */
+export function isPickupOnlyBlocked(platform: string, ebayShippingOverride: string | null | undefined): boolean {
+  return ebayShippingOverride === 'LOCAL_PICKUP_ONLY' && (PICKUP_INCOMPATIBLE_PLATFORMS as readonly string[]).includes(platform);
 }
 
 /** Plain reason shown when a bulk lot is checked against any platform. */
@@ -1501,6 +1535,7 @@ export function buildListingEligibilityItem(
     price?: unknown; packageWeightOz?: number | null; aiPackageWeightOz?: number | null;
     packageLengthIn?: unknown; packageWidthIn?: unknown; packageHeightIn?: unknown;
     aiPackageDimsJson?: unknown;
+    ebayShippingOverride?: string | null;
   },
   opts: { forNewListing: boolean }
 ): EligibilityCheckItem {
@@ -1516,6 +1551,9 @@ export function buildListingEligibilityItem(
     packageHeightIn: num(it.packageHeightIn),
     aiPackageDimsJson: it.aiPackageDimsJson,
   };
+  // 2026-10-27: pickup-only applies to new listings AND the takedown sweep (set only when present, so callers'
+  // object shapes are unchanged for every other item).
+  if (it.ebayShippingOverride != null) out.ebayShippingOverride = it.ebayShippingOverride;
   if (opts.forNewListing) {
     out.forNewListing = true; // Poshmark size/no-data gate and $ minimum apply to NEW listings only
     out.price = num(it.price);
@@ -1536,6 +1574,7 @@ export function buildListingEligibilityItem(
  */
 export function checkEligibility(platform: EligibilityPlatform, item: EligibilityCheckItem): EligibilityResult {
   if (item.isBulkLot === true) return { eligible: false, reason: BULK_LOT_ELIGIBILITY_REASON };
+  if (isPickupOnlyBlocked(platform, item.ebayShippingOverride)) return { eligible: false, reason: pickupOnlyEligibilityReason(platform) };
   const rules = RULES.filter((r) => r.platform === platform);
   if (rules.length === 0) return { eligible: true, reason: null };
   // 2026-10-27: a non-blocking note (Poshmark label cost) carried to the eligible result; any blocking rule still wins.

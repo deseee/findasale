@@ -3041,7 +3041,7 @@
       const capTxt = (document.body && (document.body.innerText || '')) || '';
       const capM = capTxt.match(/limited to (\d+) listings?/i);
       if (capM) {
-        T.problem({ code: 'mercari_listing_limit', title: 'Mercari listing limit reached', what: 'Mercari says: "Currently you are limited to ' + capM[1] + ' listings. This will be increased as you complete more sales."', why: 'Your Mercari account is at its active-listing cap, so it will not accept another listing.', next: 'Nothing was filled and the item was not marked as listed. It stays in the queue; free up room on Mercari (a sale or a removal) and run it again.' });
+        T.problem({ code: 'mercari_listing_limit', title: 'Mercari listing limit reached', what: 'Mercari says: "Currently you are limited to ' + capM[1] + ' listings. This will be increased as you complete more sales."', why: 'Your Mercari account is at its active-listing cap, so it will not accept another listing.', next: 'Nothing was filled and the item was not marked as listed. It stays in the queue; free up room on Mercari (a sale or a removal) and run it again.', ctx: { cap: Number(capM[1]) } }); // 1.0.73: the server learns the cap from this report
         T.end('Stopped: Mercari listing limit (' + capM[1] + ')');
         overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Mercari is at its ' + escapeHtml(capM[1]) + '-listing limit for your account, so <b>' + escapeHtml(queued.item.title) + '</b> was not filled. It stays queued; free up room on Mercari and run it again.</div>');
         return;

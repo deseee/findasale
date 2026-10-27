@@ -56,10 +56,11 @@ export function parseAutoQueuePatch(body: unknown): AutoQueueParse {
   return { ok: true, data };
 }
 
-// Marketplaces with no local pickup option. Mirrors popup.js PICKUP_INCOMPATIBLE_PLATFORMS (VINTED is not an
-// auto queue platform, so only MERCARI and POSHMARK matter here). The popup hides these items client-side;
-// the auto queue has no popup in the loop, so the server must hold them back itself.
-export const PICKUP_INCOMPATIBLE_AUTO_QUEUE_PLATFORMS: readonly string[] = ['MERCARI', 'POSHMARK'];
+// Marketplaces with no local pickup option, limited to auto queue platforms. Must equal
+// marketplaceEligibilityRules.PICKUP_INCOMPATIBLE_PLATFORMS minus VINTED (not an auto queue platform); a unit test pins
+// that. Since 2026-10-27 checkEligibility itself also blocks pickup-only items on these (and the takedown sweep pulls
+// live ones), so this early skip is belt and braces. Kept as a literal so this pure module stays import-free.
+export const PICKUP_INCOMPATIBLE_AUTO_QUEUE_PLATFORMS: readonly string[] = ['MERCARI', 'POSHMARK', 'GRAILED'];
 
 export function isPickupOnlyBlockedForAutoQueue(platform: string, localPickupOnly: boolean): boolean {
   return localPickupOnly === true && PICKUP_INCOMPATIBLE_AUTO_QUEUE_PLATFORMS.includes(platform);

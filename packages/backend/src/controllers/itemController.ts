@@ -3090,7 +3090,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         try {
           const jobRows = await prisma.marketplaceListingJob.findMany({
             where: { itemId: id, platform: { in: [...EXTENSION_PLATFORMS] } },
-            select: { itemId: true, platform: true, action: true, status: true, createdAt: true },
+            select: { itemId: true, platform: true, action: true, status: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true },
           });
           extensionPlan = buildExtensionPlan(listedExtensionPlatformsByItemId(jobRows).get(id) ?? [], changedMarketplaceFields);
         } catch (planErr) {
@@ -5259,7 +5259,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     // attempts -- the listing is still live) excluded from the newest-row pick.
     const pagePostedJobs = await prisma.marketplaceListingJob.findMany({
       where: { itemId: { in: itemIds }, platform: { in: [...EXTENSION_PLATFORMS] } },
-      select: { itemId: true, platform: true, action: true, status: true, createdAt: true },
+      select: { itemId: true, platform: true, action: true, status: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true },
     });
     // U3 (2026-10-04): the newest-row-wins rule now lives in itemMarketplaceStatusService, shared with
     // GET /items/:id/marketplace-status. Same rule, same result as the inline code it replaced.

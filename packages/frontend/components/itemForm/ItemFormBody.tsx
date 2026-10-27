@@ -2546,7 +2546,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                       </label>
                     </div>
                     <p className="text-xs text-gray-500 mt-1 ml-6">
-                      When checked, this item uses a local pickup policy on eBay and is hidden from Google Shopping, instead of calculated/flat-rate shipping.
+                      When checked, this item uses a local pickup policy on eBay and is hidden from Google Shopping, instead of calculated/flat-rate shipping. Poshmark, Mercari, Vinted and Grailed only sell with shipping, so it is not listed there and any listing already up is taken down.
                     </p>
                     {showLocalPickupNudge && formData.ebayShippingOverride !== 'LOCAL_PICKUP_ONLY' && (
                       <div className="mt-2 flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-700 dark:text-blue-300">
