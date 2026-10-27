@@ -3918,6 +3918,124 @@
     return qa('[class*="title" i]').find((el) => !/subtitle/i.test(el.className)) || null;
   }
 
+  // ---- ID-FIRST REMOVAL (1.0.74, 2026-10-27) ------------------------------------------------------------------------------------
+  // Live 2026-10-27, right after the 1.0.73 pickup-only sweep: three POLICY_INELIGIBLE removals came here carrying
+  // listingRefs.POSHMARK, and all three were reported listing_not_found because this flow only ever searched the closet by
+  // title. The Celestion speaker cabinet (6a982ae87789ea7d11785248) is LIVE -- its Poshmark title ("Celestion Vintage 30 G12
+  // Guitar Speaker, 12-inch...") differs from the FindA.Sale title, so the title search could never find it. Both Brass Table
+  // Lamps were already gone. The stored listing id is now checked FIRST with GET /vm-rest/posts/<id> (same-origin, read-only).
+  // Live shapes, read 2026-10-27 on poshmark.com: a live post is returned top-level with status "published",
+  // inventory.status "available", creator_id and creator_username; a deleted post is HTTP 200 with
+  // { error: { errorType: "PostRemovedError", statusCode: 404 } }. Anything unclear falls back to the title search below.
+  function poshRemovalListingId(item) {
+    const refs = item && item.listingRefs && typeof item.listingRefs === 'object' ? item.listingRefs : null;
+    const s = String((refs && refs.POSHMARK) || (item && item.remoteListingId) || '').trim();
+    if (/^[0-9a-f]{24}$/i.test(s)) return s.toLowerCase();
+    if (/^https?:\/\/(?:[a-z0-9-]+\.)*poshmark\.com\//i.test(s)) {
+      const m = /\/(?:edit-)?listing\/(?:[^/?#]*-)?([0-9a-f]{24})(?:[/?#]|$)/i.exec(s);
+      return m ? m[1].toLowerCase() : null;
+    }
+    return null;
+  }
+
+  // The signed-in seller's closet handle, from the resolved "My Closet" URL (poshmark.com/closet/<handle>).
+  function poshClosetUsername(closetUrl) {
+    const m = /\/closet\/([^/?#]+)/.exec(String(closetUrl || ''));
+    if (!m) return null;
+    try { return decodeURIComponent(m[1]).toLowerCase(); } catch (e) { return m[1].toLowerCase(); }
+  }
+
+  // Pure. Returns { kind: 'removed' | 'sold' | 'live_own' | 'live_other' | 'unknown', detail }.
+  // live_own needs a positive creator match against the signed-in seller: never touch somebody else's post.
+  function poshClassifyPostLookup(httpStatus, json, sellerUsername) {
+    const err = json && typeof json === 'object' && json.error && typeof json.error === 'object' ? json.error : null;
+    const errType = err ? String(err.errorType || err.type || '') : '';
+    if (/PostRemoved|PostNotFound|PostDeleted|NotFoundError/i.test(errType)) return { kind: 'removed', detail: errType };
+    if (httpStatus === 404 || httpStatus === 410) return { kind: 'removed', detail: 'http_' + httpStatus };
+    if (err) return { kind: 'unknown', detail: 'error:' + errType };
+    if (!(httpStatus >= 200 && httpStatus < 300)) return { kind: 'unknown', detail: 'http_' + httpStatus };
+    let post = json && typeof json === 'object' ? json : null;
+    if (post && post.data && typeof post.data === 'object' && !Array.isArray(post.data)) post = post.data;
+    else if (post && post.post && typeof post.post === 'object') post = post.post;
+    if (!post || !post.id) return { kind: 'unknown', detail: 'no_post' };
+    const status = String(post.status || '').toLowerCase();
+    const invStatus = String((post.inventory && post.inventory.status) || '').toLowerCase();
+    if (status === 'removed' || status === 'deleted') return { kind: 'removed', detail: 'status:' + status };
+    if (status === 'sold' || invStatus === 'sold_out' || invStatus === 'sold') return { kind: 'sold', detail: status + '/' + invStatus };
+    if (status !== 'published') return { kind: 'unknown', detail: 'status:' + status };
+    const creator = String(post.creator_username || (post.creator && post.creator.username) || '').toLowerCase();
+    const seller = String(sellerUsername || '').toLowerCase();
+    if (!creator || !seller) return { kind: 'unknown', detail: 'creator_unverified' };
+    if (creator !== seller) return { kind: 'live_other', detail: 'creator_mismatch' };
+    return { kind: 'live_own', detail: invStatus || status };
+  }
+
+  async function poshLookupPostById(id) {
+    try {
+      const res = await fetch('/vm-rest/posts/' + encodeURIComponent(id) + '?_=' + Date.now(), { credentials: 'include', headers: { 'Accept': 'application/json' } });
+      let json = null;
+      try { json = await res.json(); } catch (e) { json = null; }
+      return { ok: true, status: res.status, json: json };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e).slice(0, 120) };
+    }
+  }
+
+  // Returns true when this run is fully handled (reported, or navigated to the edit page); false = fall back to the title search.
+  // RESYNC_VERIFY items only ever report what they see here -- never a delete.
+  async function poshRemoveByListingId(item, closetUrl) {
+    const id = poshRemovalListingId(item);
+    if (!id) return false;
+    const verifyOnly = item.reason === 'RESYNC_VERIFY';
+    const look = await poshLookupPostById(id);
+    if (!look.ok) {
+      console.log('[FAS Poshmark] removal: listing id check failed (' + look.error + ') -- falling back to the closet title search.');
+      return false;
+    }
+    const verdict = poshClassifyPostLookup(look.status, look.json, poshClosetUsername(closetUrl));
+    console.log('[FAS Poshmark] removal: listing id ' + id + ' -> ' + verdict.kind + ' (' + verdict.detail + ')');
+    if (verdict.kind === 'removed') {
+      try { sessionStorage.removeItem('fasPoshIdNav'); sessionStorage.removeItem('fasPoshDeleteTargetId'); sessionStorage.removeItem('fasPoshClosetSearchedFor'); } catch (e) {}
+      if (verifyOnly) {
+        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'POSHMARK', itemId: item.id, reason: 'listing_not_found', verifyOnly: true, continueUrl: closetUrl || null }); } catch (e) {}
+        return true;
+      }
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px"><b>' + escapeHtml(item.title) + '</b> was already removed on Poshmark -- recorded as removed.</div>');
+      try {
+        chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'POSHMARK', itemId: item.id, note: 'already removed on Poshmark', continueUrl: closetUrl || null });
+      } catch (e) {}
+      return true;
+    }
+    if (verdict.kind === 'live_own') {
+      if (verifyOnly) {
+        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'POSHMARK', itemId: item.id, reason: 'verify_still_live', verifyOnly: true, continueUrl: closetUrl || null }); } catch (e) {}
+        return true;
+      }
+      // Loop guard: this tab was already sent to this listing's edit page a moment ago and did not arrive (the edit-page branch
+      // clears the marker on arrival). Report a transient failure (bounded retry in background.js) instead of navigating again.
+      let navGuard = null;
+      try { navGuard = JSON.parse(sessionStorage.getItem('fasPoshIdNav') || 'null'); } catch (e) { navGuard = null; }
+      if (navGuard && navGuard.id === id && navGuard.itemId === item.id && Date.now() - (navGuard.at || 0) < 10 * 60 * 1000) {
+        try { sessionStorage.removeItem('fasPoshIdNav'); } catch (e) {}
+        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'POSHMARK', itemId: item.id, reason: 'edit_page_not_reached', continueUrl: closetUrl || null }); } catch (e) {}
+        return true;
+      }
+      sessionStorage.setItem('fasPoshDeleteTargetId', id);
+      sessionStorage.setItem('fasPoshIdNav', JSON.stringify({ id: id, itemId: item.id, at: Date.now() }));
+      sessionStorage.removeItem('fasPoshClosetSearchedFor');
+      await humanPause(1200, 2200); // SAFETY FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-PACING)
+      location.href = 'https://poshmark.com/edit-listing/' + id; // fresh load lands in the /edit-listing/ branch of runPoshmarkRemovalQueue
+      return true;
+    }
+    if (verdict.kind === 'sold' && !verifyOnly) {
+      // Same permanent path as the edit page's blocked_sold result: Poshmark never allows deleting a sold listing.
+      overlayWarn('This item shows as already sold on Poshmark -- Poshmark never allows deleting a sold listing, so this can\'t be automated. Please review it yourself.' + button('fas-posh-close', 'Close', false));
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'POSHMARK', itemId: item.id, reason: 'already_sold_on_poshmark_permanent', continueUrl: closetUrl || null }); } catch (e) {}
+      return true;
+    }
+    return false; // live_other, unknown, or a sold listing on a verify run: today's title search decides
+  }
+
   async function runPoshmarkRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 ' + (window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.overlayLine(item, index, total) : 'removing item ' + (index + 1) + ' of ' + total) + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
 
@@ -3939,6 +4057,7 @@
       const pageId = extractPoshmarkListingId(location.pathname);
       const targetId = sessionStorage.getItem('fasPoshDeleteTargetId');
       if (pageId && targetId && pageId === targetId) {
+        try { sessionStorage.removeItem('fasPoshIdNav'); } catch (e) {} // 1.0.74: arrived (see poshRemoveByListingId's loop guard)
         const result = await deletePoshmarkListingOnEditPage(item, targetId, closetUrl);
         if (result === 'deleted') {
           overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Poshmark.</div>');
@@ -3990,6 +4109,9 @@
         return;
       }
     }
+
+    // 1.0.74: the stored Poshmark listing id decides first (removed / live / sold); the title search below is the fallback.
+    if (await poshRemoveByListingId(item, closetUrl)) return;
 
     // Fallback path only: if the flow lands on a listing DETAIL page some other way, hop to the
     // real edit page where the delete control actually lives (BUG FIX 2026-09-04, see comment

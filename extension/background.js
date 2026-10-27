@@ -4878,6 +4878,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await clearStalledRemovalRuns(msg.platform);
         const removed = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
           { method: 'POST', body: { platform: msg.platform } });
+        // 1.0.74: an optional note (e.g. Poshmark's id-first check: 'already removed on Poshmark') -- log only; the backend
+        // writes the same REMOVE/REMOVED row either way.
+        if (msg.note) fasLog('info', 'crossPlatformRemovalDeleted', String(msg.note).slice(0, 120) + (removed && removed.ok ? '' : ' (report failed)'),
+          await fasRemovalReasonFor(msg.platform, msg.itemId), { platform: msg.platform, itemId: msg.itemId });
         await clearRemovalAttempt(msg.platform, msg.itemId);
         const cont = await advanceAndContinueCrossPlatformRemoval(msg.platform, tabId, msg.continueUrl || null);
         sendResponse({ ok: true, removed: !!(removed && removed.ok), next: cont.next });

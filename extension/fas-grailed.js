@@ -2389,9 +2389,114 @@
   //   crossPlatformRemovalAttemptFailed -- TRANSIENT failure: do NOT advance until 3 attempts fail.
   // Every send is fire-and-forget: background navigates this tab onward, so awaiting the reply would
   // just race the navigation that tears this content script down.
+  // ---- ID-FIRST REMOVAL (1.0.75, 2026-10-27, mirrors fas-poshmark.js poshRemoveByListingId) --------------------------------------
+  // Before 1.0.75 Grailed removal matched by title only and never read listingRefs, so a retitled listing (live: 105000124 is
+  // "REBECCA STONE Graphic T-Shirt, Black Cotton wash Patterned" on Grailed, "Graphic T-Shirt, Rebecca Stone, Black Cotton" on
+  // FindA.Sale) or one already gone never resolved. The id now decides first, read-only, from Grailed's same-origin JSON
+  // (live-confirmed 2026-10-27 in Patrick's signed-in Chrome):
+  //   GET /api/listings/<id>  live, own  200 { data: { id, seller: { id: <me> }, sold: false, deleted: false, hidden } }
+  //                           (104003051 is hidden: true with an active_rejection "needs_better_photos" -- still a live, owned listing)
+  //                           missing    404 { error: { code: 3, error_id: "not_found", message: "Listing not found" } }
+  //                           sold/deleted listings carry data.sold / data.sold_at / data.deleted (fields present on every listing;
+  //                           no sold or deleted Grailed listing exists on this account to observe live)
+  //   GET /api/users/me       200 { data: { id: <me>, username } } -- the signed-in seller; without it nothing here is trusted.
+  // DELETE: the owner's /listings/<id> page DOES render a sidebar <button class="...ListingActions_action...">Delete</button>
+  // (read from the DOM only, never clicked), but what it opens next (confirm dialog markup, success signal) is unverified. So a
+  // live, owned listing is NOT deleted here: it gets the same honest grailed_delete_control_unconfirmed attempt-failure as today's
+  // matched path, now with the exact listing link. Only "already gone" is resolved automatically.
+  function grRemovalListingId(item) {
+    const refs = item && item.listingRefs && typeof item.listingRefs === 'object' ? item.listingRefs : null;
+    const v = refs ? refs.GRAILED : null;
+    const s = typeof v === 'number' && Number.isSafeInteger(v) ? String(v) : String(typeof v === 'string' ? v : '').trim();
+    if (/^\d{1,20}$/.test(s)) return s;
+    if (/^https?:\/\/(?:[a-z0-9-]+\.)*grailed\.com\//i.test(s)) {
+      const m = /\/listings\/(\d{1,20})(?:[-/?#]|$)/.exec(s);
+      return m ? m[1] : null;
+    }
+    return null;
+  }
+
+  // Pure. Returns { kind: 'removed' | 'sold' | 'live_own' | 'live_other' | 'unknown', detail }.
+  function grClassifyListingLookup(httpStatus, json, meId) {
+    const me = meId != null && /^\d+$/.test(String(meId)) ? String(meId) : '';
+    const body = json && typeof json === 'object' ? json : null;
+    const err = body && body.error && typeof body.error === 'object' ? body.error : null;
+    const notFound = httpStatus === 404 || httpStatus === 410 || (err && /^not_found$/i.test(String(err.error_id || '')));
+    if (notFound) return me ? { kind: 'removed', detail: 'http_' + httpStatus } : { kind: 'unknown', detail: 'not_found_signed_in_unverified' };
+    if (err) return { kind: 'unknown', detail: 'error:' + String(err.error_id || err.code || '') };
+    if (!(httpStatus >= 200 && httpStatus < 300)) return { kind: 'unknown', detail: 'http_' + httpStatus };
+    const d = body && body.data && typeof body.data === 'object' ? body.data : null;
+    if (!d || d.id == null) return { kind: 'unknown', detail: 'no_listing' };
+    const seller = d.seller && d.seller.id != null ? String(d.seller.id) : '';
+    if (!seller || !me) return { kind: 'unknown', detail: 'owner_unverified' };
+    if (seller !== me) return { kind: 'live_other', detail: 'seller_mismatch' };
+    if (d.deleted === true) return { kind: 'removed', detail: 'deleted' };
+    if (d.sold === true || d.sold_at) return { kind: 'sold', detail: 'sold' };
+    return { kind: 'live_own', detail: d.hidden === true ? 'hidden' : 'active' };
+  }
+
+  async function grLookupListingById(id) {
+    try {
+      const opts = { credentials: 'include', headers: { 'Accept': 'application/json' } };
+      const meRes = await fetch('/api/users/me', opts);
+      let meId = null;
+      try { const mj = await meRes.json(); meId = mj && mj.data && mj.data.id != null ? mj.data.id : null; } catch (e) { meId = null; }
+      const res = await fetch('/api/listings/' + encodeURIComponent(id), opts);
+      let json = null;
+      try { json = await res.json(); } catch (e) { json = null; }
+      return { ok: true, status: res.status, json: json, meId: meRes.ok ? meId : null };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e).slice(0, 120) };
+    }
+  }
+
+  // Returns true when this run is fully handled (reported); false = fall back to the title flow. RESYNC_VERIFY never deletes.
+  async function grRemoveByListingId(item) {
+    const id = grRemovalListingId(item);
+    if (!id) return false;
+    const verifyOnly = item.reason === 'RESYNC_VERIFY';
+    const look = await grLookupListingById(id);
+    if (!look.ok) {
+      console.log('[FAS Grailed] removal: listing id check failed (' + look.error + ') -- falling back to the title search.');
+      return false;
+    }
+    const verdict = grClassifyListingLookup(look.status, look.json, look.meId);
+    console.log('[FAS Grailed] removal: listing id ' + id + ' -> ' + verdict.kind + ' (' + verdict.detail + ')');
+    if (verdict.kind === 'removed') {
+      if (verifyOnly) {
+        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'GRAILED', itemId: item.id, reason: 'listing_not_found', verifyOnly: true, continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
+        return true;
+      }
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px"><b>' + escapeHtml(item.title) + '</b> was already removed on Grailed -- recorded as removed.</div>');
+      try {
+        chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'GRAILED', itemId: item.id, note: 'already removed on Grailed', continueUrl: GRAILED_REMOVAL_CONTINUE_URL });
+      } catch (e) {}
+      return true;
+    }
+    if (verdict.kind === 'live_own') {
+      if (verifyOnly) {
+        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'GRAILED', itemId: item.id, reason: 'verify_still_live', verifyOnly: true, continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
+        return true;
+      }
+      // Live deletion is unchanged from today (no confirmed delete flow, see above): honest retriable attempt-failure + the link.
+      const href = 'https://www.grailed.com/listings/' + id;
+      overlayWarn('<b>' + escapeHtml(item.title) + '</b> is still live on Grailed, but FindA.Sale does not yet have a confirmed way to delete a Grailed listing. Please remove it on Grailed yourself: <a href="' + escapeHtml(href) + '" target="_blank" rel="noopener" style="color:#9ad9b0">' + escapeHtml(href) + '</a> -- this item has NOT been marked removed on FindA.Sale.' + button('fas-gr-close', 'Close', false));
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'GRAILED', itemId: item.id, reason: 'grailed_delete_control_unconfirmed', continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
+      return true;
+    }
+    return false; // live_other, unknown, or sold (Grailed has no sold path of its own): today's title flow decides
+  }
+
   async function runGrailedRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 ' + (window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.overlayLine(item, index, total) : 'removing item ' + (index + 1) + ' of ' + total) + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
     await humanPause(400, 800);
+    // 1.0.75: the stored Grailed listing id decides first (removed / live); the title flow below is the fallback.
+    if (await grRemoveByListingId(item)) return;
+    if (item.reason === 'RESYNC_VERIFY') {
+      // A verify run never deletes. The id could not settle it, and the title flow below can reach a delete, so stop here.
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'GRAILED', itemId: item.id, reason: 'verify_unresolved', verifyOnly: true, continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
+      return;
+    }
     const pageTitleEl = grRemFindListingTitleEl();
     const onListingDetailPage = pageTitleEl && grRemNorm(pageTitleEl.textContent).indexOf(grRemNorm(item.title)) !== -1;
     if (onListingDetailPage) {

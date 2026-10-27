@@ -3442,7 +3442,9 @@
       // Re-verify the listing ON the edit page: the title field's value must exactly match.
       const titleEl = await mercRemWaitFor(() => { const el = mercRemEditTitleInput(); return el && String(el.value || '').trim() ? el : null; }, 12000);
       if (!titleEl) return mercRemPageIndicatesSold() ? 'blocked_sold_mercari' : 'edit_title_unreadable';
-      if (!mercRemTitleMatches(titleEl.value, item.title)) return 'edit_page_title_mismatch';
+      // 1.0.75: a marker written by mercRemoveByListingId (idVerified) means Mercari's own item data, read moments ago, said this
+      // exact listing id is on sale and owned by the signed-in seller -- a retitled listing must not fail on the title here.
+      if (!(marker.idVerified === true && marker.mercId === editId) && !mercRemTitleMatches(titleEl.value, item.title)) return 'edit_page_title_mismatch';
       const deleteBtns = (await mercRemWaitFor(() => { const l = qa('button[data-testid="DeleteButton"]').filter(mercRemVisible); return l.length ? l : null; }, 5000)) || [];
       if (deleteBtns.length === 0) return mercRemPageIndicatesSold() ? 'blocked_sold_mercari' : 'no_delete_button';
       if (deleteBtns.length > 1) return 'ambiguous_delete_button';
@@ -3452,7 +3454,7 @@
       const snap = mercRemSnapshotModalState();
       // Persisted BEFORE the click so that, if Mercari reloads/navigates the tab and kills this
       // script, the next page can tell a delete was attempted (mercRemResumeAfterDeleteClick).
-      mercRemWriteMarker({ mercId: marker.mercId, fasItemId: marker.fasItemId, title: marker.title, at: Date.now(), phase: 'delete_clicked' });
+      mercRemWriteMarker({ mercId: marker.mercId, fasItemId: marker.fasItemId, title: marker.title, at: Date.now(), phase: 'delete_clicked', idVerified: marker.idVerified === true });
       await realClick(deleteBtn);
 
       let roots = [];
@@ -3480,8 +3482,19 @@
   // Full-page-load case only: Mercari reloaded the tab after our Delete click, so the script that
   // clicked is gone. Counts as deleted ONLY on the active-listings page, once cards have rendered
   // and the exact-title scan finds zero matches among OTHER rendered listings (count 0, never -1).
-  async function mercRemResumeAfterDeleteClick(item) {
+  async function mercRemResumeAfterDeleteClick(item, marker) {
     mercRemClearMarker();
+    // 1.0.75: an id-verified delete is confirmed by the listing id itself (a retitled listing would be invisible to the title scan
+    // below, which would then read "zero matches" as deleted). Only a clear answer decides; anything else falls through.
+    if (marker && marker.idVerified === true && /^m\d{1,20}$/.test(String(marker.mercId || ''))) {
+      const look = await mercLookupItemById(marker.mercId);
+      if (look.ok) {
+        const v = mercClassifyItemLookup(look.status, look.nextData, marker.mercId);
+        console.log('[FAS Mercari] removal: post-delete id check ' + marker.mercId + ' -> ' + v.kind + ' (' + v.detail + ')');
+        if (v.kind === 'removed') return 'deleted';
+        if (v.kind === 'live_own' || v.kind === 'sold') return 'delete_not_confirmed';
+      }
+    }
     if (!/^\/mypage\/listings(\/|$)/i.test(location.pathname)) return 'delete_not_confirmed';
     await mercRemWaitFor(() => document.querySelector('a[data-testid="ItemLink"], a[href*="/item/"]'), 8000);
     const link = findMercariListingLinkByTitle(item.title);
@@ -3723,6 +3736,121 @@
     } finally { mercReconBusy = false; }
   }
 
+  // ---- ID-FIRST REMOVAL (1.0.75, 2026-10-27, mirrors fas-poshmark.js poshRemoveByListingId) --------------------------------------
+  // Before 1.0.75 the stored id only picked which page to open: /us/item/<id>/ still had to show the EXACT FindA.Sale title, so a
+  // listing retitled on Mercari and a listing already gone both ended as detail_page_title_mismatch -> delete_unconfirmed_after_3_attempts
+  // and were never resolved. The id now decides first, read-only, from the item page's own server data (same-origin GET of
+  // /us/item/<id>/, parsing its __NEXT_DATA__). Live shapes read 2026-10-27 in Patrick's signed-in Chrome:
+  //   live, own     HTTP 200, pageProps.serverState["ItemDetail:<id>"].status "on_sale", .seller.__ref "PrivateUser:<n>", .me.userId <n>
+  //   sold          HTTP 200, status "trading", .buyer set, .lastSoldAt set (m40220988747, m94800050988)
+  //   gone          HTTP 410, pageProps.gqlErrorCode "ItemNotAvailableException", empty serverState (m22452982737, removed today)
+  //   never existed HTTP 404, gqlErrorCode "RecordNotFoundException"
+  //   another seller HTTP 200, status "on_sale", .seller.__ref "PublicUser:<other n>" while .me.userId is the signed-in seller
+  //   signed out    .seller.__ref "PublicUser:<n>" with no usable .me -> owner unverified -> fallback
+  // Anything unclear (fetch error, unknown status, owner unverified) falls back to the pre-1.0.75 flow below.
+  function mercRemovalListingId(item) {
+    const refs = item && item.listingRefs && typeof item.listingRefs === 'object' ? item.listingRefs : null;
+    const s = String((refs && refs.MERCARI) || '').trim();
+    if (/^m\d{1,20}$/i.test(s)) return s.toLowerCase();
+    if (/^https?:\/\/(?:[a-z0-9-]+\.)*mercari\.com\//i.test(s)) {
+      const m = /\/item\/(m\d{1,20})(?:[/?#]|$)/i.exec(s);
+      return m ? m[1].toLowerCase() : null;
+    }
+    return null;
+  }
+
+  function mercParseNextData(html) {
+    const m = /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/.exec(String(html || ''));
+    if (!m) return null;
+    try { return JSON.parse(m[1]); } catch (e) { return null; }
+  }
+
+  // Pure. Returns { kind: 'removed' | 'sold' | 'live_own' | 'live_other' | 'unknown', detail }.
+  function mercClassifyItemLookup(httpStatus, nextData, id) {
+    const pp = nextData && nextData.props && nextData.props.pageProps && typeof nextData.props.pageProps === 'object' ? nextData.props.pageProps : null;
+    const gql = pp ? String(pp.gqlErrorCode || '') : '';
+    if (/^(ItemNotAvailableException|RecordNotFoundException|ItemNotFoundException)$/.test(gql)) return { kind: 'removed', detail: gql };
+    if (!pp) return { kind: 'unknown', detail: 'no_next_data_http_' + httpStatus };
+    if (gql) return { kind: 'unknown', detail: 'gql:' + gql };
+    if (!(httpStatus >= 200 && httpStatus < 300)) return { kind: 'unknown', detail: 'http_' + httpStatus };
+    const ss = pp.serverState && typeof pp.serverState === 'object' ? pp.serverState : null;
+    const it = ss ? ss['ItemDetail:' + id] : null;
+    if (!it || typeof it !== 'object') return { kind: 'unknown', detail: 'no_item' };
+    const sellerM = /^(?:PrivateUser|PublicUser|User):(\d+)$/.exec(String((it.seller && it.seller.__ref) || ''));
+    const sellerId = sellerM ? sellerM[1] : '';
+    const meId = it.me && it.me.userId != null ? String(it.me.userId) : '';
+    if (!sellerId || !meId) return { kind: 'unknown', detail: 'owner_unverified' };
+    if (sellerId !== meId) return { kind: 'live_other', detail: 'seller_mismatch' };
+    const status = String(it.status || '').toLowerCase();
+    if (/^(trading|sold|sold_out|complete|completed|done)$/.test(status) || it.buyer || it.lastSoldAt) return { kind: 'sold', detail: 'status:' + status };
+    if (status === 'on_sale') return { kind: 'live_own', detail: status };
+    return { kind: 'unknown', detail: 'status:' + status };
+  }
+
+  async function mercLookupItemById(id) {
+    try {
+      const res = await fetch('/us/item/' + encodeURIComponent(id) + '/', { credentials: 'include', headers: { 'Accept': 'text/html' } });
+      let html = '';
+      try { html = await res.text(); } catch (e) { html = ''; }
+      return { ok: true, status: res.status, nextData: mercParseNextData(html) };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e).slice(0, 120) };
+    }
+  }
+
+  // Returns true when this run is fully handled (reported, or navigated to the edit page); false = fall back to the flow below.
+  // RESYNC_VERIFY items only ever report what they see here -- never a delete.
+  async function mercRemoveByListingId(item) {
+    const id = mercRemovalListingId(item);
+    if (!id) return false;
+    const verifyOnly = item.reason === 'RESYNC_VERIFY';
+    const look = await mercLookupItemById(id);
+    if (!look.ok) {
+      console.log('[FAS Mercari] removal: listing id check failed (' + look.error + ') -- falling back to the page/title checks.');
+      return false;
+    }
+    const verdict = mercClassifyItemLookup(look.status, look.nextData, id);
+    console.log('[FAS Mercari] removal: listing id ' + id + ' -> ' + verdict.kind + ' (' + verdict.detail + ')');
+    if (verdict.kind === 'removed') {
+      mercRemClearMarker();
+      try { sessionStorage.removeItem('fasMercDeleteTargetId'); } catch (e) {}
+      if (verifyOnly) {
+        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'listing_not_found', verifyOnly: true, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+        return true;
+      }
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px"><b>' + escapeHtml(item.title) + '</b> was already removed on Mercari -- recorded as removed.</div>');
+      try {
+        chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'MERCARI', itemId: item.id, note: 'already removed on Mercari', continueUrl: MERCARI_REMOVAL_CONTINUE_URL });
+      } catch (e) {}
+      return true;
+    }
+    if (verdict.kind === 'live_own') {
+      if (verifyOnly) {
+        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'verify_still_live', verifyOnly: true, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+        return true;
+      }
+      // Loop guard (same as deleteMercariListingOnDetailPage): this tab was already sent to this listing's edit page and is back
+      // off it, so Mercari redirected the edit page away. Report it (bounded retry in background.js) instead of bouncing again.
+      const prior = mercRemReadMarker();
+      if (prior && prior.phase === 'navigated' && prior.mercId === id && prior.fasItemId === String(item.id)) {
+        mercRemClearMarker();
+        mercRemReportResult(item, 'edit_page_unreachable');
+        return true;
+      }
+      const ok = mercRemWriteMarker({ mercId: id, fasItemId: String(item.id), title: String(item.title == null ? '' : item.title), at: Date.now(), phase: 'navigated', idVerified: true });
+      if (!ok) { mercRemReportResult(item, 'marker_write_failed'); return true; }
+      try { sessionStorage.removeItem('fasMercDeleteTargetId'); } catch (e) {}
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening the Mercari edit page for <b>' + escapeHtml(item.title) + '</b> to remove it…</div>');
+      location.href = 'https://www.mercari.com/sell/edit/' + id + '/'; // the edit-page load runs deleteMercariListingOnEditPage
+      return true;
+    }
+    if (verdict.kind === 'sold' && !verifyOnly) {
+      mercRemReportResult(item, 'blocked_sold_mercari'); // existing permanent already_sold_on_mercari_archive_only skip
+      return true;
+    }
+    return false; // live_other, unknown, or a sold listing on a verify run: the existing checks decide
+  }
+
   async function runMercariRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 ' + (window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.overlayLine(item, index, total) : 'removing item ' + (index + 1) + ' of ' + total) + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
     // S-EXT-MERCARI-DELETE-ON-EDIT-PAGE (2026-10-03): the actual delete happens on /sell/edit/<id>/.
@@ -3740,10 +3868,12 @@
     const pendingMarker = mercRemReadMarker();
     if (pendingMarker && pendingMarker.phase === 'delete_clicked' && pendingMarker.fasItemId === String(item.id)) {
       let resumeResult;
-      try { resumeResult = await mercRemResumeAfterDeleteClick(item); } catch (e) { mercRemClearMarker(); resumeResult = 'delete_not_confirmed'; }
+      try { resumeResult = await mercRemResumeAfterDeleteClick(item, pendingMarker); } catch (e) { mercRemClearMarker(); resumeResult = 'delete_not_confirmed'; }
       mercRemReportResult(item, resumeResult);
       return;
     }
+    // 1.0.75: the stored Mercari listing id decides first (removed / live / sold); everything below is the fallback.
+    if (await mercRemoveByListingId(item)) return;
     // 2026-09-23: on an item page, wait (250ms polls, up to ~8s) for the <h1> to hydrate, then
     // require an EXACT folded title match (was: containment, which accepted a longer different
     // title) AND, when this queue entry picked a specific item id on the listings page, that the URL

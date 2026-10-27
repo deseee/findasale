@@ -1363,7 +1363,22 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
     res.json({ ok: true, alreadyRemoved: true });
     return;
   }
-  if (reason === 'listing_not_found') {
+  // 1.0.74 (2026-10-27, Poshmark id-first removal): extensions up to 1.0.73 searched the Poshmark closet by title only, so a
+  // live listing whose Poshmark title differs from the FindA.Sale title (live: item cmnzf780a0009pf19ru5qppqn, Poshmark post
+  // 6a982ae87789ea7d11785248, still published) was reported 'listing_not_found' -- and three such reports would auto-resolve it
+  // as REMOVED while it is still for sale. When the live Poshmark listing id is on record, 1.0.74 checks that id directly and
+  // reports a gone listing through /removed itself, so the title-search streak must not close a Poshmark listing with a known id.
+  // 1.0.75 (2026-10-27): Mercari, Vinted and Grailed now check the stored listing id first the same way, so the same guard covers them.
+  let skipGoneStreak = false;
+  if (reason === 'listing_not_found' && (platform === 'POSHMARK' || platform === 'MERCARI' || platform === 'VINTED' || platform === 'GRAILED')) {
+    const latestPost = await prisma.marketplaceListingJob.findFirst({
+      where: { itemId, platform, action: 'POST', status: 'POSTED' },
+      orderBy: { createdAt: 'desc' },
+      select: { remoteListingId: true },
+    });
+    skipGoneStreak = !!latestPost?.remoteListingId;
+  }
+  if (reason === 'listing_not_found' && !skipGoneStreak) {
     const LISTING_GONE_CONFIRMATIONS = 3;
     const recent = await prisma.marketplaceListingJob.findMany({
       where: { itemId, platform },
@@ -1903,7 +1918,15 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   const verifyItems: Array<{ id: string; title: string; platforms: string[]; listingRefs: Record<string, string>; reason: 'RESYNC_VERIFY' }> = [];
   for (const [id, v] of resyncVerifyCandidates) {
     const platforms = v.platforms.filter((p) => !complianceHandled.has(id + ':' + p));
-    if (platforms.length) verifyItems.push({ id, title: v.title, platforms, listingRefs: {}, reason: 'RESYNC_VERIFY' });
+    // 1.0.75: carry the live listing id so a verify run can check it by id (extensions only ever LOOK on RESYNC_VERIFY, never delete).
+    const refs: Record<string, string> = {};
+    for (const p of platforms) {
+      const latest = latestAvailableByItemPlatform.get(id + ':' + p);
+      if (latest && latest.action === 'POST' && latest.status === 'POSTED' && latest.remoteListingId) {
+        refs[p] = resolveListingRef(p, latest.remoteListingId).remoteListingId || latest.remoteListingId;
+      }
+    }
+    if (platforms.length) verifyItems.push({ id, title: v.title, platforms, listingRefs: refs, reason: 'RESYNC_VERIFY' });
   }
 
   // S-EXT-DUPLICATE-POSTINGS (2026-09-30): two Craigslist postings existed for ONE deleted item and the

@@ -4523,6 +4523,128 @@
     } catch (e) { /* non-fatal -- background self-heals a stalled removal run on its own timeout */ }
   }
 
+  // ---- ID-FIRST REMOVAL (1.0.75, 2026-10-27, mirrors fas-poshmark.js poshRemoveByListingId) --------------------------------------
+  // Before 1.0.75 the stored id only picked which page to open: /items/<id> still had to show the EXACT FindA.Sale title, and a
+  // title under VINT_REM_MIN_SAFE_TITLE_LEN was refused before the id was ever looked at. A listing retitled on Vinted, or already
+  // gone, therefore never resolved. The id now decides first, read-only, from Vinted's own same-origin JSON (plain GET with the
+  // page's session cookies; no CSRF header is needed for these GETs -- live-confirmed 2026-10-27 in Patrick's signed-in Chrome):
+  //   GET /api/v2/items/<id>/details  (NOTE: plain /api/v2/items/<id> answers 404 for every item, live or not -- not usable)
+  //     live, own      200 { code: 0, item: { user: { id: <me> }, is_closed: false, is_draft: false, can_delete: true, can_edit: true } }
+  //     sold, own      200 item.is_closed true, item.item_closing_action "sold", can_edit false (10310708293)
+  //     gone           404 { code: 104, message_code: "not_found", message: "Content not found" } (10192050693, 10220870946)
+  //     another seller 200 item.user.id != me, can_delete false, can_edit false
+  //   GET /api/v2/users/current -> 200 { user: { id: <me> } } -- the signed-in member; without it nothing here is trusted.
+  // Anything unclear (fetch error, not signed in, draft, closed-not-sold) falls back to the pre-1.0.75 flow.
+  function vintRemovalListingId(item) {
+    const refs = item && item.listingRefs && typeof item.listingRefs === 'object' ? item.listingRefs : null;
+    const v = refs ? refs.VINTED : null;
+    const s = typeof v === 'number' && Number.isSafeInteger(v) ? String(v) : String(typeof v === 'string' ? v : '').trim();
+    if (/^\d{1,20}$/.test(s)) return s;
+    if (/^https?:\/\/(?:[a-z0-9-]+\.)*vinted\.[a-z.]{2,10}\//i.test(s)) {
+      const m = /\/items\/(\d{1,20})(?:[-/?#]|$)/.exec(s);
+      return m ? m[1] : null;
+    }
+    return null;
+  }
+
+  // Pure. Returns { kind: 'removed' | 'sold' | 'live_own' | 'live_other' | 'unknown', detail }.
+  function vintClassifyItemLookup(httpStatus, json, meId) {
+    const me = meId != null && /^\d+$/.test(String(meId)) ? String(meId) : '';
+    const body = json && typeof json === 'object' ? json : null;
+    const notFound = httpStatus === 404 || httpStatus === 410 || (body && (body.code === 104 || String(body.message_code || '') === 'not_found'));
+    if (notFound) return me ? { kind: 'removed', detail: 'http_' + httpStatus + (body && body.code != null ? '_code_' + body.code : '') } : { kind: 'unknown', detail: 'not_found_signed_in_unverified' };
+    if (!(httpStatus >= 200 && httpStatus < 300)) return { kind: 'unknown', detail: 'http_' + httpStatus };
+    const it = body && body.item && typeof body.item === 'object' ? body.item : null;
+    if (!it || it.id == null) return { kind: 'unknown', detail: 'no_item' };
+    const owner = it.user && it.user.id != null ? String(it.user.id) : (it.user_id != null ? String(it.user_id) : '');
+    if (!owner || !me) return { kind: 'unknown', detail: 'owner_unverified' };
+    if (owner !== me) return { kind: 'live_other', detail: 'owner_mismatch' };
+    if (it.is_closed === true) {
+      const action = String(it.item_closing_action || '').toLowerCase();
+      return action === 'sold' ? { kind: 'sold', detail: 'closed:sold' } : { kind: 'unknown', detail: 'closed:' + (action || 'none') };
+    }
+    if (it.is_draft === true) return { kind: 'unknown', detail: 'draft' };
+    if (it.can_delete === false) return { kind: 'unknown', detail: 'cannot_delete' };
+    return { kind: 'live_own', detail: it.is_hidden === true ? 'hidden' : 'active' };
+  }
+
+  async function vintLookupItemById(id) {
+    try {
+      const opts = { credentials: 'include', headers: { 'Accept': 'application/json' } };
+      const meRes = await fetch(location.origin + '/api/v2/users/current', opts);
+      let meId = null;
+      try { const mj = await meRes.json(); meId = mj && mj.user && mj.user.id != null ? mj.user.id : null; } catch (e) { meId = null; }
+      const res = await fetch(location.origin + '/api/v2/items/' + encodeURIComponent(id) + '/details', opts);
+      let json = null;
+      try { json = await res.json(); } catch (e) { json = null; }
+      return { ok: true, status: res.status, json: json, meId: meRes.ok ? meId : null };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e).slice(0, 120) };
+    }
+  }
+
+  function vintRemSendVerify(item, reason) {
+    try {
+      chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'VINTED', itemId: item.id, reason: reason, verifyOnly: true, continueUrl: null }, () => { void chrome.runtime.lastError; });
+    } catch (e) { /* non-fatal */ }
+  }
+
+  // Returns 'handled' (reported, or navigated to the listing), 'delete_here' (this page is the live, owned listing: run the existing
+  // delete flow without a title match), or false (fall back to the existing flow). RESYNC_VERIFY items never get 'delete_here'.
+  const VINT_REM_ID_NAV_MS = 10 * 60 * 1000;
+  async function vintRemoveByListingId(item) {
+    const id = vintRemovalListingId(item);
+    if (!id) return false;
+    const verifyOnly = item.reason === 'RESYNC_VERIFY';
+    const look = await vintLookupItemById(id);
+    if (!look.ok) {
+      console.log('[FAS Vinted] removal: listing id check failed (' + look.error + ') -- falling back to the title lookup.');
+      return false;
+    }
+    const verdict = vintClassifyItemLookup(look.status, look.json, look.meId);
+    console.log('[FAS Vinted] removal: listing id ' + id + ' -> ' + verdict.kind + ' (' + verdict.detail + ')');
+    const prev = await vintRemStorageGet(VINTED_REMOVAL_TARGET_STORAGE_KEY);
+    const prevMine = !!(prev && prev.itemId === item.id);
+    if (verdict.kind === 'removed') {
+      if (prevMine) await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, null);
+      if (verifyOnly) { vintRemSendVerify(item, 'listing_not_found'); return 'handled'; }
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px"><b>' + escapeHtml(item.title) + '</b> was already removed on Vinted -- recorded as removed.</div>' + button('fas-vin-close', 'Close', false));
+      closeBtnHandler();
+      try {
+        chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'VINTED', itemId: item.id, reason: null, note: 'already removed on Vinted', continueUrl: null }, () => { void chrome.runtime.lastError; });
+      } catch (e) { /* non-fatal */ }
+      return 'handled';
+    }
+    if (verdict.kind === 'live_own') {
+      if (verifyOnly) { vintRemSendVerify(item, 'verify_still_live'); return 'handled'; }
+      const here = vintRemItemIdFromHref(location.pathname);
+      if (/^\/items\/\d+/.test(location.pathname) && here === id) return 'delete_here';
+      // Loop guard: this tab was already sent to /items/<id> for this item a moment ago and is not on it. Report a transient
+      // failure (bounded retry in background.js) instead of navigating again.
+      const navAt = prevMine && prev.source === 'id' && String(prev.vintedId) === id ? Number(prev.at) : NaN;
+      if (Number.isFinite(navAt) && Date.now() - navAt >= 0 && Date.now() - navAt < VINT_REM_ID_NAV_MS && !prev.deleteSubmittedAt) {
+        await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, null);
+        vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, 'detail_page_not_reached');
+        return 'handled';
+      }
+      await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, { itemId: item.id, vintedId: id, at: Date.now(), source: 'id' });
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening the Vinted listing for <b>' + escapeHtml(item.title) + '</b> to remove it...</div>');
+      location.href = location.origin + '/items/' + id; // the resulting page load re-invokes maybeRunVintedRemoval() for the same item
+      return 'handled';
+    }
+    if (verdict.kind === 'sold' && !verifyOnly) {
+      // Vinted itself shows this listing as sold, so it is no longer for sale there. Permanent skip, the same shape as
+      // Poshmark's already_sold_on_poshmark_permanent and Mercari's already_sold_on_mercari_archive_only: the organizer reviews it
+      // (if it also sold elsewhere it sold twice). Vinted's own sold-check reports the Vinted sale separately.
+      if (prevMine) await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, null);
+      overlayWarn('This item shows as already sold on Vinted, so there is nothing to delete. Please review it yourself.' + button('fas-vin-close', 'Close', false));
+      closeBtnHandler();
+      vintRemSignalBackground('crossPlatformRemovalSkipped', item, 'already_sold_on_vinted_permanent');
+      return 'handled';
+    }
+    return false; // live_other, unknown, or a sold listing on a verify run: the existing flow decides
+  }
+
   async function runVintedRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removing the matching Vinted listing (' + (window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.label(item) : 'sold elsewhere') + ') for <b>' + escapeHtml(item.title) + '</b>...</div>');
     // DELETE VERIFICATION 2026-09-23 (S-EXT-VINTED-DELETE-VERIFY): if a previous load already
@@ -4573,11 +4695,21 @@
         return;
       }
     }
+    // 1.0.75: the stored Vinted listing id decides first (removed / live / sold), BEFORE the short-title refusal below: an id the
+    // owner's own item data confirms needs no title at all. 'delete_here' = this page IS that live, owned listing.
+    const idFirst = await vintRemoveByListingId(item);
+    if (idFirst === 'handled') return;
+    const idFirstDeleteHere = idFirst === 'delete_here';
+    if (item.reason === 'RESYNC_VERIFY') {
+      // A verify run never deletes. The id could not settle it, and the title flow below can end in a delete, so stop here.
+      vintRemSendVerify(item, 'verify_unresolved');
+      return;
+    }
     // SECURITY FIX 2026-09-22 (F4): refuse outright when the queued title is too short to
     // identify one listing safely (an empty title used to match every page). Permanent skip so
     // the backend stops re-serving it and the rest of the queue continues.
     const wantedTitle = vintRemNorm(item.title);
-    if (wantedTitle.length < VINT_REM_MIN_SAFE_TITLE_LEN) {
+    if (!idFirstDeleteHere && wantedTitle.length < VINT_REM_MIN_SAFE_TITLE_LEN) {
       overlayWarn('The title "' + escapeHtml(item.title) + '" is too short to safely identify one Vinted listing -- nothing was deleted. Please remove it yourself.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
       vintRemSignalBackground('crossPlatformRemovalSkipped', item, 'title_too_short_for_safe_match');
@@ -4591,7 +4723,7 @@
     // (normalized, Vinted site suffix stripped) -- the former document.title.includes() check
     // accepted any listing whose page title merely contained the queued title.
     const onItemDetailPage = /^\/items\/\d+/.test(location.pathname);
-    let onDetailAlready = onItemDetailPage && vintRemDetailPageTitleMatches(wantedTitle);
+    let onDetailAlready = idFirstDeleteHere || (onItemDetailPage && vintRemDetailPageTitleMatches(wantedTitle));
     if (onItemDetailPage && !onDetailAlready) {
       // 2026-09-23: poll (250ms, up to ~8s) for the SPA to render its <h1>/document.title before
       // concluding the page does not match -- still exact-match only.
