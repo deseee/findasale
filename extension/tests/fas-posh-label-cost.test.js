@@ -39,11 +39,12 @@ test('the backend tiers in poshmarkLabelSurcharge.ts match this copy', () => {
   assert.ok(/POSHMARK_FULL_COST_OVER_OZ = 400;/.test(be));
 });
 
-test('the server payload wins; the local copy is only a fallback (organizer weight first, then the estimate)', () => {
+test('the server payload is the only source; without it there is no label note (1.0.72, no local fallback)', () => {
   assert.deepStrictEqual(L.poshLabelInfoFor({ poshmarkLabel: { surchargeUsd: 10, fullLabelCost: false, weightLb: 11.1, source: 'estimate' }, packageWeightOz: 10 }), { surchargeUsd: 10, fullLabelCost: false, weightLb: 11.1, source: 'estimate' });
-  assert.deepStrictEqual(L.poshLabelInfoFor({ packageWeightOz: 178, aiPackageWeightOz: 10 }), { surchargeUsd: 10, fullLabelCost: false, weightLb: 11.1, source: 'organizer' });
-  assert.deepStrictEqual(L.poshLabelInfoFor({ aiPackageWeightOz: 96 }), { surchargeUsd: 5, fullLabelCost: false, weightLb: 6, source: 'estimate' });
-  assert.deepStrictEqual(L.poshLabelInfoFor({}), { surchargeUsd: null, fullLabelCost: false, weightLb: null, source: 'none' });
+  const none = { surchargeUsd: null, fullLabelCost: false, weightLb: null, source: 'none' };
+  assert.deepStrictEqual(L.poshLabelInfoFor({ packageWeightOz: 178, aiPackageWeightOz: 10 }), none);
+  assert.deepStrictEqual(L.poshLabelInfoFor({ aiPackageWeightOz: 96 }), none);
+  assert.deepStrictEqual(L.poshLabelInfoFor({}), none);
 });
 
 const info = (usd, lb, source, full) => ({ surchargeUsd: usd, weightLb: lb, source: source || 'organizer', fullLabelCost: !!full });
@@ -100,4 +101,23 @@ test('the label payload reaches the Poshmark tab: popup queue map and the fill-t
   const bg = rd('background.js');
   const i = bg.indexOf('const FAS_FRESHEN_FIELDS = [');
   assert.ok(i > 0 && bg.slice(i, bg.indexOf('];', i)).includes("'poshmarkLabel'"));
+});
+
+// 1.0.72 (2026-10-27, live on 1.0.71): an older backend sent no poshmarkLabel, and the fallback read packageWeightOz, which in the
+// queue payload is the server's RESOLVED weight (a category/keyword estimate here). The overlay said "Guitar Strap ... ships at
+// 6.0 lb (from your saved package weight)" for a strap with no saved weight and a 4 oz photo estimate.
+test('no poshmarkLabel (older server): resolved packageWeightOz never produces a note or "from your saved package weight"', () => {
+  const strap = { title: 'Guitar Strap', packageWeightOz: 96, aiPackageWeightOz: 4 };
+  const i = L.poshLabelInfoFor(strap);
+  assert.strictEqual(i.source, 'none');
+  assert.strictEqual(i.surchargeUsd, null);
+  assert.strictEqual(L.poshLabelHeadsUpText(i), '');
+  assert.strictEqual(L.poshLabelRunNote(i), '');
+});
+test('"from your saved package weight" only when the server says source organizer', () => {
+  const est = L.poshLabelHeadsUpText(L.poshLabelInfoFor({ poshmarkLabel: { surchargeUsd: 5, fullLabelCost: false, weightLb: 6, source: 'estimate' } }));
+  assert.ok(/\(estimated\)/.test(est) && !/saved package weight/.test(est));
+  const org = L.poshLabelHeadsUpText(L.poshLabelInfoFor({ poshmarkLabel: { surchargeUsd: 5, fullLabelCost: false, weightLb: 6, source: 'organizer' } }));
+  assert.ok(/from your saved package weight/.test(org));
+  assert.ok(!/packageWeightOz/.test(extract(posh, 'poshLabelInfoFor')), 'the resolved payload weight is never read');
 });

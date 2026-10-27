@@ -2265,8 +2265,8 @@
   // ---- Poshmark label cost (1.0.71, 2026-10-27, Patrick). Poshmark's prepaid label covers up to 5 lb; heavier labels are
   // deducted from the seller's earnings: $5 (5-10 lb), $10 (10-15 lb), $15 (15-25 lb), the full shipping cost over 25 lb
   // (Poshmark blog 2026-02-13; seller pays since 2026-10-26). The server computes it per item (item.poshmarkLabel, from
-  // packages/backend/src/services/poshmarkLabelSurcharge.ts) and that is what is shown. poshLabelSurchargeUsd is the
-  // fallback for an older server. KEEP IN SYNC with poshmarkOverweightSurchargeUsd there (same tiers and edges).
+  // packages/backend/src/services/poshmarkLabelSurcharge.ts) and that is what is shown. poshLabelSurchargeUsd is a reference
+  // copy of the tiers (tests only since 1.0.72; an older server gets no note). KEEP IN SYNC with poshmarkOverweightSurchargeUsd there (same tiers and edges).
   function poshLabelSurchargeUsd(weightOz) {
     const w = Number(weightOz);
     if (weightOz == null || !isFinite(w) || w <= 0) return { surchargeUsd: null, fullLabelCost: false };
@@ -2276,17 +2276,17 @@
     if (w <= 400) return { surchargeUsd: 15, fullLabelCost: false };
     return { surchargeUsd: null, fullLabelCost: true }; // full USPS cost; the amount comes from the server's estimate
   }
-  // { surchargeUsd, fullLabelCost, weightLb, source } for an item: the server's poshmarkLabel, else the local fallback. Pure.
+  // { surchargeUsd, fullLabelCost, weightLb, source } for an item: the server's poshmarkLabel, else nothing. Pure.
+  // 1.0.72 (2026-10-27, live on 1.0.71): no local fallback. In the queue payload item.packageWeightOz is the server's RESOLVED
+  // effective weight (computeEffectivePackageWeight), which can be a category or keyword estimate, so reading it here labelled a
+  // guitar strap with no saved weight (photo estimate 4 oz) "6.0 lb (from your saved package weight)". Without the server's
+  // poshmarkLabel (an older backend) no label note is shown at all, and only the server's source 'organizer' ever reads as saved.
   function poshLabelInfoFor(item) {
     const p = item && item.poshmarkLabel;
     if (p && typeof p === 'object' && (p.weightLb == null || isFinite(Number(p.weightLb)))) {
       return { surchargeUsd: p.surchargeUsd == null ? null : Number(p.surchargeUsd), fullLabelCost: p.fullLabelCost === true, weightLb: p.weightLb == null ? null : Number(p.weightLb), source: p.source || 'none' };
     }
-    const own = item && item.packageWeightOz != null && Number(item.packageWeightOz) > 0 ? Number(item.packageWeightOz) : null;
-    const est = item && item.aiPackageWeightOz != null && Number(item.aiPackageWeightOz) > 0 ? Number(item.aiPackageWeightOz) : null;
-    const w = own != null ? own : est;
-    const t = poshLabelSurchargeUsd(w);
-    return { surchargeUsd: t.surchargeUsd, fullLabelCost: t.fullLabelCost, weightLb: w == null ? null : Math.round((w / 16) * 10) / 10, source: own != null ? 'organizer' : (est != null ? 'estimate' : 'none') };
+    return { surchargeUsd: null, fullLabelCost: false, weightLb: null, source: 'none' };
   }
   // True when Poshmark will deduct something for this item's label (over 5 lb). Pure.
   function poshLabelHasDeduction(info) {
@@ -2324,9 +2324,9 @@
 
   // 1.0.71 (2026-10-27, Patrick): the 1.0.59 retry ladder (shorter description, then first photo only) and the 1.0.69/1.0.70
   // auto-certify click are gone. On the FIRST flag the full, original form and Poshmark's dialog are left exactly as they are for
-  // the organizer: FindA.Sale never clicks Publish Listing or Delete Listing inside a flag dialog. Poshmark's own rule from the
-  // oversized dialog says no package over 108 inches length plus girth and 10 lb max; the 10 lb part is out of date (labels go
-  // past 15 lb now, with the seller paying the difference, see POSH_LABEL_COSTS_TEXT).
+  // the organizer: FindA.Sale never clicks Publish Listing or Delete Listing inside a flag dialog. 1.0.72: Poshmark's listing
+  // screen (the flag box and the second "Publish Listing" confirm box after it) still asks the seller to confirm the item is
+  // under 10 lb and fits a Priority Mail box, so the overlay never tells anyone to ignore that.
   // While an item is held, a marker in sessionStorage (this tab only) remembers it, so if Poshmark hard-navigates after the
   // organizer clicks Publish Listing, the next page load still checks the closet and records the item as listed with its id.
   const POSH_FLAG_HOLD_KEY = 'fasPoshFlagHold';
@@ -2411,6 +2411,79 @@
     return true;
   }
 
+  // 1.0.72 (2026-10-27, Patrick, live on 1.0.71): while a flag hold waits, nothing FindA.Sale draws may sit over Poshmark's box or
+  // the second "Publish Listing" confirm box after it. The centered problem modal is not shown for a flag (tProblem noModal), any
+  // stray one is removed, the corner bar moves beside, below or above the box (or under it by z-index when the window has no free
+  // space), and the trace panel is hidden while it would overlap. Re-run every second of the hold; poshRestoreOwnUi() undoes it.
+  // Pure: where the bar can go for a dialog rect d in a vw x vh viewport. 'default' = no dialog; 'none' = no free space.
+  function poshPlaceClearOfDialog(d, vw, vh) {
+    const M = 16, GAP = 16, MINW = 220, MINH = 120;
+    if (!d) return { side: 'default' };
+    const rightW = vw - d.right - GAP - M;
+    if (rightW >= MINW) return { side: 'right', maxWidth: Math.min(360, Math.floor(rightW)) };
+    const leftW = d.left - GAP - M;
+    if (leftW >= MINW) return { side: 'left', maxWidth: Math.min(360, Math.floor(leftW)) };
+    const belowH = vh - d.bottom - GAP - M;
+    if (belowH >= MINH) return { side: 'below', maxHeight: Math.floor(belowH) };
+    const aboveH = d.top - GAP - M;
+    if (aboveH >= MINH) return { side: 'above', maxHeight: Math.floor(aboveH) };
+    return { side: 'none', zIndex: Math.max(0, (Number(d.z) || 1) - 1) };
+  }
+  function poshRectsOverlap(a, b) { return !!a && !!b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom; }
+  // The visible Poshmark dialog box: the largest dialog-like element that is not a full-screen wrapper or backdrop. Null if none.
+  function poshFindVisibleDialog() {
+    const vw = window.innerWidth || 0, vh = window.innerHeight || 0;
+    let best = null;
+    for (const el of Array.from(document.querySelectorAll('[role="dialog"], [aria-modal="true"], .modal-dialog, .modal-content, .modal, [class*="modal"]'))) {
+      if (el.closest && el.closest('#fas-poshmark-bar, #fas-trace-host')) continue;
+      let r = null;
+      try { r = el.getBoundingClientRect(); } catch (e) { r = null; }
+      if (!r || r.width < 80 || r.height < 60) continue;
+      if (vw && vh && r.width * r.height >= 0.9 * vw * vh) continue;
+      if (String(el.innerText || '').trim().length < 10) continue;
+      if (best && r.width * r.height <= best.area) continue;
+      let z = 0;
+      for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+        try { const v = parseInt(getComputedStyle(n).zIndex, 10); if (isFinite(v) && v > z) z = v; } catch (e) {}
+      }
+      best = { left: r.left, top: r.top, right: r.right, bottom: r.bottom, area: r.width * r.height, z: z };
+    }
+    return best;
+  }
+  function poshResetBarStyle() {
+    if (!bar) return;
+    const s = bar.style;
+    s.left = 'auto'; s.top = 'auto'; s.right = '16px'; s.bottom = '16px'; s.maxWidth = '360px'; s.maxHeight = 'none'; s.overflow = ''; s.zIndex = '2147483647';
+  }
+  function poshKeepOwnUiClearOfDialog() {
+    const d = poshFindVisibleDialog();
+    const host = document.getElementById('fas-trace-host');
+    const sr = host ? (host.shadowRoot || host) : null;
+    if (d && sr) { try { const m = sr.querySelector('.mask'); if (m) m.remove(); } catch (e) {} }
+    if (bar) {
+      poshResetBarStyle();
+      const p = poshPlaceClearOfDialog(d, window.innerWidth || 0, window.innerHeight || 0);
+      const s = bar.style;
+      if (p.side === 'right') s.maxWidth = p.maxWidth + 'px';
+      else if (p.side === 'left') { s.right = 'auto'; s.left = '16px'; s.maxWidth = p.maxWidth + 'px'; }
+      else if (p.side === 'below') { s.maxHeight = p.maxHeight + 'px'; s.overflow = 'auto'; }
+      else if (p.side === 'above') { s.bottom = 'auto'; s.top = '16px'; s.maxHeight = p.maxHeight + 'px'; s.overflow = 'auto'; }
+      else if (p.side === 'none') s.zIndex = String(p.zIndex);
+    }
+    if (host) {
+      host.style.display = '';
+      if (d) {
+        let pr = null;
+        try { const panel = sr && sr.querySelector('.p'); pr = panel ? panel.getBoundingClientRect() : null; } catch (e) { pr = null; }
+        if (pr && poshRectsOverlap(pr, d)) host.style.display = 'none';
+      }
+    }
+  }
+  function poshRestoreOwnUi() {
+    poshResetBarStyle();
+    try { const host = document.getElementById('fas-trace-host'); if (host) host.style.display = ''; } catch (e) {}
+  }
+
   // 1.0.56 (Patrick): when Poshmark's validator flags a listing, do NOT silently move on. Tell the person plainly that they can
   // publish it themselves if they are sure it is allowed (Publish Listing in Poshmark's box is their own statement to Poshmark; FindA.Sale never clicks
   // it), or skip it and carry on with the queue so they can look at it later. If nobody answers for 10 minutes the queue moves on so an
@@ -2420,9 +2493,9 @@
     const what = flagKind === 'prohibited' ? 'a possibly prohibited item' : 'a possibly oversized item';
     let decision = '';
     const advice = flagKind === 'prohibited'
-      ? '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If you are sure this item is allowed on Poshmark, click <b>Publish Listing</b> (or <b>Certify Listing</b>) in Poshmark\'s box to publish it. That is your own statement to Poshmark, so FindA.Sale never clicks it for you. Otherwise skip it.</div>'
-      : '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">Poshmark\'s box still says 10 lb max, but that is out of date: its labels now go past 15 lb, and the seller pays for heavier ones out of earnings. ' + escapeHtml(POSH_LABEL_COSTS_TEXT) + '</div>' +
-        '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If the package is under 108 inches length plus girth (longest side plus twice the other two) and that label cost is fine with you, click <b>Publish Listing</b> in Poshmark\'s box to publish it. That is your own statement to Poshmark, so FindA.Sale never clicks it for you. Otherwise click Skip.</div>';
+      ? '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If you are sure this item is allowed on Poshmark, click <b>Publish Listing</b> (or <b>Certify Listing</b>) in Poshmark\'s box to publish it. If Poshmark then asks you to confirm in a second box, click <b>Publish</b> there. That is your own statement to Poshmark, so FindA.Sale never clicks it for you. Otherwise skip it.</div>'
+      : '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">Poshmark\'s listing screen asks you to confirm the item is under 10 lb and fits a Priority Mail box. Over 5 lb, the label upgrade costs come out of your earnings ($5 for 5-10 lb). Poshmark\'s shipping help also describes labels up to 15 lb ($10 for 10-15 lb), but its listing screen still says 10 lb, so only confirm if the item really is under 10 lb.</div>' +
+        '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If it is, click <b>Publish Listing</b> in Poshmark\'s box. Poshmark then asks you to confirm in a second box; click <b>Publish</b> there. That is your own statement to Poshmark, so FindA.Sale never clicks it for you. Otherwise click Skip.</div>';
     overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#ffcf7a">Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + what + '.</div>' + advice +
       button('fas-posh-skip', more ? 'Skip this item and continue the queue' : 'Skip this item', true) + button('fas-posh-close', 'Stop here', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (more ? 'If you do nothing, the queue moves on to the next item in 10 minutes. ' : '') + 'Item ' + (index + 1) + ' of ' + total + '</div>');
@@ -2430,12 +2503,15 @@
     const closeBtn = document.getElementById('fas-posh-close');
     if (skipBtn) skipBtn.onclick = () => { decision = 'skip'; };
     if (closeBtn) closeBtn.onclick = () => { decision = 'close'; if (bar) bar.remove(); };
+    const keepClear = () => { try { if (typeof poshKeepOwnUiClearOfDialog === 'function') poshKeepOwnUiClearOfDialog(); } catch (e) {} };
+    keepClear(); // 1.0.72: same task as the overlay() draw above, so the bar never paints over Poshmark's box
     // 1.0.68: say which item is waiting, so the log shows what the queue is held behind.
     tInfo('flag_hold_waiting', 'Waiting up to 10 minutes for a decision on "' + String(item.title || '').slice(0, 60) + '" (' + flagKind + ', item ' + (index + 1) + ' of ' + total + ')', { itemId: item.id, kind: flagKind, index: index, total: total });
     const deadline = Date.now() + 10 * 60 * 1000;
     while (!decision && Date.now() < deadline) {
       await sleep(1000);
       if (decision) break;
+      keepClear(); // Poshmark's second "Publish Listing" confirm box can appear at any moment
       if (!looksLikeSellForm()) {
         // The form went away: either the person clicked Publish Listing and Poshmark published, or they deleted the listing. The closet decides.
         let live = false;
@@ -2449,6 +2525,7 @@
       }
     }
     if (!decision) tWarn('flag_hold_timeout', 'No answer in 10 minutes for "' + String(item.title || '').slice(0, 60) + '"; skipping it and moving on', { itemId: item.id, kind: flagKind, index: index, total: total });
+    try { if (typeof poshRestoreOwnUi === 'function') poshRestoreOwnUi(); } catch (e) {}
     // 1.0.68: a timeout always skips (advances the queue, even on the last item) so the run never stays held behind one flagged item.
     return decision || 'skip';
   }
@@ -2559,10 +2636,12 @@
         // 1.0.71: hold on the FIRST flag with the full, original form. No cut-down retry, and never a click inside the dialog.
         writePoshFlagHoldState(item.id, flagKind);
         tInfo('flag_hold', 'Poshmark flagged this item as ' + flagKind + '; leaving the full form and Poshmark\'s box for you to decide', { kind: flagKind, dialog: flagText, descLen: (item.description || '').length, photos: Array.isArray(item.photoUrls) ? item.photoUrls.length : 0 });
+        // 1.0.72 (2026-10-27, Patrick, live on 1.0.71): noModal. The centered problem modal sat right on top of Poshmark's box and
+        // blocked the Publish Listing click; the problem is still logged (trace + backend) and the corner bar explains everything.
         if (flagKind === 'prohibited') {
-          tProblem({ code: 'poshmark_prohibited_flag', title: 'Poshmark flagged this item as possibly prohibited', what: 'Poshmark showed "potential prohibited item" and asked the seller to certify the listing. It would not publish without that.', why: 'Its validator went by the category, title or brand. FindA.Sale never certifies a listing for you, because that is your statement to Poshmark.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
+          tProblem({ noModal: true, code: 'poshmark_prohibited_flag', title: 'Poshmark flagged this item as possibly prohibited', what: 'Poshmark showed "potential prohibited item" and asked the seller to certify the listing. It would not publish without that.', why: 'Its validator went by the category, title or brand. FindA.Sale never certifies a listing for you, because that is your statement to Poshmark.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         } else {
-          tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Poshmark\'s box says 10 lb max, but labels now go past 15 lb with the cost deducted from your earnings ($5 for 5-10 lb, $10 for 10-15 lb, $15 for 15-25 lb, the full shipping cost over 25 lb). If the package is under 108 inches length plus girth, click Publish Listing in Poshmark\'s box yourself; otherwise click Skip and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
+          tProblem({ noModal: true, code: 'poshmark_oversized', title: 'Poshmark flagged this item as possibly oversized', what: 'Poshmark flagged the listing as a potential oversized item and is waiting for the seller to choose Delete Listing or Publish Listing.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Poshmark\'s listing screen asks the seller to confirm the item is under 10 lb and fits a Priority Mail box. If it really is, click Publish Listing in Poshmark\'s box, then Publish in the second confirm box; otherwise click Skip and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         }
         try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id, flagged: flagKind, flagOnly: true }); } catch (e) {}
         const decision = await holdForPoshmarkFlagDecision(item, flagKind, index, total);

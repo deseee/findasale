@@ -8,7 +8,8 @@ const bg = fs.readFileSync(path.join(__dirname, '..', 'background.js'), 'utf8');
 test('flagged listing holds for the person: skip button, never certifies, publishes if they certify', () => {
   const fn = src.indexOf('async function holdForPoshmarkFlagDecision');
   assert.ok(fn > 0);
-  const body = src.slice(fn, fn + 3200);
+  const body = src.slice(fn, src.indexOf('\n  async function doPoshmarkAutoPublish', fn)); // 1.0.72: whole function (it grew)
+  assert.ok(body.length > 1000);
   assert.ok(/Skip this item and continue the queue/.test(body));
   assert.ok(/never clicks it for you/.test(body));
   assert.ok(/fasPoshClosetDupCheck/.test(body));

@@ -8,6 +8,7 @@
  *   FAS_TRACE.ok(msg, ctx)                         mark the current step done
  *   FAS_TRACE.info / warn / error(code, msg, ctx)  log only (warn/error also show in the panel)
  *   FAS_TRACE.problem({code, title, what, why, next, ctx, snapshot})   modal: what happened, why, what happens next, copy diagnostics
+ *     (noModal: true logs the same record without the modal, 1.0.72)
  *   FAS_TRACE.end(summary, ctx)                    finish the run (panel shows result, then fades)
  *   FAS_TRACE.snapshot()                           small, privacy-safe description of the page for diagnostics
  *
@@ -191,6 +192,9 @@
       if (state.current) state.current.status = 'bad';
       log('error', o.code || 'problem', (o.title || 'Problem') + ' | ' + (o.what || '') + ' | why: ' + (o.why || '') + ' | next: ' + (o.next || ''), Object.assign({}, o.ctx || {}, { snapshot: snap }));
       render();
+      // 1.0.72: noModal logs the problem exactly as above (trace + backend log line) but draws no centered modal. For a page
+      // dialog that is waiting for the person's own click (Poshmark's flag box), where a modal on top would block that click.
+      if (o.noModal === true) return;
       if (!IS_PAGE) return;
       var wrap = ensureHost(); if (!wrap) return;
       var prev = wrap.querySelector('.mask'); if (prev) prev.remove();

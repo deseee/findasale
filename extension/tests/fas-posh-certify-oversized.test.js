@@ -128,15 +128,17 @@ test('a hold that resolves as published goes on to the normal record path (POSTE
   assert.ok(!/\breturn;/.test(branch));
 });
 
-test('oversized hold copy: Publish Listing, 108 inch rule, the outdated 10 lb text corrected with label costs, Skip; prohibited copy unchanged', () => {
+test('oversized hold copy (1.0.72): under 10 lb + Priority Mail box confirm, label costs, second confirm box, Skip; prohibited copy kept', () => {
   const body = extract(posh, 'holdForPoshmarkFlagDecision');
-  assert.ok(/Poshmark\\'s box still says 10 lb max, but that is out of date: its labels now go past 15 lb/.test(body));
-  assert.ok(/escapeHtml\(POSH_LABEL_COSTS_TEXT\)/.test(body));
-  assert.ok(/If the package is under 108 inches length plus girth/.test(body));
-  assert.ok(/click <b>Publish Listing<\/b> in Poshmark\\'s box to publish it\. That is your own statement to Poshmark, so FindA\.Sale never clicks it for you\. Otherwise click Skip\./.test(body));
+  assert.ok(!/out of date/.test(body), 'never tells people to ignore Poshmark\'s 10 lb confirmation');
+  assert.ok(/Poshmark\\'s listing screen asks you to confirm the item is under 10 lb and fits a Priority Mail box\./.test(body));
+  assert.ok(/Over 5 lb, the label upgrade costs come out of your earnings \(\$5 for 5-10 lb\)\./.test(body));
+  assert.ok(/labels up to 15 lb \(\$10 for 10-15 lb\), but its listing screen still says 10 lb, so only confirm if the item really is under 10 lb\./.test(body));
+  assert.ok(/click <b>Publish Listing<\/b> in Poshmark\\'s box\. Poshmark then asks you to confirm in a second box; click <b>Publish<\/b> there\. That is your own statement to Poshmark, so FindA\.Sale never clicks it for you\. Otherwise click Skip\./.test(body));
   assert.ok(/click <b>Publish Listing<\/b> \(or <b>Certify Listing<\/b>\) in Poshmark\\'s box/.test(body), 'prohibited wording kept');
   assert.ok(!/Not oversized, certify and post/.test(posh));
   assert.ok(!/If the item weighs under 10 lb/.test(posh));
+  assert.ok(!/10 lb max, but that is out of date/.test(posh));
 });
 
 // ---- the after-navigation resolver
