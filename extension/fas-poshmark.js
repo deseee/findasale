@@ -2230,6 +2230,8 @@
     const closeBtn = document.getElementById('fas-posh-close');
     if (skipBtn) skipBtn.onclick = () => { decision = 'skip'; };
     if (closeBtn) closeBtn.onclick = () => { decision = 'close'; if (bar) bar.remove(); };
+    // 1.0.68: say which item is waiting, so the log shows what the queue is held behind.
+    tInfo('flag_hold_waiting', 'Waiting up to 10 minutes for a decision on "' + String(item.title || '').slice(0, 60) + '" (' + flagKind + ', item ' + (index + 1) + ' of ' + total + ')', { itemId: item.id, kind: flagKind, index: index, total: total });
     const deadline = Date.now() + 10 * 60 * 1000;
     while (!decision && Date.now() < deadline) {
       await sleep(1000);
@@ -2246,7 +2248,9 @@
         decision = live ? 'published' : 'skip';
       }
     }
-    return decision || (more ? 'skip' : 'close');
+    if (!decision) tWarn('flag_hold_timeout', 'No answer in 10 minutes for "' + String(item.title || '').slice(0, 60) + '"; skipping it and moving on', { itemId: item.id, kind: flagKind, index: index, total: total });
+    // 1.0.68: a timeout always skips (advances the queue, even on the last item) so the run never stays held behind one flagged item.
+    return decision || 'skip';
   }
 
   async function doPoshmarkAutoPublish(item, index, total, fillResult) {
@@ -2779,12 +2783,20 @@
       if (seenCount >= 3) {
         sessionStorage.setItem(loopKey, JSON.stringify(starts.filter((x) => x.id !== item.id)));
         tProblem({ code: 'poshmark_fill_loop', title: 'Skipped: Poshmark kept reloading this item', what: 'This item was started 3 times in 15 minutes without finishing, so it was skipped instead of looping.', why: 'The form did not load or Poshmark kept refusing it. Check the item on Poshmark yourself.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Moving on.', ctx: { nav: navType, agesSec: starts.filter((x) => x.id === item.id).map((x) => Math.round((nowMs - x.at) / 1000)) } });
-        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
-        overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(item.title) + '</b> after 3 tries in 15 minutes. Not marked listed.</div>');
+        // 1.0.68: a skip by this guard used to leave the run stalled until reload. Advance with a logged reason (never marked listed, never held) and carry on.
+        tInfo('fill_loop_skip', 'Skipped by the 3-tries guard: ' + String(item.title || '').slice(0, 60), { itemId: item.id });
+        await fasPoshAdvance(item.id, 'fill_loop');
+        if ((index + 1) < total) {
+          overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(item.title) + '</b> after 3 tries in 15 minutes. Not marked listed. Moving to the next item...</div>');
+          await humanPause(800, 1500);
+          await navigateToPoshmarkCreateListing();
+        } else {
+          clearPoshNavRetryState();
+          overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(item.title) + '</b> after 3 tries in 15 minutes. Not marked listed. That was the last item in the queue.</div>' + button('fas-posh-close', 'Close', false));
+          closeBtnHandler();
+        }
         return;
       }
-      starts.push({ id: item.id, at: nowMs });
-      sessionStorage.setItem(loopKey, JSON.stringify(starts.slice(-20)));
     } catch (e) { /* the breaker must never block a normal listing */ }
     tStep('Opening the listing form', 'Waiting for Poshmark\'s create-listing page to finish loading so the fields can be filled');
     const formState = await waitForFormReady(8000);
@@ -2836,7 +2848,15 @@
     // not just through the initial page-ready check.
     console.log('[FAS Poshmark] Form confirmed loaded -- proceeding to fill (bounce-retry marker kept live for the duration of this fill).');
     tOk('Listing form is ready');
-    const fillResult = await fillListing(item);
+
+    // 1.0.68: only a real fill attempt counts toward the 3-tries-in-15-minutes guard (a form that never loaded, e.g. a stray /feed page, does not).
+    try {
+      const lk = 'fasPoshFillStarts'; let st = [];
+      try { st = JSON.parse(sessionStorage.getItem(lk) || '[]'); } catch (e) { st = []; }
+      st = (Array.isArray(st) ? st : []).filter((x) => x && typeof x.id === 'string' && Date.now() - x.at < 15 * 60 * 1000);
+      st.push({ id: item.id, at: Date.now() });
+      sessionStorage.setItem(lk, JSON.stringify(st.slice(-20)));
+    } catch (e) { /* never block a listing */ }    const fillResult = await fillListing(item);
     const photosOk = fillResult.photosOk;
     // Re-check for an interstitial that may have appeared mid-fill (e.g. triggered by the photo
     // upload) before showing the "you're ready to review" state.
@@ -2857,12 +2877,35 @@
     showReviewOverlay(item, index, total, photosOk, fillResult.fieldNotes);
   }
 
+  // 1.0.68: the auto queue hands its pending item to whatever Poshmark tab is open (feed, closet, a listing). Waiting for the listing form on such a page
+  // always ended in form_not_found. If an item is pending and this tab is not on the create-listing page, open it once (same URL the extension's own start uses).
+  function poshShouldAutoNavToCreate(pathname, guard, itemId, now, retryState) {
+    const p = String(pathname || '');
+    if (/^\/create-listing(\/|$)/.test(p)) return false;
+    if (/^\/(edit-listing|login|signup|sign-up|auth|oauth|verify|captcha)(\/|$)/.test(p)) return false;
+    if (guard && guard.id === itemId && now - guard.at < 3 * 60 * 1000) return false; // already tried once for this item; fall back to the bounce-retry logic
+    if (retryState && now - retryState.ts < POSH_NAV_BOUNCE_WINDOW_MS) return false; // a bounce retry is already in flight
+    return true;
+  }
+
   async function start() {
     await sleep(600); // let the page settle before reading the DOM
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getPoshmarkQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) { clearPoshNavRetryState(); clearPoshPublishAttemptState(); return; } // nothing queued -- stay silent, also clean up any stale bounce-retry/publish-attempt markers
     tBegin(queued);
+    try {
+      const gk = 'fasPoshAutoNav'; let g = null;
+      try { g = JSON.parse(sessionStorage.getItem(gk) || 'null'); } catch (e) { g = null; }
+      if (poshShouldAutoNavToCreate(location.pathname, g, queued.item.id, Date.now(), readPoshNavRetryState()) && !looksLikeInterstitial()) {
+        try { sessionStorage.setItem(gk, JSON.stringify({ id: queued.item.id, at: Date.now() })); } catch (e) { /* guard is best-effort */ }
+        writePoshNavRetryState({ ts: Date.now(), attempt: 0 });
+        tInfo('auto_nav_create_listing', 'Opening the create-listing page first (this tab was on "' + location.pathname + '")', { path: location.pathname, itemId: queued.item.id });
+        tEnd('Opening the Poshmark create-listing page; the item is filled once it loads', {});
+        location.href = POST_URL_HINT;
+        return;
+      }
+    } catch (e) { /* never block a normal listing */ }
     tStep('Starting this item', 'Checking the Poshmark rules and your records before touching the form', { autoPublish: queued.autoPublish !== false, hasPhotos: !!(queued.item.photoUrls && queued.item.photoUrls.length), hasPrice: queued.item.price != null });
 
     // SAFETY 2026-09-03 (S-EXT-POSHMARK-PROHIBITED-GATE, parity with fas-craigslist.js's call site

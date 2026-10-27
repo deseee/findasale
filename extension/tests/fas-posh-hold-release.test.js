@@ -75,6 +75,6 @@ test('a re-flag on retry follows the 2026-10-22 rule unchanged: record the flag,
   assert.ok(!/Certify Listing['"]?\)?\s*\.click|realClick\([^)]*[Cc]ertify/.test(posh));
 });
 
-test('manifest is 1.0.67', () => {
-  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.67');
+test('manifest is 1.0.68', () => {
+  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.68');
 });
