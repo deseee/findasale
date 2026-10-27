@@ -1,4 +1,4 @@
-// 1.0.69 (2026-10-27, Patrick: the flagged pick holders / tuners / straps are not oversized, post them): when the organizer
+// 1.0.70 (2026-10-27, Patrick: the flagged pick holders / tuners / straps are not oversized, post them): when the organizer
 // uses "Not oversized, certify and post" on the web card, the server returns the item id in certifyOversizedIds; the
 // extension stores it (fasPoshCertifyOk) and clicks Poshmark's Certify Listing only for an OVERSIZED flag on that item.
 // A prohibited flag is never certified. Items not on the list behave exactly as before.
@@ -97,6 +97,13 @@ test('wiring: certify runs only for an oversized flag on a confirmed item, verif
   assert.ok(/holdForPoshmarkFlagDecision\(item, flagKind, index, total\)/.test(posh));
 });
 
-test('manifest is 1.0.69', () => {
-  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.69');
+test('manifest is 1.0.70', () => {
+  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.70');
+});
+
+test('1.0.70: the oversized dialog confirm button "Publish Listing" counts as the certify control; Delete Listing never does', () => {
+  assert.strictEqual(isCertifyText('Publish Listing'), true);
+  assert.strictEqual(isCertifyText('  publish   listing '), true);
+  assert.strictEqual(isCertifyText('Delete Listing'), false);
+  assert.strictEqual(isCertifyText('Certify Listing'), true);
 });

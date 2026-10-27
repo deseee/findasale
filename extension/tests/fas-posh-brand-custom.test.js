@@ -1,4 +1,4 @@
-// 1.0.69 (2026-10-27, live-verified in Patrick's Chrome on poshmark.com/create-listing): unknown brands ("Mugig",
+// 1.0.70 (2026-10-27, live-verified in Patrick's Chrome on poshmark.com/create-listing): unknown brands ("Mugig",
 // "D'Addario") show no suggestions and Poshmark has no "add custom brand" control; the typed text stays after blur and
 // Poshmark publishes it as a custom brand. fillAutocomplete must count that as set, click only an EXACT suggestion
 // (never "Dunlop" for "Jim Dunlop"), and report not-set only when the typed value did not stick.

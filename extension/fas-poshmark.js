@@ -100,7 +100,7 @@
       return /sell/i.test(href) || /sell/i.test(testId) || /sell/i.test(ariaAttrs);
     });
     if (byLooseAttr) { console.log('[FAS Poshmark] Sell nav control found via Signal 4 (loose href/data-testid/aria "sell" match).'); return byLooseAttr; }
-    console.warn('[FAS Poshmark] All 4 Sell nav-control signals failed to find a match -- falling back to the UNVERIFIED guessed create-listing URL (see navigateToPoshmarkCreateListing).');
+    console.log('[FAS Poshmark] No Sell button on this page -- opening poshmark.com/create-listing directly (live-confirmed URL).');
     return null;
   }
   // BUG FIX 2026-08-29 (S-EXT-POSHMARK-BOUNCE-RETRY, Patrick-directed, based on live evidence from
@@ -246,7 +246,7 @@
       sellLink.click(); // SPA-safe: lets Poshmark's own router handle the route change
       return true;
     }
-    console.warn('[FAS Poshmark] Could not find a real "Sell" nav control -- falling back to the UNVERIFIED guessed create-listing URL.');
+    console.log('[FAS Poshmark] Opening poshmark.com/create-listing directly.');
     location.href = POST_URL_HINT;
     return false;
   }
@@ -2287,10 +2287,11 @@
     if (!(typeof store.at === 'number' && store.at > 0 && now - store.at <= POSH_CERTIFY_TTL_MS)) return false;
     return store.ids.indexOf(itemId) !== -1;
   }
-  // Poshmark's dialog button reads "Certify Listing" (live screenshot 2026-10-27); a few close variants are accepted. Pure.
+  // 1.0.70 (live DOM 2026-10-27, Mugig cable): the oversized dialog's confirm button reads "Publish Listing" (button.btn--primary,
+  // next to "Delete Listing"); older wording was "Certify Listing". Only ever matched inside the oversized dialog (see below). Pure.
   function poshIsCertifyButtonText(text) {
     const t = String(text == null ? '' : text).replace(/\s+/g, ' ').trim().toLowerCase();
-    return /^certify( this)?( listing| item)?$/.test(t);
+    return /^certify( this)?( listing| item)?$/.test(t) || t === 'publish listing';
   }
   // The Certify button inside the smallest open dialog that carries Poshmark's oversized-item wording; never a page-wide guess.
   function findPoshmarkCertifyButton() {
@@ -2313,7 +2314,7 @@
     let btn = null;
     for (let a = 0; a < 10 && !btn; a++) { btn = findPoshmarkCertifyButton(); if (!btn) await sleep(300); }
     if (!btn) return 'no_button';
-    tStep('Certifying the listing', 'You told FindA.Sale this item is not oversized, so clicking Poshmark\'s Certify Listing for you');
+    tStep('Certifying the listing', 'You told FindA.Sale this item is not oversized, so clicking Poshmark\'s Publish Listing for you');
     overlayInfo('Poshmark asked whether <b>' + escapeHtml(item.title) + '</b> is oversized. You said it is not, so certifying and posting it...');
     await humanPause(400, 800);
     writePoshPublishAttemptState(item.id);
@@ -2344,7 +2345,7 @@
     const what = flagKind === 'prohibited' ? 'a possibly prohibited item' : 'a possibly oversized item';
     let decision = '';
     overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#ffcf7a">Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + what + '.</div>' +
-      '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If you are sure this item is allowed on Poshmark, click <b>Certify Listing</b> in Poshmark\'s box to publish it. That is your own statement to Poshmark, so FindA.Sale never clicks it for you. Otherwise skip it.</div>' +
+      '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If you are sure this item is allowed on Poshmark, click <b>Publish Listing</b> (or <b>Certify Listing</b>) in Poshmark\'s box to publish it. That is your own statement to Poshmark, so FindA.Sale never clicks it for you. Otherwise skip it.</div>' +
       (flagKind === 'oversized' ? '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If it is not oversized, you can also skip it here and use <b>Not oversized, certify and post</b> on FindA.Sale\'s auto queue page. The extension then certifies it for you on the next try.</div>' : '') +
       button('fas-posh-skip', more ? 'Skip this item and continue the queue' : 'Skip this item', true) + button('fas-posh-close', 'Stop here', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (more ? 'If you do nothing, the queue moves on to the next item in 10 minutes. ' : '') + 'Item ' + (index + 1) + ' of ' + total + '</div>');
@@ -2488,9 +2489,9 @@
           published = true;
           tOk('certified_oversized: you said this item is not oversized, so FindA.Sale certified it and Poshmark published it', { code: 'certified_oversized', itemId: item.id });
           tInfo('certified_oversized', 'Certified the oversized flag for you and the listing went live', { itemId: item.id });
-          try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: 'Poshmark asked if this was oversized; you said it is not, so FindA.Sale clicked Certify Listing and it posted.' }); } catch (e) {}
+          try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: 'Poshmark asked if this was oversized; you said it is not, so FindA.Sale clicked Publish Listing and it posted.' }); } catch (e) {}
         } else {
-          tWarn('certify_oversized_failed', c === 'no_button' ? 'Could not find Poshmark\'s Certify Listing button, so the item is held for you as before' : 'Clicked Certify Listing but could not confirm the listing went live, so the item is held for you as before', { itemId: item.id, result: c });
+          tWarn('certify_oversized_failed', c === 'no_button' ? 'Could not find Poshmark\'s Publish Listing button, so the item is held for you as before' : 'Clicked Publish Listing but could not confirm the listing went live, so the item is held for you as before', { itemId: item.id, result: c });
         }
       }
       if (flagText && !certified) {
@@ -2516,7 +2517,7 @@
         if (flagKind === 'prohibited') {
           tProblem({ code: 'poshmark_prohibited_flag', title: 'Poshmark flagged this item as possibly prohibited', what: 'Poshmark showed "potential prohibited item" and asked the seller to certify the listing. It would not publish without that.', why: 'Its validator went by the category, title or brand. FindA.Sale never certifies a listing for you, because that is your statement to Poshmark.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         } else {
-          tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues. If it is not oversized, Not oversized, certify and post on the auto queue page has the extension certify it next time.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
+          tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Publish Listing on Poshmark yourself; otherwise skip it and the queue continues. If it is not oversized, Not oversized, certify and post on the auto queue page has the extension certify it next time.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         }
         try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id, flagged: flagKind, flagOnly: true }); } catch (e) {}
         const decision = await holdForPoshmarkFlagDecision(item, flagKind, index, total);
