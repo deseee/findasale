@@ -341,6 +341,7 @@ export const ITEM_STATUS_SELECT = {
   packageLengthIn: true,
   packageWidthIn: true,
   packageHeightIn: true,
+  aiPackageDimsJson: true, // 2026-10-27: Poshmark's label note (length plus girth) falls back to the photo estimate
 } as const;
 
 /** Longest the status endpoint waits for eBay's condition policy; the lookup keeps running and fills its cache. */

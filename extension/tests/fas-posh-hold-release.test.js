@@ -69,12 +69,12 @@ test('wiring: ack is sent as ?released=, changes are applied before the Poshmark
   assert.ok(/resp\.data\.releaseHolds/.test(fn) && /resp\.data\.dropHolds/.test(fn));
 });
 
-test('a re-flag on retry of an item the organizer did not confirm follows the 2026-10-22 rule: record the flag, hold the tab, never certify (1.0.70 certifies only confirmed oversized items, see fas-posh-certify-oversized.test.js)', () => {
+test('a re-flag on retry of an item the organizer did not confirm follows the 2026-10-22 rule: record the flag, hold the tab, never click inside the Poshmark box (1.0.71: no auto-certify for anyone, see fas-posh-certify-oversized.test.js)', () => {
   assert.ok(/advancePoshmarkQueue', itemId: item\.id, flagged: flagKind, flagOnly: true/.test(posh));
   assert.ok(/holdForPoshmarkFlagDecision\(item, flagKind, index, total\)/.test(posh));
   assert.ok(!/Certify Listing['"]?\)?\s*\.click|realClick\([^)]*[Cc]ertify/.test(posh));
 });
 
-test('manifest is 1.0.70', () => {
-  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.70');
+test('manifest is 1.0.71', () => {
+  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.71');
 });

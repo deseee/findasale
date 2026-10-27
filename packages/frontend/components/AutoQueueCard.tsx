@@ -23,9 +23,8 @@ import Skeleton from './Skeleton';
  * (POST .../auto-queue-settings/release-holds). The extension drops the hold on its next check and offers the item to
  * Poshmark again; if Poshmark flags it again, it is held again the same way.
  *
- * 1.0.69 (2026-10-27): for items held as possibly oversized, "Not oversized, certify and post" (and "Certify all oversized
- * and post") release the hold with certifyOversized: true. The organizer is telling Poshmark the item is not oversized, so
- * when Poshmark's oversized box comes up the extension clicks Certify Listing for them. Prohibited items keep only Try again.
+ * 1.0.71 (2026-10-27, Patrick): the 1.0.69 certify buttons for oversized holds are gone. The extension never clicks
+ * Publish Listing in Poshmark's flag box; for an oversized hold the card tells the organizer to click it themselves.
  *
  * Types are local on purpose (a @findasale/shared import breaks the Vercel build).
  */
@@ -34,7 +33,7 @@ type Platform = 'FACEBOOK' | 'CRAIGSLIST' | 'POSHMARK' | 'MERCARI' | 'GRAILED' |
 type Settings = Record<Platform, boolean>;
 type Limits = { maxNewPerRun: number | null; onlyItemIds: string[] };
 type HeldItem = { itemId: string; title: string; kind: string; at: string; platform: string };
-type ReleasePending = { itemId: string; title: string; at: string; certify?: boolean };
+type ReleasePending = { itemId: string; title: string; at: string };
 type ExtensionStatus = { lastPollAt: string | null; stale: boolean; neverSeen: boolean; heldFlagged: HeldItem[]; releasePending: ReleasePending[] };
 type AutoQueueData = { settings: Settings; paused: string[]; limits: Limits; limitsAvailable: boolean; extension: ExtensionStatus };
 
@@ -112,7 +111,7 @@ const AutoQueueCard: React.FC = () => {
   // 1.0.67: release Poshmark-flag holds so the extension offers those items to Poshmark again on its next check.
   const [releaseError, setReleaseError] = useState('');
   const releaseHolds = useMutation({
-    mutationFn: async (body: ({ itemIds: string[] } | { all: true }) & { certifyOversized?: true }) =>
+    mutationFn: async (body: { itemIds: string[] } | { all: true }) =>
       toData((await api.post(ENDPOINT + '/release-holds', body)).data),
     onSuccess: (next) => {
       setReleaseError('');
@@ -304,16 +303,6 @@ const AutoQueueCard: React.FC = () => {
                 Held back from Poshmark ({data.extension.heldFlagged.filter((h) => h.kind !== 'edit').length})
               </h4>
               <div className="flex flex-wrap gap-2">
-                {data.extension.heldFlagged.some((h) => h.kind === 'oversized') && (
-                  <button
-                    type="button"
-                    onClick={() => releaseHolds.mutate({ all: true, certifyOversized: true })}
-                    disabled={releaseHolds.isPending}
-                    className="rounded-md bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
-                  >
-                    Certify all oversized and post
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => releaseHolds.mutate({ all: true })}
@@ -332,10 +321,10 @@ const AutoQueueCard: React.FC = () => {
             </p>
             {data.extension.heldFlagged.some((h) => h.kind === 'oversized') && (
               <p className="text-xs text-warm-600 dark:text-gray-400 -mt-1 mb-3 leading-relaxed">
-                Poshmark sometimes calls small things oversized. If you know an item is not oversized, use Not oversized,
-                certify and post. The extension then answers Poshmark&apos;s question for you by clicking Certify Listing, which
-                tells Poshmark the item is not oversized, and posts it. Items flagged as possibly prohibited are never
-                certified for you.
+                Poshmark flagged these as possibly oversized. Its box still says 10 lb max, but its labels now go past
+                15 lb and the seller pays for heavier ones out of earnings: $5 for 5-10 lb, $10 for 10-15 lb, $15 for
+                15-25 lb, and the full shipping cost over 25 lb. If the package is under 108 inches (length plus girth)
+                and that cost is fine, open Poshmark and click Publish Listing yourself when Poshmark asks.
               </p>
             )}
             {releaseError && (
@@ -352,16 +341,6 @@ const AutoQueueCard: React.FC = () => {
                     </span>
                   </span>
                   <span className="shrink-0 flex flex-col items-end gap-1">
-                    {h.kind === 'oversized' && (
-                      <button
-                        type="button"
-                        onClick={() => releaseHolds.mutate({ itemIds: [h.itemId], certifyOversized: true })}
-                        disabled={releaseHolds.isPending}
-                        className="text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline disabled:opacity-60"
-                      >
-                        Not oversized, certify and post
-                      </button>
-                    )}
                     <button
                       type="button"
                       onClick={() => releaseHolds.mutate({ itemIds: [h.itemId] })}
@@ -381,7 +360,7 @@ const AutoQueueCard: React.FC = () => {
           <div className="mt-4 rounded-md border border-warm-200 dark:border-gray-700 p-3" id="auto-queue-release-pending">
             <p className="text-xs text-warm-700 dark:text-gray-300 leading-relaxed">
               Trying again on Poshmark at the extension&apos;s next check ({data.extension.releasePending.length}):{' '}
-              {data.extension.releasePending.map((r) => r.title + (r.certify ? ' (you said it is not oversized)' : '')).join(', ')}
+              {data.extension.releasePending.map((r) => r.title).join(', ')}
             </p>
           </div>
         )}

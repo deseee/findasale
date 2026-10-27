@@ -667,7 +667,10 @@
     }
     return bar;
   }
-  function overlay(html) { ensureBar().innerHTML = html; }
+  // 1.0.71: Poshmark label-cost heads-up for the item being filled (see poshLabelHeadsUpText). Appended under every
+  // overlay message for that item, so it stays visible while filling, publishing and on a flag hold. '' = nothing.
+  let poshLabelNoteHtml = '';
+  function overlay(html) { ensureBar().innerHTML = html + poshLabelNoteHtml; }
   function overlayInfo(text) { overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#cfe3d6">' + text + '</div>'); }
   function overlayWarn(text) { overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:12px;color:#ffcf7a">' + text + '</div>'); }
 
@@ -2259,94 +2262,168 @@
   // no longer blocks auto-publish (see run()'s call site below). Instead this records a note via
   // background.js's fasPoshmarkRunNotes list, and the LAST item in the run reads all of them back
   // and shows a roll-up instead of silently publishing N-1 guessed items with zero visibility.
-  // 1.0.59 (Patrick: "try it"): Poshmark's oversized / prohibited validator is undocumented, so the first refusal of an item is retried ONCE in
-  // the same tab with a shortened description (first sentence only) to learn whether the wording is the trigger. The marker lives in
-  // sessionStorage (this tab only). Whether the retry passed or was refused again is logged with the variant used so the result is evidence.
-  const POSH_FLAG_RETRY_KEY = 'fasPoshFlagRetry';
-  function poshFlagRetryState(item) {
-    try { const v = JSON.parse(sessionStorage.getItem(POSH_FLAG_RETRY_KEY) || 'null'); return v && item && v.id === item.id ? v : null; } catch (e) { return null; }
+  // ---- Poshmark label cost (1.0.71, 2026-10-27, Patrick). Poshmark's prepaid label covers up to 5 lb; heavier labels are
+  // deducted from the seller's earnings: $5 (5-10 lb), $10 (10-15 lb), $15 (15-25 lb), the full shipping cost over 25 lb
+  // (Poshmark blog 2026-02-13; seller pays since 2026-10-26). The server computes it per item (item.poshmarkLabel, from
+  // packages/backend/src/services/poshmarkLabelSurcharge.ts) and that is what is shown. poshLabelSurchargeUsd is the
+  // fallback for an older server. KEEP IN SYNC with poshmarkOverweightSurchargeUsd there (same tiers and edges).
+  function poshLabelSurchargeUsd(weightOz) {
+    const w = Number(weightOz);
+    if (weightOz == null || !isFinite(w) || w <= 0) return { surchargeUsd: null, fullLabelCost: false };
+    if (w <= 80) return { surchargeUsd: 0, fullLabelCost: false };
+    if (w <= 160) return { surchargeUsd: 5, fullLabelCost: false };
+    if (w <= 240) return { surchargeUsd: 10, fullLabelCost: false };
+    if (w <= 400) return { surchargeUsd: 15, fullLabelCost: false };
+    return { surchargeUsd: null, fullLabelCost: true }; // full USPS cost; the amount comes from the server's estimate
   }
-  function poshShortDescription(item) {
-    const d = String(item && item.description != null ? item.description : '').replace(/\s+/g, ' ').trim();
-    const first = (d.split(/(?<=[.!?])\s+/)[0] || d).slice(0, 160).trim();
-    return first.length >= 20 ? first : String((item && item.title) || first);
+  // { surchargeUsd, fullLabelCost, weightLb, source } for an item: the server's poshmarkLabel, else the local fallback. Pure.
+  function poshLabelInfoFor(item) {
+    const p = item && item.poshmarkLabel;
+    if (p && typeof p === 'object' && (p.weightLb == null || isFinite(Number(p.weightLb)))) {
+      return { surchargeUsd: p.surchargeUsd == null ? null : Number(p.surchargeUsd), fullLabelCost: p.fullLabelCost === true, weightLb: p.weightLb == null ? null : Number(p.weightLb), source: p.source || 'none' };
+    }
+    const own = item && item.packageWeightOz != null && Number(item.packageWeightOz) > 0 ? Number(item.packageWeightOz) : null;
+    const est = item && item.aiPackageWeightOz != null && Number(item.aiPackageWeightOz) > 0 ? Number(item.aiPackageWeightOz) : null;
+    const w = own != null ? own : est;
+    const t = poshLabelSurchargeUsd(w);
+    return { surchargeUsd: t.surchargeUsd, fullLabelCost: t.fullLabelCost, weightLb: w == null ? null : Math.round((w / 16) * 10) / 10, source: own != null ? 'organizer' : (est != null ? 'estimate' : 'none') };
+  }
+  // True when Poshmark will deduct something for this item's label (over 5 lb). Pure.
+  function poshLabelHasDeduction(info) {
+    return !!info && (info.fullLabelCost === true || (info.surchargeUsd != null && info.surchargeUsd > 0));
+  }
+  const POSH_LABEL_COSTS_TEXT = 'Poshmark\'s prepaid label covers up to 5 lb; heavier labels cost $5 (5-10 lb), $10 (10-15 lb) or $15 (15-25 lb), and over 25 lb Poshmark deducts the full shipping cost.';
+  // What Poshmark deducts, as a sentence ending in a period. Pure.
+  function poshLabelDeductionSentence(info) {
+    if (info.fullLabelCost) {
+      return info.surchargeUsd != null
+        ? 'Poshmark will deduct the full shipping cost from your earnings when this sells, about $' + info.surchargeUsd.toFixed(2) + ' (USPS estimate).'
+        : 'Poshmark will deduct the full USPS shipping cost from your earnings when this sells.';
+    }
+    return 'Poshmark will deduct $' + Number(info.surchargeUsd || 0).toFixed(2) + ' from your earnings when this sells.';
+  }
+  // The heads-up shown while filling an item over 5 lb. '' for 5 lb and under or no weight. Plain text, pure.
+  function poshLabelHeadsUpText(info) {
+    if (!poshLabelHasDeduction(info) || info.weightLb == null) return '';
+    const from = info.source === 'organizer' ? 'from your saved package weight' : 'estimated';
+    return 'Heads up: this item ships at ' + Number(info.weightLb).toFixed(1) + ' lb (' + from + '). ' + POSH_LABEL_COSTS_TEXT + ' ' +
+      poshLabelDeductionSentence(info) + (info.fullLabelCost || Number(info.surchargeUsd) >= 15 ? ' Over 15 lb, ship it in more than one box if you can.' : '');
+  }
+  // Run-summary line for an item that will carry a deduction. '' otherwise. Pure.
+  function poshLabelRunNote(info) {
+    if (!poshLabelHasDeduction(info) || info.weightLb == null) return '';
+    return (info.fullLabelCost
+      ? (info.surchargeUsd != null ? 'Poshmark will deduct the full shipping cost, about $' + info.surchargeUsd.toFixed(2) + ' (USPS estimate)' : 'Poshmark will deduct the full USPS shipping cost')
+      : 'Poshmark will deduct $' + Number(info.surchargeUsd || 0).toFixed(2)) + ' from your earnings for the heavier label (' + Number(info.weightLb).toFixed(1) + ' lb).';
+  }
+  function setPoshLabelNote(item) {
+    const text = poshLabelHeadsUpText(poshLabelInfoFor(item));
+    poshLabelNoteHtml = text ? '<div id="fas-posh-label-note" style="margin-top:8px;padding-top:6px;border-top:1px solid #3a4842;font-size:12px;color:#ffcf7a">' + escapeHtml(text) + '</div>' : '';
+    if (text) tInfo('posh_label_cost', text, { surchargeUsd: poshLabelInfoFor(item).surchargeUsd, weightLb: poshLabelInfoFor(item).weightLb });
   }
 
-  // 1.0.69 (2026-10-27, Patrick: these flagged items are not oversized, post them): when the organizer used "Not oversized,
-  // certify and post" on the web card, the server lists the item in certifyOversizedIds (background.js stores it as
-  // fasPoshCertifyOk). When Poshmark's "potential oversized item" box comes up for such an item, FindA.Sale clicks Certify
-  // Listing for them: that statement to Poshmark is the organizer's own, made on the web card for that exact item. A
-  // "prohibited" flag is NEVER certified, whatever the list says. Items not on the list behave exactly as before.
-  const POSH_CERTIFY_STORE_KEY = 'fasPoshCertifyOk';
-  const POSH_CERTIFY_TTL_MS = 30 * 24 * 3600 * 1000;
-  // True only for an oversized flag on an item the organizer confirmed, from a store refreshed within 30 days. Pure.
-  function poshShouldAutoCertify(flagKind, itemId, store, now) {
-    if (flagKind !== 'oversized') return false;
-    if (typeof itemId !== 'string' || !itemId) return false;
-    if (!store || typeof store !== 'object' || !Array.isArray(store.ids)) return false;
-    if (!(typeof store.at === 'number' && store.at > 0 && now - store.at <= POSH_CERTIFY_TTL_MS)) return false;
-    return store.ids.indexOf(itemId) !== -1;
+  // 1.0.71 (2026-10-27, Patrick): the 1.0.59 retry ladder (shorter description, then first photo only) and the 1.0.69/1.0.70
+  // auto-certify click are gone. On the FIRST flag the full, original form and Poshmark's dialog are left exactly as they are for
+  // the organizer: FindA.Sale never clicks Publish Listing or Delete Listing inside a flag dialog. Poshmark's own rule from the
+  // oversized dialog says no package over 108 inches length plus girth and 10 lb max; the 10 lb part is out of date (labels go
+  // past 15 lb now, with the seller paying the difference, see POSH_LABEL_COSTS_TEXT).
+  // While an item is held, a marker in sessionStorage (this tab only) remembers it, so if Poshmark hard-navigates after the
+  // organizer clicks Publish Listing, the next page load still checks the closet and records the item as listed with its id.
+  const POSH_FLAG_HOLD_KEY = 'fasPoshFlagHold';
+  const POSH_FLAG_HOLD_TTL_MS = 30 * 60 * 1000;
+  function writePoshFlagHoldState(itemId, kind) {
+    try { sessionStorage.setItem(POSH_FLAG_HOLD_KEY, JSON.stringify({ id: itemId, kind: kind, at: Date.now() })); } catch (e) {}
   }
-  // 1.0.70 (live DOM 2026-10-27, Mugig cable): the oversized dialog's confirm button reads "Publish Listing" (button.btn--primary,
-  // next to "Delete Listing"); older wording was "Certify Listing". Only ever matched inside the oversized dialog (see below). Pure.
-  function poshIsCertifyButtonText(text) {
-    const t = String(text == null ? '' : text).replace(/\s+/g, ' ').trim().toLowerCase();
-    return /^certify( this)?( listing| item)?$/.test(t) || t === 'publish listing';
+  function clearPoshFlagHoldState() {
+    try { sessionStorage.removeItem(POSH_FLAG_HOLD_KEY); } catch (e) {}
   }
-  // The Certify button inside the smallest open dialog that carries Poshmark's oversized-item wording; never a page-wide guess.
-  function findPoshmarkCertifyButton() {
-    const dialogs = qa('[role="dialog"], .modal, [class*="modal"]')
-      .filter((d) => /potential oversized item|certify (this )?listing/i.test((d.innerText || d.textContent || '').replace(/\s+/g, ' ')))
-      .sort((a, b) => (a.innerText || a.textContent || '').length - (b.innerText || b.textContent || '').length);
-    for (const d of dialogs) {
-      const btn = Array.from(d.querySelectorAll('button, [role="button"], a, input[type="button"], input[type="submit"]'))
-        .find((b) => b.offsetParent !== null && !b.disabled && poshIsCertifyButtonText(b.tagName === 'INPUT' ? b.value : b.textContent));
-      if (btn) return btn;
+  // The hold marker for this item if it is younger than POSH_FLAG_HOLD_TTL_MS, else null. Pure apart from the read.
+  function poshFlagHoldFor(raw, itemId, now) {
+    let v = null;
+    try { v = JSON.parse(raw || 'null'); } catch (e) { v = null; }
+    if (!v || typeof v !== 'object' || v.id !== itemId || typeof v.at !== 'number') return null;
+    return (now - v.at >= 0 && now - v.at < POSH_FLAG_HOLD_TTL_MS) ? v : null;
+  }
+  function readPoshFlagHoldState(itemId) {
+    let raw = null;
+    try { raw = sessionStorage.getItem(POSH_FLAG_HOLD_KEY); } catch (e) { raw = null; }
+    return poshFlagHoldFor(raw, itemId, Date.now());
+  }
+  // 1.0.71: this tab held this item behind a Poshmark flag and then the page changed (Poshmark hard-navigates after Publish Listing
+  // or Delete Listing). Settle it from the live closet BEFORE anything is filled again: live means the organizer published it, so it
+  // is recorded as listed with its Poshmark id exactly like a normal publish; not live means they deleted or abandoned it, so it is
+  // skipped like the Skip button (never re-filled, which would only raise the same flag). Resolves true when it handled the item.
+  async function poshResolveFlagHoldAfterReload(queued, hold) {
+    const item = queued.item;
+    tStep('Checking the flagged item', 'This item was waiting on Poshmark\'s flag box and the page changed, so checking your closet for it before anything else');
+    let dup = null;
+    const seen = [];
+    for (let attempt = 0; attempt < 4 && !dup; attempt++) {
+      await sleep(attempt === 0 ? 2000 : 4000);   // the closet can lag the publish by a few seconds
+      let r = null;
+      try { r = await fasPoshClosetDupCheck(item); } catch (e) { r = null; }
+      seen.push(r ? r.state : 'failed');
+      if (r && r.state === 'dup') dup = r;
     }
-    return null;
-  }
-  async function poshReadCertifyStore() {
-    try { return (await chrome.storage.local.get(POSH_CERTIFY_STORE_KEY))[POSH_CERTIFY_STORE_KEY] || null; } catch (e) { return null; }
-  }
-  // Click Certify Listing for a confirmed item and verify the publish the same way as a normal publish (form gone, else the
-  // live closet). Resolves 'published' | 'no_button' | 'unconfirmed'.
-  async function poshCertifyOversizedListing(item) {
-    let btn = null;
-    for (let a = 0; a < 10 && !btn; a++) { btn = findPoshmarkCertifyButton(); if (!btn) await sleep(300); }
-    if (!btn) return 'no_button';
-    tStep('Certifying the listing', 'You told FindA.Sale this item is not oversized, so clicking Poshmark\'s Publish Listing for you');
-    overlayInfo('Poshmark asked whether <b>' + escapeHtml(item.title) + '</b> is oversized. You said it is not, so certifying and posting it...');
-    await humanPause(400, 800);
-    writePoshPublishAttemptState(item.id);
-    realClick(btn);
-    let ok = await waitForPoshmarkPublishConfirmation(15000);
-    if (!ok) {
-      const seen = [];
-      for (let attempt = 0; attempt < 4; attempt++) {
-        await sleep(attempt === 0 ? 3000 : 5000);
-        let r = null;
-        try { r = await fasPoshClosetDupCheck(item); } catch (e) { r = null; }
-        seen.push({ state: r ? r.state : 'failed' });
-        if (r && r.state === 'dup') break;
-      }
-      const verdict = (typeof self !== 'undefined' && self.FAS_LISTING_REF && self.FAS_LISTING_REF.unconfirmedPublishVerdict) ? self.FAS_LISTING_REF.unconfirmedPublishVerdict(seen) : { published: false, reason: 'helper_missing' };
-      tInfo('certified_oversized_closet', 'Closet re-check after certifying: ' + verdict.reason, { verdict: verdict.reason, checks: seen.map((c) => c.state) });
-      ok = !!verdict.published;
+    if (!dup && seen.every((x) => x === 'failed')) {
+      tWarn('flag_hold_resume_unknown', 'Could not read your closet to see whether you published the flagged item; leaving it for you', { checks: seen });
+      overlayWarn('Could not check your Poshmark closet for <b>' + escapeHtml(item.title) + '</b>, which Poshmark had flagged. If you published it, it will be recognised as listed next time.' + button('fas-posh-close', 'Close', false));
+      closeBtnHandler();
+      return true;
     }
-    return ok ? 'published' : 'unconfirmed';
+    clearPoshFlagHoldState();
+    if (!dup && /^\/create-listing(\/|$)/.test(String(location.pathname || ''))) {
+      // A fresh create-listing page with nothing live (a reload, or a released "Try again"): fill it normally. If Poshmark flags it
+      // again it is held again.
+      tInfo('flag_hold_resume_retry', 'The flagged item is not in your closet and this is a fresh listing form, so filling it again', { kind: hold.kind || null });
+      return false;
+    }
+    clearPoshPublishAttemptState();
+    clearPoshNavRetryState();
+    const more = (queued.index + 1) < queued.total;
+    const autoNext = more && queued.autoPublish !== false;
+    if (dup) {
+      const C = (typeof self !== 'undefined' && self.FAS_LISTING_REF) || null;
+      const pick = (C && typeof C.pickPostedListing === 'function') ? C.pickPostedListing('POSHMARK', dup.live || [], !!dup.truncated) : { ref: null };
+      const ref = pick.ref ? { remoteListingId: pick.ref.remoteListingId, remoteListingUrl: pick.ref.remoteListingUrl } : await fasListingRef('POSHMARK', 1500);
+      tOk('You clicked Publish Listing on Poshmark and the listing is live in your closet', { hasId: !!(ref && ref.remoteListingId), kind: hold.kind || null });
+      await fasPoshMarkListed(item.id, ref);
+      await fasPoshAdvance(item.id);
+      const labelNote = poshLabelRunNote(poshLabelInfoFor(item));
+      if (labelNote) { try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: labelNote }); } catch (e) {} }
+      tEnd('Published by you after Poshmark\'s flag; recorded as listed', {});
+    } else {
+      tInfo('flag_skipped', 'The flagged item is not in your closet after the page changed, so it was skipped', { kind: hold.kind || null, checks: seen });
+      await fasPoshAdvance(item.id, hold.kind === 'prohibited' ? 'flag_prohibited' : 'flag_oversized');
+      tEnd('Skipped the flagged item', {});
+    }
+    const msg = '<b>FindA.Sale</b><div style="margin-top:6px">' + (dup ? 'Recorded <b>' + escapeHtml(item.title) + '</b> as listed on Poshmark (you published it from Poshmark\'s box).' : 'Skipped <b>' + escapeHtml(item.title) + '</b> (Poshmark flagged it and it is not in your closet).') + '</div>';
+    if (autoNext) {
+      overlay(msg + '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
+      await humanPause(1500, 2500);
+      await navigateToPoshmarkCreateListing();
+      return true;
+    }
+    overlay(msg + (more ? button('fas-posh-next', 'Next item &#9654;', true) : '') + button('fas-posh-close', 'Close', false));
+    const next = document.getElementById('fas-posh-next');
+    if (next) next.onclick = async () => { await navigateToPoshmarkCreateListing(); };
+    closeBtnHandler();
+    return true;
   }
 
   // 1.0.56 (Patrick): when Poshmark's validator flags a listing, do NOT silently move on. Tell the person plainly that they can
-  // publish it themselves if they are sure it is allowed (Certify Listing is their own statement to Poshmark; FindA.Sale never clicks
+  // publish it themselves if they are sure it is allowed (Publish Listing in Poshmark's box is their own statement to Poshmark; FindA.Sale never clicks
   // it), or skip it and carry on with the queue so they can look at it later. If nobody answers for 10 minutes the queue moves on so an
   // unattended auto run is never stuck behind one flagged item. Resolves 'published' | 'skip' | 'close'.
   async function holdForPoshmarkFlagDecision(item, flagKind, index, total) {
     const more = (index + 1) < total;
     const what = flagKind === 'prohibited' ? 'a possibly prohibited item' : 'a possibly oversized item';
     let decision = '';
-    overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#ffcf7a">Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + what + '.</div>' +
-      '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If you are sure this item is allowed on Poshmark, click <b>Publish Listing</b> (or <b>Certify Listing</b>) in Poshmark\'s box to publish it. That is your own statement to Poshmark, so FindA.Sale never clicks it for you. Otherwise skip it.</div>' +
-      (flagKind === 'oversized' ? '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If it is not oversized, you can also skip it here and use <b>Not oversized, certify and post</b> on FindA.Sale\'s auto queue page. The extension then certifies it for you on the next try.</div>' : '') +
+    const advice = flagKind === 'prohibited'
+      ? '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If you are sure this item is allowed on Poshmark, click <b>Publish Listing</b> (or <b>Certify Listing</b>) in Poshmark\'s box to publish it. That is your own statement to Poshmark, so FindA.Sale never clicks it for you. Otherwise skip it.</div>'
+      : '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">Poshmark\'s box still says 10 lb max, but that is out of date: its labels now go past 15 lb, and the seller pays for heavier ones out of earnings. ' + escapeHtml(POSH_LABEL_COSTS_TEXT) + '</div>' +
+        '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If the package is under 108 inches length plus girth (longest side plus twice the other two) and that label cost is fine with you, click <b>Publish Listing</b> in Poshmark\'s box to publish it. That is your own statement to Poshmark, so FindA.Sale never clicks it for you. Otherwise click Skip.</div>';
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#ffcf7a">Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + what + '.</div>' + advice +
       button('fas-posh-skip', more ? 'Skip this item and continue the queue' : 'Skip this item', true) + button('fas-posh-close', 'Stop here', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (more ? 'If you do nothing, the queue moves on to the next item in 10 minutes. ' : '') + 'Item ' + (index + 1) + ' of ' + total + '</div>');
     const skipBtn = document.getElementById('fas-posh-skip');
@@ -2360,7 +2437,7 @@
       await sleep(1000);
       if (decision) break;
       if (!looksLikeSellForm()) {
-        // The form went away: either the person certified and Poshmark published, or they deleted the listing. The closet decides.
+        // The form went away: either the person clicked Publish Listing and Poshmark published, or they deleted the listing. The closet decides.
         let live = false;
         for (let a = 0; a < 3 && !live; a++) {
           await sleep(3000);
@@ -2477,56 +2554,24 @@
           flagText = dlg.slice(at > 0 ? at : 0).slice(0, 700);
         }
       } catch (e) {}
-      // 1.0.69: an oversized flag on an item the organizer confirmed is not oversized is certified right away (no retry ladder).
-      let certifyTried = false;
-      let certified = false;
-      if (flagText && flagKind === 'oversized' && poshShouldAutoCertify(flagKind, item.id, await poshReadCertifyStore(), Date.now())) {
-        certifyTried = true;
-        tInfo('certify_oversized_start', 'Poshmark flagged this item as possibly oversized and you confirmed it is not, so certifying it', { itemId: item.id });
-        const c = await poshCertifyOversizedListing(item);
-        if (c === 'published') {
-          certified = true;
-          published = true;
-          tOk('certified_oversized: you said this item is not oversized, so FindA.Sale certified it and Poshmark published it', { code: 'certified_oversized', itemId: item.id });
-          tInfo('certified_oversized', 'Certified the oversized flag for you and the listing went live', { itemId: item.id });
-          try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: 'Poshmark asked if this was oversized; you said it is not, so FindA.Sale clicked Publish Listing and it posted.' }); } catch (e) {}
-        } else {
-          tWarn('certify_oversized_failed', c === 'no_button' ? 'Could not find Poshmark\'s Publish Listing button, so the item is held for you as before' : 'Clicked Publish Listing but could not confirm the listing went live, so the item is held for you as before', { itemId: item.id, result: c });
-        }
-      }
-      if (flagText && !certified) {
+      if (flagText) {
         clearPoshPublishAttemptState();
-        // Retry ladder (1.0.60): stage 1 = first sentence of the description only (skipped when the description is already that short);
-        // stage 2 = the first photo only. One change at a time so a pass says which factor the validator reacted to.
-        const rs = poshFlagRetryState(item);
-        const photoCount = Array.isArray(item.photoUrls) ? item.photoUrls.length : 0;
-        const descChanges = poshShortDescription(item) !== String(item.description == null ? '' : item.description).replace(/\s+/g, ' ').trim();
-        let nextStage = 0;
-        if (!rs) nextStage = descChanges ? 1 : (photoCount > 1 ? 2 : 0);
-        else if (rs.stage === 1 && photoCount > 1) nextStage = 2;
-        if (certifyTried) nextStage = 0;   // 1.0.69: a confirmed item is never re-posted with a cut-down listing
-        if (nextStage) {
-          try { sessionStorage.setItem(POSH_FLAG_RETRY_KEY, JSON.stringify({ id: item.id, kind: flagKind, stage: nextStage, at: Date.now() })); } catch (e) {}
-          tInfo('flag_retry', 'Poshmark flagged this item as ' + flagKind + '; retry ' + nextStage + ' of 2 with ' + (nextStage === 1 ? 'a shorter description' : 'only the first photo') + ' to learn what the validator reacts to', { kind: flagKind, stage: nextStage, dialog: flagText, descLen: (item.description || '').length, photos: photoCount });
-          overlayInfo('Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + (flagKind === 'prohibited' ? 'possibly prohibited' : 'possibly oversized') + '. Trying once more with ' + (nextStage === 1 ? 'a shorter description' : 'just the first photo') + '...');
-          await humanPause(800, 1500);
-          await navigateToPoshmarkCreateListing();
-          return;
-        }
-        tInfo('flag_retry_failed', 'Poshmark flagged the item again after every variant (shorter description' + (photoCount > 1 ? ', single photo' : '') + '), so neither the wording nor the photo count is the trigger', { kind: flagKind, stage: rs ? rs.stage : 0 });
+        // 1.0.71: hold on the FIRST flag with the full, original form. No cut-down retry, and never a click inside the dialog.
+        writePoshFlagHoldState(item.id, flagKind);
+        tInfo('flag_hold', 'Poshmark flagged this item as ' + flagKind + '; leaving the full form and Poshmark\'s box for you to decide', { kind: flagKind, dialog: flagText, descLen: (item.description || '').length, photos: Array.isArray(item.photoUrls) ? item.photoUrls.length : 0 });
         if (flagKind === 'prohibited') {
           tProblem({ code: 'poshmark_prohibited_flag', title: 'Poshmark flagged this item as possibly prohibited', what: 'Poshmark showed "potential prohibited item" and asked the seller to certify the listing. It would not publish without that.', why: 'Its validator went by the category, title or brand. FindA.Sale never certifies a listing for you, because that is your statement to Poshmark.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         } else {
-          tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Publish Listing on Poshmark yourself; otherwise skip it and the queue continues. If it is not oversized, Not oversized, certify and post on the auto queue page has the extension certify it next time.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
+          tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. Poshmark\'s box says 10 lb max, but labels now go past 15 lb with the cost deducted from your earnings ($5 for 5-10 lb, $10 for 10-15 lb, $15 for 15-25 lb, the full shipping cost over 25 lb). If the package is under 108 inches length plus girth, click Publish Listing in Poshmark\'s box yourself; otherwise click Skip and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         }
         try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id, flagged: flagKind, flagOnly: true }); } catch (e) {}
         const decision = await holdForPoshmarkFlagDecision(item, flagKind, index, total);
         if (decision === 'published') {
           published = true;
-          tOk('You certified the listing on Poshmark and it went live');
+          tOk('You clicked Publish Listing on Poshmark and it went live');
         } else if (decision === 'skip') {
           tInfo('flag_skipped', 'Skipped the flagged item and moved on', { kind: flagKind });
-          try { sessionStorage.removeItem(POSH_FLAG_RETRY_KEY); } catch (e) {}
+          clearPoshFlagHoldState();
           await fasPoshAdvance(item.id, flagKind === 'prohibited' ? 'flag_prohibited' : 'flag_oversized');
           if ((index + 1) < total) {
             overlayInfo('Skipped <b>' + escapeHtml(item.title) + '</b>. Moving to the next item...');
@@ -2556,13 +2601,7 @@
     // click is done (a later click for a DIFFERENT item id will never match this marker anyway, but
     // clearing here keeps the marker's lifecycle honest -- "live only while genuinely ambiguous").
     clearPoshPublishAttemptState();
-    const retryWas = poshFlagRetryState(item);
-    if (retryWas) {
-      try { sessionStorage.removeItem(POSH_FLAG_RETRY_KEY); } catch (e) {}
-      const passedWhat = retryWas.stage === 2 ? 'with only the first photo' : 'with a shorter description';
-      tOk('Published after retrying ' + passedWhat + ' (first try was flagged ' + retryWas.kind + '), so that is what the validator reacted to', { stage: retryWas.stage || 1 });
-      try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: 'Poshmark flagged the full listing as ' + retryWas.kind + '; it published ' + passedWhat + '. Add the rest by hand if you want it.' }); } catch (e) {}
-    }
+    clearPoshFlagHoldState();
     tOk('Poshmark accepted the listing');
     tStep('Telling FindA.Sale', 'Recording that this item is now listed on Poshmark so it is not posted again');
     const postedRef = await fasPoshCaptureFromCloset(item, await fasListingRef('POSHMARK', 3000));
@@ -2575,6 +2614,9 @@
     // committed-but-guessed Category (fell back to a department default or "Other") is a separate
     // case only known here.
     const runNotes = fillResult.fieldNotes ? fillResult.fieldNotes.slice() : [];
+    // 1.0.71: list the Poshmark label deduction for this item in the run summary.
+    const labelNote = poshLabelRunNote(poshLabelInfoFor(item));
+    if (labelNote) runNotes.push(labelNote);
     if (fillResult.categoryCommitted && !fillResult.categoryConfident) {
       runNotes.push('Category was guessed (no clear match on Poshmark\'s taxonomy) -- double-check it.');
     }
@@ -2737,7 +2779,6 @@
     // review and stopped. An item with no description now gets a plain, truthful fallback built from its own title and
     // condition, and a run note asks the organizer to add real detail.
     let poshDescription = String(item.description == null ? '' : item.description).trim();
-    if (poshFlagRetryState(item)) { poshDescription = poshShortDescription(item); tInfo('flag_retry_variant', 'Retry after a Poshmark flag: using the first sentence of the description only', { len: poshDescription.length }); }
     if (!poshDescription) {
       const cond = String(item.conditionRaw || '').trim();
       poshDescription = poshTitle + '.' + (cond ? ' Condition: ' + cond + '.' : '') + ' Please see the photos for details and message me with any questions.';
@@ -2857,10 +2898,7 @@
     if (await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v))) tOk('Condition set');
     await humanPause(400, 800);
     tStep('Photos', 'Uploading the item photos (Poshmark needs at least one before it will publish)', { count: (item.photoUrls || []).length });
-    const poshRetryNow = poshFlagRetryState(item);
-    const poshPhotoList = (poshRetryNow && poshRetryNow.stage === 2) ? (item.photoUrls || []).slice(0, 1) : item.photoUrls;
-    if (poshRetryNow && poshRetryNow.stage === 2) tInfo('flag_retry_photos', 'Retry after a Poshmark flag: attaching only the first photo', { of: (item.photoUrls || []).length });
-    const photosOk = await injectPhotos(poshPhotoList);
+    const photosOk = await injectPhotos(item.photoUrls);
     if (photosOk) tOk('Photos attached'); else tWarn('photos_not_attached', 'Photos may not have attached; check the form', { count: (item.photoUrls || []).length });
     // BUG FIX 2026-08-31 (Patrick live report, 3rd distinct Price-empty item after the polling fix
     // above in fillPoshmarkPrice() -- Saturn telescope tab, extension confirmed freshly reloaded so
@@ -2891,6 +2929,7 @@
   }
 
   async function run(item, index, total, autoPublish) {
+    setPoshLabelNote(item); // 1.0.71: Poshmark label-cost heads-up for items over 5 lb
     if (looksLikeInterstitial()) {
       tProblem({ code: 'interstitial_start', title: 'Poshmark is asking for a security check', what: 'Poshmark showed a verification or security screen before the listing form.', why: 'FindA.Sale never tries to solve these checks; only you can.', next: 'Nothing was filled or published. Finish the check yourself, then reopen the extension to continue.' });
       overlayWarn('Poshmark is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-posh-close', 'Close', false));
@@ -3033,8 +3072,11 @@
     await sleep(600); // let the page settle before reading the DOM
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getPoshmarkQueueItem' }); } catch (e) { return; }
-    if (!queued || !queued.ok || !queued.item) { clearPoshNavRetryState(); clearPoshPublishAttemptState(); return; } // nothing queued -- stay silent, also clean up any stale bounce-retry/publish-attempt markers
+    if (!queued || !queued.ok || !queued.item) { clearPoshNavRetryState(); clearPoshPublishAttemptState(); clearPoshFlagHoldState(); return; } // nothing queued -- stay silent, also clean up any stale bounce-retry/publish-attempt markers
     tBegin(queued);
+    // 1.0.71: an item this tab held behind a Poshmark flag is settled from the closet first (published by the organizer, or skipped).
+    const flagHold = readPoshFlagHoldState(queued.item.id);
+    if (flagHold && await poshResolveFlagHoldAfterReload(queued, flagHold)) return;
     try {
       const gk = 'fasPoshAutoNav'; let g = null;
       try { g = JSON.parse(sessionStorage.getItem(gk) || 'null'); } catch (e) { g = null; }

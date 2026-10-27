@@ -77,6 +77,7 @@ async function refreshAccessToken() {
 // item on title/price while they work and a value that moves between two steps of one run would read as a mismatch.
 const FAS_FRESHEN_FIELDS = [
   'packageWeightOz', 'aiPackageWeightOz', 'packageLengthIn', 'packageWidthIn', 'packageHeightIn', 'packageType',
+  'poshmarkLabel', // 1.0.71: Poshmark label deduction, recomputed by the server from the current package data
   'category', 'categoryBreadcrumb',
   'vintedCategoryId', 'vintedCategoryPath', 'vintedCategorySource', 'poshmarkCategoryId', 'poshmarkCategoryPath', 'poshmarkCategorySource',
   'mercariCategoryId', 'mercariCategoryPath', 'mercariCategorySource', 'grailedCategoryId', 'grailedCategoryPath', 'grailedCategorySource',
@@ -2738,7 +2739,7 @@ function fasPoshHeldParam(flagged, now, editHolds) {
 //   dropHolds    -- holds for items that are sold, deleted, unpublished or already on Poshmark (live: Samurai Shodown II
 //                   sold on Mercari stayed on the held list).
 // Both are removed from fasPoshFlagged. Released ids are acked on the next poll (?released=) so the server clears them.
-// If Poshmark flags a released item again, the post flow holds it exactly as before (overlay, never certifies). Pure.
+// If Poshmark flags a released item again, the post flow holds it exactly as before (overlay, never clicks inside Poshmark's box). Pure.
 function fasPoshApplyHoldChanges(flagged, releaseIds, dropIds) {
   const out = Object.assign({}, flagged || {});
   const idOk = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{8,40}$/.test(id);
@@ -2749,16 +2750,6 @@ function fasPoshApplyHoldChanges(flagged, releaseIds, dropIds) {
     if (out[id]) { delete out[id]; removed.push(id); }
   }
   return { flagged: out, changed: removed.length > 0, removed: removed, ack: release };
-}
-// 1.0.69 (2026-10-27): the autolist-queue response carries certifyOversizedIds -- held Poshmark items the organizer confirmed
-// on the web card are NOT oversized ("Not oversized, certify and post"). Stored as fasPoshCertifyOk { ids, at } beside the
-// hold changes above; fas-poshmark.js clicks Certify Listing only for an OVERSIZED flag on one of these ids (never a
-// prohibited one). The server's list is authoritative (it expires confirmations after 30 days), so each poll replaces it. Pure.
-function fasPoshCertifyStore(ids, now) {
-  const idOk = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{8,40}$/.test(id);
-  const out = [];
-  for (const id of (Array.isArray(ids) ? ids : [])) { if (idOk(id) && out.indexOf(id) === -1) out.push(id); if (out.length >= 100) break; }
-  return { ids: out, at: now };
 }
 try {
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -2813,16 +2804,8 @@ async function checkAutoListQueue() {
       fasT('info', 'posh_holds_cleared', (nRel ? nRel + ' Poshmark hold(s) released by you and offered to Poshmark again' : '') + (nRel && r.removed.length - nRel ? '; ' : '') + (r.removed.length - nRel ? (r.removed.length - nRel) + ' hold(s) dropped because the item sold, was removed, or is already on Poshmark' : ''), { platform: 'POSHMARK', flow: 'autoqueue', ctx: { released: nRel, dropped: r.removed.length - nRel } });
     }
   } catch (e) { /* best-effort; the server keeps the release until it is acked */ }
-  // 1.0.69: remember which items the organizer confirmed are not oversized (an older server sends nothing: keep what we have).
-  try {
-    if (resp.data && Array.isArray(resp.data.certifyOversizedIds)) {
-      const cs = fasPoshCertifyStore(resp.data.certifyOversizedIds, Date.now());
-      const prev = (await chrome.storage.local.get('fasPoshCertifyOk')).fasPoshCertifyOk;
-      await chrome.storage.local.set({ fasPoshCertifyOk: cs });
-      const prevIds = prev && Array.isArray(prev.ids) ? prev.ids.slice().sort().join(',') : '';
-      if (cs.ids.length && prevIds !== cs.ids.slice().sort().join(',')) fasT('info', 'posh_certify_ids', cs.ids.length + ' Poshmark item(s) you confirmed are not oversized will be certified if Poshmark asks', { platform: 'POSHMARK', flow: 'autoqueue', ctx: { count: cs.ids.length } });
-    }
-  } catch (e) { /* best-effort */ }
+  // 1.0.71: FindA.Sale no longer certifies Poshmark's oversized box for anyone (Patrick 2026-10-27), so the 1.0.69/1.0.70 store goes.
+  try { await chrome.storage.local.remove('fasPoshCertifyOk'); } catch (e) { /* best-effort */ }
   const queues = (resp.data && resp.data.queues) || {};
   const outcomes = [];
   const pausedForQueue = await fasGetPausedPlatforms();

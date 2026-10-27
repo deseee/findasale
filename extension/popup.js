@@ -571,6 +571,21 @@ function ineligibleReason(it) {
   const key = PLATFORM_ELIGIBILITY_KEY[currentChannel()];
   return (key && it.eligibility && it.eligibility[key] && it.eligibility[key].reason) || 'Not eligible for this marketplace.';
 }
+// 1.0.71 (2026-10-27): a non-blocking note the server attaches to an ELIGIBLE item for this channel (today only Poshmark:
+// "Over 5 lb: Poshmark deducts a label upgrade fee from your earnings"). '' when there is none.
+function eligibleNote(it) {
+  const key = PLATFORM_ELIGIBILITY_KEY[currentChannel()];
+  const e = key && it.eligibility && it.eligibility[key];
+  return e && e.eligible !== false && typeof e.note === 'string' ? e.note : '';
+}
+// 1.0.71 (2026-10-27): what Poshmark will deduct from earnings for this item's heavier label, from the server's
+// item.poshmarkLabel (packages/backend/src/services/poshmarkLabelSurcharge.ts). '' for 5 lb and under or no data.
+function poshLabelAmountText(it) {
+  const p = it && it.poshmarkLabel;
+  if (!p || typeof p !== 'object') return '';
+  if (p.fullLabelCost === true) return p.surchargeUsd != null ? 'about $' + Number(p.surchargeUsd).toFixed(2) : 'full shipping cost';
+  return p.surchargeUsd != null && Number(p.surchargeUsd) > 0 ? '$' + Number(p.surchargeUsd).toFixed(2) : '';
+}
 
 // S-VINTED-PICKUP-ONLY (2026-10-05): marketplaces with no local-pickup / no-shipping option. Verified live on
 // Vinted 2026-10-05 (the sell form has no meet-up choice; "The buyer always pays for shipping"). Items the organizer
@@ -615,6 +630,7 @@ function render() {
   const groups = {};
   let hiddenIneligibleCount = 0;
   let hiddenPickupOnlyCount = 0; // S-VINTED-PICKUP-ONLY
+  const poshLabelItems = []; // 1.0.71: shown Poshmark items that will carry a label deduction
   let hiddenBySearchCount = 0;
   ITEMS.forEach((it) => {
     if (hideListed && currentListedFlag(it)) return;
@@ -637,6 +653,7 @@ function render() {
     const bySale = (groups[it.saleTitle] = groups[it.saleTitle] || {});
     const cat = categoryLabel(it);
     (bySale[cat] = bySale[cat] || []).push(it);
+    if (currentChannel() === 'poshmark' && poshLabelAmountText(it)) poshLabelItems.push(it);
   });
   const eligNote = $('eligibilityNote');
   if (eligNote) {
@@ -647,6 +664,17 @@ function render() {
         ' hidden — not eligible for this marketplace. Check "Show all items" above to see them.';
     } else {
       eligNote.hidden = true;
+    }
+  }
+  const poshNote = $('poshLabelNote');
+  if (poshNote) {
+    if (poshLabelItems.length) {
+      poshNote.hidden = false;
+      poshNote.textContent = 'Poshmark will deduct a heavier-label cost from your earnings when these sell: ' +
+        poshLabelItems.map((it) => (it.title || 'Item') + ' (' + poshLabelAmountText(it) + ')').join(', ') +
+        '. Its prepaid label covers up to 5 lb; 5-10 lb costs $5, 10-15 lb $10, 15-25 lb $15, and over 25 lb the full shipping cost.';
+    } else {
+      poshNote.hidden = true;
     }
   }
   const pickupNote = $('pickupOnlyNote');
@@ -758,6 +786,7 @@ function row(it) {
     (pickupBlocked ? '<span class="badge badge-blocked" title="Marked local pickup only; ' + esc(channelName(currentChannel())) + ' cannot sell it as intended">PICKUP ONLY</span>' : '') +
     (fbBlocked && !pickupBlocked ? '<span class="badge badge-blocked" title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '">NOT ALLOWED ON FB</span>' : '') +
     (ineligible ? '<span class="badge badge-blocked" title="' + esc(ineligibleReason(it)) + '">MAY NOT FIT</span>' : '') +
+    (!ineligible && eligibleNote(it) ? '<span class="badge" title="' + esc(eligibleNote(it)) + '">' + (currentChannel() === 'poshmark' && poshLabelAmountText(it) ? 'LABEL ' + esc(poshLabelAmountText(it)) : 'NOTE') + '</span>' : '') +
     (showMarkPosted ? '<button type="button" class="markPostedBtn" title="I already posted this item to ' + esc(channelName(currentChannel())) + ' myself, outside the extension">Already posted?</button>' : '') +
     '<input type="checkbox" class="cb"' + (fbBlocked ? ' disabled title="' + esc(pickupBlocked ? 'Local pickup only' : (it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace')) + '"' : '') + '>';
   const cb = d.querySelector('.cb');
@@ -890,6 +919,7 @@ async function startQueue() {
     craigslistCategoryId: it.craigslistCategoryId, craigslistCategoryPath: it.craigslistCategoryPath,
     craigslistCategorySource: it.craigslistCategorySource,
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
+    poshmarkLabel: it.poshmarkLabel, // 1.0.71: server-computed Poshmark label deduction (fas-poshmark.js shows it while filling)
     // S-EXT-MERCARI-BATCH-8 (2026-08-23): package dims now flow through, same pattern as bestOfferAutoAcceptAmt
     packageLengthIn: it.packageLengthIn, packageWidthIn: it.packageWidthIn, packageHeightIn: it.packageHeightIn,
     // BUG FIX 2026-09-28 (real root cause of Patrick's "still no shipping cost given" report,

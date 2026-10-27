@@ -14,10 +14,8 @@
 //   release   -- (2026-10-26, 1.0.67) held Poshmark items the organizer asked to try again ("Try again on Poshmark" on the
 //                web card): [{ itemId, at }]. The autolist-queue response hands them to the extension as releaseHolds; the
 //                extension drops its own hold and acks them on its next poll (?released=), which removes them here.
-//   certify   -- (2026-10-27, 1.0.69) held Poshmark items the organizer confirmed are NOT oversized ("Not oversized, certify and
-//                post" on the web card): [{ itemId, at }]. Every autolist-queue response hands the ids to the extension as
-//                certifyOversizedIds; when Poshmark's "potential oversized item" box comes up for one of them, the extension
-//                clicks Certify Listing for the organizer. Never used for a "prohibited" flag. Kept CERTIFY_TTL_MS (30 days).
+//   (certify  -- 1.0.69/1.0.70 only, removed 2026-10-27 for 1.0.71: FindA.Sale never clicks Publish Listing in Poshmark's flag box
+//                for the organizer. A leftover `certify` key is dropped on the next poll; see mergeHeartbeatContext.)
 // Only an extension poll (one that sends ?v=) records a heartbeat (2026-10-26 retest: a cookie GET from the web replaced
 // the whole context and the page showed held 0 / version null). A poll merges into the existing context: held and v are
 // the extension's current report, alertedAt is cleared, and any other keys are kept.
@@ -37,11 +35,9 @@ export const HEARTBEAT_HELD_MAX = 50;
 export type HeldKind = 'oversized' | 'prohibited' | 'edit';
 export type HeldItem = { itemId: string; kind: HeldKind; at: string };
 export type HeldRelease = { itemId: string; at: string };
-export type HeartbeatRecord = { lastPollAt: Date | null; held: HeldItem[]; alertedAt: Date | null; version: string | null; release: HeldRelease[]; certify: HeldRelease[] };
+export type HeartbeatRecord = { lastPollAt: Date | null; held: HeldItem[]; alertedAt: Date | null; version: string | null; release: HeldRelease[] };
 /** A pending release the extension never acked (an old extension that ignores releaseHolds) is dropped after this long. */
 export const RELEASE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-/** 1.0.69: how long the organizer's "this item is not oversized" confirmation is honoured by the extension. */
-export const CERTIFY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const ITEM_ID_RE = /^[A-Za-z0-9_-]{8,40}$/;
 const VERSION_RE = /^\d{1,3}(\.\d{1,4}){1,3}$/;
@@ -172,7 +168,7 @@ export function shouldAlertHeartbeat(hb: { lastPollAt: Date | null; alertedAt: D
 }
 
 function toRecord(row: { createdAt: Date; context: unknown } | null): HeartbeatRecord {
-  if (!row) return { lastPollAt: null, held: [], alertedAt: null, version: null, release: [], certify: [] };
+  if (!row) return { lastPollAt: null, held: [], alertedAt: null, version: null, release: [] };
   const ctx = (row.context && typeof row.context === 'object' ? row.context : {}) as Record<string, unknown>;
   const held = Array.isArray(ctx.held)
     ? (ctx.held as unknown[]).filter((h): h is HeldItem => !!h && typeof h === 'object'
@@ -180,7 +176,7 @@ function toRecord(row: { createdAt: Date; context: unknown } | null): HeartbeatR
       && typeof (h as HeldItem).at === 'string')
     : [];
   const alertedAt = typeof ctx.alertedAt === 'string' && !Number.isNaN(Date.parse(ctx.alertedAt)) ? new Date(ctx.alertedAt) : null;
-  return { lastPollAt: row.createdAt, held, alertedAt, version: typeof ctx.v === 'string' ? ctx.v : null, release: parseRelease(ctx.release), certify: parseRelease(ctx.certify) };
+  return { lastPollAt: row.createdAt, held, alertedAt, version: typeof ctx.v === 'string' ? ctx.v : null, release: parseRelease(ctx.release) };
 }
 
 function parseRelease(raw: unknown): HeldRelease[] {
@@ -205,49 +201,31 @@ export function mergeHeartbeatContext(existing: unknown, info: { held: HeldItem[
     const left = parseRelease(base.release).filter((r) => !acked.has(r.itemId) && now - Date.parse(r.at) <= RELEASE_TTL_MS);
     if (left.length) base.release = left; else delete base.release;
   }
-  if (base.certify !== undefined) {
-    const live = parseRelease(base.certify).filter((r) => now - Date.parse(r.at) <= CERTIFY_TTL_MS);
-    if (live.length) base.certify = live; else delete base.certify;
-  }
+  // 1.0.71: the 1.0.69 "certify as not oversized" list is gone; drop any leftover from an older release.
+  delete base.certify;
   return base;
 }
 
-/** 1.0.69: item ids the organizer confirmed are not oversized, still inside CERTIFY_TTL_MS. Pure. */
-export function certifyIdsFromContext(ctx: unknown, now: number = Date.now()): string[] {
-  const c = (ctx && typeof ctx === 'object' && !Array.isArray(ctx) ? (ctx as Record<string, unknown>).certify : undefined);
-  return parseRelease(c).filter((r) => now - Date.parse(r.at) <= CERTIFY_TTL_MS).map((r) => r.itemId);
-}
-
 /**
- * 1.0.69: parse the release-holds request body. { itemIds: string[] (1 to 50) } or { all: true }, plus an optional
- * certifyOversized: true (the organizer says these items are not oversized). certifyOversized must be a boolean when sent.
- * Pure; exported for unit tests.
+ * Parse the release-holds request body: { itemIds: string[] (1 to 50) } or { all: true }. Any other key (including the
+ * retired 1.0.69 certifyOversized) is ignored. Pure; exported for unit tests.
  */
 export function parseReleaseHoldsBody(body: unknown):
-  { ok: true; all: boolean; itemIds: string[]; certifyOversized: boolean } | { ok: false; message: string } {
+  { ok: true; all: boolean; itemIds: string[] } | { ok: false; message: string } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { ok: false, message: 'Body must be an object' };
   const b = body as Record<string, unknown>;
   const all = b.all === true;
   const itemIds = Array.isArray(b.itemIds) ? (b.itemIds as unknown[]).filter((x): x is string => typeof x === 'string' && ITEM_ID_RE.test(x)) : [];
   if (!all && (!itemIds.length || itemIds.length > 50)) return { ok: false, message: 'Send itemIds (1 to 50) or all: true' };
-  if (b.certifyOversized !== undefined && typeof b.certifyOversized !== 'boolean') return { ok: false, message: 'certifyOversized must be true or false' };
-  return { ok: true, all, itemIds: Array.from(new Set(itemIds)), certifyOversized: b.certifyOversized === true };
+  return { ok: true, all, itemIds: Array.from(new Set(itemIds)) };
 }
 
-/**
- * Add organizer-requested releases to a heartbeat context (de-duplicated by item id, newest wins). Pure.
- * 1.0.69: certifyIds (a subset of itemIds the organizer confirmed are not oversized) are also recorded under `certify`.
- */
-export function addReleasesToContext(existing: unknown, itemIds: string[], now: number = Date.now(), certifyIds: string[] = []): Record<string, unknown> {
+/** Add organizer-requested releases to a heartbeat context (de-duplicated by item id, newest wins). Pure. */
+export function addReleasesToContext(existing: unknown, itemIds: string[], now: number = Date.now()): Record<string, unknown> {
   const base = (existing && typeof existing === 'object' && !Array.isArray(existing) ? { ...(existing as Record<string, unknown>) } : {}) as Record<string, unknown>;
   const at = new Date(now).toISOString();
   const keep = parseRelease(base.release).filter((r) => !itemIds.includes(r.itemId));
   base.release = [...keep, ...itemIds.map((itemId) => ({ itemId, at }))].slice(-HEARTBEAT_HELD_MAX);
-  const cert = certifyIds.filter((id) => itemIds.includes(id));
-  if (cert.length) {
-    const keepC = parseRelease(base.certify).filter((r) => !cert.includes(r.itemId));
-    base.certify = [...keepC, ...cert.map((itemId) => ({ itemId, at }))].slice(-HEARTBEAT_HELD_MAX);
-  }
   return base;
 }
 
@@ -261,11 +239,11 @@ export async function recordExtensionHeartbeat(organizerId: string, info: { held
 }
 
 /**
- * 1.0.69: same as recordExtensionHeartbeat, and also returns the item ids the organizer confirmed are not oversized
- * (certifyOversizedIds, see the header). Never throws; both lists are [] on error or for a poll with no version.
+ * Same as recordExtensionHeartbeat, returned as { releaseHolds } for the poll handler. Never throws; [] on error or for a
+ * poll with no version. (1.0.71: the 1.0.69 certifyOversizedIds list is gone.)
  */
-export async function recordExtensionPoll(organizerId: string, info: { held: HeldItem[]; version: string | null; acked?: string[] }): Promise<{ releaseHolds: string[]; certifyOversizedIds: string[] }> {
-  if (!info.version) return { releaseHolds: [], certifyOversizedIds: [] };
+export async function recordExtensionPoll(organizerId: string, info: { held: HeldItem[]; version: string | null; acked?: string[] }): Promise<{ releaseHolds: string[] }> {
+  if (!info.version) return { releaseHolds: [] };
   try {
     const existing = await prisma.extensionRuntimeLog.findFirst({
       where: { organizerId, source: HEARTBEAT_SOURCE },
@@ -281,26 +259,26 @@ export async function recordExtensionPoll(organizerId: string, info: { held: Hel
         data: { organizerId, level: 'info', source: HEARTBEAT_SOURCE, message: 'auto queue poll (last successful)', context },
       });
     }
-    return { releaseHolds: parseRelease(merged.release).map((r) => r.itemId), certifyOversizedIds: certifyIdsFromContext(merged) };
+    return { releaseHolds: parseRelease(merged.release).map((r) => r.itemId) };
   } catch (err) {
     console.warn('[extensionHeartbeat] record failed:', (err as Error)?.message || err);
-    return { releaseHolds: [], certifyOversizedIds: [] };
+    return { releaseHolds: [] };
   }
 }
 
 /**
  * Record the organizer's "Try again on Poshmark" for these held item ids (already validated by the caller as this
  * organizer's own currently held flag items). Updates the heartbeat row's context only; does not move the last-poll
- * time. 1.0.69: certifyIds (subset of itemIds) are also recorded as confirmed not oversized. Returns false when there is no heartbeat row (nothing is held then). Throws on a DB error.
+ * time. Returns false when there is no heartbeat row (nothing is held then). Throws on a DB error.
  */
-export async function addHeldReleases(organizerId: string, itemIds: string[], now: number = Date.now(), certifyIds: string[] = []): Promise<boolean> {
+export async function addHeldReleases(organizerId: string, itemIds: string[], now: number = Date.now()): Promise<boolean> {
   const existing = await prisma.extensionRuntimeLog.findFirst({
     where: { organizerId, source: HEARTBEAT_SOURCE },
     orderBy: { createdAt: 'desc' },
     select: { id: true, context: true },
   });
   if (!existing) return false;
-  const context = addReleasesToContext(existing.context, itemIds, now, certifyIds) as unknown as Prisma.InputJsonValue;
+  const context = addReleasesToContext(existing.context, itemIds, now) as unknown as Prisma.InputJsonValue;
   await prisma.extensionRuntimeLog.update({ where: { id: existing.id }, data: { context } });
   return true;
 }

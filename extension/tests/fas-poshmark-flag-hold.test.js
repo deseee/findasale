@@ -53,14 +53,9 @@ test('getPoshmarkQueueItem also refuses edit pump / removal tabs and edit-listin
   assert.ok(/poshOnEditSurface/.test(seg) && /edit-listing/.test(seg) && /fasEditRun/.test(seg) && /fasPoshmarkRemovalTabId/.test(seg));
 });
 
-test('first flag retries once with a short description; second flag holds; a pass is logged as wording-was-the-trigger', () => {
-  assert.ok(/POSH_FLAG_RETRY_KEY/.test(src) && /function poshShortDescription/.test(src));
-  const i = src.indexOf("tInfo('flag_retry'");
-  assert.ok(i > 0);
-  const seg = src.slice(i, i + 900);
-  assert.ok(/navigateToPoshmarkCreateListing\(\)/.test(seg));
-  assert.ok(/flag_retry_failed/.test(src));
-  assert.ok(/if \(poshFlagRetryState\(item\)\) \{ poshDescription = poshShortDescription\(item\)/.test(src));
-  assert.ok(/Published after retrying/.test(src) && /with only the first photo/.test(src) && /flag_retry_photos/.test(src));
-  assert.ok(src.indexOf("tInfo('flag_retry'") < src.indexOf("code: 'poshmark_oversized'"));
+test('1.0.71: the first flag holds at once with the full form (no retry ladder, see fas-posh-certify-oversized.test.js)', () => {
+  assert.ok(!/POSH_FLAG_RETRY_KEY|poshShortDescription|flag_retry/.test(src));
+  const i = src.indexOf('writePoshFlagHoldState(item.id, flagKind);');
+  assert.ok(i > 0 && i < src.indexOf("code: 'poshmark_oversized'"));
+  assert.ok(i < src.indexOf('holdForPoshmarkFlagDecision(item, flagKind, index, total)', i));
 });

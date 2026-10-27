@@ -28,6 +28,7 @@
 
 import { EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS } from './ebayRateEstimateService';
 import { etsyWhenMadeQualifies } from '../config/etsyWhenMade';
+import { poshmarkLabelInfo } from './poshmarkLabelSurcharge';
 
 export type EligibilityPlatform = 'FACEBOOK' | 'CRAIGSLIST' | 'GUMTREE_AU' | 'GRAILED' | 'POSHMARK' | 'MERCARI' | 'VINTED' | 'REVERB' | 'ETSY';
 
@@ -69,6 +70,14 @@ export interface EligibilityCheckItem {
   packageLengthIn?: number | null;
   packageWidthIn?: number | null;
   packageHeightIn?: number | null;
+  /**
+   * 2026-10-27: the photo-pass package size estimate, Item.aiPackageDimsJson ({ length, width, height } in inches).
+   * Only read for Poshmark's label note (length plus girth) when the organizer has not entered all three package
+   * dimensions; organizer-entered dimensions always win. Anything malformed is ignored.
+   */
+  aiPackageDimsJson?: unknown;
+  /** 2026-10-27: the sale's ZIP, only used to pick the USPS zone for Poshmark's over-25-lb full-label estimate. */
+  originZip?: string | null;
   /**
    * 2026-10-14 (Patrick, "gate Poshmark"): true ONLY when the caller is deciding whether to put a NEW
    * listing on a marketplace (the auto-list queue, the item picker, the unlisted channel dot). Rules
@@ -114,6 +123,11 @@ export const BULK_LOT_ELIGIBILITY_REASON = 'Bulk lots are sold by the card at yo
 export interface EligibilityResult {
   eligible: boolean;
   reason: string | null;
+  /**
+   * 2026-10-27: an optional, NON-blocking note for an eligible item (Poshmark's label deduction over 5 lb, or a package
+   * over 108 inches length plus girth). Present only when there is something to say; eligible stays true.
+   */
+  note?: string;
 }
 
 interface CategoryBlocklistRule {
@@ -165,8 +179,9 @@ interface PrerequisiteLookupRule {
  * this extension actually drives. Only added for platforms where exceeding the ceiling is a real
  * dead end for automated crosslisting, not merely a UX nicety, AND where the platform actually
  * has a hard weight/size cutoff at all (see the VINTED note below for a case where it does not):
- *   - POSHMARK: 15lb (raised from 10lb as of Feb 2026; carrier is now USPS Ground Advantage, not
- *     Priority Mail) -- Poshmark's Community Guidelines explicitly prohibit arranging local
+ *   - POSHMARK: no weight or size ceiling any more (2026-10-27, Patrick: nothing blocked by weight or size). Poshmark's
+ *     labels go past 15 lb with the seller paying the difference (see services/poshmarkLabelSurcharge.ts), so this rule
+ *     now only carries a non-blocking label note. Poshmark's Community Guidelines explicitly prohibit arranging local
  *     pickup/meetups in lieu of shipping, so there is no fallback path here either.
  *   - MERCARI: 50lb / 34"x20" (stated identically on two official pages, each with an explicit
  *     "ship on your own beyond this" fallback statement -- but "on your own" means OUTSIDE
@@ -206,6 +221,8 @@ interface SizeWeightCeilingRule {
     maxLengthPlusGirthIn?: number;
     /** When true, an item with NO usable weight AND NO usable dimension is ineligible (nothing proves it ships). */
     requirePackageData?: boolean;
+    /** 2026-10-27: add Poshmark's label deduction / size note (services/poshmarkLabelSurcharge.ts) to an eligible result. Never blocks. */
+    poshmarkLabelNote?: boolean;
     /** Minimum listing price in dollars a new listing needs (compared exactly, in cents; no rounding), e.g. Poshmark's $5. */
     minPriceUsd?: number;
     reasonLowPrice?: string;
@@ -1193,29 +1210,26 @@ const RULES: EligibilityRule[] = [
   // computeCheapestForOrigin is async and needs real rate-table/zone data -- doing this properly
   // is a real (small) architecture task, not a one-line fix, and should not be guessed at twice in
   // one day. Flagged as a follow-up in claude/crosslister-automation-decisions-2026-09-26.md.
+  // 2026-10-27 (Patrick): nothing is excluded from Poshmark by weight or size. The 15 lb ceiling, the 30 inch longest
+  // side and the 108 inch length plus girth limits are gone. Poshmark's labels (Poshmark blog 2026-02-13; seller pays
+  // since 2026-10-26): up to 5 lb included, 5-10 lb $5, 10-15 lb $10, 15-25 lb $15, over 25 lb the full USPS cost, all
+  // deducted from earnings. Those amounts, and a "may be too big" warning over 108 inches length plus girth, are shown
+  // as a NON-blocking note (poshmarkLabelNote, services/poshmarkLabelSurcharge.ts). The no-data gate and the $5 minimum
+  // are unchanged and still apply to NEW listings only.
   {
     type: 'SIZE_WEIGHT_CEILING',
     platform: 'POSHMARK',
-    maxWeightOz: 240, // 15lb, raised from 10lb as of Feb 2026 (carrier is now USPS Ground Advantage, not Priority Mail).
-    // 2026-10-14 (Patrick: "gate Poshmark"; research claude/ session 2026-10-14): Poshmark charges the buyer a flat
-    // $6.49 up to 5lb and the seller covers the weight overage up to 15lb, on USPS Ground Advantage. USPS GA hard
-    // limit is 130" length+girth, but third-party Poshmark guides agree on 108" (Poshmark's own support article is
-    // not machine-readable, so 108" is treated as probable, not confirmed) -- and a bass guitar in a case or a
-    // full-size guitar case blows through it. 30" longest side is the point where USPS adds its >30" surcharge.
-    // Applies to NEW listings only (newListingOnly) so nothing already live is taken down.
     newListingOnly: {
-      maxLongestSideIn: 30,
-      maxLengthPlusGirthIn: 108,
       requirePackageData: true,
+      poshmarkLabelNote: true,
       // 2026-10-15 (Patrick: items under $2 show a "Not For Sale" tag): Poshmark's own announcement sets $0-$2 listings
       // to Not For Sale (minimum purchasable price $3); confirmed live on the closet (two $1 listings tagged, $3 not).
       // 2026-10-19 (Patrick): raised from Poshmark's own $3 floor to $5 -- the seller fee is a flat $2.95 under $15, so a $3 item nets $0.05.
       minPriceUsd: 5,
       reasonLowPrice: 'Poshmark takes a flat $2.95 on sales under $15, so items under $5 net almost nothing and stay off it.',
-      reasonOversize: 'Too large for Poshmark\'s flat-rate shipping (over 30" on a side or 108" length plus girth) -- Poshmark ships everything on one prepaid label, so oversize items stay off it.',
-      reasonNoData: 'No package weight or size is recorded for this item, so it can\'t be confirmed to fit Poshmark\'s 15lb prepaid-label limits. Add the package weight and size to list it there.',
+      reasonNoData: 'No package weight or size is recorded for this item, so Poshmark\'s label cost can\'t be worked out. Add the package weight and size to list it there.',
     },
-    reason: 'Over Poshmark\'s 15lb shipping limit -- Poshmark\'s Community Guidelines prohibit arranging local pickup/meetups in place of shipping, so this is a dead end there, not just a bad fit.',
+    reason: 'Not eligible for Poshmark.',
   },
   {
     type: 'SIZE_WEIGHT_CEILING',
@@ -1262,6 +1276,13 @@ function effectiveWeightOz(item: EligibilityCheckItem): number | null {
   const raw = item.packageWeightOz ?? item.aiPackageWeightOz;
   const n = Number(raw);
   return raw != null && isFinite(n) && n > 0 ? n : null;
+}
+
+// 2026-10-27: the photo estimate carries a usable { length, width, height } (all three positive numbers).
+function hasAiDims(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  const o = raw as Record<string, unknown>;
+  return [o.length, o.width, o.height].every((v) => v != null && v !== '' && isFinite(Number(v)) && Number(v) > 0);
 }
 
 // Longest single side of whatever dimensions are actually present -- deliberately not "all three
@@ -1479,6 +1500,7 @@ export function buildListingEligibilityItem(
     ebayCategoryName?: string | null; category?: string | null; ebayCategoryId?: string | null; title?: string | null;
     price?: unknown; packageWeightOz?: number | null; aiPackageWeightOz?: number | null;
     packageLengthIn?: unknown; packageWidthIn?: unknown; packageHeightIn?: unknown;
+    aiPackageDimsJson?: unknown;
   },
   opts: { forNewListing: boolean }
 ): EligibilityCheckItem {
@@ -1492,6 +1514,7 @@ export function buildListingEligibilityItem(
     packageLengthIn: num(it.packageLengthIn),
     packageWidthIn: num(it.packageWidthIn),
     packageHeightIn: num(it.packageHeightIn),
+    aiPackageDimsJson: it.aiPackageDimsJson,
   };
   if (opts.forNewListing) {
     out.forNewListing = true; // Poshmark size/no-data gate and $ minimum apply to NEW listings only
@@ -1515,6 +1538,8 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
   if (item.isBulkLot === true) return { eligible: false, reason: BULK_LOT_ELIGIBILITY_REASON };
   const rules = RULES.filter((r) => r.platform === platform);
   if (rules.length === 0) return { eligible: true, reason: null };
+  // 2026-10-27: a non-blocking note (Poshmark label cost) carried to the eligible result; any blocking rule still wins.
+  let pendingNote = '';
 
   for (const rule of rules) {
     if (rule.type === 'CATEGORY_BLOCKLIST') {
@@ -1571,9 +1596,10 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
         if (nl.minPriceUsd != null && item.price != null && isFinite(Number(item.price)) && Math.round(Number(item.price) * 100) < Math.round(nl.minPriceUsd * 100)) {
           return { eligible: false, reason: nl.reasonLowPrice || rule.reason };
         }
-        if (nl.requirePackageData === true && weightOz == null && longestSideIn == null) {
+        if (nl.requirePackageData === true && weightOz == null && longestSideIn == null && !hasAiDims(item.aiPackageDimsJson)) {
           return { eligible: false, reason: nl.reasonNoData || rule.reason };
         }
+        if (nl.poshmarkLabelNote === true && !pendingNote) pendingNote = poshmarkLabelInfo(item, item.originZip).note;
       }
     }
 
@@ -1599,5 +1625,5 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
     // requires anything.
   }
 
-  return { eligible: true, reason: null };
+  return pendingNote ? { eligible: true, reason: null, note: pendingNote } : { eligible: true, reason: null };
 }

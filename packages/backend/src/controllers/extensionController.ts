@@ -20,10 +20,19 @@ import { loadListingExtras, listingExtraFields, organizerListableScope, stockRem
 import { actorCanPublish } from '../lib/publishGate'; // 2026-10-23: an account that cannot publish gets empty listing queues
 import { pickStoredRemoteRef, extractRemoteId, resolveListingRef, listingRefFields } from '../services/marketplaceListingRef'; // 2026-10-18: best remote id + URL on every sync queue entry
 import { AUTO_QUEUE_FLAG_SELECT, toAutoQueueSettings, parseAutoQueuePatch, isPickupOnlyBlockedForAutoQueue, toAutoQueueLimits, parseAutoQueueLimitsPatch, applyAutoQueueLimits, isMissingTableError, NO_AUTO_QUEUE_LIMITS, AutoQueueLimits } from '../services/autoQueueSettings';
-import { loadExtensionHeartbeat, parseHeldParam, parseVersionParam, heartbeatStatus, heldStillUnlisted, parseIdListParam, staleFlagHoldIds, loadHeldItemState, addHeldReleases, recordExtensionPoll, parseReleaseHoldsBody, certifyIdsFromContext } from '../services/extensionHeartbeat'; // 2026-10-26: extension heartbeat + held-back items (+ 1.0.67 release / stale-hold drop, 1.0.69 certify not oversized)
+import { loadExtensionHeartbeat, parseHeldParam, parseVersionParam, heartbeatStatus, heldStillUnlisted, parseIdListParam, staleFlagHoldIds, loadHeldItemState, addHeldReleases, recordExtensionPoll, parseReleaseHoldsBody } from '../services/extensionHeartbeat'; // 2026-10-26: extension heartbeat + held-back items (+ 1.0.67 release / stale-hold drop)
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { postCapRetryEligible } from '../utils/removalRetryGate'; // 2026-10-25: past the hard stop, re-probe daily instead of never
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
+import { poshmarkLabelInfo } from '../services/poshmarkLabelSurcharge'; // 2026-10-27: Poshmark label deduction (never blocks)
+
+// 2026-10-27 (Patrick): what the extension shows about Poshmark's label cost for one item. Computed from the raw
+// package fields (organizer data first, then the photo estimates), the same inputs as the eligibility note; it is
+// informational, so it is not gated by hasTrustedPackage the way the label-buying weight fields are.
+function poshmarkLabelPayload(it: { packageWeightOz?: number | null; aiPackageWeightOz?: number | null; packageLengthIn?: unknown; packageWidthIn?: unknown; packageHeightIn?: unknown; aiPackageDimsJson?: unknown }, originZip: string | null) {
+  const r = poshmarkLabelInfo(it, originZip);
+  return { surchargeUsd: r.surchargeUsd, fullLabelCost: r.fullLabelCost, weightLb: r.weightLb, source: r.source, lengthPlusGirthIn: r.lengthPlusGirthIn, note: r.note };
+}
 
 // Facebook Marketplace condition values: toFacebookCondition is now the shared facebookMarketplaceCondition
 // helper (utils/marketplaceCondition.ts), imported above, so the extension and the XLSX export cannot drift.
@@ -764,7 +773,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       CRAIGSLIST: checkEligibility('CRAIGSLIST', buildListingEligibilityItem(it, { forNewListing: false })),
       GUMTREE_AU: checkEligibility('GUMTREE_AU', buildListingEligibilityItem(it, { forNewListing: false })),
       GRAILED: checkEligibility('GRAILED', buildListingEligibilityItem(it, { forNewListing: false })),
-      POSHMARK: checkEligibility('POSHMARK', buildListingEligibilityItem(it, { forNewListing: true })),
+      POSHMARK: checkEligibility('POSHMARK', { ...buildListingEligibilityItem(it, { forNewListing: true }), originZip: saleLocationById.get(it.saleId || '')?.zip || null }),
       MERCARI: checkEligibility('MERCARI', buildListingEligibilityItem(it, { forNewListing: true })),
       VINTED: checkEligibility('VINTED', buildListingEligibilityItem(it, { forNewListing: false })),
     },
@@ -892,6 +901,9 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // Craigslist geoverify-step street address (2026-08-06) -- fills fas-craigslist.js's
     // #xstreet0 field on the ?s=geoverify "add map" screen. Same never-invent rule.
     saleAddress: saleLocationById.get(it.saleId || '')?.address || null,
+    // 2026-10-27: Poshmark's label deduction for this item (services/poshmarkLabelSurcharge.ts); the popup lists the
+    // items that will carry one. Same payload as getAutolistQueue's.
+    poshmarkLabel: poshmarkLabelPayload(it, saleLocationById.get(it.saleId || '')?.zip || null),
     // GAP FIX 2026-09-26 (S-EXT-MERCARI-MARKDOWN-FLOOR-SYNC): fas-mercari.js's Smart Pricing
     // floor logic (fillMercariSmartPricingFloor / computeMercariAutoMarkdownFloor) needs to know
     // whether this item's sale has Auto-Markdown on, and at what floor, so Mercari's own Smart
@@ -2767,13 +2779,11 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   // 1.0.67 (2026-10-26): dropHolds = reported Poshmark-flag holds the extension should forget (item sold / deleted /
   // unpublished / already on Poshmark; live: Samurai Shodown II sold on Mercari stayed held); releaseHolds = holds the
   // organizer asked to try again from the web card. The extension acks releases with ?released= on its next poll.
-  // 1.0.69 (2026-10-27): certifyOversizedIds = items the organizer confirmed are NOT oversized ("Not oversized, certify and
-  // post" on the web card); when Poshmark's "potential oversized item" box comes up for one, the extension clicks Certify
-  // Listing. Never applied to a "prohibited" flag (the extension enforces that too). Confirmations last 30 days.
+  // 1.0.71 (2026-10-27, Patrick): the 1.0.69 certifyOversizedIds field is gone. FindA.Sale never clicks Publish Listing in
+  // Poshmark's flag box for the organizer; they click it themselves.
   const pollVersion = parseVersionParam(req.query?.v);
   let releaseHolds: string[] = [];
   let dropHolds: string[] = [];
-  let certifyOversizedIds: string[] = [];
   if (pollVersion) {
     const reportedHeld = parseHeldParam(req.query?.held);
     dropHolds = await staleFlagHoldIds(organizer.id, reportedHeld);
@@ -2783,9 +2793,8 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
       acked: parseIdListParam(req.query?.released),
     });
     releaseHolds = poll.releaseHolds;
-    certifyOversizedIds = poll.certifyOversizedIds.filter((id) => !dropHolds.includes(id));
   }
-  const holdChanges = { releaseHolds, dropHolds, certifyOversizedIds };
+  const holdChanges = { releaseHolds, dropHolds };
 
   const emptyQueues: Record<AutoListPlatform, unknown[]> = {
     CRAIGSLIST: [], FACEBOOK: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
@@ -2839,6 +2848,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
       brand: true, size: true, color: true, material: true, isbn: true,
       packageWeightOz: true, aiPackageWeightOz: true,
       packageLengthIn: true, packageWidthIn: true, packageHeightIn: true,
+      aiPackageDimsJson: true, // 2026-10-27: Poshmark's label note (length plus girth) falls back to the photo estimate
       packageConfirmedByOrganizer: true, packageEstimateSource: true,
       ebayShippingOverride: true, crosslisterFreeShipping: true,
       allowBestOffer: true, bestOfferMinimumAmt: true, bestOfferAutoAcceptAmt: true,
@@ -2950,6 +2960,9 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     saleCity: saleLocationById.get(it.saleId || '')?.city || null,
     saleZip: saleLocationById.get(it.saleId || '')?.zip || null,
     saleAddress: saleLocationById.get(it.saleId || '')?.address || null,
+    // 2026-10-27: Poshmark's label deduction for this item (services/poshmarkLabelSurcharge.ts), the one source of
+    // truth the extension shows while filling, on a flag hold and in the run summary.
+    poshmarkLabel: poshmarkLabelPayload(it, saleLocationById.get(it.saleId || '')?.zip || null),
   });
 
   // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
@@ -2966,7 +2979,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     CRAIGSLIST: [], FACEBOOK: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
   };
   for (const it of items) {
-    const eligibilityItem = buildListingEligibilityItem(it, { forNewListing: true });
+    const eligibilityItem = { ...buildListingEligibilityItem(it, { forNewListing: true }), originZip: saleLocationById.get(it.saleId || '')?.zip || null };
     for (const platform of enabledPlatforms) {
       if (isAlreadyListed(it.id, platform)) continue;
       // 2026-10-21: same pickup-only rule the popup applies (Mercari and Poshmark have no local pickup option).
@@ -3348,7 +3361,7 @@ async function extensionStatusFor(organizerId: string, anyAutoQueueOn: boolean) 
   const status = heartbeatStatus(hb.lastPollAt, anyAutoQueueOn);
   let heldFlagged: Array<{ itemId: string; title: string; kind: string; at: string; platform: 'POSHMARK' }> = [];
   // 1.0.67: held items the organizer asked to try again, waiting for the extension's next check to pick them up.
-  let releasePending: Array<{ itemId: string; title: string; at: string; certify: boolean }> = [];
+  let releasePending: Array<{ itemId: string; title: string; at: string }> = [];
   const ids = Array.from(new Set([...hb.held.map((h) => h.itemId), ...hb.release.map((r) => r.itemId)]));
   if (ids.length) {
     try {
@@ -3360,11 +3373,9 @@ async function extensionStatusFor(organizerId: string, anyAutoQueueOn: boolean) 
       heldFlagged = heldStillUnlisted(hb.held, poshJobs, eligibleIds)
         .filter((h) => titleById.has(h.itemId) && !(h.kind !== 'edit' && releasing.has(h.itemId)))
         .map((h) => ({ itemId: h.itemId, title: titleById.get(h.itemId) || 'Item', kind: h.kind, at: h.at, platform: 'POSHMARK' as const }));
-      // 1.0.69: certify = the organizer confirmed this item is not oversized, so the extension certifies Poshmark's oversized box.
-      const certified = new Set(certifyIdsFromContext({ certify: hb.certify }));
       releasePending = hb.release
         .filter((r) => eligibleIds.has(r.itemId))
-        .map((r) => ({ itemId: r.itemId, title: titleById.get(r.itemId) || 'Item', at: r.at, certify: certified.has(r.itemId) }));
+        .map((r) => ({ itemId: r.itemId, title: titleById.get(r.itemId) || 'Item', at: r.at }));
     } catch {
       heldFlagged = [];
       releasePending = [];
@@ -3382,44 +3393,41 @@ async function extensionStatusFor(organizerId: string, anyAutoQueueOn: boolean) 
 }
 
 // POST /api/organizers/me/auto-queue-settings/release-holds (cookie session + CSRF, routes/organizers.ts; organizer, PRO)
-//   body: { itemIds: string[] } or { all: true }, optional certifyOversized: true (1.0.69)
+//   body: { itemIds: string[] } or { all: true }
 // 1.0.67 (2026-10-26, Patrick: "the rest are all things that aren't oversized"): the organizer's "Try again on Poshmark"
 // for items the extension holds back because Poshmark flagged them (oversized / prohibited). Only items currently on this
 // organizer's own held list are accepted (resolved from the session, never the body); anything else is ignored, and a
 // request that matches nothing is a 400. The release rides on the next autolist-queue poll as releaseHolds. Edit holds
 // (kind "edit") are not released here. If Poshmark flags the item again, the extension holds it again exactly as before.
-// 1.0.69 (2026-10-27, Patrick: these items are not oversized, post them): with certifyOversized: true only items held as
-// "oversized" are accepted (never "prohibited"); they are released AND recorded as confirmed not oversized for 30 days, so
-// when Poshmark's oversized box comes up again the extension clicks Certify Listing for the organizer.
+// 1.0.71 (2026-10-27, Patrick): the 1.0.69 certifyOversized option is gone (FindA.Sale never clicks Publish Listing in
+// Poshmark's flag box); a body that still sends it is treated as a plain release.
 export const releaseHeldPoshmarkItems = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
   const parsed = parseReleaseHoldsBody(req.body);
   if (!parsed.ok) { res.status(400).json({ message: parsed.message }); return; }
-  const { all, certifyOversized } = parsed;
+  const { all } = parsed;
   const requested = parsed.itemIds;
   const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
   const status = await extensionStatusFor(organizer.id, false);
   const releasable = status.heldFlagged
-    .filter((h) => (certifyOversized ? h.kind === 'oversized' : (h.kind === 'oversized' || h.kind === 'prohibited')))
+    .filter((h) => h.kind === 'oversized' || h.kind === 'prohibited')
     .map((h) => h.itemId);
   const ids = all ? releasable : releasable.filter((id) => requested.includes(id));
   if (!ids.length) {
-    res.status(400).json({ message: certifyOversized
-      ? 'None of those items are held back as possibly oversized right now. Only oversized items can be certified.'
-      : 'None of those items are held back from Poshmark right now.' });
+    res.status(400).json({ message: 'None of those items are held back from Poshmark right now.' });
     return;
   }
   try {
-    const ok = await addHeldReleases(organizer.id, ids, Date.now(), certifyOversized ? ids : []);
+    const ok = await addHeldReleases(organizer.id, ids, Date.now());
     if (!ok) { res.status(400).json({ message: 'None of those items are held back from Poshmark right now.' }); return; }
   } catch (err) {
     console.warn('[releaseHeldPoshmarkItems] failed:', (err as Error)?.message || err);
     res.status(500).json({ message: 'That did not save. Try again.' });
     return;
   }
-  res.json({ ...(await autoQueueResponse(organizer.id)), released: ids, certified: certifyOversized ? ids : [] });
+  res.json({ ...(await autoQueueResponse(organizer.id)), released: ids });
 };
 
 export const getAutoQueueSettings = async (req: AuthRequest, res: Response): Promise<void> => {

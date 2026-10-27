@@ -3308,12 +3308,16 @@ export function estimateCheapestRate(input: {
    *  destination-surcharge tier for that ZIP instead of the conservative unmapped default;
    *  see FEDEX_DESTINATION_SURCHARGE_TIERS. Omitting it changes nothing. */
   destinationZip?: string | null;
+  /** 2026-10-27 (Poshmark label cost estimate): price ONE carrier only (its weight table plus, for USPS, its cubic
+   *  base). Omitted = every carrier, cheapest wins (unchanged behaviour for every existing caller). */
+  onlyCarrier?: 'USPS' | 'UPS' | 'FEDEX';
 }): CheapestRate {
   const dims = input.dims ?? null;
   let best: CheapestRate | null = null;
   let anyCarrierViable = false;
 
   for (const c of CARRIER_TABLES) {
+    if (input.onlyCarrier && c.carrier !== input.onlyCarrier) continue;
     if (!withinAbsoluteMax(c.carrier, dims, input.weightOz)) continue; // this carrier can't ship it
     anyCarrierViable = true;
 
@@ -3409,7 +3413,7 @@ export function estimateCheapestRate(input: {
   // surcharge is 0 by construction, not by omission -- a cubic-eligible parcel is <=1 cu ft
   // and <=22in on its longest side, so no Notice 123 p.15 nonstandard fee can trigger.
   const cubic = evaluateUspsCubic(dims, input.weightOz, input.zone, input.packageType);
-  if (cubic && cubic.rate < best!.rate) {
+  if (cubic && (!input.onlyCarrier || input.onlyCarrier === 'USPS') && cubic.rate < best!.rate) {
     best = {
       carrier: 'USPS',
       rate: cubic.rate,

@@ -5160,6 +5160,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         packageLengthIn: true,
         packageWidthIn: true,
         packageHeightIn: true,
+        aiPackageDimsJson: true, // 2026-10-27: Poshmark's label note (length plus girth) falls back to the photo estimate
         packageEstimateSource: true, // 2026-10-21: Add Items crosslist-blocker badges (same trust rule as getAutolistQueue)
         packageConfirmedByOrganizer: true,
         ebayShippingOverride: true,
