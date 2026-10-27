@@ -1141,16 +1141,74 @@
       await sleep(150);
     }
   }
+  // 1.0.69 (2026-10-27, live-verified in Patrick's Chrome on poshmark.com/create-listing): the Brand input is
+  // POSH_BRAND_INPUT_SEL and its suggestions render as POSH_BRAND_SUGGESTION_SEL. Brands Poshmark does not know ("Mugig",
+  // "D'Addario") show no suggestions and there is NO "add custom brand" control: the typed text stays in the input after
+  // Tab/blur and Poshmark publishes it as a custom brand (confirmed on live listings via /vm-rest/posts: brand "United
+  // Artists Records" / "Janus Records" with no brand_id). So: only an EXACT (case-insensitive) suggestion is clicked, never
+  // a partial one ("Dunlop" for "Jim Dunlop"); otherwise the field is blurred and, if the typed brand is still there, it
+  // counts as set. Only a value that did not stick is reported as not set.
+  const POSH_BRAND_INPUT_SEL = '[data-et-name="listingEditorBrandSection"] input[placeholder="Enter the Brand/Designer"]';
+  const POSH_BRAND_SUGGESTION_SEL = 'ul[data-test="dropdown_menu_list"] li.dropdown__menu__item a.dropdown__link';
+  function poshBrandNorm(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase(); }
+  // Index of the suggestion whose whole text equals the brand (case and spacing ignored), else -1. Pure.
+  function poshBrandExactIndex(texts, value) {
+    const want = poshBrandNorm(value);
+    if (!want || !Array.isArray(texts)) return -1;
+    for (let i = 0; i < texts.length; i++) { if (poshBrandNorm(texts[i]) === want) return i; }
+    return -1;
+  }
+  // True when the input still holds the brand after blur, i.e. Poshmark kept it as a custom brand. Pure.
+  function poshBrandValueStuck(inputValue, value) {
+    const want = poshBrandNorm(value);
+    return !!want && poshBrandNorm(inputValue) === want;
+  }
+  async function waitForBrandInput(labelText, maxWaitMs) {
+    const start = Date.now();
+    while (true) {
+      const live = qa(POSH_BRAND_INPUT_SEL).find((e) => e.offsetParent !== null) || document.querySelector(POSH_BRAND_INPUT_SEL);
+      const el = live || fieldByLabel(labelText);
+      if (el) return el;
+      if (Date.now() - start >= maxWaitMs) return null;
+      await sleep(150);
+    }
+  }
+  function brandSuggestionEls() {
+    const live = qa(POSH_BRAND_SUGGESTION_SEL).filter((e) => e.offsetParent !== null);
+    if (live.length) return live;
+    return qa('[role="option"], [role="menuitem"], [role="menuitemradio"]').filter((e) => e.offsetParent !== null);
+  }
+  async function waitForBrandSuggestion(value, maxWaitMs) {
+    const start = Date.now();
+    while (true) {
+      const els = brandSuggestionEls();
+      const i = poshBrandExactIndex(els.map((e) => e.textContent), value);
+      if (i >= 0) return els[i];
+      if (Date.now() - start >= maxWaitMs) return null;
+      await sleep(180);
+    }
+  }
+  function blurBrandInput(el) {
+    try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { /* ignore */ }
+    try { el.blur(); } catch (e) { /* ignore */ }
+    try { el.dispatchEvent(new FocusEvent('blur')); el.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); } catch (e) { /* ignore */ }
+  }
   async function fillAutocomplete(labelText, value) {
-    const el = await waitForFieldByLabel(labelText, 1500);
+    const el = await waitForBrandInput(labelText, 1500);
     if (!el) return false;
     el.focus();
     setNativeValue(el, String(value));
-    const match = await waitForOptionByText(value, 2500);
+    const match = await waitForBrandSuggestion(value, 2500);
     if (match) { realClick(match); await sleep(200); return true; }
-    const addCustom = qa('[role="option"], li, div[role="button"], button').find((n) => /add\s+.*brand|custom brand|create\s+"/.test(norm(n.textContent)));
-    if (addCustom) { realClick(addCustom); await sleep(200); return true; }
-    console.warn('[FAS Poshmark] Brand "' + value + '" had no matching suggestion and no "add custom brand" action was found (UNVERIFIED) -- left unset.');
+    // No exact suggestion: leave the typed text as a custom brand (Poshmark has no "add custom" control) and check it stuck.
+    blurBrandInput(el);
+    await sleep(300);
+    if (poshBrandValueStuck(el.value, value)) {
+      tOk('Brand set as a custom brand (Poshmark had no suggestion)', { brand: String(value).slice(0, 40) });
+      return true;
+    }
+    console.warn('[FAS Poshmark] Brand "' + value + '" had no exact suggestion and the typed text did not stay in the field -- left unset.');
+    tWarn('brand_not_kept', 'Typed the brand "' + String(value).slice(0, 40) + '" but Poshmark did not keep it in the Brand field', { brand: String(value).slice(0, 40), now: String(el.value || '').slice(0, 40) });
     return false;
   }
 
@@ -2214,6 +2272,69 @@
     return first.length >= 20 ? first : String((item && item.title) || first);
   }
 
+  // 1.0.69 (2026-10-27, Patrick: these flagged items are not oversized, post them): when the organizer used "Not oversized,
+  // certify and post" on the web card, the server lists the item in certifyOversizedIds (background.js stores it as
+  // fasPoshCertifyOk). When Poshmark's "potential oversized item" box comes up for such an item, FindA.Sale clicks Certify
+  // Listing for them: that statement to Poshmark is the organizer's own, made on the web card for that exact item. A
+  // "prohibited" flag is NEVER certified, whatever the list says. Items not on the list behave exactly as before.
+  const POSH_CERTIFY_STORE_KEY = 'fasPoshCertifyOk';
+  const POSH_CERTIFY_TTL_MS = 30 * 24 * 3600 * 1000;
+  // True only for an oversized flag on an item the organizer confirmed, from a store refreshed within 30 days. Pure.
+  function poshShouldAutoCertify(flagKind, itemId, store, now) {
+    if (flagKind !== 'oversized') return false;
+    if (typeof itemId !== 'string' || !itemId) return false;
+    if (!store || typeof store !== 'object' || !Array.isArray(store.ids)) return false;
+    if (!(typeof store.at === 'number' && store.at > 0 && now - store.at <= POSH_CERTIFY_TTL_MS)) return false;
+    return store.ids.indexOf(itemId) !== -1;
+  }
+  // Poshmark's dialog button reads "Certify Listing" (live screenshot 2026-10-27); a few close variants are accepted. Pure.
+  function poshIsCertifyButtonText(text) {
+    const t = String(text == null ? '' : text).replace(/\s+/g, ' ').trim().toLowerCase();
+    return /^certify( this)?( listing| item)?$/.test(t);
+  }
+  // The Certify button inside the smallest open dialog that carries Poshmark's oversized-item wording; never a page-wide guess.
+  function findPoshmarkCertifyButton() {
+    const dialogs = qa('[role="dialog"], .modal, [class*="modal"]')
+      .filter((d) => /potential oversized item|certify (this )?listing/i.test((d.innerText || d.textContent || '').replace(/\s+/g, ' ')))
+      .sort((a, b) => (a.innerText || a.textContent || '').length - (b.innerText || b.textContent || '').length);
+    for (const d of dialogs) {
+      const btn = Array.from(d.querySelectorAll('button, [role="button"], a, input[type="button"], input[type="submit"]'))
+        .find((b) => b.offsetParent !== null && !b.disabled && poshIsCertifyButtonText(b.tagName === 'INPUT' ? b.value : b.textContent));
+      if (btn) return btn;
+    }
+    return null;
+  }
+  async function poshReadCertifyStore() {
+    try { return (await chrome.storage.local.get(POSH_CERTIFY_STORE_KEY))[POSH_CERTIFY_STORE_KEY] || null; } catch (e) { return null; }
+  }
+  // Click Certify Listing for a confirmed item and verify the publish the same way as a normal publish (form gone, else the
+  // live closet). Resolves 'published' | 'no_button' | 'unconfirmed'.
+  async function poshCertifyOversizedListing(item) {
+    let btn = null;
+    for (let a = 0; a < 10 && !btn; a++) { btn = findPoshmarkCertifyButton(); if (!btn) await sleep(300); }
+    if (!btn) return 'no_button';
+    tStep('Certifying the listing', 'You told FindA.Sale this item is not oversized, so clicking Poshmark\'s Certify Listing for you');
+    overlayInfo('Poshmark asked whether <b>' + escapeHtml(item.title) + '</b> is oversized. You said it is not, so certifying and posting it...');
+    await humanPause(400, 800);
+    writePoshPublishAttemptState(item.id);
+    realClick(btn);
+    let ok = await waitForPoshmarkPublishConfirmation(15000);
+    if (!ok) {
+      const seen = [];
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await sleep(attempt === 0 ? 3000 : 5000);
+        let r = null;
+        try { r = await fasPoshClosetDupCheck(item); } catch (e) { r = null; }
+        seen.push({ state: r ? r.state : 'failed' });
+        if (r && r.state === 'dup') break;
+      }
+      const verdict = (typeof self !== 'undefined' && self.FAS_LISTING_REF && self.FAS_LISTING_REF.unconfirmedPublishVerdict) ? self.FAS_LISTING_REF.unconfirmedPublishVerdict(seen) : { published: false, reason: 'helper_missing' };
+      tInfo('certified_oversized_closet', 'Closet re-check after certifying: ' + verdict.reason, { verdict: verdict.reason, checks: seen.map((c) => c.state) });
+      ok = !!verdict.published;
+    }
+    return ok ? 'published' : 'unconfirmed';
+  }
+
   // 1.0.56 (Patrick): when Poshmark's validator flags a listing, do NOT silently move on. Tell the person plainly that they can
   // publish it themselves if they are sure it is allowed (Certify Listing is their own statement to Poshmark; FindA.Sale never clicks
   // it), or skip it and carry on with the queue so they can look at it later. If nobody answers for 10 minutes the queue moves on so an
@@ -2224,6 +2345,7 @@
     let decision = '';
     overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#ffcf7a">Poshmark flagged <b>' + escapeHtml(item.title) + '</b> as ' + what + '.</div>' +
       '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If you are sure this item is allowed on Poshmark, click <b>Certify Listing</b> in Poshmark\'s box to publish it. That is your own statement to Poshmark, so FindA.Sale never clicks it for you. Otherwise skip it.</div>' +
+      (flagKind === 'oversized' ? '<div style="margin-top:6px;font-size:12px;color:#cfe3d6">If it is not oversized, you can also skip it here and use <b>Not oversized, certify and post</b> on FindA.Sale\'s auto queue page. The extension then certifies it for you on the next try.</div>' : '') +
       button('fas-posh-skip', more ? 'Skip this item and continue the queue' : 'Skip this item', true) + button('fas-posh-close', 'Stop here', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (more ? 'If you do nothing, the queue moves on to the next item in 10 minutes. ' : '') + 'Item ' + (index + 1) + ' of ' + total + '</div>');
     const skipBtn = document.getElementById('fas-posh-skip');
@@ -2354,7 +2476,24 @@
           flagText = dlg.slice(at > 0 ? at : 0).slice(0, 700);
         }
       } catch (e) {}
-      if (flagText) {
+      // 1.0.69: an oversized flag on an item the organizer confirmed is not oversized is certified right away (no retry ladder).
+      let certifyTried = false;
+      let certified = false;
+      if (flagText && flagKind === 'oversized' && poshShouldAutoCertify(flagKind, item.id, await poshReadCertifyStore(), Date.now())) {
+        certifyTried = true;
+        tInfo('certify_oversized_start', 'Poshmark flagged this item as possibly oversized and you confirmed it is not, so certifying it', { itemId: item.id });
+        const c = await poshCertifyOversizedListing(item);
+        if (c === 'published') {
+          certified = true;
+          published = true;
+          tOk('certified_oversized: you said this item is not oversized, so FindA.Sale certified it and Poshmark published it', { code: 'certified_oversized', itemId: item.id });
+          tInfo('certified_oversized', 'Certified the oversized flag for you and the listing went live', { itemId: item.id });
+          try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: 'Poshmark asked if this was oversized; you said it is not, so FindA.Sale clicked Certify Listing and it posted.' }); } catch (e) {}
+        } else {
+          tWarn('certify_oversized_failed', c === 'no_button' ? 'Could not find Poshmark\'s Certify Listing button, so the item is held for you as before' : 'Clicked Certify Listing but could not confirm the listing went live, so the item is held for you as before', { itemId: item.id, result: c });
+        }
+      }
+      if (flagText && !certified) {
         clearPoshPublishAttemptState();
         // Retry ladder (1.0.60): stage 1 = first sentence of the description only (skipped when the description is already that short);
         // stage 2 = the first photo only. One change at a time so a pass says which factor the validator reacted to.
@@ -2364,6 +2503,7 @@
         let nextStage = 0;
         if (!rs) nextStage = descChanges ? 1 : (photoCount > 1 ? 2 : 0);
         else if (rs.stage === 1 && photoCount > 1) nextStage = 2;
+        if (certifyTried) nextStage = 0;   // 1.0.69: a confirmed item is never re-posted with a cut-down listing
         if (nextStage) {
           try { sessionStorage.setItem(POSH_FLAG_RETRY_KEY, JSON.stringify({ id: item.id, kind: flagKind, stage: nextStage, at: Date.now() })); } catch (e) {}
           tInfo('flag_retry', 'Poshmark flagged this item as ' + flagKind + '; retry ' + nextStage + ' of 2 with ' + (nextStage === 1 ? 'a shorter description' : 'only the first photo') + ' to learn what the validator reacts to', { kind: flagKind, stage: nextStage, dialog: flagText, descLen: (item.description || '').length, photos: photoCount });
@@ -2376,7 +2516,7 @@
         if (flagKind === 'prohibited') {
           tProblem({ code: 'poshmark_prohibited_flag', title: 'Poshmark flagged this item as possibly prohibited', what: 'Poshmark showed "potential prohibited item" and asked the seller to certify the listing. It would not publish without that.', why: 'Its validator went by the category, title or brand. FindA.Sale never certifies a listing for you, because that is your statement to Poshmark.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         } else {
-          tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
+          tProblem({ code: 'poshmark_oversized', title: 'Poshmark refused this item as oversized', what: 'Poshmark flagged the listing as a potential oversized item and would not publish it.', why: 'Its validator went by the package size or category on the listing. Check the dimensions saved on this item; small items with wrong dimensions trigger it.', next: 'The item was NOT marked listed and stays available for your other marketplaces. If you are sure it is allowed, click Certify Listing on Poshmark yourself; otherwise skip it and the queue continues. If it is not oversized, Not oversized, certify and post on the auto queue page has the extension certify it next time.', ctx: { dialog: flagText, item: { path: item.poshmarkCategoryPath || null, category: item.category || null, price: item.price != null ? item.price : null, photos: Array.isArray(item.photos) ? item.photos.length : (Array.isArray(item.photoUrls) ? item.photoUrls.length : null), titleLen: (item.title || '').length, descLen: (item.description || '').length } } });
         }
         try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id, flagged: flagKind, flagOnly: true }); } catch (e) {}
         const decision = await holdForPoshmarkFlagDecision(item, flagKind, index, total);
@@ -2673,7 +2813,7 @@
     // items where the organizer hasn't set a value. Brand is a plain autocomplete field, not gated
     // by category on Poshmark's form (UNVERIFIED against a live account, but not the field named in
     // Patrick's report) -- kept unconditional.
-    if (item.brand) { tStep('Brand', 'Typing the brand and picking it from Poshmark\'s suggestions', { brand: String(item.brand).slice(0, 40) }); if (await tryFill('Brand', item.brand, (v) => fillAutocomplete('Brand', v))) tOk('Brand set'); }
+    if (item.brand) { tStep('Brand', 'Typing the brand and picking Poshmark\'s exact suggestion, or keeping it as a custom brand', { brand: String(item.brand).slice(0, 40) }); if (await tryFill('Brand', item.brand, (v) => fillAutocomplete('Brand', v))) tOk('Brand set'); }
     else tInfo('brand_skipped', 'No brand on this item; Brand left blank', {});
     if (categoryCommitted) {
       if (item.size) tStep('Size', 'Picking the size from the list Poshmark shows for this category', { size: String(item.size).slice(0, 30) });

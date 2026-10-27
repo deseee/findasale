@@ -20,7 +20,7 @@ import { loadListingExtras, listingExtraFields, organizerListableScope, stockRem
 import { actorCanPublish } from '../lib/publishGate'; // 2026-10-23: an account that cannot publish gets empty listing queues
 import { pickStoredRemoteRef, extractRemoteId, resolveListingRef, listingRefFields } from '../services/marketplaceListingRef'; // 2026-10-18: best remote id + URL on every sync queue entry
 import { AUTO_QUEUE_FLAG_SELECT, toAutoQueueSettings, parseAutoQueuePatch, isPickupOnlyBlockedForAutoQueue, toAutoQueueLimits, parseAutoQueueLimitsPatch, applyAutoQueueLimits, isMissingTableError, NO_AUTO_QUEUE_LIMITS, AutoQueueLimits } from '../services/autoQueueSettings';
-import { recordExtensionHeartbeat, loadExtensionHeartbeat, parseHeldParam, parseVersionParam, heartbeatStatus, heldStillUnlisted, parseIdListParam, staleFlagHoldIds, loadHeldItemState, addHeldReleases } from '../services/extensionHeartbeat'; // 2026-10-26: extension heartbeat + held-back items (+ 1.0.67 release / stale-hold drop)
+import { loadExtensionHeartbeat, parseHeldParam, parseVersionParam, heartbeatStatus, heldStillUnlisted, parseIdListParam, staleFlagHoldIds, loadHeldItemState, addHeldReleases, recordExtensionPoll, parseReleaseHoldsBody, certifyIdsFromContext } from '../services/extensionHeartbeat'; // 2026-10-26: extension heartbeat + held-back items (+ 1.0.67 release / stale-hold drop, 1.0.69 certify not oversized)
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { postCapRetryEligible } from '../utils/removalRetryGate'; // 2026-10-25: past the hard stop, re-probe daily instead of never
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
@@ -2761,25 +2761,31 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
   // 2026-10-26: a successful poll is the extension's heartbeat (services/extensionHeartbeat.ts). Recorded before any
-  // early return so an empty queue still counts. recordExtensionHeartbeat never throws, so this cannot fail the poll.
+  // early return so an empty queue still counts. recordExtensionPoll never throws, so this cannot fail the poll.
   // Only the extension counts: it always sends its version (?v=). Any other caller of this route (e.g. a cookie GET
   // from the web) carries no v and must not record a heartbeat or wipe the held list / version the extension reported.
   // 1.0.67 (2026-10-26): dropHolds = reported Poshmark-flag holds the extension should forget (item sold / deleted /
   // unpublished / already on Poshmark; live: Samurai Shodown II sold on Mercari stayed held); releaseHolds = holds the
   // organizer asked to try again from the web card. The extension acks releases with ?released= on its next poll.
+  // 1.0.69 (2026-10-27): certifyOversizedIds = items the organizer confirmed are NOT oversized ("Not oversized, certify and
+  // post" on the web card); when Poshmark's "potential oversized item" box comes up for one, the extension clicks Certify
+  // Listing. Never applied to a "prohibited" flag (the extension enforces that too). Confirmations last 30 days.
   const pollVersion = parseVersionParam(req.query?.v);
   let releaseHolds: string[] = [];
   let dropHolds: string[] = [];
+  let certifyOversizedIds: string[] = [];
   if (pollVersion) {
     const reportedHeld = parseHeldParam(req.query?.held);
     dropHolds = await staleFlagHoldIds(organizer.id, reportedHeld);
-    releaseHolds = await recordExtensionHeartbeat(organizer.id, {
+    const poll = await recordExtensionPoll(organizer.id, {
       held: reportedHeld.filter((h) => !dropHolds.includes(h.itemId)),
       version: pollVersion,
       acked: parseIdListParam(req.query?.released),
     });
+    releaseHolds = poll.releaseHolds;
+    certifyOversizedIds = poll.certifyOversizedIds.filter((id) => !dropHolds.includes(id));
   }
-  const holdChanges = { releaseHolds, dropHolds };
+  const holdChanges = { releaseHolds, dropHolds, certifyOversizedIds };
 
   const emptyQueues: Record<AutoListPlatform, unknown[]> = {
     CRAIGSLIST: [], FACEBOOK: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
@@ -3342,7 +3348,7 @@ async function extensionStatusFor(organizerId: string, anyAutoQueueOn: boolean) 
   const status = heartbeatStatus(hb.lastPollAt, anyAutoQueueOn);
   let heldFlagged: Array<{ itemId: string; title: string; kind: string; at: string; platform: 'POSHMARK' }> = [];
   // 1.0.67: held items the organizer asked to try again, waiting for the extension's next check to pick them up.
-  let releasePending: Array<{ itemId: string; title: string; at: string }> = [];
+  let releasePending: Array<{ itemId: string; title: string; at: string; certify: boolean }> = [];
   const ids = Array.from(new Set([...hb.held.map((h) => h.itemId), ...hb.release.map((r) => r.itemId)]));
   if (ids.length) {
     try {
@@ -3354,9 +3360,11 @@ async function extensionStatusFor(organizerId: string, anyAutoQueueOn: boolean) 
       heldFlagged = heldStillUnlisted(hb.held, poshJobs, eligibleIds)
         .filter((h) => titleById.has(h.itemId) && !(h.kind !== 'edit' && releasing.has(h.itemId)))
         .map((h) => ({ itemId: h.itemId, title: titleById.get(h.itemId) || 'Item', kind: h.kind, at: h.at, platform: 'POSHMARK' as const }));
+      // 1.0.69: certify = the organizer confirmed this item is not oversized, so the extension certifies Poshmark's oversized box.
+      const certified = new Set(certifyIdsFromContext({ certify: hb.certify }));
       releasePending = hb.release
         .filter((r) => eligibleIds.has(r.itemId))
-        .map((r) => ({ itemId: r.itemId, title: titleById.get(r.itemId) || 'Item', at: r.at }));
+        .map((r) => ({ itemId: r.itemId, title: titleById.get(r.itemId) || 'Item', at: r.at, certify: certified.has(r.itemId) }));
     } catch {
       heldFlagged = [];
       releasePending = [];
@@ -3374,35 +3382,44 @@ async function extensionStatusFor(organizerId: string, anyAutoQueueOn: boolean) 
 }
 
 // POST /api/organizers/me/auto-queue-settings/release-holds (cookie session + CSRF, routes/organizers.ts; organizer, PRO)
-//   body: { itemIds: string[] } or { all: true }
+//   body: { itemIds: string[] } or { all: true }, optional certifyOversized: true (1.0.69)
 // 1.0.67 (2026-10-26, Patrick: "the rest are all things that aren't oversized"): the organizer's "Try again on Poshmark"
 // for items the extension holds back because Poshmark flagged them (oversized / prohibited). Only items currently on this
 // organizer's own held list are accepted (resolved from the session, never the body); anything else is ignored, and a
 // request that matches nothing is a 400. The release rides on the next autolist-queue poll as releaseHolds. Edit holds
 // (kind "edit") are not released here. If Poshmark flags the item again, the extension holds it again exactly as before.
+// 1.0.69 (2026-10-27, Patrick: these items are not oversized, post them): with certifyOversized: true only items held as
+// "oversized" are accepted (never "prohibited"); they are released AND recorded as confirmed not oversized for 30 days, so
+// when Poshmark's oversized box comes up again the extension clicks Certify Listing for the organizer.
 export const releaseHeldPoshmarkItems = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
-  const body = req.body as Record<string, unknown> | null | undefined;
-  if (!body || typeof body !== 'object' || Array.isArray(body)) { res.status(400).json({ message: 'Body must be an object' }); return; }
-  const all = body.all === true;
-  const requested = Array.isArray(body.itemIds) ? (body.itemIds as unknown[]).filter((x): x is string => typeof x === 'string') : [];
-  if (!all && (!requested.length || requested.length > 50)) { res.status(400).json({ message: 'Send itemIds (1 to 50) or all: true' }); return; }
+  const parsed = parseReleaseHoldsBody(req.body);
+  if (!parsed.ok) { res.status(400).json({ message: parsed.message }); return; }
+  const { all, certifyOversized } = parsed;
+  const requested = parsed.itemIds;
   const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
   const status = await extensionStatusFor(organizer.id, false);
-  const releasable = status.heldFlagged.filter((h) => h.kind === 'oversized' || h.kind === 'prohibited').map((h) => h.itemId);
+  const releasable = status.heldFlagged
+    .filter((h) => (certifyOversized ? h.kind === 'oversized' : (h.kind === 'oversized' || h.kind === 'prohibited')))
+    .map((h) => h.itemId);
   const ids = all ? releasable : releasable.filter((id) => requested.includes(id));
-  if (!ids.length) { res.status(400).json({ message: 'None of those items are held back from Poshmark right now.' }); return; }
+  if (!ids.length) {
+    res.status(400).json({ message: certifyOversized
+      ? 'None of those items are held back as possibly oversized right now. Only oversized items can be certified.'
+      : 'None of those items are held back from Poshmark right now.' });
+    return;
+  }
   try {
-    const ok = await addHeldReleases(organizer.id, ids);
+    const ok = await addHeldReleases(organizer.id, ids, Date.now(), certifyOversized ? ids : []);
     if (!ok) { res.status(400).json({ message: 'None of those items are held back from Poshmark right now.' }); return; }
   } catch (err) {
     console.warn('[releaseHeldPoshmarkItems] failed:', (err as Error)?.message || err);
     res.status(500).json({ message: 'That did not save. Try again.' });
     return;
   }
-  res.json({ ...(await autoQueueResponse(organizer.id)), released: ids });
+  res.json({ ...(await autoQueueResponse(organizer.id)), released: ids, certified: certifyOversized ? ids : [] });
 };
 
 export const getAutoQueueSettings = async (req: AuthRequest, res: Response): Promise<void> => {

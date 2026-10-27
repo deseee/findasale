@@ -19,6 +19,6 @@ test('background records what the auto queue loaded and the popup shows it', () 
   assert.ok(/by your auto queue/.test(popup));
 });
 
-test('manifest is 1.0.68', () => {
-  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.68');
+test('manifest is 1.0.69', () => {
+  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.69');
 });

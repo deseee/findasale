@@ -39,7 +39,7 @@ test('invalid limits are ignored, not trusted', () => {
 
 test('checkAutoListQueue reads limits from the server response and spends one budget across platforms', () => {
   const i = bg.indexOf('async function checkAutoListQueue()');
-  const body = bg.slice(i, i + 8000); // 1.0.67: widened for the hold release/drop block
+  const body = bg.slice(i, i + 10000); // 1.0.67: widened for the hold release/drop block; 1.0.69: and the certify-ids block
   assert.ok(/fasAutoQueueLimitPlan\(resp\.data && resp\.data\.limits\)/.test(body));
   assert.ok(/limitPlan\.budget -= items\.length/.test(body));
   assert.ok(/fasAutoQueueSweepStale\(platform, 'limit_reached'\)/.test(body)); // 1.0.66: outcome comes from the stale-queue sweep

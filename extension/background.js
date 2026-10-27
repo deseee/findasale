@@ -2750,6 +2750,16 @@ function fasPoshApplyHoldChanges(flagged, releaseIds, dropIds) {
   }
   return { flagged: out, changed: removed.length > 0, removed: removed, ack: release };
 }
+// 1.0.69 (2026-10-27): the autolist-queue response carries certifyOversizedIds -- held Poshmark items the organizer confirmed
+// on the web card are NOT oversized ("Not oversized, certify and post"). Stored as fasPoshCertifyOk { ids, at } beside the
+// hold changes above; fas-poshmark.js clicks Certify Listing only for an OVERSIZED flag on one of these ids (never a
+// prohibited one). The server's list is authoritative (it expires confirmations after 30 days), so each poll replaces it. Pure.
+function fasPoshCertifyStore(ids, now) {
+  const idOk = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{8,40}$/.test(id);
+  const out = [];
+  for (const id of (Array.isArray(ids) ? ids : [])) { if (idOk(id) && out.indexOf(id) === -1) out.push(id); if (out.length >= 100) break; }
+  return { ids: out, at: now };
+}
 try {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
@@ -2803,6 +2813,16 @@ async function checkAutoListQueue() {
       fasT('info', 'posh_holds_cleared', (nRel ? nRel + ' Poshmark hold(s) released by you and offered to Poshmark again' : '') + (nRel && r.removed.length - nRel ? '; ' : '') + (r.removed.length - nRel ? (r.removed.length - nRel) + ' hold(s) dropped because the item sold, was removed, or is already on Poshmark' : ''), { platform: 'POSHMARK', flow: 'autoqueue', ctx: { released: nRel, dropped: r.removed.length - nRel } });
     }
   } catch (e) { /* best-effort; the server keeps the release until it is acked */ }
+  // 1.0.69: remember which items the organizer confirmed are not oversized (an older server sends nothing: keep what we have).
+  try {
+    if (resp.data && Array.isArray(resp.data.certifyOversizedIds)) {
+      const cs = fasPoshCertifyStore(resp.data.certifyOversizedIds, Date.now());
+      const prev = (await chrome.storage.local.get('fasPoshCertifyOk')).fasPoshCertifyOk;
+      await chrome.storage.local.set({ fasPoshCertifyOk: cs });
+      const prevIds = prev && Array.isArray(prev.ids) ? prev.ids.slice().sort().join(',') : '';
+      if (cs.ids.length && prevIds !== cs.ids.slice().sort().join(',')) fasT('info', 'posh_certify_ids', cs.ids.length + ' Poshmark item(s) you confirmed are not oversized will be certified if Poshmark asks', { platform: 'POSHMARK', flow: 'autoqueue', ctx: { count: cs.ids.length } });
+    }
+  } catch (e) { /* best-effort */ }
   const queues = (resp.data && resp.data.queues) || {};
   const outcomes = [];
   const pausedForQueue = await fasGetPausedPlatforms();

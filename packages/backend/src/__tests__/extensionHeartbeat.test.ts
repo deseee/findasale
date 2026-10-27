@@ -39,6 +39,7 @@ import {
   parseHeldParam, parseVersionParam, heartbeatStatus, shouldAlertHeartbeat,
   recordExtensionHeartbeat, loadExtensionHeartbeat, mergeHeartbeatContext, heldStillUnlisted, HEARTBEAT_SOURCE, HEARTBEAT_STALE_MS,
   parseIdListParam, isHoldEligibleItem, staleFlagHoldIds, addReleasesToContext, addHeldReleases, RELEASE_TTL_MS,
+  recordExtensionPoll, parseReleaseHoldsBody, certifyIdsFromContext, CERTIFY_TTL_MS,
 } from '../services/extensionHeartbeat';
 import { runExtensionHeartbeatAlert, EXTENSION_SILENT_TITLE, EXTENSION_SILENT_BODY, EXTENSION_SILENT_LINK } from '../jobs/extensionHeartbeatAlertJob';
 
@@ -103,7 +104,7 @@ describe('record / load', () => {
     mockLogFindFirst.mockRejectedValueOnce(new Error('db down'));
     await expect(recordExtensionHeartbeat('org1', { held: [], version: '1.0.66' })).resolves.toEqual([]);
     mockLogFindFirst.mockRejectedValueOnce(new Error('db down'));
-    await expect(loadExtensionHeartbeat('org1')).resolves.toEqual({ lastPollAt: null, held: [], alertedAt: null, version: null, release: [] });
+    await expect(loadExtensionHeartbeat('org1')).resolves.toEqual({ lastPollAt: null, held: [], alertedAt: null, version: null, release: [], certify: [] });
   });
 
   it('2026-10-26 retest: a poll without an extension version (e.g. a cookie GET from the web) records nothing', async () => {
@@ -217,7 +218,7 @@ describe('wiring (source pins)', () => {
   it('getAutolistQueue records the heartbeat before any early return', () => {
     const src = read('controllers/extensionController.ts');
     const start = src.indexOf('export const getAutolistQueue');
-    const hb = src.indexOf('await recordExtensionHeartbeat(organizer.id', start);
+    const hb = src.indexOf('await recordExtensionPoll(organizer.id', start);
     const firstEarly = src.indexOf('if (enabledPlatforms.length === 0)', start);
     expect(hb).toBeGreaterThan(start);
     expect(hb).toBeLessThan(firstEarly);
@@ -227,7 +228,7 @@ describe('wiring (source pins)', () => {
     const src = read('controllers/extensionController.ts');
     const start = src.indexOf('export const getAutolistQueue');
     const seg = src.slice(start, src.indexOf('if (enabledPlatforms.length === 0)', start));
-    expect(seg).toMatch(/if \(pollVersion\) \{[\s\S]*?releaseHolds = await recordExtensionHeartbeat\(organizer\.id/);
+    expect(seg).toMatch(/if \(pollVersion\) \{[\s\S]*?const poll = await recordExtensionPoll\(organizer\.id[\s\S]*?releaseHolds = poll\.releaseHolds;/);
     expect(seg).toMatch(/const pollVersion = parseVersionParam\(req\.query\?\.v\);/);
   });
 
@@ -356,6 +357,92 @@ describe('1.0.67 stale holds and organizer release (2026-10-26)', () => {
     expect(card).toContain('Try again on Poshmark');
     expect(card).toContain('Try all again');
     expect(card).toContain("ENDPOINT + '/release-holds'");
+    expect(card).not.toMatch(/—/);
+    expect(card).not.toMatch(/\bAI\b/);
+  });
+});
+
+describe('1.0.69 certify as not oversized (2026-10-27)', () => {
+  const STRAP = 'cmuobqqyg00g1qcr4e3qyxnk3';
+  const PICKS = 'cmu5stawt0071rd9bwrntc9ok';
+  const FURY = 'cmu5oob4s001rrd9bl67f2nt9';
+  const at = new Date(NOW).toISOString();
+
+  it('parseReleaseHoldsBody: itemIds or all, optional boolean certifyOversized', () => {
+    expect(parseReleaseHoldsBody({ itemIds: [STRAP], certifyOversized: true })).toEqual({ ok: true, all: false, itemIds: [STRAP], certifyOversized: true });
+    expect(parseReleaseHoldsBody({ all: true, certifyOversized: true })).toEqual({ ok: true, all: true, itemIds: [], certifyOversized: true });
+    expect(parseReleaseHoldsBody({ itemIds: [STRAP, STRAP] })).toEqual({ ok: true, all: false, itemIds: [STRAP], certifyOversized: false });
+    expect(parseReleaseHoldsBody({ itemIds: [STRAP], certifyOversized: 'yes' }).ok).toBe(false);
+    expect(parseReleaseHoldsBody({ itemIds: [STRAP], certifyOversized: 1 }).ok).toBe(false);
+    expect(parseReleaseHoldsBody({ itemIds: ['../x', 5] }).ok).toBe(false);
+    expect(parseReleaseHoldsBody({}).ok).toBe(false);
+    expect(parseReleaseHoldsBody([STRAP]).ok).toBe(false);
+    expect(parseReleaseHoldsBody(null).ok).toBe(false);
+    expect(parseReleaseHoldsBody({ itemIds: Array.from({ length: 51 }, (_, i) => 'abcdefgh' + String(i).padStart(2, '0')) }).ok).toBe(false);
+  });
+
+  it('addReleasesToContext records certify only for the released ids asked for; a plain release adds no certify', () => {
+    const plain = addReleasesToContext({}, [STRAP], NOW);
+    expect(plain.certify).toBeUndefined();
+    const ctx = addReleasesToContext({}, [STRAP, PICKS], NOW, [STRAP, PICKS, FURY]);
+    expect(ctx.release).toEqual([{ itemId: STRAP, at }, { itemId: PICKS, at }]);
+    expect(ctx.certify).toEqual([{ itemId: STRAP, at }, { itemId: PICKS, at }]);
+    expect(certifyIdsFromContext(ctx, NOW)).toEqual([STRAP, PICKS]);
+  });
+
+  it('certify survives the release ack and expires after CERTIFY_TTL_MS', () => {
+    const ctx1 = addReleasesToContext({}, [STRAP], NOW, [STRAP]);
+    const ctx2 = mergeHeartbeatContext(ctx1, { held: [], version: '1.0.69', acked: [STRAP] }, NOW + 1000);
+    expect(ctx2.release).toBeUndefined();
+    expect(certifyIdsFromContext(ctx2, NOW + 1000)).toEqual([STRAP]);
+    const later = NOW + CERTIFY_TTL_MS + 5000;
+    const ctx3 = mergeHeartbeatContext(ctx2, { held: [], version: '1.0.69' }, later);
+    expect(ctx3.certify).toBeUndefined();
+    expect(certifyIdsFromContext(ctx2, later)).toEqual([]);
+  });
+
+  it('recordExtensionPoll returns releaseHolds and certifyOversizedIds; recordExtensionHeartbeat still returns only releases', async () => {
+    const ctx = { v: '1.0.68', held: [], release: [{ itemId: STRAP, at }], certify: [{ itemId: STRAP, at }, { itemId: PICKS, at: new Date(NOW - CERTIFY_TTL_MS - H).toISOString() }] };
+    mockLogFindFirst.mockResolvedValueOnce({ id: 'row1', context: ctx });
+    const r = await recordExtensionPoll('org1', { held: [], version: '1.0.69', acked: [] });
+    expect(r.releaseHolds).toEqual([STRAP]);
+    expect(r.certifyOversizedIds).toEqual([STRAP]);
+    expect(mockLogUpdate.mock.calls[0][0].data.context.certify).toEqual([{ itemId: STRAP, at }]);
+    mockLogFindFirst.mockResolvedValueOnce({ id: 'row1', context: ctx });
+    await expect(recordExtensionHeartbeat('org1', { held: [], version: '1.0.69' })).resolves.toEqual([STRAP]);
+    await expect(recordExtensionPoll('org1', { held: [], version: null })).resolves.toEqual({ releaseHolds: [], certifyOversizedIds: [] });
+    mockLogFindFirst.mockRejectedValueOnce(new Error('db down'));
+    await expect(recordExtensionPoll('org1', { held: [], version: '1.0.69' })).resolves.toEqual({ releaseHolds: [], certifyOversizedIds: [] });
+  });
+
+  it('addHeldReleases writes certify for the confirmed ids', async () => {
+    mockLogFindFirst.mockResolvedValueOnce({ id: 'row1', context: { v: '1.0.68', held: [] } });
+    await expect(addHeldReleases('org1', [STRAP], NOW, [STRAP])).resolves.toBe(true);
+    expect(mockLogUpdate.mock.calls[0][0].data.context.certify).toEqual([{ itemId: STRAP, at }]);
+  });
+
+  it('wiring: the poll response carries certifyOversizedIds on every response', () => {
+    const src = read('controllers/extensionController.ts');
+    const start = src.indexOf('export const getAutolistQueue');
+    const fn = src.slice(start, src.indexOf('\n};', start));
+    expect(fn).toMatch(/const holdChanges = \{ releaseHolds, dropHolds, certifyOversizedIds \};/);
+    expect(fn).toMatch(/certifyOversizedIds = poll\.certifyOversizedIds\.filter\(\(id\) => !dropHolds\.includes\(id\)\)/);
+  });
+
+  it('wiring: release-holds with certifyOversized accepts oversized holds only, never prohibited', () => {
+    const src = read('controllers/extensionController.ts');
+    const fn = src.slice(src.indexOf('export const releaseHeldPoshmarkItems'), src.indexOf('export const getAutoQueueSettings'));
+    expect(fn).toMatch(/const parsed = parseReleaseHoldsBody\(req\.body\);/);
+    expect(fn).toMatch(/certifyOversized \? h\.kind === 'oversized' :/);
+    expect(fn).toMatch(/addHeldReleases\(organizer\.id, ids, Date\.now\(\), certifyOversized \? ids : \[\]\)/);
+  });
+
+  it('wiring: the card has the certify buttons for oversized holds and sends certifyOversized', () => {
+    const card = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'frontend', 'components', 'AutoQueueCard.tsx'), 'utf8');
+    expect(card).toContain('Not oversized, certify and post');
+    expect(card).toContain('Certify all oversized and post');
+    expect(card).toContain('certifyOversized: true');
+    expect(card).toMatch(/h\.kind === 'oversized' && \(/);
     expect(card).not.toMatch(/—/);
     expect(card).not.toMatch(/\bAI\b/);
   });
