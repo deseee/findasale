@@ -6,7 +6,9 @@
 // Craigslist / Gumtree AU (manifest content_scripts, before the platform script), and Node (module.exports).
 //
 // The id formats mirror the backend's (packages/backend/src/services/marketplaceListingRef.ts):
-//   Facebook numeric item id, Poshmark 24-hex, Mercari m<digits>, Grailed numeric, Craigslist 9-12 digits, Gumtree AU 8-12 digits.
+//   Facebook numeric item id, Poshmark 24-hex, Mercari m<digits>, Grailed numeric, Craigslist 9-12 digits, Gumtree AU 8-12 digits,
+//   Vinted numeric item id (1.0.80: VINTED was missing here, so background.js fasListedBody() turned every Vinted markListed id
+//   into null and the upload was recorded POSTED with remoteListingId NULL; the backend stores a bare Vinted id as sent).
 (function (root) {
   'use strict';
 
@@ -16,7 +18,8 @@
     MERCARI: /^m\d{1,20}$/i,
     GRAILED: /^\d{1,20}$/,
     CRAIGSLIST: /^\d{9,12}$/,
-    GUMTREE_AU: /^\d{8,12}$/
+    GUMTREE_AU: /^\d{8,12}$/,
+    VINTED: /^\d{1,20}$/
   };
   var HOST_RE = {
     FACEBOOK: /^https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com(?:[/?#:]|$)/i,
@@ -24,7 +27,8 @@
     MERCARI: /^https?:\/\/(?:[a-z0-9-]+\.)*mercari\.com(?:[/?#:]|$)/i,
     GRAILED: /^https?:\/\/(?:[a-z0-9-]+\.)*grailed\.com(?:[/?#:]|$)/i,
     CRAIGSLIST: /^https?:\/\/(?:[a-z0-9-]+\.)*craigslist\.org(?:[/?#:]|$)/i,
-    GUMTREE_AU: /^https?:\/\/(?:[a-z0-9-]+\.)*gumtree\.com\.au(?:[/?#:]|$)/i
+    GUMTREE_AU: /^https?:\/\/(?:[a-z0-9-]+\.)*gumtree\.com\.au(?:[/?#:]|$)/i,
+    VINTED: /^https?:\/\/(?:[a-z0-9-]+\.)*vinted\.com(?:[/?#:]|$)/i
   };
   var MAX_URL = 500;
 
@@ -53,6 +57,7 @@
       case 'GRAILED': raw = firstMatch(u, [/\/listings\/(\d{1,20})(?:[-/?#]|$)/]); break;
       case 'CRAIGSLIST': raw = firstMatch(u, [/\/manage\/(\d{9,12})(?:[/?#]|$)/, /\/(\d{9,12})\.html(?:[?#]|$)/, /[?&](?:postingid|postid|postingId)=(\d{9,12})(?:[&#]|$)/i, /\/(\d{9,12})(?:[/?#]|$)/]); break;
       case 'GUMTREE_AU': raw = firstMatch(u, [/[?&](?:adId|adid)=(\d{8,12})(?:[&#]|$)/, /\/(\d{8,12})(?:[/?#]|$)/]); break;
+      case 'VINTED': raw = firstMatch(u, [/\/items\/(\d{1,20})(?:[-/?#]|$)/]); break;
       default: raw = '';
     }
     return normalizeRemoteId(platform, raw);

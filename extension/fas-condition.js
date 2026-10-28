@@ -80,9 +80,13 @@
     // fas-poshmark.js CONDITION_LABELS (Poshmark has no poor level: parts reads as Fair, as before)
     poshmark:   { newV: 'New With Tags (NWT)', refurb: 'Like New', parts: 'Fair', ungraded: 'Good',
                   used: { A: 'Like New', B: 'Good', C: 'Good', D: 'Fair' } },
-    // fas-vinted.js mapVintedCondition
-    vinted:     { newV: 'New', refurb: 'Like new', parts: 'Needs repair (electronics only)', ungraded: 'Good',
-                  used: { A: 'Like new', B: 'Very good', C: 'Good', D: 'Satisfactory' } },
+    // Vinted's live condition options (verified 2026-10-28): New with tags, New without tags, Very good, Good,
+    // Satisfactory, Not fully functional. There is no "Like new": used grade A and refurbished read as Very good
+    // (1.0.80; before, 'Like new' made the old word scorer land on "New with tags" for used items). newNoTags is
+    // used when the stored raw condition says new-other / new without tags (see NEW_WITHOUT_TAGS_KEYS).
+    vinted:     { newV: 'New with tags', newNoTags: 'New without tags', refurb: 'Very good', parts: 'Not fully functional',
+                  ungraded: 'Good',
+                  used: { A: 'Very good', B: 'Very good', C: 'Good', D: 'Satisfactory' } },
     // fas-grailed.js mapGrailedCondition
     grailed:    { newV: 'New/Never Worn', refurb: 'Gently Used', parts: 'Very Worn', ungraded: 'Used',
                   used: { A: 'Gently Used', B: 'Gently Used', C: 'Used', D: 'Used' } },
@@ -92,12 +96,23 @@
                   used: { A: '20', B: '30', C: '40', D: '50' } }
   };
 
+  // Raw stored values that normalize to NEW but say the item has no tags (eBay NEW_OTHER and its spellings).
+  var NEW_WITHOUT_TAGS_KEYS = ['NEW_OTHER', 'NEW_WITHOUT_TAGS', 'NEW_WITHOUT_TAG', 'NEW_NO_TAGS', 'NEW_WITHOUT_BOX', 'NEW_OPEN_BOX'];
+
+  function rawKey(item) {
+    var raw = item ? item.conditionRaw : null;
+    return typeof raw === 'string' ? raw.trim().toUpperCase().replace(/[\s-]+/g, '_') : '';
+  }
+
+  // Vinted's six live condition labels, in form order. fas-vinted.js only ever selects one of these, by exact text.
+  var VINTED_LABELS = ['New with tags', 'New without tags', 'Very good', 'Good', 'Satisfactory', 'Not fully functional'];
+
   function platformValue(platform, item) {
     var table = PLATFORMS[platform];
     if (!table) return null;
     var n = normalize(item);
     switch (n.condition) {
-      case 'NEW': return table.newV;
+      case 'NEW': return (table.newNoTags && NEW_WITHOUT_TAGS_KEYS.indexOf(rawKey(item)) !== -1) ? table.newNoTags : table.newV;
       case 'REFURBISHED': return table.refurb;
       case 'PARTS_OR_REPAIR': return table.parts;
       case 'USED': return n.grade ? table.used[n.grade] : table.ungraded;
@@ -109,7 +124,8 @@
     normalizeCondition: normalizeCondition,
     normalizeGrade: normalizeGrade,
     normalize: normalize,
-    platformValue: platformValue
+    platformValue: platformValue,
+    VINTED_LABELS: VINTED_LABELS
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -20,8 +20,8 @@ function extract(src, name) {
 const nav = new Function('POSH_NAV_BOUNCE_WINDOW_MS', extract(posh, 'poshShouldAutoNavToCreate') + '\nreturn poshShouldAutoNavToCreate;')(20000);
 const NOW = 1e12;
 
-test('manifest is 1.0.78', () => {
-  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8')).version, '1.0.78');
+test('manifest is 1.0.80', () => {
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8')).version, '1.0.80');
 });
 
 test('a pending item on /feed or a closet page navigates to create-listing once', () => {

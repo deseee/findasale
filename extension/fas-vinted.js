@@ -614,6 +614,61 @@
     condition: 'category-condition-single-list',
     material: 'category-material-multi-list',
   };
+  // 1.0.79 (2026-10-28, live-confirmed on Patrick's own vinted.com/items/new): Vinted moved the listing form's pickers
+  // to a new "bloom" select. Category, Brand, Condition, Colors and Material are now menu triggers --
+  // <button aria-haspopup="menu" data-state="closed|open" data-testid="<field>-...-input" id="_r_g_"> -- with the
+  // chosen value shown in a child [data-testid="...-input--value"] span ("Select a category" / "Select condition" /
+  // "Select up to 2 colors" while empty). The old ids (#category, #brand, #color ...) and the readonly inputs' .value
+  // are gone, so every `.value` read of these controls came back '' (the deferred category watch never saw a chosen
+  // category), and a plain .click() on the trigger no longer opens it (live: .click() -> stays closed; a pointerdown
+  // -> open, Radix-style). The panels (data-testid "...-content"), their search inputs and their option leaves are
+  // unchanged, and a .click() on an option leaf still selects it (live: Condition "New with tags").
+  const VINTED_PICKER_INPUT_TESTIDS = {
+    category: 'catalog-select-dropdown-input',
+    catalog: 'catalog-select-dropdown-input',
+    brand: 'brand-select-dropdown-input',
+    color: 'color-select-dropdown-input',
+    condition: 'category-condition-single-list-input',
+    size: 'category-size-single-grid-input',
+    material: 'category-material-multi-list-input',
+  };
+  // The picker control for a field: the old id when the old form is served, else the new trigger by its testid.
+  function vintedPickerControl(fieldId) {
+    try {
+      const byId = document.getElementById(fieldId);
+      if (byId) return byId;
+      const tid = VINTED_PICKER_INPUT_TESTIDS[fieldId];
+      return tid ? document.querySelector('[data-testid="' + tid + '"]') : null;
+    } catch (e) { return null; }
+  }
+  // The value a control shows: .value for an input/textarea/select, else the trigger's value span (or its text).
+  // A "Select ..." placeholder reads as ''.
+  function vintedControlText(el) {
+    if (!el) return '';
+    try {
+      const tag = String(el.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return typeof el.value === 'string' ? el.value.trim() : '';
+      const span = el.querySelector ? el.querySelector('[data-testid$="--value"]') : null;
+      const t = String((span || el).textContent || '').replace(/\s+/g, ' ').trim();
+      if (!t || /^select (a |an |up to |your )|^select [a-z]+$/i.test(t)) return '';
+      return t;
+    } catch (e) { return ''; }
+  }
+  function vintedIsMenuTrigger(el) {
+    return !!(el && el.getAttribute && (el.getAttribute('aria-haspopup') || el.getAttribute('data-state')));
+  }
+  // Opens a picker: the new menu trigger opens on pointerdown (never toggled shut when it is already open); the old
+  // readonly input still opens on click.
+  function vintedOpenPicker(opener) {
+    if (!opener) return;
+    if (!vintedIsMenuTrigger(opener)) { opener.click(); return; }
+    if (opener.getAttribute('data-state') === 'open' || opener.getAttribute('aria-expanded') === 'true') return;
+    const o = { bubbles: true, cancelable: true, composed: true, button: 0, buttons: 1, pointerId: 1, pointerType: 'mouse', isPrimary: true, view: window };
+    try {
+      if (typeof PointerEvent === 'function') opener.dispatchEvent(new PointerEvent('pointerdown', o));
+      else opener.dispatchEvent(new MouseEvent('mousedown', o));
+    } catch (e) { try { opener.dispatchEvent(new MouseEvent('mousedown', o)); } catch (e2) { /* ignore */ } }
+  }
   function findOpenPanel(fieldId, strict) {
     // Vinted names each panel's container '<field>-...-content' (confirmed: catalog-select-dropdown
     // -content, brand-select-dropdown-content, color-select-dropdown-content, category-size-single-
@@ -803,7 +858,8 @@
     // and can fall through to some other element that merely contains the word. Live-confirmed the
     // real control is the readonly <input id="color" data-testid="color-select-dropdown-input">, and a
     // plain click on it opens color-select-dropdown-content. Use it directly for Color.
-    const resolveOpener = () => (fieldId === 'color' && document.getElementById('color')) || openerByLabel(labelText) || document.getElementById(fieldId);
+    // 1.0.79: the field's own picker control first (old id or the new trigger's testid), then the label.
+    const resolveOpener = () => vintedPickerControl(fieldId) || openerByLabel(labelText) || document.getElementById(fieldId);
     let opener = resolveOpener();
     console.log('[FAS Vinted DIAG] ' + fieldId + ': opener resolved to tag=' + (opener ? opener.tagName : null) + ' id=' + (opener ? opener.id : null) + ' testid=' + (opener ? opener.getAttribute('data-testid') : null) + ' text="' + (opener ? opener.textContent.trim().slice(0, 40) : '') + '"');
     if (!opener) return false;
@@ -859,7 +915,7 @@
         // (a click on a detached node does nothing, which matches "did not open on attempt 1/3, 2/3, 3/3").
         // Re-resolve it whenever the cached one is detached or missing.
         if (!opener || !opener.isConnected) { const fresh = resolveOpener(); if (fresh) opener = fresh; }
-        opener.click();
+        vintedOpenPicker(opener); // 1.0.79: the new menu trigger opens on pointerdown, not click
         // Poll for the panel instead of a fixed guess; the window grows with each attempt.
         await waitFor(() => findOpenPanel(fieldId, true), 1000 + attempt * 700);
       }
@@ -1218,12 +1274,12 @@
   }
 
   async function acceptSuggestedColor(labelText, inferFromText) {
-    const opener = document.getElementById('color') || openerByLabel(labelText);
+    const opener = vintedPickerControl('color') || openerByLabel(labelText);
     if (!opener) return false;
     let panel = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       if (!findOpenPanel('color', true)) {
-        opener.click();
+        vintedOpenPicker(opener);
         // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY): was a fixed
         // `sleep(400 + attempt * 200)` guess followed by a single re-check -- a page rendering the
         // panel even slightly slower than that guess meant this gave up before the panel had
@@ -1243,10 +1299,10 @@
       // "opener" actually was, so the next paste shows whether it is the real #color control or some
       // other element that merely matched the label text.
       if (attempt === 1) {
-        console.log('[FAS Vinted DIAG] color opener: tag=' + opener.tagName + ' id=' + (opener.id || '') + ' testid=' + (opener.getAttribute('data-testid') || '') + ' hasColorId=' + !!document.getElementById('color') + ' category=' + ((fieldByLabel('Category') || {}).value || ''));
+        console.log('[FAS Vinted DIAG] color opener: tag=' + opener.tagName + ' id=' + (opener.id || '') + ' testid=' + (opener.getAttribute('data-testid') || '') + ' hasColorId=' + !!vintedPickerControl('color') + ' category=' + vintedCategoryValue());
         // No #color control on the form at all = this category simply has no Color field (Vinted's
         // Books & Media forms don't). Retrying two more times just adds ~3s of delay per item.
-        if (!document.getElementById('color')) {
+        if (!vintedPickerControl('color')) {
           console.log('[FAS Vinted] No #color field on this category\'s form -- skipping the suggested-color check.');
           return false;
         }
@@ -1538,8 +1594,9 @@
   // to the label lookup used elsewhere in this file. '' when unset or still showing the placeholder.
   function vintedCategoryValue() {
     try {
-      const el = document.getElementById('category') || fieldByLabel('Category');
-      const t = el && typeof el.value === 'string' ? norm(el.value) : '';
+      // 1.0.79: the new form's Category is a menu trigger with no .value; read the value it shows.
+      const el = vintedPickerControl('category') || fieldByLabel('Category');
+      const t = norm(vintedControlText(el));
       return (t && t !== norm('Select a category')) ? t : '';
     } catch (e) { return ''; }
   }
@@ -1862,9 +1919,9 @@
         }
       }
     }
-    const opener = openerByLabel('Category');
+    const opener = vintedPickerControl('category') || openerByLabel('Category');
     if (!opener) return false;
-    opener.click();
+    vintedOpenPicker(opener);
     await sleep(400);
     const segments = quickSegments;
     // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): prefer the real search input
@@ -1926,7 +1983,7 @@
     // Brand DOES exist on the form (see the 2026-08-19 fix immediately below) -- its absence up
     // front means there is genuinely nothing here to set, so this returns success instead of
     // running the noisy fallback chain and warning.
-    if (!document.getElementById('brand')) {
+    if (!vintedPickerControl('brand')) {
       // 2026-10-04 (S-EXT-VINTED-CATEGORY-CASCADE): return a distinct 'absent' state (truthy, so tryFill
       // treats it as "nothing to do" and adds no warning) instead of plain true, so callers can no longer
       // claim a selection was made when no Brand control existed at all.
@@ -2026,8 +2083,8 @@
       try {
         let bp = findOpenPanel('brand', true);
         if (!bp) {
-          const brandOpener = document.getElementById('brand') || openerByLabel(labelText);
-          if (brandOpener) { brandOpener.click(); bp = await waitFor(() => findOpenPanel('brand', true), 2500); }
+          const brandOpener = vintedPickerControl('brand') || openerByLabel(labelText);
+          if (brandOpener) { vintedOpenPicker(brandOpener); bp = await waitFor(() => findOpenPanel('brand', true), 2500); }
         }
         const bpSearch = bp && Array.from(bp.querySelectorAll('input[data-testid*="search" i], input[type="text"], input:not([type])')).find((el) => el.offsetParent !== null && el.id !== 'brand');
         if (bpSearch && bpSearch.value) { bpSearch.focus(); setNativeValue(bpSearch, ''); }
@@ -2079,9 +2136,9 @@
     // with Category/Brand) is class-name-agnostic and live-confirmed working for both widget shapes.
     const fieldId = norm(labelText).replace(/[^a-z0-9]+/g, '');
     if (await pickFromPanel(fieldId, labelText, value)) return true;
-    const opener = openerByLabel(labelText);
+    const opener = vintedPickerControl(fieldId) || openerByLabel(labelText);
     if (!opener) return false;
-    opener.click();
+    vintedOpenPicker(opener);
     await sleep(350);
     const opt = optionElByText(value);
     if (!opt) return false;
@@ -2090,20 +2147,62 @@
     return true;
   }
 
-  // Vinted's CURRENT confirmed condition wording (Vinted help center) -- SUPERSEDES older
-  // "New with tags / New without tags" wording found in third-party blogs, which appears
-  // outdated. "Needs repair" is electronics-only per Vinted's own docs; mapped here regardless
-  // when the source condition clearly says broken/for-parts, since the form itself is expected
-  // to only offer it for the relevant category.
+  // 1.0.80 (2026-10-28, owner-approved): Vinted's live condition options (verified 2026-10-28) are exactly
+  // New with tags, New without tags, Very good, Good, Satisfactory, Not fully functional. The old mapping sent
+  // 'Like new' (no such option) for used grade A / refurbished, and the word scorer then landed on "New with tags",
+  // labelling used items as new. Condition is now STRICT: only an explicit label from VINTED_CONDITION_LABELS is
+  // ever selected, by exact text, never by a partial word match. No mapping -> the field is left for the organizer
+  // with a warning.
+  const VINTED_CONDITION_LABELS = (window.__FAS_COND__ && window.__FAS_COND__.VINTED_LABELS) ||
+    ['New with tags', 'New without tags', 'Very good', 'Good', 'Satisfactory', 'Not fully functional'];
+
+  // Exact label for a value, or null.
+  function vintedConditionLabel(value) {
+    const w = norm(value);
+    if (!w) return null;
+    return VINTED_CONDITION_LABELS.find((l) => norm(l) === w) || null;
+  }
+
+  // Fallback only, for an item whose conditionRaw/conditionGrade fas-condition.js could not read. item.condition is
+  // the backend's Facebook-formatted string (facebookMarketplaceCondition): an explicit, exact map of those strings,
+  // nothing fuzzy. Anything else (including an empty value) returns null.
+  const VINTED_CONDITION_FROM_FB = {
+    'new': 'New with tags',
+    'used - like new': 'Very good',
+    'used - good': 'Good',
+    'used - fair': 'Satisfactory',
+  };
   function mapVintedCondition(condition) {
     const c = norm(condition);
-    if (!c) return 'Good';
-    if (/^new$|brand new|nwt|new,/.test(c)) return 'New';
-    if (/like new|excellent/.test(c)) return 'Like new';
-    if (/very good/.test(c)) return 'Very good';
-    if (/needs repair|broken|for parts|not working/.test(c)) return 'Needs repair (electronics only)';
-    if (/satisfactory|fair|acceptable|worn/.test(c)) return 'Satisfactory';
-    return 'Good';
+    if (!c) return null;
+    return VINTED_CONDITION_FROM_FB[c] || vintedConditionLabel(c);
+  }
+
+  // Exact-text chooser: picks the leaf whose whole text equals the label, never a leaf that merely shares a word.
+  function vintedStrictConditionChooser(leaves, value) {
+    const want = norm(value);
+    return (leaves || []).find((el) => norm(el.textContent) === want) || null;
+  }
+
+  async function fillVintedCondition(value) {
+    const label = vintedConditionLabel(value);
+    if (!label) return false;
+    const native = fieldByLabel('Condition');
+    if (native && native.tagName === 'SELECT') {
+      const opt = Array.from(native.options).find((o) => norm(o.textContent) === norm(label));
+      if (!opt) return false;
+      native.value = opt.value;
+      native.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+    return pickFromPanel('condition', 'Condition', label, vintedStrictConditionChooser);
+  }
+
+  function vintedConditionUnmappedWarn(item, warnings) {
+    const raw = item ? (item.conditionRaw || item.condition || '') : '';
+    T.warn('condition_unmapped', 'The FindA.Sale condition could not be matched to a Vinted condition; choose it yourself', { field: 'Condition' });
+    console.warn('[FAS Vinted] Condition "' + raw + '" has no Vinted condition mapping -- left for the organizer.');
+    if (warnings) warnings.push('Condition could not be matched to a Vinted condition -- please choose it yourself before publishing.');
   }
 
   // BUG FIX 2026-09-17 (Patrick live-reported): VINTED_MAX_PRICE was previously hardcoded to
@@ -3169,11 +3268,14 @@
   }
 
   // What Vinted's reset leaves: the listing form is on the page but its Title and Description are both empty.
+  // 1.0.79: a form that still has a Category chosen was not reset (Vinted's reset clears the category with everything
+  // else), so a category pick, and the re-render Vinted does after one, is never read as a reset.
   function fasVintedFormLooksBlank() {
     if (!looksLikeListingForm()) return false;
     const t = fieldByLabel('Title');
     const d = fieldByLabel('Description');
     if (!t || !d) return false;
+    if (vintedCategoryValue()) return false;
     return !String(t.value || '').trim() && !String(d.value || '').trim();
   }
 
@@ -3184,6 +3286,7 @@
     const timer = setInterval(() => {
       if (token !== fasVintedResetWatchToken || !fasContextAlive()) { clearInterval(timer); return; }
       if (fasVintedRefilling || fasVintedAdvancing) return;
+      if (fasVintedDeferredFilling) { blankStreak = 0; return; } // 1.0.79: the post-category fill is running
       if (location.pathname.indexOf('/items/new') === -1) { clearInterval(timer); return; } // left the form: upload detection takes over
       if (!fasVintedFormLooksBlank()) { blankStreak = 0; return; }
       if (++blankStreak < 2) return;
@@ -3470,38 +3573,55 @@
     return { photosOk, warnings, deferred: true };
   }
 
-  // Runs ONCE per item (token + `finished` guards): waits, bounded to 15 minutes, for the organizer to
-  // choose a Category, then runs the unchanged dependent-field fills. Stops for good when the organizer
-  // clicks Vinted's Upload, advances/closes the review overlay, leaves /items/new, or another fill starts.
+  // Runs ONCE per item (token + `finished` guards): waits, bounded to 15 minutes, for a Category to be set (by the
+  // organizer, or by Vinted's own suggestion from the title), then runs the unchanged dependent-field fills once.
+  // 1.0.79 (2026-10-28, live bug: Patrick picked a category for "Samsung Super-Writemaster CDR 5 pack" and Condition,
+  // Colors and Material stayed empty; the step log ended with deferred:end and no deferred:fillStart). Root cause,
+  // reproduced live: Vinted's new form has no #category input, so vintedCategoryValue() read '' for the whole wait and
+  // the watch never saw the chosen category; it then ended on the organizer's Upload click (which only showed Vinted's
+  // "Fill in condition/color to continue" errors). vintedCategoryValue() now reads the new menu trigger, and the watch
+  // no longer ends on an Upload click, a replaced or closed review overlay, the upload watch or the form-reset watcher:
+  // only when another fill starts for this tab (superseded), the tab leaves /items/new, or the 15 minutes run out.
+  // Every ending is logged to the trace (T.info, or T.warn when it ends without filling) and the console.
   let fasVintedDeferredToken = 0;
+  let fasVintedDeferredFilling = false; // true while the post-category fill runs (the form-reset watcher stands down)
+  function fasVintedDependentControlsPresent() {
+    return !!(vintedPickerControl('brand') || vintedPickerControl('color') || vintedPickerControl('condition') || fieldByLabel('Condition'));
+  }
   function fasVintedStartDeferredWatch(item, firstPassWarnings, photosOk) {
     const token = ++fasVintedDeferredToken;
     const startedAt = Date.now();
     const MAX_MS = 15 * 60 * 1000;
     const MIN_START_MS = 6000; // let the review overlay's button arming (3.5s) finish before touching the overlay
     const POLL_MS = 1500;
+    const itemId = String(item && item.id != null ? item.id : '');
     let finished = false;
-    let uploadClicked = false;
     let categorySince = 0;
+    let lastCategory = '';
+    let uploadClicks = 0;
+    // Observes the organizer's Upload click for the log only; it no longer ends the watch.
     const onClick = (evt) => {
       const b = evt.target && evt.target.closest && evt.target.closest('button');
-      if (b && norm(b.textContent) === 'upload') uploadClicked = true;
+      if (b && norm(b.textContent) === 'upload') uploadClicks++;
     };
     document.addEventListener('click', onClick, true);
     const setNote = (state) => { const el = document.getElementById('fas-vin-deferred'); if (el) el.innerHTML = vintedDeferredNoteHtml(state); };
-    const finish = (why) => {
+    const finish = (why, willFill) => {
       if (finished) return;
       finished = true;
       document.removeEventListener('click', onClick, true);
       console.log('[FAS Vinted] deferred category watch ended: ' + why);
+      const ctx = { platform: 'VINTED', itemId, reason: why, willFill: !!willFill, waitedMs: Date.now() - startedAt, uploadClicks };
+      try {
+        if (willFill) T.info('vinted_deferred_watch_end', 'Category watch ended: ' + why, ctx);
+        else T.warn('vinted_deferred_watch_end', 'Category watch ended without filling the remaining fields: ' + why, ctx);
+      } catch (e) { /* diagnostics only */ }
       fasMarkStep('deferred:end');
-    };
-    const overlayStillUp = () => {
-      const n = document.getElementById('fas-vin-next');
-      return !!(bar && bar.isConnected && n && n.textContent !== 'Please wait\u2026');
     };
     const runFill = async () => {
       fasMarkStep('deferred:fillStart');
+      fasVintedDeferredFilling = true;
+      try { if (bar && !bar.isConnected) document.documentElement.appendChild(bar); } catch (e) { /* the fill still runs */ }
       // Park the review overlay's nodes (handlers intact): fillPackageSize and friends call overlayWarn(),
       // which replaces the bar's contents. They are put back afterwards.
       const saved = document.createDocumentFragment();
@@ -3516,34 +3636,36 @@
         ok = false;
         console.warn('[FAS Vinted] deferred dependent fill threw:', e && e.message);
         warnings.push('Filling the remaining fields hit an error -- please check brand, condition, size, color, material and package size.');
+      } finally {
+        fasVintedDeferredFilling = false;
       }
       if (bar) { bar.innerHTML = ''; bar.appendChild(saved); }
       const wEl = document.getElementById('fas-vin-warnings');
       if (wEl) wEl.innerHTML = vintedWarningsBlockHtml(warnings);
       setNote(ok ? 'done' : 'error');
+      try { T.info('vinted_deferred_fill_done', ok ? 'Filled the remaining fields after the category was chosen' : 'The post-category fill hit an error', { platform: 'VINTED', itemId, ok, warnings: warnings.length }); } catch (e) { /* diagnostics only */ }
       fasMarkStep('deferred:fillDone');
       // 1.0.77: nothing is clicked after the dependent fill (no drafts); the organizer clicks Upload.
     };
     const tick = () => {
       if (finished) return;
       try {
-        if (token !== fasVintedDeferredToken) return finish('superseded by a newer fill');
-        if (uploadClicked) return finish('organizer clicked Upload');
-        if (!overlayStillUp()) return finish('review overlay closed or advanced');
-        if (location.pathname.indexOf('/items/new') === -1) return finish('left the sell page');
-        if (Date.now() - startedAt > MAX_MS) { setNote('timeout'); return finish('15 minute limit'); }
-        if (Date.now() - startedAt >= MIN_START_MS && vintedCategoryValue()) {
-          if (!categorySince) categorySince = Date.now();
-          const dependentsPresent = !!(document.getElementById('brand') || document.getElementById('color') || fieldByLabel('Condition'));
+        if (token !== fasVintedDeferredToken) return finish('superseded by a newer fill', false);
+        if (location.pathname.indexOf('/items/new') === -1) return finish('left the sell page', false);
+        if (Date.now() - startedAt > MAX_MS) { setNote('timeout'); return finish('15 minute limit', false); }
+        const cat = Date.now() - startedAt >= MIN_START_MS ? vintedCategoryValue() : '';
+        if (cat) {
+          if (!categorySince || cat !== lastCategory) { categorySince = Date.now(); lastCategory = cat; } // settle clock restarts on a change
           const settled = Date.now() - categorySince >= 2500;
           const waitedLong = Date.now() - categorySince >= 12000;
-          if (settled && !findOpenPanel('catalog', true) && (dependentsPresent || waitedLong)) {
-            finish('category chosen, running dependent fills once');
-            runFill();
+          if (settled && !findOpenPanel('catalog', true) && (fasVintedDependentControlsPresent() || waitedLong)) {
+            finish('category "' + cat + '" chosen, running the dependent fills once', true);
+            runFill().catch((e) => { fasVintedDeferredFilling = false; console.warn('[FAS Vinted] deferred fill failed:', e && e.message); });
             return;
           }
         } else {
           categorySince = 0; // category not set (or cleared again): start the settle clock over
+          lastCategory = '';
         }
       } catch (e) { console.warn('[FAS Vinted] deferred category watch tick error:', e && e.message); }
       setTimeout(tick, POLL_MS);
@@ -3562,7 +3684,7 @@
         const t = norm(lab.getAttribute('aria-label') || lab.textContent);
         if (labels.indexOf(t) === -1) continue;
         const forId = lab.getAttribute('for');
-        const el = forId ? document.getElementById(forId) : lab.querySelector('input, textarea, select');
+        const el = forId ? document.getElementById(forId) : lab.querySelector('input, textarea, select, button');
         if (el) return el;
       }
       return null;
@@ -3571,7 +3693,7 @@
       brand: { ids: ['brand'], labels: ['brand'] },
       color: { ids: ['color'], labels: ['color', 'colors'] },
       size: { ids: ['size'], labels: ['size'] },
-      material: { ids: ['material'], labels: ['material', 'materials'] },
+      material: { ids: ['material'], labels: ['material', 'materials', 'material (recommended)', 'materials (recommended)'] },
       condition: { ids: ['condition', 'status'], labels: ['condition'] },
       isbn: { ids: ['isbn'], labels: ['isbn'] }
     };
@@ -3585,9 +3707,9 @@
       const sp = spec[key];
       if (!sp) return '';
       let el = null;
-      for (const id of sp.ids) { el = document.getElementById(id); if (el) break; }
+      for (const id of sp.ids) { el = vintedPickerControl(id); if (el) break; } // 1.0.79: old id or new trigger
       if (!el) el = exactLabelControl(sp.labels);
-      return (el && typeof el.value === 'string' && el.value.trim()) ? el.value.trim() : '';
+      return vintedControlText(el);
     } catch (e) { return ''; }
   }
 
@@ -3596,11 +3718,12 @@
   // field was already empty before it. Snapshot what had a value just before the Language step and word the
   // message accordingly.
   function fasSnapshotVintedFields() {
-    const has = (el) => !!(el && typeof el.value === 'string' && el.value.trim());
+    const has = (el) => !!vintedControlText(el); // 1.0.79: also reads the new menu triggers' shown value
+    const pick = (id, label) => vintedPickerControl(id) || fieldByLabel(label);
     return {
       title: has(fieldByLabel('Title')), description: has(fieldByLabel('Description')), category: !!vintedCategoryValue(),
-      brand: has(fieldByLabel('Brand')), color: has(document.getElementById('color')), size: has(fieldByLabel('Size')),
-      material: has(fieldByLabel('Material')), condition: has(fieldByLabel('Condition')), isbn: has(fieldByLabel('ISBN')),
+      brand: has(pick('brand', 'Brand')), color: has(vintedPickerControl('color')), size: has(pick('size', 'Size')),
+      material: has(pick('material', 'Material')), condition: has(pick('condition', 'Condition')), isbn: has(fieldByLabel('ISBN')),
       photos: fasCountVintedPhotoThumbs() > 0
     };
   }
@@ -3789,8 +3912,11 @@
     if (lastMaterialFallbackUsed) {
       warnings.push('Material was set to "Cotton" as a best-guess default (item said "' + item.material + '", which has no specific fiber Vinted recognizes) -- please correct if inaccurate.');
     }
-    const conditionLabel = (window.__FAS_COND__ && window.__FAS_COND__.platformValue('vinted', item)) || mapVintedCondition(item.condition);
-    if (!fasSkipIfSet('condition', 'Condition')) await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v), warnings);
+    const conditionLabel = vintedConditionLabel((window.__FAS_COND__ && window.__FAS_COND__.platformValue('vinted', item)) || mapVintedCondition(item.condition));
+    if (!fasSkipIfSet('condition', 'Condition')) {
+      if (conditionLabel) await tryFill('Condition', conditionLabel, fillVintedCondition, warnings);
+      else vintedConditionUnmappedWarn(item, warnings);
+    }
     // FEATURE 2026-09-17 (ADR: eBay freight & Vinted shipping-cap pricing): vintedPrice is item.price
     // plus any bump computed backend-side (extensionController.ts) to cover real shipping cost that
     // exceeds Vinted's $100 shipping cap. Falls back to item.price when no bump was computed. When a
@@ -4007,7 +4133,7 @@
     fasMarkStep('postLanguage:categoryCheckStart');
     await sleep(250 + Math.floor(Math.random() * 450));
     const categoryFieldAfterLanguage = fieldByLabel('Category');
-    const categoryTextAfterLanguage = categoryFieldAfterLanguage ? norm(categoryFieldAfterLanguage.value) : '';
+    const categoryTextAfterLanguage = norm(vintedCategoryValue() || vintedControlText(categoryFieldAfterLanguage));
     const categoryStillSet = categoryTextAfterLanguage && categoryTextAfterLanguage !== norm('Select a category');
     if (!categoryStillSet) {
       console.warn(fasMissingAfterLanguageMsg('Category', 'category', languageStepRan, fasPreLangSnap).replace('re-filling', 're-selecting'));
@@ -4068,9 +4194,9 @@
     }
     fasMarkStep('postLanguage:descCheckDone');
     await sleep(250 + Math.floor(Math.random() * 450));
-    const brandFieldAfterLanguage = fieldByLabel('Brand');
-    const brandStillSet = brandFieldAfterLanguage && String(brandFieldAfterLanguage.value || '').trim();
-    if (!brandStillSet && document.getElementById('brand')) { // 2026-10-04: no #brand control = nothing to re-fill
+    const brandFieldAfterLanguage = vintedPickerControl('brand') || fieldByLabel('Brand');
+    const brandStillSet = vintedControlText(brandFieldAfterLanguage);
+    if (!brandStillSet && vintedPickerControl('brand')) { // 2026-10-04: no #brand control = nothing to re-fill
       console.warn(fasMissingAfterLanguageMsg('Brand', 'brand', languageStepRan, fasPreLangSnap));
       if (item.brand === undefined || item.brand === null || item.brand === '') {
         try {
@@ -4088,8 +4214,8 @@
     // Vinted resets it along with Brand/Size/Material (Patrick: Color "keeps items from posting, not
     // all the time but often enough"). Same empty-check + same fill path as the first pass.
     {
-      const colorInputAfterLanguage = document.getElementById('color');
-      const colorStillSet = colorInputAfterLanguage && String(colorInputAfterLanguage.value || '').trim();
+      const colorInputAfterLanguage = vintedPickerControl('color');
+      const colorStillSet = vintedControlText(colorInputAfterLanguage);
       if (colorInputAfterLanguage && !colorStillSet) {
         console.warn(fasMissingAfterLanguageMsg('Color', 'color', languageStepRan, fasPreLangSnap));
         if (item.color === undefined || item.color === null || item.color === '') {
@@ -4102,8 +4228,8 @@
     fasMarkStep('postLanguage:colorCheckDone');
     await sleep(250 + Math.floor(Math.random() * 450));
     if (item.size) {
-      const sizeFieldAfterLanguage = fieldByLabel('Size');
-      const sizeStillSet = sizeFieldAfterLanguage && String(sizeFieldAfterLanguage.value || '').trim();
+      const sizeFieldAfterLanguage = vintedPickerControl('size') || fieldByLabel('Size');
+      const sizeStillSet = vintedControlText(sizeFieldAfterLanguage);
       if (!sizeStillSet) {
         console.warn(fasMissingAfterLanguageMsg('Size', 'size', languageStepRan, fasPreLangSnap));
         await tryFill('Size', item.size, (v) => fillSelectLike('Size', v), warnings);
@@ -4112,8 +4238,8 @@
     fasMarkStep('postLanguage:sizeCheckDone');
     await sleep(250 + Math.floor(Math.random() * 450));
     if (item.material) {
-      const materialFieldAfterLanguage = fieldByLabel('Material');
-      const materialStillSet = materialFieldAfterLanguage && String(materialFieldAfterLanguage.value || '').trim();
+      const materialFieldAfterLanguage = vintedPickerControl('material') || fieldByLabel('Material');
+      const materialStillSet = vintedControlText(materialFieldAfterLanguage);
       if (!materialStillSet) {
         console.warn(fasMissingAfterLanguageMsg('Material', 'material', languageStepRan, fasPreLangSnap));
         lastMaterialFallbackUsed = false;
@@ -4123,11 +4249,11 @@
     fasMarkStep('postLanguage:materialCheckDone');
     await sleep(250 + Math.floor(Math.random() * 450));
     if (conditionLabel) {
-      const conditionFieldAfterLanguage = fieldByLabel('Condition');
-      const conditionStillSet = conditionFieldAfterLanguage && String(conditionFieldAfterLanguage.value || '').trim();
+      const conditionFieldAfterLanguage = vintedPickerControl('condition') || fieldByLabel('Condition');
+      const conditionStillSet = vintedControlText(conditionFieldAfterLanguage);
       if (!conditionStillSet) {
         console.warn(fasMissingAfterLanguageMsg('Condition', 'condition', languageStepRan, fasPreLangSnap));
-        await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v), warnings);
+        await tryFill('Condition', conditionLabel, fillVintedCondition, warnings);
       }
     }
     fasMarkStep('postLanguage:conditionCheckDone');

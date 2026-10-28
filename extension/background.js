@@ -431,8 +431,17 @@ async function reportItemListedOnce(itemId, platform, remoteListingId, remoteLis
   }
   if (pruned[key] != null) {
     // Some other path already reported this exact item+platform within the window -- treat as a
-    // successful no-op. Never call apiFetch a second time for the same real publish event.
+    // successful no-op. Never create a second POSTED row for the same real publish event.
     await chrome.storage.local.set({ fasListedReportDedup: pruned });
+    // 1.0.80: unless THIS report carries the listing id. The earlier report may have had none (e.g. a
+    // net or "I posted" report before the id was known); the backend's /listed only fills a still-empty
+    // id on the latest POSTED row (set-once) and answers {deduped:true}, so re-sending can never add a row.
+    const dedupBody = fasListedBody(platform, remoteListingId, remoteListingUrl);
+    if (dedupBody.remoteListingId) {
+      try {
+        await apiFetch('/extension/items/' + encodeURIComponent(itemId) + '/listed', { method: 'POST', body: dedupBody });
+      } catch (e) { /* best effort; the delayed wardrobe check retries */ }
+    }
     return { ok: true, deduped: true };
   }
   pruned[key] = now;

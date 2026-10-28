@@ -73,7 +73,7 @@ describe('extension fas-condition.js platform values', () => {
     const table: Record<string, Record<string, string>> = {
       mercari:    { NEW: 'New', A: 'Like New', B: 'Good', C: 'Good', D: 'Fair', USED: 'Good', REFURBISHED: 'Like New', PARTS_OR_REPAIR: 'Poor' },
       poshmark:   { NEW: 'New With Tags (NWT)', A: 'Like New', B: 'Good', C: 'Good', D: 'Fair', USED: 'Good', REFURBISHED: 'Like New', PARTS_OR_REPAIR: 'Fair' },
-      vinted:     { NEW: 'New', A: 'Like new', B: 'Very good', C: 'Good', D: 'Satisfactory', USED: 'Good', REFURBISHED: 'Like new', PARTS_OR_REPAIR: 'Needs repair (electronics only)' },
+      vinted:     { NEW: 'New with tags', A: 'Very good', B: 'Very good', C: 'Good', D: 'Satisfactory', USED: 'Good', REFURBISHED: 'Very good', PARTS_OR_REPAIR: 'Not fully functional' },
       grailed:    { NEW: 'New/Never Worn', A: 'Gently Used', B: 'Gently Used', C: 'Used', D: 'Used', USED: 'Used', REFURBISHED: 'Gently Used', PARTS_OR_REPAIR: 'Very Worn' },
       craigslist: { NEW: '10', A: '20', B: '30', C: '40', D: '50', USED: '40', REFURBISHED: '20', PARTS_OR_REPAIR: '60' },
     };
@@ -88,13 +88,20 @@ describe('extension fas-condition.js platform values', () => {
 
   it('reads legacy values: LIKE_NEW and EXCELLENT are used grade A, a stored grade wins, S reads as A', () => {
     expect(v('mercari', 'LIKE_NEW')).toBe('Like New');
-    expect(v('vinted', 'excellent')).toBe('Like new');
+    expect(v('vinted', 'excellent')).toBe('Very good');
     expect(v('vinted', 'LIKE_NEW', 'C')).toBe('Good');
-    expect(v('vinted', 'USED', 's')).toBe('Like new');
+    expect(v('vinted', 'USED', 's')).toBe('Very good');
     expect(v('poshmark', 'GOOD')).toBe('Good');
     expect(v('poshmark', 'FAIR')).toBe('Good');
     expect(v('mercari', 'POOR')).toBe('Poor');
     expect(v('craigslist', 'seller refurbished')).toBe('20');
+  });
+
+  it('1.0.80: Vinted reads a stored new-without-tags raw value as New without tags; other platforms are unchanged', () => {
+    expect(v('vinted', 'NEW_OTHER')).toBe('New without tags');
+    expect(v('vinted', 'NEW_WITH_TAGS')).toBe('New with tags');
+    expect(v('mercari', 'NEW_OTHER')).toBe('New');
+    expect(v('poshmark', 'NEW_OTHER')).toBe('New With Tags (NWT)');
   });
 
   it('treats a missing condition with a valid grade as used, like desiredEbayCondition', () => {

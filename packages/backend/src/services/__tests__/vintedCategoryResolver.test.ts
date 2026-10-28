@@ -322,3 +322,48 @@ describe('vintedCategoryResolver: singular and plural both match (dropped-singul
     expect(bad).toEqual([]);
   });
 });
+
+describe('vintedCategoryResolver: 1.0.79 blank optical media and video game cases (prod 2026-10-28)', () => {
+  const DISCS_PATH = 'Electronics > Computers & accessories > Blank media > CD, DVD & Blu-ray discs';
+
+  it('the CD-R 5 pack filed under eBay 131542 "CD, DVD & Blu-ray Drives" resolves to leaf 3614 (curated)', () => {
+    const x = explainVintedCategory({
+      ebayCategoryId: '131542',
+      ebayCategoryName: 'CD, DVD & Blu-ray Drives',
+      categoryBreadcrumb: 'Computers/tablets & Networking',
+      title: 'Samsung Super-Writemaster CDR 5 pack',
+      description: 'Samsung Super-Writemaster branded 5pk CDR',
+      brand: 'Samsung',
+    });
+    expect(x.result).not.toBeNull();
+    expect(x.result!.leafId).toBe(3614);
+    expect(x.result!.pathText).toBe(DISCS_PATH);
+    expect(x.result!.source).toBe('CURATED_ID');
+  });
+
+  it('an actual optical drive under eBay 131542 is not filed as blank media', () => {
+    expect(leafOf({ ebayCategoryId: '131542', ebayCategoryName: 'CD, DVD & Blu-ray Drives', title: 'LG internal DVD burner drive SATA' })).not.toBe(3614);
+  });
+
+  it('blank discs resolve to 3614 by rule without an eBay id; drives and music CDs do not', () => {
+    expect(leafOf({ title: 'Verbatim CD-R 700MB 50 pack spindle' })).toBe(3614);
+    expect(leafOf({ title: 'Sony DVD+R 4.7GB 25 pack' })).toBe(3614);
+    expect(leafOf({ title: 'Maxell blank CDs 10 pack' })).toBe(3614);
+    expect(leafOf({ title: 'Panasonic BD-RE rewritable Blu-ray 5 pack' })).toBe(3614);
+    expect(leafOf({ title: 'External USB DVD-RW drive' })).not.toBe(3614);
+    expect(leafOf({ title: 'Pink Floyd The Wall CD album' })).not.toBe(3614);
+    expect(leafOf({ title: 'CD rack holds 300 discs' })).not.toBe(3614);
+  });
+
+  it('a video game travel case under eBay 171831 resolves to Accessories > Cases (3027)', () => {
+    const r = resolveVintedCategory({ ebayCategoryId: '171831', ebayCategoryName: 'Bags, Skins & Travel Cases', title: 'Nintendo Wii Messenger Bag, Official Travel Carry Case' });
+    expect(r).not.toBeNull();
+    expect(r!.leafId).toBe(3027);
+    expect(r!.source).toBe('CURATED_ID');
+  });
+
+  it('both new targets are real leaves', () => {
+    expect(isVintedLeaf(3614)).toBe(true);
+    expect(isVintedLeaf(3027)).toBe(true);
+  });
+});

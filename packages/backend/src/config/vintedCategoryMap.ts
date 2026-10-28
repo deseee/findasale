@@ -55,6 +55,14 @@ const blank = (id: string, all: string[], none?: string[]): VintedRuleDef => rul
 
 /** Shared exclusion alternations for the sports rules: they only stop apparel and collectibles being filed as gear. */
 const NOT_APPAREL = 'shirts?|jerseys?|caps?|hats?|hoodies?|jackets?|pants?|shorts?|socks?|shoes?|cleats?|costumes?|uniforms?';
+/**
+ * Blank recordable optical discs (CD-R/RW, DVD-R/RW, BD-R, "blank CDs") in normalised text ("CD-R" -> "cd r",
+ * "DVD+R" -> "dvd r"). 1.0.79 (2026-10-28): a Samsung "Super-Writemaster CDR 5 pack" listed under eBay
+ * 131542 "CD, DVD & Blu-ray Drives" had no Vinted category, so the extension stopped and waited for one.
+ * Vinted leaf 3614 = Electronics > Computers & accessories > Blank media > CD, DVD & Blu-ray discs (confirmed
+ * live in Vinted's own category picker the same day).
+ */
+const BLANK_OPTICAL = 'cd ?rs?|cd ?rws?|cdrs?|cdrws?|dvd ?rs?|dvd ?rws?|dvdrs?|dvdrws?|dvd ram|bd ?rs?|bd ?res?|blank (cds?|dvds?|discs?|disks?|blu ?rays?|media)|recordable (cds?|dvds?|discs?|disks?|media)|rewritable (cds?|dvds?|discs?|disks?)';
 const NOT_COLLECTIBLE = 'cards?|pins?|patch(?:es)?|figurines?|figures?|bobbleheads?|ornaments?|posters?|prints?|photos?|plaques?|magazines?|programs?|tickets?|pennants?|stickers?|mugs?|keychains?|signed|autographed|memorabilia';
 
 // ---------------------------------------------------------------------------------------------------
@@ -164,6 +172,12 @@ export const VINTED_CURATED_BY_EBAY_ID: Record<string, VintedCuratedEntry> = {
   '177': 3580, // PC Laptops & Netbooks
   '171485': 3728, // Tablets & eBook Readers
   '31388': 3075, // Digital Cameras
+  // 1.0.79: blank discs filed under the eBay drives id go to Blank media > CD, DVD & Blu-ray discs (a real drive is left
+  // to the rule layer). Prod 2026-10-28: "Samsung Super-Writemaster CDR 5 pack".
+  '131542': { split: [[BLANK_OPTICAL, 3614]] }, // CD, DVD & Blu-ray Drives
+  // 1.0.79: video game Bags, Skins & Travel Cases -> Electronics > Video games & consoles > Accessories > Cases (a skin
+  // or decal is left to the rule layer). Prod 2026-10-28: "Nintendo Wii Messenger Bag, Official Travel Carry Case".
+  '171831': { split: [['bags?|cases?|carry|travel|sleeves?|pouch(?:es)?|totes?', 3027]] }, // Bags, Skins & Travel Cases
   // Clothing (department comes from the words, never guessed)
   '185084': { women: 572, men: 582, any: 582 }, // Tracksuits & Sets -> Activewear > Tracksuits
   '185708': { women: 572, men: 582, any: 582 }, // Tracksuits & Sets
@@ -203,18 +217,19 @@ export const VINTED_RULES: VintedRuleDef[] = [
   rule('magazine-racks', 5455, ['magazine (racks?|holders?|files?)|literature (racks?|holders?)']),
   // Video media (cat or title). Accessories and players are excluded so a DVD player is not filed as a DVD.
   rule('media-4k', 3042, ['4k (uhd|blu ray)|ultra hd blu ray|uhd blu ray'], ['players?|drives?']),
-  rule('media-bluray', 3044, ['blu rays?|bluray'], ['players?|drives?|burners?|blank|recorders?']),
+  rule('media-bluray', 3044, ['blu rays?|bluray'], ['players?|drives?|burners?|blank|recorders?|bd ?rs?|bd ?res?|recordable|rewritable']),
   rule('media-hddvd', 3046, ['hd dvds?'], ['players?']),
   rule('media-laserdisc', 3047, ['laser ?discs?'], ['players?']),
   rule('media-betamax', 3043, ['betamax|beta max'], ['players?|recorders?']),
   rule('media-vhs', 3048, ['vhs|video tapes?|video cassettes?'], ['players?|vcrs?|recorders?|cleaners?|rewinders?|blank|combo|converters?|duplicators?']),
-  rule('media-dvd', 3045, ['dvds?|dvd movies?'], ['players?|recorders?|drives?|burners?|blank|dvd r|dvd rw|cases?|storage|cleaners?|lens|cables?|adapters?|remotes?|combo']),
+  rule('media-dvd', 3045, ['dvds?|dvd movies?'], ['players?|recorders?|drives?|burners?|blank|dvd r|dvd rw|dvdrs?|dvdrws?|recordable|rewritable|cases?|storage|cleaners?|lens|cables?|adapters?|remotes?|combo']),
   rule('media-minidisc', 3040, ['mini ?discs?|md discs?'], ['players?|recorders?|decks?']),
   rule('media-cassette', 3038, ['cassette tapes?|audio cassettes?|mixtapes?|cassettes?'], ['players?|decks?|recorders?|blank|walkman|adapters?|cleaners?|cases?|storage|video|vhs|shimano|sram|derailleur|freehub|cogset|speed cassette|sprockets?']),
   rule('media-vinyl', 3041, ['vinyl records?|vinyl albums?|record albums?|lps?|12 inch (single|vinyl)|45 rpm|33 rpm|vinyl'], ['lp gas|propane|turntables?|record (players?|cleaners?|brush|storage|crates?|racks?|holders?|bags?|sleeves?)|stylus|needles?|slipmats?|decals?|wall art|stickers?|siding|flooring|plank|wrap|bags?|toys?|htv|cricut|silhouette|vinyl (stickers?|decals?|wraps?|letters?|lettering|fabric|banners?|tablecloths?|cutters?|figures?|dolls?|gloves?|aprons?|tiles?|sheets?|rolls?|adhesive|cling|weeding|plotter)']),
-  rule('media-cd', 3039, ['cds?|compact discs?'], ['valves?|solenoids?|vac|volts?|relays?|switch(es)?|sensors?|pumps?|motors?|fittings?|pipes?|hoses?|players?|recorders?|burners?|blank|recordable|cd r|cd rw|cases?|storage|wallets?|binders?|racks?|cleaners?|drives?|cables?|changers?|jewel|towers?|lens|repair|games?|twister|milton bradley|hasbro|parker brothers']),
-  // Blank media and storage
-  rule('blank-discs', 3614, ['blank (cds?|dvds?|discs?|disks?)|recordable (cds?|dvds?|discs?)|cd r|cd rw|dvd r|dvd rw|dvd plus r']),
+  rule('media-cd', 3039, ['cds?|compact discs?'], ['valves?|solenoids?|vac|volts?|relays?|switch(es)?|sensors?|pumps?|motors?|fittings?|pipes?|hoses?|players?|recorders?|burners?|blank|recordable|rewritable|cd r|cd rw|cdrs?|cdrws?|cases?|storage|wallets?|binders?|racks?|cleaners?|drives?|cables?|changers?|jewel|towers?|lens|repair|games?|twister|milton bradley|hasbro|parker brothers']),
+  // Blank media and storage. 1.0.79: the pattern also covers CDR/DVDR written without a hyphen, BD-R/BD-RE and
+  // rewritable discs (BLANK_OPTICAL), and a drive, player or duplicator is not blank media.
+  rule('blank-discs', 3614, [BLANK_OPTICAL + '|dvd plus r'], ['drives?|players?|duplicators?']),
   rule('floppy-discs', 3615, ['floppy (discs?|disks?)|diskettes?|zip disks?']),
   // Video games and consoles
   rule('game-strategy-guides', 3574, ['strategy guides?|game guides?|player guides?|players guides?|official guides?|walkthroughs?|cheat books?|prima guides?']),

@@ -142,6 +142,7 @@ function harness(opts) {
     fasArmButton: () => {},
     fieldByLabel: (l) => (form.present ? { value: l === 'Title' ? form.title : form.description } : null),
     looksLikeListingForm: () => form.present,
+    vintedCategoryValue: () => form.category || '', // 1.0.79: a chosen category means the form was not reset
     run: async (item, index, total) => { runs.push({ id: item.id, index, total }); },
     fetch: async (url) => {
       fetches.push(url);
