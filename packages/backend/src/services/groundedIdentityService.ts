@@ -32,6 +32,7 @@
 
 import { prisma } from '../lib/prisma';
 import { getVisionLabels } from './cloudAIService';
+import { normalizeTextField } from './textHomoglyphs';
 import {
   groundingEnabled,
   groundingTextEnabled,
@@ -357,7 +358,8 @@ function pickWinner(candidates: GroundedCandidate[]): GroundedCandidate | null {
  * (that produced the "Tupperware Cool" over-capture).
  */
 function deriveTitle(identity: string): string {
-  return identity.split(' — ')[0]?.trim() || identity.trim();
+  // 2026-10-27: same mixed-script homoglyph fix as the tagging result (model-written text).
+  return normalizeTextField(identity.split(' — ')[0]?.trim() || identity.trim(), '[grounding] title');
 }
 
 /**

@@ -79,6 +79,7 @@ import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'
 import { loadShadowPricingByItemId, shadowDtoFromCompRow, isAudioFormatItem } from '../services/shadowPricingStore'; // shadow mode (2026-10-11): model price + market estimate side by side (read-only)
 import { listedExtensionPlatformsByItemId, getItemMarketplaceStatus, getFailedPushCountsByItemId, getNeedsInfoPushCodesByItemId, ITEM_STATUS_SELECT, EXTENSION_PLATFORMS } from '../services/itemMarketplaceStatusService'; // 2026-10-04 (U3): newest-row-wins listing status shared by the Add Items list and GET /items/:id/marketplace-status
 import { NOT_INFORMATIONAL_PUSH_WHERE, INFORMATIONAL_ONLY_PUSH_WHERE } from '../lib/ebayPushInformational';
+import { normalizeTextField } from '../services/textHomoglyphs'; // 2026-10-27: mixed-script homoglyph fix on title/description writes
 
 /**
  * Bug #469: Live-listing edit propagation.
@@ -1754,7 +1755,10 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, aiConfidence, consignorId, card } = req.body;
+    const { saleId, title: rawTitle, description: rawDescription, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, aiConfidence, consignorId, card } = req.body;
+    // 2026-10-27: organizer intent wins, but Cyrillic/Greek lookalikes inside Latin words and zero-width characters are a pure fix (logged when applied).
+    const title = normalizeTextField(rawTitle, 'createItem title');
+    const description = normalizeTextField(rawDescription, 'createItem description');
     const files = req.files as Express.Multer.File[];
 
     // #102: Validate price >= 0
@@ -2077,7 +2081,10 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // "true", 1 and every other truthy value are ignored. The hold columns (ebaySyncHeldAt, ebayHeldFields,
     // ebayContentDirtyAt) are never read from the request body at all: this handler picks its fields explicitly.
     const skipMarketplaceSyncRequested = (req.body as { skipMarketplaceSync?: unknown } | undefined)?.skipMarketplaceSync === true;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal: stockTotalBody, inStock: inStockBody, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, fccId, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown, card } = req.body;
+    const { title: rawTitle, description: rawDescription, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal: stockTotalBody, inStock: inStockBody, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, fccId, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown, card } = req.body;
+    // 2026-10-27: organizer intent wins, but Cyrillic/Greek lookalikes inside Latin words and zero-width characters are a pure fix (logged when applied).
+    const title = normalizeTextField(rawTitle, `updateItem ${id} title`);
+    const description = normalizeTextField(rawDescription, `updateItem ${id} description`);
 
     // 2026-10-13 (single inventory number): `inStock` is the ONE number the organizer edits ("how many do I have right now").
     // It wins over the legacy `stockTotal` when both arrive. stockTotal is then derived atomically as inStock + stockSold from

@@ -26,6 +26,7 @@ import { postCapRetryEligible } from '../utils/removalRetryGate'; // 2026-10-25:
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
 import { poshmarkLabelInfo } from '../services/poshmarkLabelSurcharge'; // 2026-10-27: Poshmark label deduction (never blocks)
 import { listingStateForAutoQueue, blocksAutoQueue, unitsLeftOnQuantityListing, isSoldOnPlatformRow, QUANTITY_LISTING_PLATFORMS, type ListingJobRow } from '../services/singleUnitRepost'; // 2026-10-27: repost after a sale on one-unit marketplaces
+import { liveListingsByItemPlatform, livePlatformsByItem, liveListingAfterUnitSale, loadListingRows, unitSalesSinceNewestPost, syncedQuantityToStore, isQuantityListingPlatform } from '../services/liveListingState'; // 2026-10-27: one live-listing rule (a Poshmark Multi Item listing stays live after a unit sale)
 import { loadMercariCapacity, applyMercariCap, type MercariCapacity } from '../services/mercariListingCap'; // 2026-10-27: Mercari active-listing cap
 
 // 2026-10-27 (Patrick): what the extension shows about Poshmark's label cost for one item. Computed from the raw
@@ -986,7 +987,12 @@ async function stampSyncedQuantity(itemId: string, platform: string, quantity: n
       orderBy: { createdAt: 'desc' },
       select: { id: true },
     });
-    if (latest) await prisma.marketplaceListingJob.update({ where: { id: latest.id }, data: { syncedQuantity: quantity } });
+    if (latest) {
+      // 2026-10-27: on a quantity platform (Poshmark) the stored value is a baseline: shown units + unit sales there since the POST
+      // (services/liveListingState.ts), so the units-left computation keeps reading the listing correctly after the stamp.
+      const stored = isQuantityListingPlatform(platform) ? syncedQuantityToStore(await loadListingRows(itemId, platform), platform, quantity) : quantity;
+      await prisma.marketplaceListingJob.update({ where: { id: latest.id }, data: { syncedQuantity: stored } });
+    }
   } catch (err: any) {
     console.warn(`[extension] could not record the synced quantity for item ${itemId} on ${platform}:`, err?.message);
   }
@@ -1156,12 +1162,22 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
   const latestForPlatform = await prisma.marketplaceListingJob.findFirst({
     where: { itemId, platform },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, action: true, status: true, remoteListingId: true },
+    select: { id: true, action: true, status: true, remoteListingId: true, lastErrorMessage: true },
   });
   if (latestForPlatform && latestForPlatform.action === 'POST' && latestForPlatform.status === 'POSTED') {
     // 2026-10-18: a duplicate/replayed report that now carries the listing id fills a still-empty one (set-once, conditional write).
     if (remoteListingId && latestForPlatform.id && !latestForPlatform.remoteListingId) {
       try { await prisma.marketplaceListingJob.updateMany({ where: { id: latestForPlatform.id, remoteListingId: null }, data: { remoteListingId } }); } catch { /* best effort */ }
+    }
+    res.json({ ok: true, deduped: true });
+    return;
+  }
+  // 2026-10-27: a Poshmark Multi Item listing that sold some units there is still live (latest row = the sold_on_poshmark unit sale):
+  // a replayed report is the same listing, not a new one (a new POST row would reset its units-left baseline).
+  const liveMultiListing = await liveListingAfterUnitSale(itemId, platform, latestForPlatform);
+  if (liveMultiListing) {
+    if (remoteListingId && liveMultiListing.postRow.id && !liveMultiListing.postRow.remoteListingId) {
+      try { await prisma.marketplaceListingJob.updateMany({ where: { id: liveMultiListing.postRow.id, remoteListingId: null }, data: { remoteListingId } }); } catch { /* best effort */ }
     }
     res.json({ ok: true, deduped: true });
     return;
@@ -1235,9 +1251,11 @@ export const markItemRemoved = async (req: AuthRequest, res: Response): Promise<
   const latestForPlatform = await prisma.marketplaceListingJob.findFirst({
     where: { itemId, platform },
     orderBy: { createdAt: 'desc' },
-    select: { action: true, status: true },
+    select: { action: true, status: true, lastErrorMessage: true },
   });
-  if (latestForPlatform && latestForPlatform.action === 'REMOVE' && latestForPlatform.status === 'REMOVED') {
+  // 2026-10-27: a sold_on_poshmark unit-sale row is not "already removed" while the Multi Item listing still shows units
+  // (services/liveListingState.ts): the removal the extension just did must be recorded, or the listing is served forever.
+  if (latestForPlatform && latestForPlatform.action === 'REMOVE' && latestForPlatform.status === 'REMOVED' && !(await liveListingAfterUnitSale(itemId, platform, latestForPlatform))) {
     res.json({ ok: true, deduped: true });
     return;
   }
@@ -1357,9 +1375,10 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
   const latestNonSkip = await prisma.marketplaceListingJob.findFirst({
     where: { itemId, platform, NOT: { action: 'REMOVE', status: 'SKIPPED' } },
     orderBy: { createdAt: 'desc' },
-    select: { action: true, status: true },
+    select: { action: true, status: true, lastErrorMessage: true },
   });
-  if (latestNonSkip && latestNonSkip.action === 'REMOVE' && latestNonSkip.status === 'REMOVED') {
+  // 2026-10-27: a Poshmark Multi Item listing still showing units after a unit sale there is live, so its skip is real.
+  if (latestNonSkip && latestNonSkip.action === 'REMOVE' && latestNonSkip.status === 'REMOVED' && !(await liveListingAfterUnitSale(itemId, platform, latestNonSkip))) {
     res.json({ ok: true, alreadyRemoved: true });
     return;
   }
@@ -1518,7 +1537,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   const itemIds = soldItems.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true, platform: true, createdAt: true, remoteListingId: true },
+    select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true, platform: true, createdAt: true, remoteListingId: true, syncedQuantity: true },
   });
   const postedByItem = new Set<string>();
   const removedByItem = new Set<string>();
@@ -1541,36 +1560,12 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   // AVAILABLE items -- but that endpoint filters to status:'AVAILABLE' only, so it never returns
   // SOLD items at all. Mirroring the same latest-row-per-item+platform-wins computation here
   // instead of a second divergent implementation of "is this platform's listing still live".
-  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; remoteListingId: string | null }>();
-  for (const j of jobs) {
-    // BUG FIX 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): a REMOVE/SKIPPED row is a failed
-    // removal ATTEMPT, not a state change -- the listing is still live. markItemRemovalSkipped
-    // writes one on every skip, so letting it win "newest row" dropped the platform from
-    // stillListedPlatformsByItem after the FIRST skip, and the skip-cap / RETRY_COOLDOWN_MS /
-    // needsManualReview logic below never got a chance to run. Confirmed live: item
-    // cmtizddor02ru3bwwqrjktvkw (VINTED) and cmt3ak88q01lea4xvvj0zh0ax (VINTED/MERCARI/FACEBOOK)
-    // stuck with POST/POSTED followed only by REMOVE/SKIPPED rows -- silently never retried and
-    // never reported. SKIPPED rows are excluded from the newest-row pick ONLY; they are still
-    // counted by skipCountByItemPlatform below (separate loop over the same `jobs`). A
-    // REMOVE/REMOVED row still ends the listing. Mirrored in getSyncHealth and adminController's
-    // getMarketplaceReviewBacklog -- change all three together.
-    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
-    const key = j.itemId + ':' + j.platform;
-    const existing = latestByItemPlatform.get(key);
-    if (!existing || j.createdAt > existing.createdAt) {
-      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, remoteListingId: j.remoteListingId ?? null });
-    }
-  }
-  const stillListedPlatformsByItem = new Map<string, string[]>();
-  for (const [key, latest] of latestByItemPlatform) {
-    if (latest.action !== 'POST' || latest.status !== 'POSTED') continue;
-    const sepIdx = key.lastIndexOf(':');
-    const itemId = key.slice(0, sepIdx);
-    const platform = key.slice(sepIdx + 1);
-    const arr = stillListedPlatformsByItem.get(itemId) || [];
-    arr.push(platform);
-    stillListedPlatformsByItem.set(itemId, arr);
-  }
+  // 2026-10-27 (services/liveListingState.ts): the live listing per item+platform. Same rule as before (newest non-SKIPPED row
+  // POST/POSTED; S-EXT-REMOVAL-SKIP-ENDS-LISTING 2026-09-22: a REMOVE/SKIPPED row is a failed attempt and never ends a listing),
+  // plus a Poshmark Multi Item listing whose newest row is a unit sale there while units still show: it is still live and must
+  // come down when the item sells out elsewhere. Mirrored in getSyncHealth and adminController's getMarketplaceReviewBacklog.
+  const liveByItemPlatform = liveListingsByItemPlatform(jobs);
+  const stillListedPlatformsByItem = livePlatformsByItem(liveByItemPlatform);
   for (const j of jobs) {
     if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
     if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
@@ -1620,7 +1615,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     return postCapRetryEligible({
       skipCount,
       hardStopAfter: REMOVAL_HARD_STOP_AFTER_ATTEMPTS,
-      hasRemoteListingId: !!latestByItemPlatform.get(skipKey)?.remoteListingId,
+      hasRemoteListingId: !!liveByItemPlatform.get(skipKey)?.remoteListingId,
       lastSkipReason: lastSkipReasonByItemPlatform.get(skipKey),
       lastSkipAt: lastSkipAtByItemPlatform.get(skipKey),
       now,
@@ -1674,9 +1669,9 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   const listingRefsFor = (itemId: string, platforms: string[]): Record<string, string> => {
     const refs: Record<string, string> = {};
     for (const p of platforms) {
-      const latest = latestByItemPlatform.get(itemId + ':' + p);
-      if (latest && latest.action === 'POST' && latest.status === 'POSTED' && latest.remoteListingId) {
-        refs[p] = resolveListingRef(p, latest.remoteListingId).remoteListingId || latest.remoteListingId;
+      const live = liveByItemPlatform.get(itemId + ':' + p);
+      if (live && live.remoteListingId) {
+        refs[p] = resolveListingRef(p, live.remoteListingId).remoteListingId || live.remoteListingId;
       }
     }
     return refs;
@@ -1742,9 +1737,11 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
       item: { status: 'AVAILABLE', OR: [{ sale: { organizerId: organizer.id, deletedAt: null } }, { saleId: null, organizerId: organizer.id }] },
       platform: { in: VALID_LISTING_PLATFORMS },
     },
-    select: { itemId: true, platform: true, action: true, status: true, createdAt: true, remoteListingId: true, lastAttemptAt: true, lastErrorMessage: true },
+    select: { itemId: true, platform: true, action: true, status: true, createdAt: true, remoteListingId: true, lastAttemptAt: true, lastErrorMessage: true, syncedQuantity: true },
   });
-  const latestAvailableByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; remoteListingId: string | null }>();
+  // 2026-10-27: live listings by the shared rule (services/liveListingState.ts), so a Poshmark Multi Item listing that sold some
+  // units there is still pulled when the item becomes pickup-only, policy-ineligible or unpublished.
+  const liveAvailableByItemPlatform = liveListingsByItemPlatform(availableCandidateJobs);
   // S-EXT-COMPLIANCE-REMOVAL-RETRY-CAP (2026-09-29): this path had NO skip cap or cooldown at all
   // (the SOLD path above has both). Live: 9 AVAILABLE items got ~90 REMOVE/SKIPPED rows each in ~28h
   // (~every 20min poll). Counters below feed complianceRetryEligible, same semantics as the SOLD
@@ -1764,24 +1761,9 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
         complianceLastSkipAt.set(sk, at);
         complianceLastReason.set(sk, j.lastErrorMessage ?? null);
       }
-      continue;
-    }
-    const key = j.itemId + ':' + j.platform;
-    const existing = latestAvailableByItemPlatform.get(key);
-    if (!existing || j.createdAt > existing.createdAt) {
-      latestAvailableByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, remoteListingId: j.remoteListingId ?? null });
     }
   }
-  const stillLiveAvailablePlatformsByItem = new Map<string, string[]>();
-  for (const [key, latest] of latestAvailableByItemPlatform) {
-    if (latest.action !== 'POST' || latest.status !== 'POSTED') continue;
-    const sepIdx = key.lastIndexOf(':');
-    const itemId = key.slice(0, sepIdx);
-    const platform = key.slice(sepIdx + 1);
-    const arr = stillLiveAvailablePlatformsByItem.get(itemId) || [];
-    arr.push(platform);
-    stillLiveAvailablePlatformsByItem.set(itemId, arr);
-  }
+  const stillLiveAvailablePlatformsByItem = livePlatformsByItem(liveAvailableByItemPlatform);
 
   const complianceItems: Array<{ id: string; title: string; platforms: string[]; listingRefs: Record<string, string>; reason: 'POLICY_INELIGIBLE' | 'UNPUBLISHED'; policyReasons?: Record<string, string>; deleteAllMatches?: boolean }> = [];
   // S-EXT-RESYNC-VERIFY (2026-09-30): AVAILABLE items whose Poshmark/Mercari listing FindA.Sale still
@@ -1847,7 +1829,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
         return postCapRetryEligible({
           skipCount,
           hardStopAfter: REMOVAL_HARD_STOP_AFTER_ATTEMPTS,
-          hasRemoteListingId: !!latestAvailableByItemPlatform.get(sk)?.remoteListingId,
+          hasRemoteListingId: !!liveAvailableByItemPlatform.get(sk)?.remoteListingId,
           lastSkipReason: complianceLastReason.get(sk),
           lastSkipAt: complianceLastSkipAt.get(sk),
           now,
@@ -1857,7 +1839,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
       if (retryablePlatforms.length === 0) continue;
       const refs: Record<string, string> = {};
       for (const p of retryablePlatforms) {
-        const latest = latestAvailableByItemPlatform.get(it.id + ':' + p);
+        const latest = liveAvailableByItemPlatform.get(it.id + ':' + p);
         if (latest?.remoteListingId) refs[p] = resolveListingRef(p, latest.remoteListingId).remoteListingId || latest.remoteListingId;
       }
       // 2026-10-17: per-platform rule reason string (additive, backwards compatible) so the extension can log WHY
@@ -1921,8 +1903,8 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     // 1.0.75: carry the live listing id so a verify run can check it by id (extensions only ever LOOK on RESYNC_VERIFY, never delete).
     const refs: Record<string, string> = {};
     for (const p of platforms) {
-      const latest = latestAvailableByItemPlatform.get(id + ':' + p);
-      if (latest && latest.action === 'POST' && latest.status === 'POSTED' && latest.remoteListingId) {
+      const latest = liveAvailableByItemPlatform.get(id + ':' + p);
+      if (latest && latest.remoteListingId) {
         refs[p] = resolveListingRef(p, latest.remoteListingId).remoteListingId || latest.remoteListingId;
       }
     }
@@ -2037,14 +2019,19 @@ export const setItemRemoteListingId = async (req: AuthRequest, res: Response): P
   const latest = await prisma.marketplaceListingJob.findFirst({
     where: { itemId, platform, NOT: { action: 'REMOVE', status: 'SKIPPED' } },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, action: true, status: true, remoteListingId: true },
+    select: { id: true, action: true, status: true, remoteListingId: true, lastErrorMessage: true },
   });
-  if (!latest || latest.action !== 'POST' || latest.status !== 'POSTED') {
+  // 2026-10-27: a Poshmark Multi Item listing that sold some units there is still live; its POST row takes the id.
+  const liveMulti = latest && !(latest.action === 'POST' && latest.status === 'POSTED') ? await liveListingAfterUnitSale(itemId, platform, latest) : null;
+  const target = latest && latest.action === 'POST' && latest.status === 'POSTED'
+    ? { id: latest.id, remoteListingId: latest.remoteListingId }
+    : liveMulti ? { id: liveMulti.postRow.id, remoteListingId: liveMulti.postRow.remoteListingId ?? null } : null;
+  if (!target) {
     res.status(409).json({ message: 'No live listing recorded for this item on this platform', reason: 'no_live_listing' });
     return;
   }
-  if (latest.remoteListingId) {
-    if (latest.remoteListingId === remoteListingId || extractRemoteId(platformRaw, latest.remoteListingId) === remoteListingId) { res.json({ ok: true, unchanged: true }); return; }
+  if (target.remoteListingId) {
+    if (target.remoteListingId === remoteListingId || extractRemoteId(platformRaw, target.remoteListingId) === remoteListingId) { res.json({ ok: true, unchanged: true }); return; }
     res.status(409).json({ message: 'A different listing id is already recorded', reason: 'already_set' });
     return;
   }
@@ -2070,7 +2057,7 @@ export const setItemRemoteListingId = async (req: AuthRequest, res: Response): P
   // Craigslist / Gumtree AU keep the real URL when one was reported (their id-only URL cannot be rebuilt); everyone else stores the id.
   const toStore = pickStoredRemoteRef(platformRaw, { remoteListingId, remoteListingUrl: bodyRemoteUrl }) || remoteListingId;
   const updated = await prisma.marketplaceListingJob.updateMany({
-    where: { id: latest.id, remoteListingId: null },
+    where: { id: target.id, remoteListingId: null },
     data: { remoteListingId: toStore },
   });
   if (updated.count !== 1) {
@@ -2198,23 +2185,23 @@ export const getPendingUpdates = async (req: AuthRequest, res: Response): Promis
   const itemIds = items.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, remoteListingId: true, createdAt: true, platform: true, syncedQuantity: true },
+    select: { itemId: true, action: true, status: true, remoteListingId: true, createdAt: true, platform: true, syncedQuantity: true, lastErrorMessage: true },
     orderBy: { createdAt: 'desc' },
   });
-  const postedByItem = new Set<string>();
-  const removedByItem = new Set<string>();
+  // 2026-10-27 (services/liveListingState.ts): this is the FACEBOOK edit queue, so liveness, the listing id and the confirmed
+  // quantity all come from the item's live FACEBOOK listing. It used to be item-level (any POST row on any platform, and no
+  // REMOVE/REMOVED row on any platform ever), so a Poshmark unit sale's REMOVE row (or any removal elsewhere) stopped Facebook
+  // price and quantity sync for the item, and an item live only on another market was offered with that market's listing id.
+  const liveFacebook = liveListingsByItemPlatform(jobs.filter((j) => j.platform === 'FACEBOOK'));
+  const liveFacebookItemIds = new Set<string>();
   const remoteListingIdByItem = new Map<string, string | null>();
   // QUANTITY DRIFT (2026-10-13): the quantity last confirmed on this item's live FACEBOOK listing (null = never recorded, read as 1).
   const syncedQtyByItem = new Map<string, number | null>();
-  for (const j of jobs) {
-    if (j.action === 'POST' && j.status === 'POSTED') {
-      postedByItem.add(j.itemId);
-      if ((j as any).platform === 'FACEBOOK' && !syncedQtyByItem.has(j.itemId)) syncedQtyByItem.set(j.itemId, (j as any).syncedQuantity ?? null);
-      // jobs is ordered createdAt desc, so the first POST/POSTED row seen per item is the
-      // most recent one -- only set it once so an older job can't overwrite a newer remoteListingId.
-      if (!remoteListingIdByItem.has(j.itemId)) remoteListingIdByItem.set(j.itemId, j.remoteListingId);
-    }
-    if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
+  for (const [key, live] of liveFacebook) {
+    const itemId = key.slice(0, key.lastIndexOf(':'));
+    liveFacebookItemIds.add(itemId);
+    remoteListingIdByItem.set(itemId, live.remoteListingId);
+    syncedQtyByItem.set(itemId, live.postRow.syncedQuantity ?? null);
   }
 
   // An entry is due when the PRICE drifted (unchanged rule) OR the one stock number differs from the quantity last confirmed on the
@@ -2225,7 +2212,7 @@ export const getPendingUpdates = async (req: AuthRequest, res: Response): Promis
     it.price != null && Math.round(it.price) !== it.marketplaceListedPrice;
 
   const dueItems = items
-    .filter((it) => postedByItem.has(it.id) && !removedByItem.has(it.id))
+    .filter((it) => liveFacebookItemIds.has(it.id))
     .filter((it) => it.price != null && (priceDrifted(it) || quantityDrifted(it)));
   const extras = await loadListingExtras(dueItems.map((i) => i.id));
   const pending = dueItems
@@ -2315,16 +2302,13 @@ export const getPendingSoldChecks = async (req: AuthRequest, res: Response): Pro
   const itemIds = availableItems.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true },
+    select: { itemId: true, action: true, status: true, platform: true, createdAt: true },
   });
-  const postedByItem = new Set<string>();
-  const removedByItem = new Set<string>();
-  for (const j of jobs) {
-    if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
-    if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
-  }
+  // 2026-10-27 (services/liveListingState.ts): an item with a live FACEBOOK listing (this is the Facebook sold-detection poll).
+  // It used to be item-level (any POST anywhere, no REMOVE anywhere), so a removal or unit sale on another market hid it.
+  const liveFacebook = livePlatformsByItem(liveListingsByItemPlatform(jobs.filter((j) => j.platform === 'FACEBOOK')));
 
-  const liveItems = availableItems.filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id));
+  const liveItems = availableItems.filter((i) => liveFacebook.has(i.id));
   const soldCheckExtras = await loadListingExtras(liveItems.map((i) => i.id));
   const items = liveItems.map((i) => ({ id: i.id, title: i.title, ...listingExtraFields(soldCheckExtras.get(i.id)) }));
 
@@ -2368,28 +2352,29 @@ export const getPendingRenewals = async (req: AuthRequest, res: Response): Promi
   const itemIds = availableItems.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, platform: true, renewDueAt: true, createdAt: true },
+    select: { itemId: true, action: true, status: true, platform: true, renewDueAt: true, createdAt: true, lastErrorMessage: true },
     orderBy: { createdAt: 'desc' },
   });
-  const postedByItem = new Set<string>();
-  const removedByItem = new Set<string>();
   // jobs is ordered createdAt desc, so the first POST/POSTED row seen per item is the most
   // recent one -- only set it once so an older renewal job can't overwrite a newer renewDueAt
   // (same "first-seen wins under desc order" idiom getPendingUpdates uses for remoteListingId).
+  // 2026-10-27 (services/liveListingState.ts): per item, its LIVE listings on a renewal platform (Facebook, Craigslist, Gumtree AU),
+  // the one due first. It used to take the newest POST row of ANY platform and drop the item when any platform had a REMOVE row,
+  // so a later Poshmark post (no renewDueAt) or a Poshmark unit sale's REMOVE row silently stopped a live Facebook listing's renewal.
   const renewalInfoByItem = new Map<string, { platform: MarketplaceRenewalPlatform; renewDueAt: Date | null }>();
-  for (const j of jobs) {
-    if (j.action === 'POST' && j.status === 'POSTED') {
-      postedByItem.add(j.itemId);
-      if (!renewalInfoByItem.has(j.itemId)) {
-        renewalInfoByItem.set(j.itemId, { platform: j.platform as MarketplaceRenewalPlatform, renewDueAt: j.renewDueAt });
-      }
-    }
-    if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
+  for (const [key, live] of liveListingsByItemPlatform(jobs)) {
+    const sep = key.lastIndexOf(':');
+    const itemId = key.slice(0, sep);
+    const platform = key.slice(sep + 1) as MarketplaceListingPlatform;
+    if (!isRenewalEligiblePlatform(platform)) continue;
+    const due = live.postRow.renewDueAt ?? null;
+    const cur = renewalInfoByItem.get(itemId);
+    if (!cur || (due && (!cur.renewDueAt || due < cur.renewDueAt))) renewalInfoByItem.set(itemId, { platform, renewDueAt: due });
   }
 
   const dueThreshold = Date.now() + RENEWAL_NOTIFY_LEAD_TIME_DAYS * 24 * 60 * 60 * 1000;
   const items = availableItems
-    .filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id))
+    .filter((i) => renewalInfoByItem.has(i.id))
     .map((i) => ({ id: i.id, title: i.title, saleId: i.saleId, ...renewalInfoByItem.get(i.id)! }))
     // renewDueAt is null for every pre-ADR-100 row (no backfill, ADR-100 §7 Q4) -- such items
     // simply never surface a renewal nudge until a fresh POST row is written for them.
@@ -2518,13 +2503,22 @@ export const markItemAlreadyPostedManually = async (req: AuthRequest, res: Respo
   const latestJob = await prisma.marketplaceListingJob.findFirst({
     where: { itemId, platform },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, action: true, status: true, remoteListingId: true },
+    select: { id: true, action: true, status: true, remoteListingId: true, lastErrorMessage: true },
   });
   if (latestJob && latestJob.action === 'POST' && latestJob.status === 'POSTED') {
     // Already posted (this call, a prior manual mark, or the automated flow) -- idempotent
     // success, never a duplicate row.
     if (manualRemoteListingId && latestJob.id && !latestJob.remoteListingId) {
       try { await prisma.marketplaceListingJob.updateMany({ where: { id: latestJob.id, remoteListingId: null }, data: { remoteListingId: manualRemoteListingId } }); } catch { /* best effort */ }
+    }
+    res.json({ ok: true, status: 'POSTED' });
+    return;
+  }
+  // 2026-10-27: a Poshmark Multi Item listing that sold some units there is still the live listing (services/liveListingState.ts).
+  const liveMultiListing = await liveListingAfterUnitSale(itemId, platform, latestJob);
+  if (liveMultiListing) {
+    if (manualRemoteListingId && !liveMultiListing.postRow.remoteListingId) {
+      try { await prisma.marketplaceListingJob.updateMany({ where: { id: liveMultiListing.postRow.id, remoteListingId: null }, data: { remoteListingId: manualRemoteListingId } }); } catch { /* best effort */ }
     }
     res.json({ ok: true, status: 'POSTED' });
     return;
@@ -2574,24 +2568,23 @@ export const getSyncHealth = async (req: AuthRequest, res: Response): Promise<vo
   const activityJobs = allItemIds.length
     ? await prisma.marketplaceListingJob.findMany({
         where: { itemId: { in: allItemIds } },
-        select: { itemId: true, action: true, status: true, createdAt: true },
+        select: { itemId: true, action: true, status: true, createdAt: true, platform: true, lastErrorMessage: true, syncedQuantity: true },
       })
     : [];
-  const postedByItem = new Set<string>();
-  const removedByItem = new Set<string>();
   let lastPostAt: Date | null = null;
   let lastRemoveAt: Date | null = null;
   for (const j of activityJobs) {
     if (j.action === 'POST' && j.status === 'POSTED') {
-      postedByItem.add(j.itemId);
       if (!lastPostAt || j.createdAt > lastPostAt) lastPostAt = j.createdAt;
     }
     if (j.action === 'REMOVE' && j.status === 'REMOVED') {
-      removedByItem.add(j.itemId);
       if (!lastRemoveAt || j.createdAt > lastRemoveAt) lastRemoveAt = j.createdAt;
     }
   }
-  const activePostedCount = allItemIds.filter((id) => postedByItem.has(id) && !removedByItem.has(id)).length;
+  // 2026-10-27 (services/liveListingState.ts): items with at least one live listing. It used to be item-level (any POST ever and
+  // no REMOVE/REMOVED ever on any platform), so one platform's removal or a Poshmark unit sale hid every other live listing.
+  const liveActivityItems = livePlatformsByItem(liveListingsByItemPlatform(activityJobs));
+  const activePostedCount = allItemIds.filter((id) => liveActivityItems.has(id)).length;
 
   // --- manualReviewBacklog ---
   // Mirrors getPendingRemovals' needsManualReview computation exactly (same
@@ -2605,7 +2598,7 @@ export const getSyncHealth = async (req: AuthRequest, res: Response): Promise<vo
   const removalJobs = soldItemIds.length
     ? await prisma.marketplaceListingJob.findMany({
         where: { itemId: { in: soldItemIds } },
-        select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true, platform: true, createdAt: true },
+        select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true, platform: true, createdAt: true, syncedQuantity: true },
       })
     : [];
   // BUG FIX 2026-09-04 (S-EXT-SYNCHEALTH-CROSS-PLATFORM-MASKING): everything below used to be a
@@ -2622,28 +2615,8 @@ export const getSyncHealth = async (req: AuthRequest, res: Response): Promise<vo
   // the same pass, or the card and the engine drift apart again exactly as they just did.
   // Every pre-existing response field (itemId/title/saleTitle/skipCount/lastErrorMessage/
   // lastAttemptAt) is unchanged for MarketplaceSyncHealthCard.tsx; `platforms` is purely additive.
-  const latestByRemovalItemPlatform = new Map<string, { action: string; status: string; createdAt: Date }>();
-  for (const j of removalJobs) {
-    // 2026-09-22: same REMOVE/SKIPPED exclusion as getPendingRemovals (S-EXT-REMOVAL-SKIP-ENDS-LISTING)
-    // -- a skip is a failed attempt, not the end of the listing; it is still counted below.
-    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
-    const key = j.itemId + ':' + j.platform;
-    const existing = latestByRemovalItemPlatform.get(key);
-    if (!existing || j.createdAt > existing.createdAt) {
-      latestByRemovalItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt });
-    }
-  }
-  const stillListedPlatformsByRemovalItem = new Map<string, string[]>();
-  for (const [key, latest] of latestByRemovalItemPlatform) {
-    if (latest.action !== 'POST' || latest.status !== 'POSTED') continue;
-    // Same split convention as getPendingRemovals -- item ids are cuids and contain no colon.
-    const sepIdx = key.lastIndexOf(':');
-    const rowItemId = key.slice(0, sepIdx);
-    const rowPlatform = key.slice(sepIdx + 1);
-    const arr = stillListedPlatformsByRemovalItem.get(rowItemId) || [];
-    arr.push(rowPlatform);
-    stillListedPlatformsByRemovalItem.set(rowItemId, arr);
-  }
+  // 2026-10-27: the same live-listing rule as getPendingRemovals (services/liveListingState.ts).
+  const stillListedPlatformsByRemovalItem = livePlatformsByItem(liveListingsByItemPlatform(removalJobs));
   const skipCountByItemPlatform = new Map<string, number>();
   const lastSkipReasonByItemPlatform = new Map<string, string | null>();
   const lastSkipAtByItemPlatform = new Map<string, Date>();
@@ -3162,19 +3135,13 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
   const itemIds = items.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, platform: true, createdAt: true, priceSyncedAt: true, remoteListingId: true, syncedQuantity: true },
+    select: { itemId: true, action: true, status: true, platform: true, createdAt: true, priceSyncedAt: true, remoteListingId: true, syncedQuantity: true, lastErrorMessage: true },
   });
-  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; priceSyncedAt: Date | null; remoteListingId: string | null; syncedQuantity: number | null }>();
-  for (const j of jobs) {
-    // 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): ignore REMOVE/SKIPPED (failed removal attempt,
-    // listing still live) -- otherwise a still-live platform silently dropped out of price sync.
-    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
-    const key = `${j.itemId}:${j.platform}`;
-    const existing = latestByItemPlatform.get(key);
-    if (!existing || j.createdAt > existing.createdAt) {
-      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, priceSyncedAt: j.priceSyncedAt, remoteListingId: j.remoteListingId ?? null, syncedQuantity: (j as any).syncedQuantity ?? null });
-    }
-  }
+  // 2026-10-27 (services/liveListingState.ts): the live listing per item+platform. Same rule as before (newest non-SKIPPED row
+  // POST/POSTED; 2026-09-22 a REMOVE/SKIPPED row never ends a listing), plus a Poshmark Multi Item listing that sold some units
+  // there: still live, its price still syncs, and its quantity is compared as the units it SHOWS now (posted/confirmed baseline
+  // minus the unit sales there), so a sale elsewhere pushes the new remaining stock to Poshmark (owner rule 2026-10-13).
+  const liveByItemPlatform = liveListingsByItemPlatform(jobs);
 
   // 2026-09-30 per-marketplace pause: skip paused platforms.
   const PRICE_SYNC_PLATFORMS: PriceSyncPlatform[] = filterPausedPlatforms(['CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI'] as PriceSyncPlatform[], organizer.pausedMarketplaces);
@@ -3185,21 +3152,21 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
   const priceSyncExtras = await loadListingExtras(items.map((i) => i.id));
   for (const it of items) {
     for (const platform of PRICE_SYNC_PLATFORMS) {
-      const latest = latestByItemPlatform.get(`${it.id}:${platform}`);
-      const isLive = !!latest && latest.action === 'POST' && latest.status === 'POSTED';
-      if (!isLive) continue;
+      const live = liveByItemPlatform.get(`${it.id}:${platform}`);
+      if (!live) continue;
       // PRICE drift is unchanged (and only for items with a recorded price change); QUANTITY drift (2026-10-13): the one stock number
       // differs from the quantity last confirmed on this platform's listing (null = never recorded, read as 1).
-      const priceDrift = it.priceUpdatedAt != null && (latest!.priceSyncedAt == null || latest!.priceSyncedAt < it.priceUpdatedAt);
+      const priceSyncedAt = live.postRow.priceSyncedAt ?? null;
+      const priceDrift = it.priceUpdatedAt != null && (priceSyncedAt == null || priceSyncedAt < it.priceUpdatedAt);
       const remaining = stockRemainingOf(it);
-      const quantityDrift = (latest!.syncedQuantity ?? 1) !== remaining;
+      const quantityDrift = live.unitsShowing !== remaining;
       const needsSync = priceDrift || quantityDrift;
       if (!needsSync) continue;
       // S-EXT-MERCARI-PRICE-PUSH (2026-09-27, Patrick-approved): Phase B (background price-push)
       // is id-first-only, no title-based fallback -- an item with no captured remoteListingId is
       // skipped silently here rather than surfaced with nothing for the content script to act on.
       // The other 4 platforms are unaffected -- still Phase-A/notify-only, no id requirement.
-      const syncRef = listingRefFields(platform, latest!.remoteListingId);
+      const syncRef = listingRefFields(platform, live.remoteListingId);
       if (platform === 'MERCARI' && !syncRef.remoteListingId) continue;
       queues[platform].push({
         id: it.id,
@@ -3225,15 +3192,15 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
       const poshJobs = await prisma.marketplaceListingJob.findMany({
         where: { platform: 'POSHMARK', item: { OR: organizerListableScope(organizer.id) } },
         orderBy: { createdAt: 'desc' },
-        select: { itemId: true, action: true, status: true, remoteListingId: true, item: { select: { title: true } } },
+        select: { itemId: true, platform: true, action: true, status: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true, remoteListingId: true, item: { select: { title: true } } },
       });
-      const seenItems = new Set<string>();
+      // 2026-10-27: live Poshmark listings by the shared rule (services/liveListingState.ts; a Multi Item listing stays live after a unit sale).
+      const titleByItem = new Map<string, string>();
+      for (const j of poshJobs) if (!titleByItem.has(j.itemId)) titleByItem.set(j.itemId, titleKey(j.item?.title));
       const live: Array<{ itemId: string; title: string; id: string | null }> = [];
-      for (const j of poshJobs) {
-        if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
-        if (seenItems.has(j.itemId)) continue;
-        seenItems.add(j.itemId);
-        if (j.action === 'POST' && j.status === 'POSTED') live.push({ itemId: j.itemId, title: titleKey(j.item?.title), id: listingRefFields('POSHMARK', j.remoteListingId).remoteListingId ?? null });
+      for (const [key, l] of liveListingsByItemPlatform(poshJobs)) {
+        const itemId = key.slice(0, key.lastIndexOf(':'));
+        live.push({ itemId, title: titleByItem.get(itemId) ?? '', id: listingRefFields('POSHMARK', l.remoteListingId).remoteListingId ?? null });
       }
       for (const e of poshNoId) {
         const key = titleKey(e.title);
@@ -3285,10 +3252,22 @@ export const markItemPriceSyncedForPlatform = async (req: AuthRequest, res: Resp
   if (!latest) { res.status(404).json({ message: 'No live listing found for this item on that platform' }); return; }
 
   const stockRow = await prisma.item.findUnique({ where: { id: itemId }, select: { stockTotal: true, stockSold: true } });
+  // 2026-10-27: the units the listing shows. An extension that read the listing back may send it as body.quantity (a whole
+  // number): that is recorded instead of the stock number, so a listing that still shows fewer units than stock (live: Poshmark
+  // showed qty 1 while 3 were recorded) stays in quantity drift instead of being marked in sync. On Poshmark the stored value is
+  // the baseline (shown + unit sales there since the POST, services/liveListingState.ts).
+  const rawShown = req.body?.quantity;
+  const reportedShown = typeof rawShown === 'number' && Number.isInteger(rawShown) && rawShown >= 0 && rawShown <= 100000 ? rawShown : null;
+  const soldSincePost = isQuantityListingPlatform(platform) ? unitSalesSinceNewestPost(await loadListingRows(itemId, platform), platform) : 0;
   await prisma.marketplaceListingJob.update({
     where: { id: latest.id },
     // 2026-10-13: also records the quantity now shown on this platform's listing (fresh read), clearing quantity drift.
-    data: { priceSyncedAt: new Date(), ...(stockRow ? { syncedQuantity: stockRemainingOf(stockRow as any) } : {}) },
+    data: {
+      priceSyncedAt: new Date(),
+      ...(reportedShown !== null
+        ? { syncedQuantity: reportedShown + soldSincePost }
+        : stockRow ? { syncedQuantity: stockRemainingOf(stockRow as any) + soldSincePost } : {}),
+    },
   });
   res.json({ ok: true });
 };

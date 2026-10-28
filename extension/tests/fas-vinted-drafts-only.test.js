@@ -18,13 +18,17 @@ test('the only button code ever clicks for posting is an exact "Save draft" matc
   assert.ok(!/upload[^\n]{0,80}\.click\(\)/i.test(src.replace(/\/\/[^\n]*/g, '')));
 });
 
-test('saving a draft advances the queue without marking the item listed', () => {
+test('saving a draft never marks the item listed; the queue moves on only after the draft is confirmed (1.0.76)', () => {
   const i = src.indexOf('fasVintedSaveDraftNow = async (why)');
   assert.ok(i > 0);
-  const body = src.slice(i, i + 3200);
-  assert.ok(/advanceVintedQueue/.test(body));
+  const body = src.slice(i, src.indexOf('\n    };\n', i));
   assert.ok(!/markListed/.test(body));
+  assert.ok(!/advanceVintedQueue/.test(body)); // 1.0.76: no blind advance before the click (see fas-vinted-draft-advance.test.js)
   assert.ok(/btn\.click\(\)/.test(body));
+  const c = src.indexOf('async function fasVintedConfirmPendingDraft(');
+  const confirm = src.slice(c, src.indexOf('\n  }\n', c));
+  assert.ok(/advanceVintedQueue/.test(confirm));
+  assert.ok(!/markListed/.test(confirm));
 });
 
 test('both fill paths save the draft, and the UI says drafts only', () => {

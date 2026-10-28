@@ -9,6 +9,7 @@ import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { createNotification } from '../lib/notificationService';
 import { MAX_REMOVAL_SKIP_ATTEMPTS } from './extensionController';
+import { liveListingsByItemPlatform, livePlatformsByItem } from '../services/liveListingState'; // 2026-10-27: shared live-listing rule
 import { executeVerifiedRefund, RefundError } from '../services/refundService';
 import { resolvePlatformRevenueDollars } from '../utils/feeCalculator'; // 2026-09-30: platform revenue from the stored fee snapshot (inclusive model), legacy 10/8 only for pre-2026-09-24 rows without a snapshot
 import { executeVerifiedSquareRefund } from '../services/squareRefundService'; // Square migration Wave 1 #4 (2026-09-07): one added branch in bulkRefundPurchases below routes SQUARE-processor purchases through the Square-side choke point.
@@ -2398,7 +2399,7 @@ export const getMarketplaceReviewBacklog = async (req: AuthRequest, res: Respons
     const itemIds = soldItems.map((i) => i.id);
     const jobs = await prisma.marketplaceListingJob.findMany({
       where: { itemId: { in: itemIds } },
-      select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true, platform: true, createdAt: true, remoteListingId: true },
+      select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true, platform: true, createdAt: true, remoteListingId: true, syncedQuantity: true },
     });
 
     // BUG FIX 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING, consistency pass): this used to be the
@@ -2411,24 +2412,10 @@ export const getMarketplaceReviewBacklog = async (req: AuthRequest, res: Respons
     // (POST/POSTED); REMOVE/SKIPPED rows are failed attempts, counted per item+platform; an item
     // is in the backlog when ANY still-listed platform has hit MAX_REMOVAL_SKIP_ATTEMPTS, and
     // reports the worst-affected platform. Response fields unchanged; `platforms` is additive.
-    const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; remoteListingId: string | null }>();
-    for (const j of jobs) {
-      if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
-      const key = j.itemId + ':' + j.platform;
-      const existing = latestByItemPlatform.get(key);
-      if (!existing || j.createdAt > existing.createdAt) {
-        latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, remoteListingId: j.remoteListingId ?? null });
-      }
-    }
-    const stillListedPlatformsByItem = new Map<string, string[]>();
-    for (const [key, latest] of latestByItemPlatform) {
-      if (latest.action !== 'POST' || latest.status !== 'POSTED') continue;
-      const sepIdx = key.lastIndexOf(':'); // item ids are cuids -- no colon
-      const rowItemId = key.slice(0, sepIdx);
-      const arr = stillListedPlatformsByItem.get(rowItemId) || [];
-      arr.push(key.slice(sepIdx + 1));
-      stillListedPlatformsByItem.set(rowItemId, arr);
-    }
+    // 2026-10-27: same live-listing rule as getPendingRemovals (services/liveListingState.ts): a Poshmark Multi Item listing that
+    // sold some units there is still live.
+    const liveByItemPlatform = liveListingsByItemPlatform(jobs);
+    const stillListedPlatformsByItem = livePlatformsByItem(liveByItemPlatform);
     const skipCountByItemPlatform = new Map<string, number>();
     const lastSkipReasonByItemPlatform = new Map<string, string | null>();
     const lastSkipAtByItemPlatform = new Map<string, Date>();
@@ -2490,7 +2477,7 @@ export const getMarketplaceReviewBacklog = async (req: AuthRequest, res: Respons
           // platform's live listing has NEVER had a remoteListingId captured, so it cannot
           // structurally self-resolve via id-based matching and automated retry alone -- the
           // Hortilux/Vinted case this field was added for.
-          remoteListingIdCaptured: !!latestByItemPlatform.get(stuck.worstKey)?.remoteListingId,
+          remoteListingIdCaptured: !!liveByItemPlatform.get(stuck.worstKey)?.remoteListingId,
           lastAttemptAt: lastSkipAtByItemPlatform.get(stuck.worstKey)?.toISOString() || null,
           platforms: stuck.platforms,
         };

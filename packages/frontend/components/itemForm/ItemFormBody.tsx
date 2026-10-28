@@ -65,6 +65,7 @@ import { buildPlatformChips } from '../../lib/platformStatusView';
 import { useItemForEdit } from './useItemForEdit';
 import { useItemMarketplace } from './useItemMarketplace';
 import { stockCountNoteText } from '../../lib/stockCountNote';
+import { vintedListAgainNoteText } from '../../lib/vintedListAgainNote';
 import { ConditionSelect, ConditionGradePicker } from './ConditionFields';
 import { PushFailureBanner, PushNeedsInfoNotice, SaveOutcomeRow, EbayHoldPanel } from './MarketplaceNotices';
 import { PlatformChipStrip, PlatformStatusList } from './PlatformChips';
@@ -1449,6 +1450,8 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
 
   // Read-only note under In stock: shown only when the loaded count is above 1 and a listed market cannot take a count.
   const stockCountNote = stockCountNoteText(mp.status, inStockFromItem(item));
+  // Vinted is drafts only: after a sale there with stock left, say so (no automation lists it on Vinted again).
+  const vintedListAgainNote = vintedListAgainNoteText(mp.status);
 
   // Where this is listed: one chip per platform from marketplace-status; until it loads, eBay and Discogs come from
   // the item itself. Extension marketplaces (Vinted, Poshmark, ...) are prompt-only.
@@ -3192,6 +3195,9 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
             <ItemFormSection id="where-listed" title="Where this is listed" defaultOpen openSignal={whereListedSignal}>
               {/* One chip per marketplace from marketplace-status. Extension marketplaces show their prompt only. */}
               <PlatformStatusList chips={platformChips} />
+              {vintedListAgainNote && (
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-2" data-testid="vinted-list-again-note">{vintedListAgainNote}</p>
+              )}
 
               {/* eBay Push Section: S725 three states: Live / Pending Publish / Push */}
               {tier !== 'SIMPLE' && (

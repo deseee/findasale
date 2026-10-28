@@ -43,6 +43,8 @@ export interface PlatformEntry {
   supportsQuantity?: boolean;
   /** One-unit market with the organizer's auto queue on: a sale there with stock left is followed by a fresh listing. */
   autoRepostAfterSale?: boolean;
+  /** Vinted only (1.0.76): sold there and stock is left; Vinted listings are drafts the organizer uploads from the extension. */
+  readyToListAgain?: { unitsLeft: number };
 }
 
 export interface EbayHold {

@@ -20,6 +20,7 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { liveListingsByItemPlatform } from './liveListingState'; // 2026-10-27: shared live-listing rule
 import { endEbayListingIfExists } from '../controllers/ebayController';
 import { withdrawDiscogsListingIfExists } from './marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from './marketplace/reverbConnector';
@@ -60,20 +61,10 @@ export async function countLiveExtensionListings(itemIds: string[]): Promise<num
   try {
     const jobs = await prisma.marketplaceListingJob.findMany({
       where: { itemId: { in: itemIds } },
-      select: { itemId: true, platform: true, action: true, status: true, createdAt: true },
+      select: { itemId: true, platform: true, action: true, status: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true },
     });
-    const latest = new Map<string, { action: string; status: string; createdAt: Date }>();
-    for (const j of jobs) {
-      if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
-      const key = j.itemId + ':' + j.platform;
-      const existing = latest.get(key);
-      if (!existing || j.createdAt > existing.createdAt) latest.set(key, { action: j.action, status: j.status, createdAt: j.createdAt });
-    }
-    let live = 0;
-    for (const l of latest.values()) {
-      if (l.action === 'POST' && l.status === 'POSTED') live++;
-    }
-    return live;
+    // 2026-10-27 (liveListingState.ts): also counts a Poshmark Multi Item listing still showing units after a unit sale there.
+    return liveListingsByItemPlatform(jobs).size;
   } catch (err: any) {
     console.warn('[unpublish] extension listing count failed (non-fatal):', err?.message);
     return 0;

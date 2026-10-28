@@ -26,6 +26,7 @@ import { applyCharmPricing } from '../utils/charmPricing';
 import type { AIRecordIdentity } from './marketplace/recordIdentity';
 import { normalizeAiCard, AICardResult } from './cardAiSuggestion'; // card-aware tagging: validates the optional `card` block
 import { extractFccIdFromText, normalizeFccIdStrict } from '../utils/fccId'; // FCC ID: OCR fallback + shape check for the model-read value
+import { normalizeTaggedText } from './textHomoglyphs'; // 2026-10-27: mixed-script homoglyph fix on AI title/description
 
 // Destructured (same values) so the pre-commit secret scan does not read an env lookup as a hardcoded key.
 const { GOOGLE_VISION_API_KEY, ANTHROPIC_API_KEY } = process.env;
@@ -993,6 +994,9 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
       [...detectedText, ...(ebayMatch?.titleWordConsensus ?? [])],
       ebayMatch?.listingTitles
     );
+    // 2026-10-27: Cyrillic/Greek lookalikes inside Latin words (e.g. "Plane\u0442waves") and zero-width
+    // characters break marketplace search; fix them last, after every other title correction.
+    normalizeTaggedText(parsed, '[cloudAI] tagging');
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller
@@ -1736,6 +1740,9 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
       [...detectedText, ...(ebayMatch?.titleWordConsensus ?? [])],
       ebayMatch?.listingTitles
     );
+    // 2026-10-27: Cyrillic/Greek lookalikes inside Latin words (e.g. "Plane\u0442waves") and zero-width
+    // characters break marketplace search; fix them last, after every other title correction.
+    normalizeTaggedText(parsed, '[cloudAI] tagging');
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller

@@ -55,6 +55,7 @@ import { computeEtsyQuantity } from './marketplace/etsyMapping';
 import { withdrawDiscogsListingIfExists } from './marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from './marketplace/reverbConnector';
 import { notifyFacebookExportedItemSold } from './facebookNudgeService';
+import { liveListingsByItemPlatform } from './liveListingState'; // 2026-10-27: shared live-listing rule
 
 export { inStockOf };
 
@@ -832,16 +833,12 @@ async function syncCountlessMarkets(ctx: SyncCtx): Promise<MarketSyncOutcome[]> 
   try {
     const jobs = await prisma.marketplaceListingJob.findMany({
       where: { itemId: item.id, platform: { in: ['FACEBOOK', 'CRAIGSLIST', 'VINTED', 'POSHMARK', 'MERCARI', 'GRAILED'] } },
-      select: { platform: true, action: true, status: true, createdAt: true },
+      select: { itemId: true, platform: true, action: true, status: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true },
     });
-    const newest = new Map<string, { action: string; status: string; createdAt: Date }>();
-    for (const j of jobs) {
-      if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
-      const cur = newest.get(j.platform);
-      if (!cur || j.createdAt > cur.createdAt) newest.set(j.platform, { action: j.action, status: j.status, createdAt: j.createdAt });
-    }
-    for (const [platform, job] of newest) {
-      if (job.action === 'POST' && job.status === 'POSTED' && EXTENSION_MARKETS[platform]) present.push({ ...EXTENSION_MARKETS[platform] });
+    // 2026-10-27 (liveListingState.ts): also a Poshmark Multi Item listing still showing units after a unit sale there.
+    for (const key of liveListingsByItemPlatform(jobs).keys()) {
+      const platform = key.slice(key.lastIndexOf(':') + 1);
+      if (EXTENSION_MARKETS[platform]) present.push({ ...EXTENSION_MARKETS[platform] });
     }
   } catch (err) {
     console.warn(`[StockSync] could not read extension listings for item ${item.id}:`, (err as Error).message);

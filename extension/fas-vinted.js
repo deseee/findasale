@@ -2923,14 +2923,38 @@
       fasUploadClickedAt = Date.now(); // the save-draft navigation is ours: let it through the leave-page guard
       try { await chrome.storage.local.set({ fasVintedLastDraft: { itemId: item.id, title: String(item.title || '').slice(0, 80), at: Date.now(), why: why } }); } catch (e) { /* best-effort */ }
       T.step('Saving this listing as a draft on Vinted', 'Drafts only: FindA.Sale never presses Upload on Vinted. Post the draft yourself from your Vinted drafts.');
-      setDraftNote('<div style="margin-top:8px;padding:8px 10px;background:#1f3a2a;border:1px solid #3c8c5a;border-radius:8px;font-size:12px;color:#cfe3d6">Saved as a draft on Vinted. Post it yourself from your Vinted drafts.' + (more ? ' The next item opens next.' : '') + '</div>');
-      // Advance the queue BEFORE the click: Vinted navigates away after saving, which ends this script.
-      try { chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }).catch(() => {}); } catch (e) { /* ignore */ }
+      setDraftNote('<div style="margin-top:8px;padding:8px 10px;background:#1f3a2a;border:1px solid #3c8c5a;border-radius:8px;font-size:12px;color:#cfe3d6">Saved as a draft on Vinted. Post it yourself from your Vinted drafts.' + (more ? ' The next item opens once Vinted shows the draft.' : '') + '</div>');
+      // 1.0.76 (live 2026-10-27): Vinted saves the draft and leaves the form for the member profile. The queue used to move on
+      // BEFORE this click, so the profile page then showed "Finished with <the NEXT item>?" and the queue stalled. Now the
+      // save is remembered as a pending draft and, once the form is left, fasVintedConfirmPendingDraft looks for the new
+      // draft in the organizer's own wardrobe before advancing (unconfirmed: the Continue / Not yet prompt, as before).
+      // A snapshot of same-title drafts taken now tells the new draft apart from older ones (bounded, best effort).
+      const titleEl = fieldByLabel('Title');
+      const filledTitle = String((titleEl && titleEl.value) || item.title || '').slice(0, 200);
+      const priorDraftIds = await fasVintedSnapshotDraftIds({ title: filledTitle, altTitle: item.title });
+      const pendingDraft = {
+        itemId: String(item.id), title: filledTitle, altTitle: String(item.title || '').slice(0, 200),
+        startedAt: fasVintedFillStartedAt || (Date.now() - 30 * 60 * 1000), clickedAt: Date.now(), priorDraftIds: priorDraftIds,
+      };
+      try { await chrome.storage.local.set({ [FAS_VINTED_PENDING_DRAFT_KEY]: pendingDraft }); } catch (e) { /* the prompt fallback still applies */ }
+      const sbtn = (btn.isConnected ? btn : null) || fasVintedFindSaveDraftButton();
+      if (!sbtn) {
+        fasDraftSaved = false;
+        try { await chrome.storage.local.remove(FAS_VINTED_PENDING_DRAFT_KEY); } catch (e) { /* ignore */ }
+        T.warn('vinted_save_draft_not_found', 'The "Save draft" button went away before it could be pressed; nothing was saved or published', { why: why });
+        setDraftNote('<div style="margin-top:8px;padding:8px 10px;background:#3a2a1a;border:1px solid #a06b2a;border-radius:8px;font-size:12px;color:#ffcf7a">FindA.Sale could not find Vinted\'s <b>Save draft</b> button. Click it yourself to keep this as a draft.</div>');
+        return 'not_found';
+      }
       window.removeEventListener('beforeunload', fasReviewUnloadHandler);
       window.removeEventListener('pagehide', fasReviewUnloadHandler);
-      btn.click();
-      T.end('Saved as a Vinted draft (not posted): ' + item.title + (more ? ' (next item next)' : ' (queue finished)'));
-      if (more) setTimeout(() => { if (location.pathname.indexOf('/items/new') !== -1) location.href = LISTING_URL_HINT; }, 4000);
+      sbtn.click();
+      T.end('Saved as a Vinted draft (not posted): ' + item.title + (more ? ' (next item once the draft is confirmed)' : ' (queue finished)'));
+      // A full page load confirms from the next page's start(); a same-document change (or staying here) confirms from this one.
+      setTimeout(() => {
+        fasVintedConfirmPendingDraft('after_save_click').then((r) => {
+          if (r === 'unconfirmed' && looksLikeVintedListingPage()) maybeShowVintedContinuePrompt();
+        }).catch(() => {});
+      }, 4000);
       return 'clicked';
     };
     // Category-first (deferred) fills save the draft from fasVintedStartDeferredWatch once the rest is filled.
@@ -2939,6 +2963,200 @@
 
   // 1.0.63: exact-text match on "Save draft" only. Never returns the Upload button, whatever the page looks like.
   let fasVintedSaveDraftNow = async () => 'not_ready';
+
+  // ------------------------------------------------------------------------------------------
+  // 1.0.76 (2026-10-27) DRAFT CONFIRMATION + UPLOAD RECORDING. Pure matching lives in fas-vinted-drafts.js.
+  //  - After Save draft the queue advances only once the new draft (is_draft: true, same title, new since the fill
+  //    started) is found in the organizer's own wardrobe (GET /api/v2/wardrobe/<id>/items?order=newest_first). The next
+  //    item then opens after the same 10-25s pause the other queues use (guessedQueueDelayMs), never faster.
+  //  - Each confirmed draft is kept (fasVintedDrafts). When the organizer later uploads one, the same id shows in the
+  //    wardrobe with is_draft: false, and it is recorded through the existing markListed path with that id.
+  // Nothing here presses any Vinted button: the furthest automation goes on Vinted is still Save draft.
+  const FAS_VINTED_PENDING_DRAFT_KEY = 'fasVintedPendingDraft';
+  const FAS_VINTED_DRAFTS_KEY = 'fasVintedDrafts';
+  const FAS_VINTED_DRAFT_UPLOAD_CHECK_KEY = 'fasVintedDraftUploadCheckAt';
+  const FAS_VINTED_DRAFT_UPLOAD_CHECK_MS = 15 * 60 * 1000;
+  const FAS_VINTED_PENDING_DRAFT_TTL_MS = 2 * 60 * 60 * 1000;
+  const FVD = (typeof window !== 'undefined' && window.FAS_VINTED_DRAFTS) || null;
+  let fasVintedFillStartedAt = 0;
+  let fasVintedConfirmBusy = false;
+  let fasVintedConfirmTriedFor = '';
+  let fasVintedAdvancing = false;
+
+  // The organizer's own member id: the cached own profile, else the /member page Vinted opened right after our own
+  // Save draft click (within 3 minutes of it). Never clicks anything.
+  async function fasVintedOwnMemberIdForDrafts(pending) {
+    const cached = await vintRemStorageGet(VINTED_OWN_PROFILE_URL_STORAGE_KEY);
+    const cm = /\/member\/(\d+)/.exec(String(cached || ''));
+    if (cm) return cm[1];
+    const here = vintRemMemberIdFromLocation();
+    if (here && pending && pending.clickedAt && (Date.now() - pending.clickedAt) < 3 * 60 * 1000) return here;
+    return null;
+  }
+
+  async function fasVintedWardrobePage(memberId, page) {
+    const url = location.origin + '/api/v2/wardrobe/' + encodeURIComponent(memberId) +
+      '/items?page=' + page + '&per_page=' + VINT_REM_API_PER_PAGE + '&order=newest_first';
+    let res;
+    try { res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } }); } catch (e) { return { ok: false, why: 'fetch_error' }; }
+    if (!res || !res.ok) return { ok: false, why: 'http_' + (res ? res.status : 'none') };
+    let data;
+    try { data = await res.json(); } catch (e) { return { ok: false, why: 'non_json' }; }
+    const items = data && Array.isArray(data.items) ? data.items : null;
+    if (!items) return { ok: false, why: 'no_items_array' };
+    const totalPages = data.pagination ? Number(data.pagination.total_pages) : NaN;
+    const last = (Number.isFinite(totalPages) && totalPages > 0) ? page >= totalPages : items.length < VINT_REM_API_PER_PAGE;
+    return { ok: true, items, last };
+  }
+
+  // Same-title draft ids already in the wardrobe, read just before Save draft is pressed (null when unknown).
+  async function fasVintedSnapshotDraftIds(titles) {
+    if (!FVD) return null;
+    try {
+      const memberId = await fasVintedOwnMemberIdForDrafts(null);
+      if (!memberId) return null;
+      const read = await Promise.race([fasVintedWardrobePage(memberId, 1), sleep(6000).then(() => ({ ok: false, why: 'timeout' }))]);
+      return read && read.ok ? FVD.draftIdsWithTitle(read.items, titles) : null;
+    } catch (e) { return null; }
+  }
+
+  async function fasVintedGetDrafts() {
+    const v = await vintRemStorageGet(FAS_VINTED_DRAFTS_KEY);
+    return Array.isArray(v) ? v : [];
+  }
+
+  async function fasVintedGetPendingDraft() {
+    const p = await vintRemStorageGet(FAS_VINTED_PENDING_DRAFT_KEY);
+    if (!p || !p.itemId) return null;
+    if (!p.clickedAt || Date.now() - p.clickedAt > FAS_VINTED_PENDING_DRAFT_TTL_MS) {
+      try { await chrome.storage.local.remove(FAS_VINTED_PENDING_DRAFT_KEY); } catch (e) { /* ignore */ }
+      return null;
+    }
+    return p;
+  }
+
+  async function fasVintedHasPendingDraftFor(itemId) {
+    const p = await fasVintedGetPendingDraft();
+    return !!(p && String(p.itemId) === String(itemId));
+  }
+
+  // Forget the pending draft (and this item's reached-review marker, so a later start() fills it fresh).
+  async function fasVintedClearPendingDraft(itemId) {
+    try { await chrome.storage.local.remove(FAS_VINTED_PENDING_DRAFT_KEY); } catch (e) { /* ignore */ }
+    try {
+      const st = await chrome.storage.local.get(['fasVintedReachedReview']);
+      const m = (st && st.fasVintedReachedReview) || {};
+      if (itemId != null && m[itemId]) { delete m[itemId]; await chrome.storage.local.set({ fasVintedReachedReview: m }); }
+    } catch (e) { /* ignore */ }
+  }
+
+  // 'none' (nothing pending for the queued item), 'busy', 'unconfirmed' (show the prompt), 'advanced' or 'finished'.
+  async function fasVintedConfirmPendingDraft(trigger) {
+    if (fasVintedAdvancing || fasVintedConfirmBusy) return 'busy';
+    if (!FVD || !fasContextAlive()) return 'none';
+    const pending = await fasVintedGetPendingDraft();
+    if (!pending) return 'none';
+    const triedKey = pending.clickedAt + '|' + location.pathname;
+    if (fasVintedConfirmTriedFor === triedKey) return 'unconfirmed'; // one wardrobe check per page, not every watcher tick
+    fasVintedConfirmBusy = true;
+    try {
+      let queued = null;
+      try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return 'none'; }
+      if (!queued || !queued.ok || !queued.item) return 'none'; // another tab owns the queue, or it is empty
+      if (String(queued.item.id) !== String(pending.itemId)) {
+        // The queue moved on or was set up again: this pending draft no longer belongs to the queued item.
+        await fasVintedClearPendingDraft(null);
+        return 'none';
+      }
+      const memberId = await fasVintedOwnMemberIdForDrafts(pending);
+      let draft = null;
+      if (memberId) {
+        const recorded = (await fasVintedGetDrafts()).map((d) => String(d.draftId));
+        for (let attempt = 0; attempt < 3 && !draft; attempt++) {
+          if (attempt) await sleep(2500 + Math.floor(Math.random() * 1500)); // the wardrobe can lag the save by a moment
+          const read = await fasVintedWardrobePage(memberId, 1);
+          if (read.ok) draft = FVD.findConfirmedDraft(read.items, pending, recorded);
+          else console.log('[FAS Vinted] draft-confirm: wardrobe read failed (' + read.why + ').');
+        }
+      } else {
+        console.log('[FAS Vinted] draft-confirm: own member id unknown here -- cannot check the drafts.');
+      }
+      fasVintedConfirmTriedFor = triedKey;
+      const decision = FVD.decideAfterLeavingReview(pending, queued.item.id, draft);
+      if (decision !== 'advance') {
+        T.info('vinted_draft_unconfirmed', 'Could not find the saved Vinted draft for "' + pending.title + '" yet; asking instead of moving on', { platform: 'VINTED', itemId: String(pending.itemId), trigger: trigger || null });
+        return 'unconfirmed';
+      }
+      const drafts = FVD.pruneDrafts((await fasVintedGetDrafts()).concat([{
+        itemId: String(pending.itemId), draftId: draft.draftId, title: String(pending.title || '').slice(0, 120), at: Date.now(),
+      }]), Date.now());
+      await vintRemStorageSet(FAS_VINTED_DRAFTS_KEY, drafts);
+      await fasVintedClearPendingDraft(pending.itemId);
+      T.info('vinted_draft_saved', 'Vinted saved "' + pending.title + '" as draft ' + draft.draftId + ' (not posted)', { platform: 'VINTED', itemId: String(pending.itemId), draftId: draft.draftId, trigger: trigger || null });
+      await fasVintedRecordPost();
+      let adv = null;
+      try { adv = await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) { adv = null; }
+      fasVintedAdvancing = true; // keeps the navigation watcher from prompting for the next item meanwhile
+      if (adv && adv.ok && adv.item && !adv.notOwner) {
+        const ms = guessedQueueDelayMs(); // the same 10-25s range as background.js QUEUE_ADVANCE_DELAY_MS
+        startQueueDelayCountdown(ms, '"' + escapeHtml(adv.item.title || 'the next item') + '"');
+        await sleep(ms);
+        location.href = LISTING_URL_HINT;
+        return 'advanced';
+      }
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Saved as a draft on Vinted: <b>' + escapeHtml(pending.title) + '</b></div>' +
+        '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">That was the last item. Post your drafts yourself from your Vinted profile.</div>' +
+        button('fas-vin-close', 'Close', false));
+      closeBtnHandler();
+      return 'finished';
+    } catch (e) {
+      console.warn('[FAS Vinted] draft-confirm threw:', e && e.message);
+      return 'unconfirmed';
+    } finally { fasVintedConfirmBusy = false; }
+  }
+
+  // On any vinted.com page load: recorded drafts the organizer has since uploaded are recorded as listed (markListed with
+  // the Vinted item id). Passive own-id only, throttled across tabs, read-only on Vinted.
+  async function fasVintedRecordUploadedDrafts() {
+    if (!FVD || !fasContextAlive() || vintRemRunning) return;
+    try {
+      const drafts = FVD.pruneDrafts(await fasVintedGetDrafts(), Date.now());
+      const open = drafts.filter((d) => !d.listedAt);
+      if (!open.length) return;
+      const last = Number(await vintRemStorageGet(FAS_VINTED_DRAFT_UPLOAD_CHECK_KEY)) || 0;
+      if (Date.now() - last < FAS_VINTED_DRAFT_UPLOAD_CHECK_MS) return;
+      const memberId = await fasVintedOwnMemberIdForDrafts(null);
+      if (!memberId) { console.log('[FAS Vinted] draft-upload check: own member id not cached yet -- skipped.'); return; }
+      await vintRemStorageSet(FAS_VINTED_DRAFT_UPLOAD_CHECK_KEY, Date.now()); // claimed before the read (other tabs)
+      const wanted = new Set(open.map((d) => String(d.draftId)));
+      let items = [];
+      for (let page = 1; page <= VINT_REM_API_MAX_PAGES; page++) {
+        const read = await fasVintedWardrobePage(memberId, page);
+        if (!read.ok) { console.log('[FAS Vinted] draft-upload check: wardrobe page ' + page + ' failed (' + read.why + ').'); break; }
+        items = items.concat(read.items);
+        if (read.last || open.every((d) => items.some((it) => it && String(it.id) === String(d.draftId)))) break;
+        await sleep(300 + Math.floor(Math.random() * 300));
+      }
+      const hits = FVD.findUploadedDrafts(items, open);
+      console.log('[FAS Vinted] draft-upload check: ' + open.length + ' draft(s) waiting, ' + hits.length + ' now posted on Vinted.');
+      let changed = false;
+      for (const h of hits) {
+        if (!wanted.has(h.remoteListingId)) continue;
+        let resp = null;
+        try { resp = await chrome.runtime.sendMessage({ type: 'markListed', itemId: h.itemId, remoteListingId: h.remoteListingId, platform: 'VINTED' }); } catch (e) { resp = null; }
+        if (resp && (resp.ok || resp.deduped)) {
+          const d = drafts.find((x) => String(x.draftId) === h.remoteListingId);
+          if (d) { d.listedAt = Date.now(); changed = true; }
+          T.info('vinted_draft_uploaded', 'Vinted draft ' + h.remoteListingId + ' is now posted; recorded as listed', { platform: 'VINTED', itemId: h.itemId, remoteListingId: h.remoteListingId });
+        } else {
+          console.log('[FAS Vinted] draft-upload check: markListed not recorded for item ' + h.itemId + ' (' + ((resp && (resp.error || resp.status)) || 'no response') + ') -- will retry next check.');
+        }
+      }
+      if (changed || drafts.length !== (await fasVintedGetDrafts()).length) await vintRemStorageSet(FAS_VINTED_DRAFTS_KEY, drafts);
+    } catch (e) {
+      console.warn('[FAS Vinted] draft-upload check threw:', e && e.message);
+    }
+  }
   function fasVintedFindSaveDraftButton() {
     const btn = qa('button').find((b) => /^save (as )?draft$/.test(norm(b.textContent)) && !b.disabled && b.offsetParent !== null);
     if (!btn || norm(btn.textContent) === 'upload') return null;
@@ -5610,6 +5828,11 @@
     // "it ran and quietly no-opped" (this function had zero console output either way before this
     // round, so those two cases were indistinguishable from Patrick's report alone).
     if (!fasContextAlive()) return; // extension reloaded under this page: nothing to ask
+    // 1.0.76: a Save draft click is waiting for confirmation: check the wardrobe and move on by itself when it is there.
+    if (fasVintedAdvancing) return;
+    const draftOutcome = await fasVintedConfirmPendingDraft('left_review');
+    if (draftOutcome === 'busy' || draftOutcome === 'advanced' || draftOutcome === 'finished') return;
+    const draftPending = draftOutcome === 'unconfirmed';
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) {
       if (fasContextGone(e)) {
@@ -5654,10 +5877,25 @@
     // live via screenshot). Fire-and-forget -- the on-page toast below is the primary UI regardless
     // of whether the notification succeeds (e.g. OS notifications disabled for Chrome).
     try { const pn = chrome.runtime.sendMessage({ type: 'showVintedContinueNotification', itemId: queued.item.id, itemTitle: queued.item.title }); if (pn && pn.catch) pn.catch(() => {}); } catch (e) { /* non-fatal */ }
-    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Finished with <b>' + escapeHtml(queued.item.title) + '</b>?</div>' +
-      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Vinted took you away from the review screen before you could confirm. If you already clicked Vinted\'s own Upload for this item, continue to the next one below -- if not, just close this.</div>' +
-      button('fas-vin-continue', 'Continue to next item &#9654;', true) +
-      button('fas-vin-close', 'Not yet', false));
+    if (draftPending) {
+      // 1.0.76: the draft could not be found in the wardrobe. Ask; Continue only moves the queue (a draft is not listed).
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Did Vinted save <b>' + escapeHtml(queued.item.title) + '</b> as a draft?</div>' +
+        '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">FindA.Sale could not find it in your Vinted drafts yet. If the draft is there, continue to the next item. If not, fill it again. Nothing is posted either way.</div>' +
+        button('fas-vin-continue', 'Continue to next item &#9654;', true) +
+        button('fas-vin-refill', 'Fill it again', false) +
+        button('fas-vin-close', 'Not yet', false));
+      const refill = document.getElementById('fas-vin-refill');
+      if (refill) refill.onclick = async () => {
+        refill.disabled = true;
+        await fasVintedClearPendingDraft(queued.item.id);
+        location.href = LISTING_URL_HINT;
+      };
+    } else {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Finished with <b>' + escapeHtml(queued.item.title) + '</b>?</div>' +
+        '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Vinted took you away from the review screen before you could confirm. If you already clicked Vinted\'s own Upload for this item, continue to the next one below -- if not, just close this.</div>' +
+        button('fas-vin-continue', 'Continue to next item &#9654;', true) +
+        button('fas-vin-close', 'Not yet', false));
+    }
     const cont = document.getElementById('fas-vin-continue');
     fasArmButton(cont, 3500);
     if (cont) cont.onclick = async () => {
@@ -5670,11 +5908,11 @@
       cont.disabled = true;
       cont.textContent = 'Please wait…';
       await fasVintedRecordPost();
-      try { const mr = await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); if (mr && !mr.ok && !mr.deduped) console.warn('[FAS Vinted] markListed was NOT recorded:', JSON.stringify(mr)); } catch (e) { if (fasContextGone(e)) console.log('[FAS Vinted] continue-prompt: extension was reloaded, markListed skipped. Reload this page.'); else console.warn('[FAS Vinted] continue-prompt: markListed failed:', e && e.message); }
+      if (!draftPending) try { const mr = await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); if (mr && !mr.ok && !mr.deduped) console.warn('[FAS Vinted] markListed was NOT recorded:', JSON.stringify(mr)); } catch (e) { if (fasContextGone(e)) console.log('[FAS Vinted] continue-prompt: extension was reloaded, markListed skipped. Reload this page.'); else console.warn('[FAS Vinted] continue-prompt: markListed failed:', e && e.message); }
       // S-EXT-VINTED-REMOTE-LISTING-ID: this prompt usually shows on the organizer's own
       // /member/<id>?promo_shown=true landing page right after Vinted's Upload -- the best moment
       // to find the new listing's id in their wardrobe. Runs alongside the queue delay.
-      const capture = vintCapAfterMarkListed(queued.item);
+      const capture = draftPending ? fasVintedClearPendingDraft(queued.item.id) : vintCapAfterMarkListed(queued.item);
       try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) { if (fasContextGone(e)) console.log('[FAS Vinted] continue-prompt: extension was reloaded, advanceVintedQueue skipped. Reload this page.'); else console.warn('[FAS Vinted] continue-prompt: advanceVintedQueue failed:', e && e.message); }
       try { await capture; } catch (e) {}
       clearQueueDelayCountdown();
@@ -5942,7 +6180,11 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+    // 1.0.76: this item's Save draft is still waiting for confirmation (Vinted came back to the form instead of leaving
+    // it): confirm the draft in the wardrobe and move on, or ask, instead of filling the same item a second time.
+    if (await fasVintedHasPendingDraftFor(queued.item.id)) { await maybeShowVintedContinuePrompt(); return; }
     T.begin({ platform: 'VINTED', flow: 'post', item: { id: queued.item.id, title: queued.item.title }, itemPos: (queued.index + 1) + ' of ' + queued.total });
+    fasVintedFillStartedAt = Date.now();
     T.step('Checking the item can be sold on Vinted', 'Vinted has no local pickup and bans some categories; those are skipped up front to protect your account.');
 
     // S-VINTED-PICKUP-ONLY: refuse before anything is filled, counted as an attempt, or marked reviewed.
@@ -6130,6 +6372,8 @@
     vintCapMaybeCapture(); // fire-and-forget; no-op unless this tab filled a listing in the last 15 min
     // S-EXT-VINTED-SOLD-DETECT: fire-and-forget, read-only, throttled to once per 30 min across tabs.
     setTimeout(() => { vintSoldMaybeCheck(); }, 3000 + Math.floor(Math.random() * 4000));
+    // 1.0.76: drafts the organizer has since uploaded are recorded as listed (read-only, throttled to once per 15 min).
+    setTimeout(() => { fasVintedRecordUploadedDrafts(); }, 8000 + Math.floor(Math.random() * 4000));
     // 2026-10-12: automatic Vinted bundle reconciliation (reads the order from Vinted; see vintBundleOrdersMaybeRun).
     // Once shortly after load, then every 10 minutes while this tab lives (each order is throttled to once per 20 min).
     setTimeout(() => { vintBundleOrdersMaybeRun(); }, 9000 + Math.floor(Math.random() * 5000));

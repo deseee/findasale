@@ -1425,11 +1425,14 @@ async function fasEditApplyItem(tabId, platform, entry, state, itemPos) {
   return { state: 'fail', code: 'too_many_steps', reason: 'More than ' + FAS_EDIT_MAX_STEPS + ' steps without a verified result', step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
 }
 
-async function fasEditConfirm(platform, entry) {
+async function fasEditConfirm(platform, entry, readBackQty) {
+  // 2026-10-27: send the quantity the listing actually shows (read back after the edit) so the server records what the marketplace shows, not the stock number.
+  const qBody = { platform: platform };
+  if (Number.isInteger(readBackQty) && readBackQty >= 0) qBody.quantity = readBackQty;
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = platform === 'FACEBOOK'
       ? await apiFetch('/extension/items/' + encodeURIComponent(entry.id) + '/price-synced', { method: 'POST', body: {} })
-      : await apiFetch('/extension/items/' + encodeURIComponent(entry.id) + '/price-synced-for-platform', { method: 'POST', body: { platform: platform } });
+      : await apiFetch('/extension/items/' + encodeURIComponent(entry.id) + '/price-synced-for-platform', { method: 'POST', body: qBody });
     const ep = platform === 'FACEBOOK' ? 'price-synced' : 'price-synced-for-platform';
     if (r && r.ok) { fasT('info', 'confirm_ok', 'Told FindA.Sale the new value is verified on ' + platform + ' (/' + ep + ' HTTP ' + (r.status || 200) + ')', { platform: platform, flow: 'edit', itemId: entry.id, title: entry.title, ctx: { status: r.status || 200, attempt: attempt + 1 } }); return { ok: true }; }
     fasT('warn', 'confirm_failed', 'FindA.Sale did not accept the verified-price report for ' + platform + ' (/' + ep + ' HTTP ' + (r && r.status) + ' ' + String((r && r.error) || '').slice(0, 80) + ')', { platform: platform, flow: 'edit', itemId: entry.id, title: entry.title, ctx: { status: r && r.status, error: r && r.error, attempt: attempt + 1 } });
@@ -1715,7 +1718,7 @@ async function fasEditRunPlatform(platform, rawEntries) {
       if (poshHeld) { try { poshHoldNew = await fasPoshEditHoldRecord(entry, res); delete state.items[key]; } catch (e) { /* best-effort */ } }
       if (res.state === 'done') {
         if (platform === 'POSHMARK') { try { await fasPoshEditHoldClear(entry.id); } catch (e) { /* best-effort */ } }
-        const c = await fasEditConfirm(platform, entry);
+        const c = await fasEditConfirm(platform, entry, res.details && res.details.readBack ? Number(res.details.readBack.quantity) : undefined);
         applied++;
         delete state.items[key];
         const rb = res.details && res.details.readBack ? ' (read back ' + JSON.stringify(res.details.readBack).slice(0, 80) + ')' : '';

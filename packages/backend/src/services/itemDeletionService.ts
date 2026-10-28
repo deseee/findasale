@@ -16,6 +16,7 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { liveListingsByItemPlatform } from './liveListingState'; // 2026-10-27: shared live-listing rule
 import { endEbayListingIfExists } from '../controllers/ebayController';
 import { withdrawDiscogsListingIfExists } from './marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from './marketplace/reverbConnector';
@@ -109,16 +110,15 @@ export async function prepareItemForDeletion(
     if (opts.organizerId) {
       const listingJobs = await prisma.marketplaceListingJob.findMany({
         where: { itemId },
-        select: { platform: true, status: true, action: true, remoteListingId: true, createdAt: true },
+        select: { itemId: true, platform: true, status: true, action: true, remoteListingId: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true },
         orderBy: { createdAt: 'desc' },
       });
-      const latestJobByPlatform = new Map<string, (typeof listingJobs)[number]>();
-      for (const job of listingJobs) {
-        if (!latestJobByPlatform.has(job.platform)) latestJobByPlatform.set(job.platform, job);
-      }
-      const stillLivePlatforms = [...latestJobByPlatform.values()].filter(
-        (job) => job.action === 'POST' && job.status === 'POSTED'
-      );
+      // 2026-10-27 (liveListingState.ts): the shared live-listing rule. It also stops a failed removal attempt (REMOVE/SKIPPED, the
+      // newest row) from hiding a live listing here, and keeps a Poshmark Multi Item listing that sold some units there.
+      const stillLivePlatforms = [...liveListingsByItemPlatform(listingJobs).entries()].map(([key, live]) => ({
+        platform: key.slice(key.lastIndexOf(':') + 1) as (typeof listingJobs)[number]['platform'],
+        remoteListingId: live.remoteListingId,
+      }));
       if (stillLivePlatforms.length > 0) {
         await prisma.pendingListingRemoval.createMany({
           data: stillLivePlatforms.map((job) => ({

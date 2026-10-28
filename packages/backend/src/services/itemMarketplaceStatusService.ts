@@ -37,6 +37,7 @@ import { isPlatformPaused, sanitizePausedPlatforms } from './pausedMarketplaces'
 import { NOT_INFORMATIONAL_PUSH_WHERE, isInformationalPushCode } from '../lib/ebayPushInformational';
 import { isSoldOnPlatformRow, unitsLeftOnQuantityListing, QUANTITY_LISTING_PLATFORMS, SINGLE_UNIT_REPOST_PLATFORMS } from './singleUnitRepost';
 import { toAutoQueueSettings } from './autoQueueSettings';
+import { inStockOf } from './inventoryStockMath';
 
 export const EXTENSION_PLATFORMS = ['FACEBOOK', 'CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI', 'VINTED'] as const;
 export type ExtensionPlatform = (typeof EXTENSION_PLATFORMS)[number];
@@ -125,6 +126,12 @@ export interface PlatformStatusEntry {
    * for it (not paused), so a sale there with stock remaining is followed by a fresh listing. Absent otherwise.
    */
   autoRepostAfterSale?: boolean;
+  /**
+   * 1.0.76 (2026-10-27), Vinted only: the newest Vinted row is a sale there (sold_on_vinted) and the item still has stock.
+   * Vinted listings are drafts the organizer uploads and nothing lists the item there again by itself, so the item form
+   * shows a note ("Sold one on Vinted, N left ..."). Absent otherwise.
+   */
+  readyToListAgain?: { unitsLeft: number };
 }
 
 export interface ItemMarketplaceStatus {
@@ -163,6 +170,8 @@ export type StatusItemInput = ChannelStatusItemInput & {
   ebaySyncHeldAt?: Date | null;
   ebayHeldFields?: string[] | null;
   ebayContentDirtyAt?: Date | null;
+  stockTotal?: number | null;
+  stockSold?: number | null;
 };
 
 /** Markets whose unit count inventoryStockSync.ts can set. Every other platform is reported 'manual' there. */
@@ -250,6 +259,23 @@ export interface StatusInputs {
   ebayAcceptedConditions?: string[] | null;
 }
 
+/**
+ * Units in stock when the item's newest Vinted row (REMOVE/SKIPPED ignored, same rule as everywhere else) is a sale on
+ * Vinted (REMOVE/REMOVED, lastErrorMessage 'sold_on_vinted...') and stock remains; otherwise null. Null too when the stock
+ * numbers were not loaded (stockSold missing), so an older caller never shows a wrong count.
+ */
+export function vintedReadyToListAgain(
+  jobs: readonly MarketplaceJobRow[],
+  itemId: string,
+  stock: { stockTotal?: number | null; stockSold?: number | null }
+): number | null {
+  if (typeof stock.stockSold !== 'number') return null;
+  const latest = latestJobByItemPlatform(jobs.filter((j) => j.itemId === itemId && j.platform === 'VINTED')).get(`${itemId}:VINTED`);
+  if (!latest || !isSoldOnPlatformRow(latest, 'VINTED')) return null;
+  const left = inStockOf({ stockTotal: stock.stockTotal ?? null, stockSold: stock.stockSold });
+  return left > 0 ? left : null;
+}
+
 /** Pure composition: everything has been fetched by the caller. */
 export function buildItemMarketplaceStatus(inputs: StatusInputs): ItemMarketplaceStatus {
   const { item } = inputs;
@@ -315,7 +341,12 @@ export function buildItemMarketplaceStatus(inputs: StatusInputs): ItemMarketplac
       ineligible = base === 'PUBLISHED_INELIGIBLE';
     } else status = base === 'ELIGIBLE' ? 'eligible' : 'none';
     const autoRepost = !isPaused && SINGLE_UNIT_REPOST_PLATFORMS.includes(platform) && inputs.autoQueueEnabled?.[platform] === true;
-    ext[EXT_KEYS[platform]] = entry(platform, status, {}, { ...(ineligible ? { ineligible: true } : {}), ...(autoRepost ? { autoRepostAfterSale: true } : {}) });
+    const readyAgain = platform === 'VINTED' && !isPaused && !listed ? vintedReadyToListAgain(inputs.jobs, item.id, item) : null;
+    ext[EXT_KEYS[platform]] = entry(platform, status, {}, {
+      ...(ineligible ? { ineligible: true } : {}),
+      ...(autoRepost ? { autoRepostAfterSale: true } : {}),
+      ...(readyAgain != null ? { readyToListAgain: { unitsLeft: readyAgain } } : {}),
+    });
   }
 
   return {
@@ -363,6 +394,8 @@ export const ITEM_STATUS_SELECT = {
   packageWidthIn: true,
   packageHeightIn: true,
   aiPackageDimsJson: true, // 2026-10-27: Poshmark's label note (length plus girth) falls back to the photo estimate
+  stockTotal: true, // 1.0.76: Vinted "sold one, N left" note (vintedReadyToListAgain)
+  stockSold: true,
   ebayShippingOverride: true, // 2026-10-27: pickup-only is ineligible on Poshmark, Mercari, Vinted and Grailed (live listing flagged for removal)
 } as const;
 
