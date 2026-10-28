@@ -138,7 +138,8 @@ const extensionPresent = fs.existsSync(popupPath);
     expect(popupSrc).toContain('localPickupOnly: it.localPickupOnly === true,');
     expect(popupSrc).toContain('.filter((it) => !isPickupOnlyBlockedOnCurrentChannel(it))');
     expect(popupSrc).toContain('if (isPickupOnlyBlockedOnCurrentChannel(it)) {');
-    expect(popupSrc).toContain('skipped for ');
+    // 1.0.78 popup declutter: the held-back note is now one short line ("N pickup only") with details behind "why?".
+    expect(popupSrc).toContain("parts.push(pickup + ' pickup only')");
   });
 
   it('background.js renewal queue items and fas-vinted.js are wired', () => {
