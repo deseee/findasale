@@ -9,6 +9,9 @@ const selected = new Set();
 // never gives those a checkbox at all -- see fbBlocked in row()). Select All operates on exactly
 // this set so it never tries to select something that isn't actually checkable on screen.
 let visibleSelectableIds = [];
+// 1.0.77/1.0.78: what the Vinted content script found already LIVE on Vinted (fas-vinted.js duplicate guard,
+// fasVintedPresent). Read from chrome.storage.local when the popup opens. 1.0.78: drafts are no longer marked or blocked.
+let VINTED_PRESENT = {};
 // (2026-09-03, S-EXT-ITEM-SEARCH -- Patrick-reported live: "hard to find things when you have
 // more than a few items to list") Free-text filter applied in render() against title + category
 // before grouping. Lives outside #list so it survives render()'s full innerHTML rebuild.
@@ -196,6 +199,7 @@ async function load() {
   await loadAutoRenewSetting();
   await loadHideFromFriendsSetting();
   await loadPausedMarketplaces();
+  await loadVintedPresence();
   render();
 }
 
@@ -433,6 +437,57 @@ function showPaceHint(ch) {
   } catch (e) { /* storage unavailable: no hint */ }
 }
 
+// Vinted tab mark (1.0.78). 'live' = "Already on Vinted", null = not marked (or not the Vinted tab). A live item stays
+// selectable: "Select all" leaves it out, but the organizer can tick it, and the row then says that posting again makes a
+// second listing. The queue item carries vintedPostAgain so fas-vinted.js fills it as asked instead of skipping it.
+// A Vinted draft is never marked and never blocks anything (the extension stopped creating drafts in 1.0.77).
+async function loadVintedPresence() {
+  try {
+    const st = await chrome.storage.local.get(['fasVintedPresent']);
+    VINTED_PRESENT = st.fasVintedPresent && typeof st.fasVintedPresent === 'object' ? st.fasVintedPresent : {};
+  } catch (e) { VINTED_PRESENT = {}; }
+}
+function vintedPresenceOf(it) {
+  if (currentChannel() !== 'vinted' || !self.FAS_VINTED_DRAFTS) return null;
+  return self.FAS_VINTED_DRAFTS.popupPresence(it, [], VINTED_PRESENT, Date.now());
+}
+function vintedLiveOnVinted(it) { return vintedPresenceOf(it) === 'live'; }
+const VINTED_POST_AGAIN_NOTE = 'Already on Vinted. Posting again makes a second listing.';
+
+// 1.0.78 (owner report 2026-10-27, "the UI is so cluttered now"): the separate "N items hidden", "N items skipped:
+// local pickup only" and "N items already on Vinted" paragraphs are one short line, with the details behind "why?".
+// counts = { ineligible, pickup, live, channel }. Returns { line, why: [sentences] } or null when there is nothing to say.
+function hiddenSummary(counts) {
+  const c = counts || {};
+  const ineligible = Number(c.ineligible) || 0;
+  const pickup = Number(c.pickup) || 0;
+  const live = Number(c.live) || 0;
+  const ch = c.channel || 'this marketplace';
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+  const parts = [];
+  if (ineligible) parts.push(ineligible + ' not eligible');
+  if (pickup) parts.push(pickup + ' pickup only');
+  const hidden = ineligible + pickup;
+  const bits = [];
+  if (hidden) bits.push(hidden + ' hidden: ' + parts.join(', '));
+  if (live) bits.push(live + ' already on ' + ch);
+  if (!bits.length) return null;
+  const why = [];
+  if (ineligible) why.push(plural(ineligible, 'item does', 'items do') + ' not fit ' + ch + '\'s categories. Check "Show all items" to see ' + (ineligible === 1 ? 'it' : 'them') + '.');
+  if (pickup) why.push(plural(pickup, 'item is', 'items are') + ' local pickup only. ' + ch + ' has no local pickup (the buyer always pays for shipping). Check "Show local pickup only items" to see ' + (pickup === 1 ? 'it' : 'them') + '.');
+  if (live) why.push(plural(live, 'item is', 'items are') + ' already listed on ' + ch + '. Select all leaves ' + (live === 1 ? 'it' : 'them') + ' out. Tick one yourself to post it again; that makes a second listing.');
+  return { line: bits.join('. ') + '.', why };
+}
+function renderHiddenSummary(counts) {
+  const box = $('hiddenSummary');
+  if (!box) return;
+  const s = hiddenSummary(counts);
+  if (!s) { box.hidden = true; return; }
+  box.hidden = false;
+  $('hiddenSummaryLine').textContent = s.line;
+  $('hiddenSummaryWhy').innerHTML = s.why.map((w) => '<div>' + esc(w) + '</div>').join('');
+}
+
 function onChannelChange() {
   const ch = currentChannel();
   showPaceHint(ch);
@@ -484,8 +539,6 @@ function onChannelChange() {
   if (showAllRow) showAllRow.hidden = !PLATFORM_ELIGIBILITY_KEY[ch];
   const showPickRow = $('showPickupOnlyRow');
   if (showPickRow) showPickRow.hidden = PICKUP_INCOMPATIBLE_PLATFORMS.indexOf(String(ch || '').toUpperCase()) === -1;
-  const eligNote = $('eligibilityNote');
-  if (eligNote && !PLATFORM_ELIGIBILITY_KEY[ch]) eligNote.hidden = true;
   checkResumeableQueue(ch);
   if (ITEMS.length) render();
   updateCount();
@@ -518,8 +571,8 @@ async function checkResumeableQueue(channel) {
     if (abtn) abtn.onclick = () => { if (isChannelPaused(channel)) return; chrome.tabs.create({ url: CFG[cfg.postUrlKey] }); window.close(); };
     return;
   }
-  banner.innerHTML = 'A ' + esc(cfg.label) + ' posting run is already in progress (item ' + (index + 1) + ' of ' + queue.length + ') &mdash; ' +
-    '<button type="button" class="link" id="resumeQueueBtn">reopen that tab</button> instead of picking items again.';
+  banner.innerHTML = 'A ' + esc(cfg.label) + ' posting run is already in progress (item ' + (index + 1) + ' of ' + queue.length + '). ' +
+    '<button type="button" class="link" id="resumeQueueBtn">Reopen that tab</button> instead of picking items again.';
   const btn = document.getElementById('resumeQueueBtn');
   if (btn) btn.onclick = () => { if (isChannelPaused(channel)) return; chrome.tabs.create({ url: CFG[cfg.postUrlKey] }); window.close(); };
 }
@@ -538,7 +591,7 @@ async function renderCraigslistLoginNote() {
   n.hidden = false;
   n.textContent = r.loggedIn
     ? 'Craigslist: logged in as of the last check.'
-    : 'Craigslist: not logged in as of the last check \u2014 guest posts need email verification, and unattended auto-renew will notify you instead of posting until you\'re logged in.';
+    : 'Craigslist: not logged in as of the last check. Guest posts need email verification, and unattended auto-renew will notify you instead of posting until you\'re logged in.';
 }
 
 // (ADR-102, 2026-08-09) Same best-effort informational note as renderCraigslistLoginNote above,
@@ -553,7 +606,7 @@ async function renderGumtreeAuLoginNote() {
   n.hidden = false;
   n.textContent = r.loggedIn
     ? 'Gumtree Australia: logged in as of the last check.'
-    : 'Gumtree Australia: not logged in as of the last check \u2014 sign in before posting, and unattended auto-renew will notify you instead of trying until you\'re logged in.';
+    : 'Gumtree Australia: not logged in as of the last check. Sign in before posting, and unattended auto-renew will notify you instead of trying until you\'re logged in.';
 }
 
 // Per-marketplace category eligibility (S-EXT-BATCH-2026-08-19): true when `it` is INELIGIBLE
@@ -630,6 +683,7 @@ function render() {
   const groups = {};
   let hiddenIneligibleCount = 0;
   let hiddenPickupOnlyCount = 0; // S-VINTED-PICKUP-ONLY
+  let vintedLiveCount = 0; // 1.0.78: shown and selectable, but left out of "Select all"
   const poshLabelItems = []; // 1.0.71: shown Poshmark items that will carry a label deduction
   let hiddenBySearchCount = 0;
   ITEMS.forEach((it) => {
@@ -650,22 +704,19 @@ function render() {
       const haystack = ((it.title || '') + ' ' + (it.category || '') + ' ' + self.FAS_KIT.kitComponents(it).map((c) => c.title).join(' ')).toLowerCase();
       if (!haystack.includes(q)) { hiddenBySearchCount++; return; }
     }
+    if (vintedLiveOnVinted(it)) vintedLiveCount++;
     const bySale = (groups[it.saleTitle] = groups[it.saleTitle] || {});
     const cat = categoryLabel(it);
     (bySale[cat] = bySale[cat] || []).push(it);
     if (currentChannel() === 'poshmark' && poshLabelAmountText(it)) poshLabelItems.push(it);
   });
-  const eligNote = $('eligibilityNote');
-  if (eligNote) {
-    const eligKey = PLATFORM_ELIGIBILITY_KEY[currentChannel()];
-    if ((eligKey || currentChannel() === 'facebook') && hiddenIneligibleCount > 0 && !showAll) {
-      eligNote.hidden = false;
-      eligNote.textContent = hiddenIneligibleCount + ' item' + (hiddenIneligibleCount === 1 ? '' : 's') +
-        ' hidden — not eligible for this marketplace. Check "Show all items" above to see them.';
-    } else {
-      eligNote.hidden = true;
-    }
-  }
+  const eligKey = PLATFORM_ELIGIBILITY_KEY[currentChannel()];
+  renderHiddenSummary({
+    ineligible: (eligKey || currentChannel() === 'facebook') && !showAll ? hiddenIneligibleCount : 0,
+    pickup: hiddenPickupOnlyCount,
+    live: vintedLiveCount,
+    channel: channelName(currentChannel()),
+  });
   const poshNote = $('poshLabelNote');
   if (poshNote) {
     if (poshLabelItems.length) {
@@ -675,17 +726,6 @@ function render() {
         '. Its prepaid label covers up to 5 lb; 5-10 lb costs $5, 10-15 lb $10, 15-25 lb $15, and over 25 lb the full shipping cost.';
     } else {
       poshNote.hidden = true;
-    }
-  }
-  const pickupNote = $('pickupOnlyNote');
-  if (pickupNote) {
-    if (hiddenPickupOnlyCount > 0) {
-      const chName = channelName(currentChannel());
-      pickupNote.hidden = false;
-      pickupNote.textContent = hiddenPickupOnlyCount + ' item' + (hiddenPickupOnlyCount === 1 ? '' : 's') +
-        ' skipped for ' + chName + ': local pickup only. ' + chName + ' has no local pickup option (the buyer always pays for shipping), so these are not offered here. Check "Show local pickup only items" above to see them.';
-    } else {
-      pickupNote.hidden = true;
     }
   }
   const saleTitles = Object.keys(groups);
@@ -725,7 +765,8 @@ function render() {
     const bySale = groups[saleTitle];
     Object.keys(bySale).forEach((cat) => {
       bySale[cat].forEach((it) => {
-        const blocked = (currentChannel() === 'facebook' && it.facebookRestricted === true) || isPickupOnlyBlockedOnCurrentChannel(it);
+        // 1.0.78: an item already live on Vinted is left out of Select all but stays selectable by hand.
+        const blocked = (currentChannel() === 'facebook' && it.facebookRestricted === true) || isPickupOnlyBlockedOnCurrentChannel(it) || vintedLiveOnVinted(it);
         if (!blocked) visibleSelectableIds.push(it.id);
       });
     });
@@ -754,6 +795,8 @@ function row(it) {
   // still the authoritative reject -- this is UI guidance, not the real gate.
   const pickupBlocked = isPickupOnlyBlockedOnCurrentChannel(it);
   const fbBlocked = (currentChannel() === 'facebook' && it.facebookRestricted === true) || pickupBlocked;
+  // 1.0.78: already live on Vinted: a small mark, never a disabled checkbox. Ticking it shows VINTED_POST_AGAIN_NOTE.
+  const vPresence = vintedPresenceOf(it);
   // "Already posted?" manual mark -- covers the case where the organizer posted this item by
   // hand on the current channel (extension automation stalled, or they just did it themselves
   // directly on that marketplace). GENERALIZED 2026-08-30 (S-EXT-MARK-POSTED-PARITY,
@@ -777,28 +820,41 @@ function row(it) {
   const kitComps = kit ? self.FAS_KIT.kitComponents(it) : [];
   const qty = self.FAS_KIT.itemQuantity(it);
   const kitSummary = kitComps.map((c) => (c.quantity > 1 ? c.quantity + ' x ' : '') + c.title).join(', ');
+  // 1.0.78 row layout (owner report 2026-10-27: badges squeezed a kit title to "C." and wrapped the price into a
+  // one-word column): the title gets its own full-width line; price, condition, quantity, the small badges and the
+  // "Already posted?" text link share one wrapping line below it, ending with the kit list (truncated, full list on hover;
+  // it wraps to its own line when there is no room); then, for a ticked live Vinted item, the one-line post-again note.
+  const facts = '$' + (it.price != null ? Number(it.price).toFixed(2) : '-') +
+    (it.condition ? ' · ' + esc(it.condition) : '') + (qty > 1 ? ' · qty ' + qty : '');
   d.innerHTML = img +
-    '<div class="meta"><div class="t">' + esc(it.title) + '</div><div class="p">$' + (it.price != null ? Number(it.price).toFixed(2) : '—') +
-    ' · ' + esc(it.condition || '') + (qty > 1 ? ' · qty ' + qty : '') + '</div>' +
-    (kit ? '<div class="p kitline" title="' + esc(kitSummary) + '">Includes: ' + (kitSummary ? esc(kitSummary) : '(no components listed)') + '</div>' : '') + '</div>' +
+    '<div class="meta"><div class="t" title="' + esc(it.title) + '">' + esc(it.title) + '</div>' +
+    '<div class="sub"><span class="facts">' + facts + '</span>' +
     (kit ? '<span class="badge badge-kit" title="Kit: ' + esc(kitSummary || 'bundle of items') + '">KIT</span>' : '') +
-    (currentListedFlag(it) ? '<span class="badge">LISTED</span>' : '') +
+    (currentListedFlag(it) && vPresence !== 'live' ? '<span class="badge">LISTED</span>' : '') +
+    (vPresence === 'live' ? '<span class="badge badge-live" title="This item is already listed on ' + esc(channelName(currentChannel())) + '">On Vinted</span>' : '') +
     (pickupBlocked ? '<span class="badge badge-blocked" title="Marked local pickup only; ' + esc(channelName(currentChannel())) + ' cannot sell it as intended">PICKUP ONLY</span>' : '') +
     (fbBlocked && !pickupBlocked ? '<span class="badge badge-blocked" title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '">NOT ALLOWED ON FB</span>' : '') +
     (ineligible ? '<span class="badge badge-blocked" title="' + esc(ineligibleReason(it)) + '">MAY NOT FIT</span>' : '') +
     (!ineligible && eligibleNote(it) ? '<span class="badge" title="' + esc(eligibleNote(it)) + '">' + (currentChannel() === 'poshmark' && poshLabelAmountText(it) ? 'LABEL ' + esc(poshLabelAmountText(it)) : 'NOTE') + '</span>' : '') +
     (showMarkPosted ? '<button type="button" class="markPostedBtn" title="I already posted this item to ' + esc(channelName(currentChannel())) + ' myself, outside the extension">Already posted?</button>' : '') +
+    (kit ? '<span class="kitline" title="' + esc(kitSummary) + '">Includes: ' + (kitSummary ? esc(kitSummary) : '(no components listed)') + '</span>' : '') +
+    '</div>' +
+    (vPresence === 'live' ? '<div class="postAgainNote" hidden>' + esc(VINTED_POST_AGAIN_NOTE) + '</div>' : '') +
+    '</div>' +
     '<input type="checkbox" class="cb"' + (fbBlocked ? ' disabled title="' + esc(pickupBlocked ? 'Local pickup only' : (it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace')) + '"' : '') + '>';
   const cb = d.querySelector('.cb');
+  const againNote = d.querySelector('.postAgainNote');
+  const showAgain = () => { if (againNote) againNote.hidden = !(cb && cb.checked); };
   if (fbBlocked) {
     // Make sure a coin/currency item can't sneak into the selected set (e.g. selected while on
     // a different channel, then the organizer switches to Facebook without re-clicking it).
     selected.delete(it.id);
   } else if (cb) {
     cb.checked = selected.has(it.id);
-    const toggle = () => { cb.checked = !cb.checked; sync(it.id, cb.checked); };
+    showAgain();
+    const toggle = () => { cb.checked = !cb.checked; sync(it.id, cb.checked); showAgain(); };
     d.onclick = (e) => { if (e.target !== cb) toggle(); };
-    cb.onclick = (e) => { e.stopPropagation(); sync(it.id, cb.checked); };
+    cb.onclick = (e) => { e.stopPropagation(); sync(it.id, cb.checked); showAgain(); };
   }
   if (showMarkPosted) {
     const markBtn = d.querySelector('.markPostedBtn');
@@ -939,6 +995,9 @@ async function startQueue() {
     vintedDomesticShippingUsd: it.vintedDomesticShippingUsd,
     shippingOverride: it.shippingOverride,
     localPickupOnly: it.localPickupOnly === true, // S-VINTED-PICKUP-ONLY: raw organizer flag (fas-vinted.js refuses these)
+    // 1.0.78: the organizer ticked this item while it showed "Already on Vinted", so fas-vinted.js fills it as asked
+    // instead of skipping it as a duplicate.
+    vintedPostAgain: ch === 'vinted' && vintedLiveOnVinted(it),
     allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
     // S-EXT-MERCARI-BATCH-4 (2026-08-23, Patrick-directed): bestOfferAutoAcceptAmt now flows
     // through too -- Patrick's explicit direction is that this should be the DEFAULT Smart

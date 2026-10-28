@@ -31,16 +31,30 @@ header { padding: 8px 10px; border-bottom: 1px solid #26362d; display: flex; ali
 .item:hover { background: #182720; }
 .item img { width: 32px; height: 32px; object-fit: cover; border-radius: 6px; background: #26362d; flex: 0 0 auto; }
 .item .meta { flex: 1; min-width: 0; }
-.item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 1.0.78 row layout: the title owns its own full-width line (up to two lines, never squeezed by badges); price,
+   condition, qty, small badges and the "Already posted?" text link share one wrapping line under it. */
+.item .t { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; line-height: 1.3; }
 .item .p { color: #9fb6a8; font-size: 12px; }
-.item .badge { font-size: 10px; color: #14201a; background: #6fd08c; border-radius: 4px; padding: 1px 5px; font-weight: 700; white-space: nowrap; flex: 0 0 auto; }
-.item .badge-blocked { color: #2a1414; background: #e08a7a; margin-left: 4px; }
-.item .badge-kit { color: #10202e; background: #8ec5f0; margin-right: 4px; }
-.item .kitline { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin-top: 1px; color: #9fb6a8; font-size: 12px; line-height: 1.35; }
+.item .sub > * { white-space: nowrap; }
+.item .badge { font-size: 9px; line-height: 14px; letter-spacing: .02em; color: #14201a; background: #6fd08c; border-radius: 3px; padding: 0 4px; font-weight: 700; white-space: nowrap; }
+.item .badge-blocked { color: #2a1414; background: #e08a7a; }
+.item .badge-kit { color: #10202e; background: #8ec5f0; }
+.item .badge-live { color: #2a2414; background: #e7c27a; }
+.item .kitline { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+.item .postAgainNote { margin-top: 2px; font-size: 11px; color: #ffcf7a; }
+.item .cb { flex: 0 0 auto; margin: 0 0 0 2px; }
 .item .cb:disabled { opacity: .35; cursor: not-allowed; }
-.item .markPostedBtn { flex: 0 0 auto; font-size: 10px; color: #6fd08c; background: none; border: 1px solid #3c8c5a; border-radius: 4px; padding: 2px 6px; cursor: pointer; white-space: nowrap; }
-.item .markPostedBtn:hover { background: #1d2a22; }
-.item .markPostedBtn:disabled { opacity: .5; cursor: default; }
+.item .markPostedBtn { font: inherit; font-size: 11px; color: #6fd08c; background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+.item .markPostedBtn:hover { color: #8fe0a8; }
+.item .markPostedBtn:disabled { opacity: .5; cursor: default; text-decoration: none; }
+/* 1.0.78: one compact "N hidden: ..." line with the details behind "why?" (replaces three stacked paragraphs). */
+.note.hiddenSummary { margin: 0; padding: 4px 10px; border-bottom: 1px solid #26362d; }
+.note.hiddenSummary summary { color: #9fb6a8; list-style: none; }
+.note.hiddenSummary summary::-webkit-details-marker { display: none; }
+.note.hiddenSummary .why { color: #6fd08c; text-decoration: underline; white-space: nowrap; }
+.note.hiddenSummary[open] summary { margin-bottom: 2px; }
+.hiddenSummaryWhy div { margin-top: 2px; }
 .searchRow { padding: 6px 10px; border-bottom: 1px solid #26362d; }
 .searchInput { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid #26362d; background: #1a2620; color: #eef3ee; font: inherit; }
 .searchInput::placeholder { color: #7f9b8a; }
@@ -101,3 +115,57 @@ header { align-items: center; }
 .zoomBtn { background: #1d2a22; color: #eef3ee; border: 1px solid #2f4337; border-radius: 4px; padding: 1px 7px; font: inherit; font-size: 12px; cursor: pointer; }
 .zoomBtn:hover { background: #26382d; }
 .zoomBtn:disabled { opacity: .4; cursor: default; }
+
+/* 1.0.78 height budget (owner's popup at 1.3x showed about 1.5 item rows): the fixed chrome above and below the list is
+   tighter, so the list (the only flexing region, see body > *:not(.list) above) gets the height. Nothing is removed:
+   the XP strip and Hunt Pass share one line, the filters sit in a two-column grid, "Post to" is inline with its select,
+   and "What does this do?" and "More settings" are two small links on one row (an opened one takes the full width). */
+header { padding: 5px 10px; }
+.guildBar { flex-direction: row; align-items: center; gap: 8px; padding: 3px 10px; }
+.guildBar .guildBarRow { flex: 1 1 auto; min-width: 0; }
+.guildBar .guildHuntPass { flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.controls { display: grid; grid-template-columns: 1fr auto; grid-auto-flow: row dense; align-items: center; gap: 1px 10px; padding: 3px 10px; }
+.controls .count { grid-column: 2; justify-self: end; white-space: nowrap; }
+.controls .chk { white-space: nowrap; }
+.searchRow { padding: 3px 10px; }
+.searchInput { padding: 3px 8px; }
+.note.hiddenSummary { padding: 2px 10px; }
+.sale-group { padding: 2px 10px 0; }
+.category-group summary { padding: 2px 10px; }
+.item { padding: 4px 10px; }
+footer { padding: 5px 10px 4px; }
+.channelRow { display: flex; align-items: center; gap: 8px; }
+.channelRow > label { flex: 0 0 auto; white-space: nowrap; }
+.channelRow .select { margin-top: 0; flex: 1 1 auto; min-width: 0; padding: 4px 6px; }
+#autoPublishRow { display: block; margin-top: 3px; }
+#autoPublishRow[hidden] { display: none; }
+button.primary { margin-top: 5px; padding: 7px; }
+#paceHint { margin-top: 4px; }
+.footerLinks { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 14px; }
+.footerLinks > .note { margin: 4px 0 0; }
+.footerLinks > details[open] { flex-basis: 100%; order: 2; }
+.footerLinks > p { flex-basis: 100%; order: 3; }
+.sale-group { font-size: 10px; line-height: 14px; }
+.category-group summary { font-size: 10px; line-height: 14px; padding: 1px 10px; }
+.item { padding: 3px 10px; }
+.item .sub .kitline { flex: 1 1 90px; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: #7f9b8a; }
+header { padding: 3px 10px; }
+.brand { font-size: 15px; }
+button.primary { padding: 6px; }
+/* Title: one full-width line (full title on hover), so more rows fit; badges never share its line. */
+.item .t { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: unset; }
+.item img { width: 30px; height: 30px; }
+.item .sub .kitline { flex-basis: 60px; }
+.controls { gap: 0 10px; padding: 2px 10px; }
+.controls input[type="checkbox"] { margin: 0 4px 0 0; vertical-align: -2px; width: 13px; height: 13px; }
+.controls .chk, .controls .count { line-height: 18px; }
+.searchRow { padding: 3px 10px; }
+.searchInput { font-size: 12px; padding: 2px 8px; }
+.sale-group, .category-group summary { line-height: 12px; padding-top: 1px; padding-bottom: 1px; }
+.item { padding: 2px 10px; }
+.item .t { line-height: 1.25; }
+.item .sub { line-height: 1.25; margin-top: 0; }
+footer { padding: 4px 10px 3px; }
+.channelRow .select { padding: 3px 6px; }
+button.primary { margin-top: 4px; padding: 5px; }
+.footerLinks > .note { margin-top: 3px; }

@@ -1,12 +1,19 @@
-// fas-vinted-drafts.js -- pure helpers for the Vinted drafts-only flow (extension 1.0.76, 2026-10-27).
+// fas-vinted-drafts.js -- pure helpers for the Vinted fill-and-stop flow (extension 1.0.77, 2026-10-27; 1.0.78 2026-10-27).
 //
-// Vinted is drafts only (owner decision 1.0.63): FindA.Sale fills the form and presses Vinted's "Save draft", never Upload.
-// Live 2026-10-27: after Save draft, Vinted leaves the form for the member profile, which used to stall a multi-item queue.
+// 1.0.77 (owner decision 2026-10-27): Vinted listings are no longer saved as drafts. FindA.Sale fills the listing and
+// stops with Vinted's own form ready; the organizer clicks Upload. No code clicks Upload or Save draft.
 // These helpers decide, from the organizer's own wardrobe API rows (GET /api/v2/wardrobe/<id>/items, where a draft has
-// is_draft: true), (1) whether the draft just saved for the queued item really exists, so the queue can move on, and
-// (2) which recorded drafts the organizer has since uploaded (is_draft: false, same id), so FindA.Sale can record them.
-// Nothing here clicks, fetches or touches chrome.*; it is unit-tested in Node (extension/tests/fas-vinted-draft-advance.test.js).
-// Loaded before fas-vinted.js in the manifest (window.FAS_VINTED_DRAFTS) and by Node (module.exports).
+// is_draft: true and a live listing is_draft: false), (1) which live listing is the organizer's own Upload of the
+// queued item, (2) whether a form reset is refilled or the prompt shows (2 refills per item), (3) whether a queued item
+// is already live on Vinted so it is skipped instead of listed twice, (4) what the popup marks,
+// and (5) which drafts saved by 1.0.63-1.0.76 the organizer has since uploaded, so FindA.Sale can record them.
+// 1.0.78 (owner report 2026-10-27, "says draft waiting on vinted and can't click through it"): a Vinted draft is no
+// longer a reason to skip or block anything. The extension stopped creating drafts in 1.0.77, so only a LIVE listing
+// counts as already there: FindA.Sale's own record, a recorded legacy draft the organizer has since uploaded, or a
+// live (non-draft, not closed) wardrobe listing with the exact title.
+// Nothing here clicks, fetches or touches chrome.*; it is unit-tested in Node
+// (extension/tests/fas-vinted-draft-advance.test.js and fas-vinted-drafts-only.test.js).
+// Loaded before fas-vinted.js in the manifest and before popup.js in popup.html (self.FAS_VINTED_DRAFTS) and by Node.
 (function (root) {
   'use strict';
 
@@ -16,6 +23,14 @@
   var DRAFT_KEEP_MS = 60 * 24 * 60 * 60 * 1000;
   var LISTED_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
   var MAX_DRAFTS = 200;
+  // Refills of the same never-submitted listing after Vinted resets the form, per item.
+  var MAX_REFILLS = 2;
+  // Fills the organizer moved on from without a confirmed upload, watched for a late upload.
+  var AWAITING_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+  var MAX_AWAITING = 50;
+  // What the duplicate guard found per item, shown in the popup.
+  var PRESENT_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
+  var MAX_PRESENT = 500;
 
   // Same folding as fas-vinted.js fasFoldTitle (so a title compares the way the removal flow compares it).
   function fold(s) {
@@ -72,44 +87,51 @@
     return a > b;
   }
 
-  function wantedTitles(pending) {
+  // Live = posted and still up: not a draft, not closed (sold / closed listings are not live).
+  function isLiveRow(it) { return !!it && it.is_draft === false && it.is_closed !== true; }
+
+  function wantedTitles(p) {
     var out = [];
-    [pending && pending.title, pending && pending.altTitle].forEach(function (t) {
+    [p && p.title, p && p.altTitle].forEach(function (t) {
       var f = fold(t);
       if (f && out.indexOf(f) === -1) out.push(f);
     });
     return out;
   }
 
-  // Draft ids already in the wardrobe with the pending item's title, taken just before Save draft is pressed.
-  function draftIdsWithTitle(items, pending) {
-    var want = wantedTitles(pending);
+  // Same-title live ids in the wardrobe before the organizer's upload (the "already there" snapshot). Rows that say they
+  // were created after `sinceMs` (the fill start) are left out: those cannot be older listings.
+  function liveIdsWithTitle(items, p, sinceMs) {
+    var want = wantedTitles(p);
     var ids = [];
     if (!Array.isArray(items) || !want.length) return ids;
+    var since = Number(sinceMs) || 0;
     items.forEach(function (it) {
-      if (!it || it.is_draft !== true) return;
+      if (!isLiveRow(it)) return;
       var id = idOf(it);
-      if (id && want.indexOf(fold(it.title)) !== -1 && ids.indexOf(id) === -1) ids.push(id);
+      if (!id || want.indexOf(fold(it.title)) === -1 || ids.indexOf(id) !== -1) return;
+      var created = createdAtMs(it);
+      if (since && created != null && created >= since - CLOCK_SKEW_MS) return;
+      ids.push(id);
     });
     return ids;
   }
 
-  // The draft Vinted saved for `pending` ({ itemId, title, altTitle, startedAt, priorDraftIds }), or null.
-  // A candidate is an is_draft row whose folded title equals the filled title, that is not already recorded for another
-  // fill, and that is new: either absent from the pre-save snapshot (priorDraftIds) or, when the row carries a timestamp,
-  // created after the fill started. With neither a snapshot nor a timestamp there is no way to tell it is new: null.
-  // The newest candidate wins.
-  function findConfirmedDraft(items, pending, recordedDraftIds) {
+  // The listing the organizer uploaded for `pending` ({ itemId, title, altTitle, startedAt, priorLiveIds }), or null.
+  // A candidate is a live row whose folded title equals the filled title, that is not already recorded, and that is new:
+  // either absent from the snapshot (priorLiveIds) or, when the row carries a timestamp, created after the fill started.
+  // With neither a snapshot nor a timestamp there is no way to tell it is new: null. The newest candidate wins.
+  function findOrganizerUpload(items, pending, recordedIds) {
     if (!Array.isArray(items) || !pending || !pending.itemId) return null;
     var want = wantedTitles(pending);
     if (!want.length) return null;
-    var prior = Array.isArray(pending.priorDraftIds) ? pending.priorDraftIds.map(String) : null;
-    var recorded = Array.isArray(recordedDraftIds) ? recordedDraftIds.map(String) : [];
+    var prior = Array.isArray(pending.priorLiveIds) ? pending.priorLiveIds.map(String) : null;
+    var recorded = Array.isArray(recordedIds) ? recordedIds.map(String) : [];
     var startedAt = Number(pending.startedAt) || 0;
     var best = null;
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
-      if (!it || typeof it !== 'object' || it.is_draft !== true) continue;
+      if (!isLiveRow(it)) continue;
       var id = idOf(it);
       if (!id || want.indexOf(fold(it.title)) === -1) continue;
       if (recorded.indexOf(id) !== -1) continue;
@@ -120,19 +142,98 @@
       } else if (!prior) {
         continue;
       }
-      if (!best || idGreater(id, best.draftId)) best = { draftId: id, createdAt: created };
+      if (!best || idGreater(id, best.listingId)) best = { listingId: id, createdAt: created };
     }
     return best;
   }
 
-  // What to do once the flow has left Vinted's review screen for the queued item.
-  //   'none'    no draft save is waiting for this queued item (stale or another item): today's behavior applies
-  //   'advance' the draft is confirmed: record it, move the queue on, open the next item (paced)
-  //   'prompt'  not confirmed: show the "Continue / Not yet" prompt, never mark anything listed
-  // Never returns anything that presses a Vinted button: the furthest automation goes is Save draft.
-  function decideAfterLeavingReview(pending, queuedItemId, confirmedDraft) {
+  // What to do once the organizer has left (or asked about) the filled form for the queued item.
+  //   'none'    nothing is waiting for this queued item (stale or another item)
+  //   'advance' their upload was found: record it with its Vinted id, move the queue on, open the next item (paced)
+  //   'prompt'  not found: show the "Continue / Not yet" prompt; Continue only moves the queue, never marks listed
+  function decideAfterLeavingForm(pending, queuedItemId, upload) {
     if (!pending || !pending.itemId || queuedItemId == null || String(pending.itemId) !== String(queuedItemId)) return 'none';
-    return confirmedDraft && confirmedDraft.draftId ? 'advance' : 'prompt';
+    return upload && upload.listingId ? 'advance' : 'prompt';
+  }
+
+  // Vinted blanked the form of the queued, never-submitted listing: 'refill' (the same listing, filled in again) while
+  // fewer than maxRefills refills were used for this item, else 'prompt'. 'none' when nothing is waiting for this item.
+  function decideOnBlankForm(pending, queuedItemId, maxRefills) {
+    if (!pending || !pending.itemId || queuedItemId == null || String(pending.itemId) !== String(queuedItemId)) return 'none';
+    var cap = maxRefills == null ? MAX_REFILLS : Number(maxRefills);
+    return (Number(pending.refills) || 0) < cap ? 'refill' : 'prompt';
+  }
+
+  // Duplicate guard (1.0.78: live listings only). `item` = { itemId, title, altTitle }. `items` = wardrobe rows read
+  // (null when unread), `drafts` = recorded legacy drafts ({ itemId, draftId, listedAt? }), opts.listed = FindA.Sale
+  // already records it live on Vinted. Returns { kind: 'live', remoteId, source } or null. A row that is still a draft
+  // (recorded or same title) never counts: drafts are not listings and no longer block a fill.
+  function findAlreadyPresent(items, item, drafts, opts) {
+    if (!item || item.itemId == null || String(item.itemId) === '') return null;
+    var itemId = String(item.itemId);
+    if (opts && opts.listed === true) return { kind: 'live', remoteId: null, source: 'recorded_listing' };
+    var rows = Array.isArray(items) ? items : null;
+    if (!rows) return null;
+    var byId = {};
+    rows.forEach(function (it) { var id = idOf(it); if (id) byId[id] = it; });
+    var uploaded = null;
+    (Array.isArray(drafts) ? drafts : []).forEach(function (d) {
+      if (uploaded || !d || String(d.itemId) !== itemId) return;
+      var id = String(d.draftId == null ? '' : d.draftId);
+      if (!/^\d{1,20}$/.test(id)) return;
+      if (isLiveRow(byId[id])) uploaded = { kind: 'live', remoteId: id, source: 'recorded_draft_uploaded' };
+    });
+    if (uploaded) return uploaded;
+    var want = wantedTitles(item);
+    if (!want.length) return null;
+    var live = null;
+    rows.forEach(function (it) {
+      var id = idOf(it);
+      if (live || !id || want.indexOf(fold(it.title)) === -1) return;
+      if (isLiveRow(it)) live = { kind: 'live', remoteId: id, source: 'wardrobe_title' };
+    });
+    return live;
+  }
+
+  // Popup mark for an item on the Vinted tab: 'live' ("Already on Vinted") or null. 1.0.78: drafts are never marked
+  // (the `drafts` argument is kept for callers and ignored), and a stored 'draft' guard result from 1.0.77 is ignored.
+  function popupPresence(item, drafts, presentMap, now) {
+    if (!item || item.id == null) return null;
+    var id = String(item.id);
+    var t = Number(now) || Date.now();
+    if (item.marketplaceListedVinted === true) return 'live';
+    var p = presentMap && typeof presentMap === 'object' ? presentMap[id] : null;
+    if (p && p.kind === 'live' && t - (Number(p.at) || 0) <= PRESENT_KEEP_MS) return 'live';
+    return null;
+  }
+
+  // Keeps only live guard results (1.0.77 'draft' entries are dropped), newest MAX_PRESENT, none older than 30 days.
+  function prunePresent(map, now) {
+    var t = Number(now) || Date.now();
+    var src = map && typeof map === 'object' && !Array.isArray(map) ? map : {};
+    var keys = Object.keys(src).filter(function (k) {
+      var p = src[k];
+      return p && p.kind === 'live' && t - (Number(p.at) || 0) <= PRESENT_KEEP_MS;
+    });
+    keys.sort(function (a, b) { return (Number(src[a].at) || 0) - (Number(src[b].at) || 0); });
+    var out = {};
+    keys.slice(-MAX_PRESENT).forEach(function (k) { out[k] = src[k]; });
+    return out;
+  }
+
+  function pruneAwaiting(list, now) {
+    var t = Number(now) || Date.now();
+    var arr = Array.isArray(list) ? list : [];
+    var seen = {};
+    var out = [];
+    for (var i = arr.length - 1; i >= 0; i--) {
+      var a = arr[i];
+      if (!a || !a.itemId || !fold(a.title) || seen[String(a.itemId)]) continue;
+      if (t - (Number(a.at) || 0) > AWAITING_KEEP_MS) continue;
+      seen[String(a.itemId)] = true;
+      out.unshift(a);
+    }
+    return out.slice(-MAX_AWAITING);
   }
 
   // Recorded drafts ({ itemId, draftId, listedAt? }) the organizer has since uploaded: the same id is now in the wardrobe
@@ -173,12 +274,18 @@
   var API = {
     fold: fold,
     createdAtMs: createdAtMs,
-    draftIdsWithTitle: draftIdsWithTitle,
-    findConfirmedDraft: findConfirmedDraft,
-    decideAfterLeavingReview: decideAfterLeavingReview,
+    liveIdsWithTitle: liveIdsWithTitle,
+    findOrganizerUpload: findOrganizerUpload,
+    decideAfterLeavingForm: decideAfterLeavingForm,
+    decideOnBlankForm: decideOnBlankForm,
+    findAlreadyPresent: findAlreadyPresent,
+    popupPresence: popupPresence,
+    prunePresent: prunePresent,
+    pruneAwaiting: pruneAwaiting,
     findUploadedDrafts: findUploadedDrafts,
     pruneDrafts: pruneDrafts,
-    CLOCK_SKEW_MS: CLOCK_SKEW_MS
+    CLOCK_SKEW_MS: CLOCK_SKEW_MS,
+    MAX_REFILLS: MAX_REFILLS
   };
   if (root) root.FAS_VINTED_DRAFTS = API;
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
