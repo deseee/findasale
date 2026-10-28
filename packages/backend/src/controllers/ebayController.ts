@@ -80,6 +80,7 @@ import { csvCell } from '../utils/csvSafe'; // CSV formula-injection-safe cell w
 import { inStockOf } from '../services/inventoryStockMath'; // 2026-10-13: the ONE in-stock number (pure module, no import cycle with inventoryStockSync)
 import { loadKitComponentLines, withKitIncludes } from '../services/itemKitListing'; // 2026-10-13: a kit's eBay description lists its components
 import { resolveItemOwnerOrganizer } from '../utils/itemOwner'; // B1: inventory-safe, default-deny item ownership
+import { buildBestOfferTerms } from '../utils/ebayBestOfferThresholds'; // 2026-10-28: never send Best Offer thresholds at or above the price
 
 /**
  * Feature #229: AI Price Comps Tool
@@ -3279,12 +3280,13 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             returnPolicyId: routing.returnPolicyId,
           },
           ...(finalDescription ? { listingDescription: finalDescription } : {}),
+          // Best Offer thresholds (2026-10-28): the stored dollar amounts are never moved by
+          // a markdown, so they can sit at or above the current price, which eBay rejects on
+          // offer create AND update. buildBestOfferTerms sends them only when valid for this
+          // price and otherwise uses the same safe pair as ebayPriceRevisionService's repair.
+          // Stored data is not changed. Used by both the PUT (update) and POST (create) below.
           ...(item.allowBestOffer ? {
-            bestOfferTerms: {
-              bestOfferEnabled: true,
-              ...(item.bestOfferAutoAcceptAmt ? { autoAcceptPrice: { value: Number(item.bestOfferAutoAcceptAmt).toFixed(2), currency: 'USD' } } : {}),
-              ...(item.bestOfferMinimumAmt ? { autoDeclinePrice: { value: Number(item.bestOfferMinimumAmt).toFixed(2), currency: 'USD' } } : {}),
-            },
+            bestOfferTerms: buildBestOfferTerms(price, item.bestOfferAutoAcceptAmt, item.bestOfferMinimumAmt),
           } : {}),
           // Secondary category (evidence 2026-06-13, errorId 25005 param
           // SECONDARY_CATEGORY_ID "category selected is not a leaf category"):

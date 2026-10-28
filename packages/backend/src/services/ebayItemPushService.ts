@@ -26,6 +26,7 @@ import { prisma } from '../lib/prisma';
 import { ebayPublishWithSelfHeal, ensureConditionValidForCategory, getRequiredAspectsForCategory } from './ebayPublishService';
 import { applyFccIdAspect } from '../utils/ebayFccAspect'; // FCC ID item specific, shared with the first-publish path
 import { normalizeFccId } from '../utils/fccId';
+import { sanitizeOfferBestOfferTerms } from '../utils/ebayBestOfferThresholds'; // 2026-10-28: Best Offer thresholds valid for the pushed price
 import { mergeEbayIdentifiers, resolveMpnRequired, normalizeIdentifier, EBAY_IDENTIFIER_FIELDS, type EbayIdentifierField } from '../utils/ebayIdentifierMerge'; // brand, mpn, upc, ean, isbn on a live listing
 import { desiredEbayCondition, buildEbayConditionDescription } from '../utils/conditionMapping';
 import { findBulkLotItemIds } from './bulkLot/bulkLotService'; // ADR-136 Addendum C (#659)
@@ -761,6 +762,10 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
             ...pricingSummary,
             price: { ...priceObj, value: String(item.price), currency: (priceObj.currency as string) ?? 'USD' },
           };
+          // 2026-10-28: the GET body echoes the listing's existing Best Offer thresholds. A lower
+          // price can leave them at or above it, which eBay rejects; fix them in the payload with
+          // the same rules as the publish path and the price-revision repair. Stored data is untouched.
+          sanitizeOfferBestOfferTerms(offerObject, Number(item.price));
           try {
             const offerRes = await fetch(proxyUrl(offerPath), {
               method: 'PUT',

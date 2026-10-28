@@ -226,6 +226,46 @@ describe('pushItemToEbay', () => {
     expect(mockEnsureCondition).not.toHaveBeenCalled();
   });
 
+  it('a price push fixes echoed Best Offer thresholds that would sit at or above the new price (2026-10-28)', async () => {
+    fetchPlan = (call) => {
+      const path = decodeURIComponent(call.url.split('path=')[1] ?? '');
+      if (call.method === 'GET' && path.includes('/offer/')) {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            ...OFFER(),
+            pricingSummary: { price: { value: '35', currency: 'USD' } },
+            bestOfferTerms: { bestOfferEnabled: true, autoAcceptPrice: { value: '30.00', currency: 'USD' }, autoDeclinePrice: { value: '26.00', currency: 'USD' } },
+          },
+        };
+      }
+      return happyFetch(call);
+    };
+    const out = await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['price'] });
+    expect(out.status).toBe('SUCCESS');
+    const offerPut = fetchCalls.find((c) => c.method === 'PUT' && c.url.includes('offer'))!.body;
+    expect(offerPut.pricingSummary.price.value).toBe('25');
+    expect(offerPut.bestOfferTerms).toEqual({
+      bestOfferEnabled: true,
+      autoAcceptPrice: { value: '22.50', currency: 'USD' },
+      autoDeclinePrice: { value: '16.88', currency: 'USD' },
+    });
+    expect(mockPrisma.item.update.mock.calls.some((c: any[]) => 'bestOfferAutoAcceptAmt' in (c[0]?.data ?? {}))).toBe(false); // stored data untouched
+  });
+
+  it('a price push leaves valid echoed Best Offer thresholds exactly as eBay returned them', async () => {
+    const terms = { bestOfferEnabled: true, autoAcceptPrice: { value: '20.00', currency: 'USD' }, autoDeclinePrice: { value: '15.00', currency: 'USD' } };
+    fetchPlan = (call) => {
+      const path = decodeURIComponent(call.url.split('path=')[1] ?? '');
+      if (call.method === 'GET' && path.includes('/offer/')) return { ok: true, status: 200, json: { ...OFFER(), bestOfferTerms: terms } };
+      return happyFetch(call);
+    };
+    await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['price'] });
+    const offerPut = fetchCalls.find((c) => c.method === 'PUT' && c.url.includes('offer'))!.body;
+    expect(offerPut.bestOfferTerms).toEqual(terms);
+  });
+
   it('description gets the organizer template ({{DESCRIPTION}} replaced everywhere)', async () => {
     mockPrisma.organizer.findUnique.mockResolvedValue({ id: 'org1', ebayPolicyMapping: { defaultDescriptionHtml: '<p>{{DESCRIPTION}}</p><hr>{{DESCRIPTION}}' } });
     await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['description'] });

@@ -36,6 +36,11 @@ import { reanalyzeItem } from './reanalyzeService';
 import { prisma } from '../lib/prisma';
 import { findBulkLotItemIds } from './bulkLot/bulkLotService'; // ADR-136 Addendum C (#659)
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
+import {
+  isBestOfferThresholdError,
+  computeSafeBestOfferThresholds,
+  sanitizeOfferBestOfferTerms,
+} from '../utils/ebayBestOfferThresholds';
 
 export interface EbayPriceRevisionResult {
   ok: boolean;
@@ -76,14 +81,9 @@ export interface EbayPriceRevisionResult {
 // account doesn't own -- these need someone to look at that specific listing, not an
 // automatic retry, since retrying an unchanged bad field never succeeds).
 
-function isBestOfferThresholdError(detail: string | undefined): boolean {
-  if (!detail) return false;
-  return (
-    /best offer auto accept/i.test(detail) ||
-    /auto decline amount/i.test(detail) ||
-    /minimum best offer price/i.test(detail)
-  );
-}
+// isBestOfferThresholdError and computeSafeBestOfferThresholds moved unchanged to
+// utils/ebayBestOfferThresholds.ts (2026-10-28) so the publish/offer paths in
+// ebayController.ts and ebayItemPushService.ts apply the same thresholds before sending.
 
 function isCategoryAspectError(detail: string | undefined): boolean {
   if (!detail) return false;
@@ -94,13 +94,6 @@ function isCategoryAspectError(detail: string | undefined): boolean {
   );
 }
 
-/**
- * Recompute safe Best-Offer thresholds proportional to a new (lower) price, so a
- * markdown never leaves BestOfferAutoAcceptPrice/MinimumBestOfferPrice sitting above
- * the new Buy-It-Now price. Ratios mirror ebayController.ts's publish-path Best-Offer
- * shape -- not a new design decision, just applying the same proportions at revise time
- * that already exist at initial-listing time.
- */
 // Same eBay Inventory API packageType enum ebayController.ts's publish-path payload
 // builder validates against (~line 2864) -- kept in sync manually since it's a strict
 // eBay-side enum, not a schema-driven list.
@@ -115,12 +108,6 @@ const VALID_PACKAGE_TYPES = new Set([
   'USPS_FLAT_RATE_ENVELOPE', 'USPS_LARGE_PACK', 'VERY_LARGE_PACK',
   'WINE_PRESENTATION_BOX',
 ]);
-
-function computeSafeBestOfferThresholds(newPrice: number): { accept: number; minimum: number } {
-  const accept = Math.max(0.99, Math.round(newPrice * 0.9 * 100) / 100);
-  const minimum = Math.max(0.5, Math.round(accept * 0.75 * 100) / 100);
-  return { accept, minimum };
-}
 
 /**
  * Revise ONLY the price on an existing eBay offer via GET-then-PUT.
@@ -558,6 +545,11 @@ export async function reviseEbayOfferPrice(
           autoAcceptPrice: { value: bestOffer.accept.toFixed(2), currency: 'USD' },
           autoDeclinePrice: { value: bestOffer.minimum.toFixed(2), currency: 'USD' },
         };
+      } else if (sanitizeOfferBestOfferTerms(offer, safeNewPrice)) {
+        // 2026-10-28: the GET body echoes the listing's existing thresholds. When the new
+        // (marked-down) price would leave them at or above the price, fix them before the
+        // first PUT using the same repair numbers, instead of waiting for eBay to reject it.
+        console.log(`[eBay PriceRevision] item=${itemId ?? 'n/a'} offer=${offerId}: best-offer thresholds adjusted for price ${safeNewPrice.toFixed(2)} before PUT`);
       }
       // Same read-only-field strip heal25005 already applies before PUTting a GET body back
       // (services/ebayPublishService.ts heal25005) — eBay rejects these if echoed back.
