@@ -70,6 +70,7 @@ import { ConditionSelect, ConditionGradePicker } from './ConditionFields';
 import { PushFailureBanner, PushNeedsInfoNotice, SaveOutcomeRow, EbayHoldPanel } from './MarketplaceNotices';
 import { PlatformChipStrip, PlatformStatusList } from './PlatformChips';
 import { KitContentsSection, InKitsNote, MakeThisKit } from './KitContentsSection'; // kits live in the Quantity & setup section
+import { bestOfferPctInputBounds, bestOfferPctRangeNote, moneyInputStep } from '../../lib/storedNumberInputs';
 
 // Bug fix (2026-08-08, same P1 data-corruption class as add-items.tsx auctionEndTime
 // fix): item.auctionEndTime is stored as a UTC ISO timestamp. Previously this page did
@@ -338,6 +339,11 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
   // lib/itemFormSave.ts), so a legacy value shown normalized (LIKE_NEW as Used, grade A) is never rewritten by an
   // unrelated save. Reset after a save and when the item loads.
   const [conditionTouched, setConditionTouched] = useState(false);
+  // True once the organizer edits the matching eBay best-offer percentage. Until then the input has no
+  // native min/max, so a stored threshold outside 1 to 99 (for example 0% after a markdown) never blocks
+  // saving other fields. See lib/storedNumberInputs.ts. Reset after a save and when the item loads.
+  const [bestOfferAcceptEdited, setBestOfferAcceptEdited] = useState(false);
+  const [bestOfferDeclineEdited, setBestOfferDeclineEdited] = useState(false);
   // Date.now() at the Save click: the marketplace result row only accepts an eBay push newer than this.
   const saveClickedAtRef = useRef(0);
 
@@ -642,6 +648,8 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
       setConsignorTouched(false);
       setConditionTouched(false);
       setInStockTouched(false);
+      setBestOfferAcceptEdited(false);
+      setBestOfferDeclineEdited(false);
       setBaseline({ ...snapshot, w: false, s: false, c: false });
     } else {
       setBaseline(snapshot);
@@ -1107,6 +1115,8 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
       setStockSold(loadedSold);
       setInStockText(String(inStockFromItem(item)));
       setInStockTouched(false);
+      setBestOfferAcceptEdited(false);
+      setBestOfferDeclineEdited(false);
       // Re-baseline dirty tracking once these values have rendered.
       setBaselinePending(true);
     }
@@ -2239,7 +2249,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                 </label>
                 <input
                   type="number"
-                  step="0.01"
+                  step={moneyInputStep(formData.price)}
                   value={formData.price}
                   onChange={(e) =>
                     setFormData({ ...formData, price: e.target.value })
@@ -2352,6 +2362,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                       const thresholdError = acceptPct !== null && declinePct !== null && declinePct <= acceptPct
                         ? 'Auto-decline threshold must be higher than auto-accept threshold.'
                         : null;
+                      const rangeNote = bestOfferPctRangeNote(formData.bestOfferAcceptPct, formData.bestOfferDeclinePct);
                       return (
                         <div className="ml-6 space-y-3">
                           <div>
@@ -2361,12 +2372,12 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                             <div className="flex items-center gap-2">
                               <input
                                 type="number"
-                                min="1"
-                                max="99"
+                                {...bestOfferPctInputBounds(bestOfferAcceptEdited)}
                                 step="1"
                                 placeholder="e.g. 10"
                                 value={formData.bestOfferAcceptPct === '' ? '' : formData.bestOfferAcceptPct}
                                 onChange={(e) => {
+                                  setBestOfferAcceptEdited(true);
                                   const v = e.target.value === '' ? '' : parseInt(e.target.value, 10);
                                   setFormData(prev => ({ ...prev, bestOfferAcceptPct: v as number | '' }));
                                 }}
@@ -2387,12 +2398,12 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                             <div className="flex items-center gap-2">
                               <input
                                 type="number"
-                                min="1"
-                                max="99"
+                                {...bestOfferPctInputBounds(bestOfferDeclineEdited)}
                                 step="1"
                                 placeholder="e.g. 25"
                                 value={formData.bestOfferDeclinePct === '' ? '' : formData.bestOfferDeclinePct}
                                 onChange={(e) => {
+                                  setBestOfferDeclineEdited(true);
                                   const v = e.target.value === '' ? '' : parseInt(e.target.value, 10);
                                   setFormData(prev => ({ ...prev, bestOfferDeclinePct: v as number | '' }));
                                 }}
@@ -2408,6 +2419,9 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                           </div>
                           {thresholdError && (
                             <p className="text-xs text-red-600 dark:text-red-400">{thresholdError}</p>
+                          )}
+                          {rangeNote && (
+                            <p className="text-xs text-amber-700 dark:text-amber-400">{rangeNote}</p>
                           )}
                         </div>
                       );
