@@ -2,9 +2,12 @@
  * poshmarkSoldEmailDetection.ts -- Poshmark branch of the ADR-131 inbound sold-email pipeline
  * (2026-09-23). Sibling of mercariSoldEmailDetection.ts, same guards in the same order.
  *
- * STATUS: RESEARCH-BUILT, NOT YET SEEN LIVE. No real Poshmark sale email has reached the
- * outreach@finda.sale mailbox yet. The template below comes from six independent sources that
- * agree with each other, two of them code that parses real Poshmark mail:
+ * STATUS (2026-10-29): SEEN LIVE. The first real sale email (2026-10-28, "Mouse Trap Board Game ...",
+ * fixture __tests__/fixtures/poshmark-sold-email-2026-10-28.eml) did NOT match the research template:
+ * Poshmark no longer quotes the title in the subject or the body, and the order row is labelled
+ * "Order Number", not "Order ID". The quoted research shape caused that sale to be ignored
+ * ("subject is not ...") and marked processed, so the item stayed AVAILABLE. Both shapes are now
+ * accepted (see LIVE EMAIL below). The original research template came from these sources:
  *   - reddit.com/r/poshmark/comments/1qi5z8n (seller screenshots of the sale email)
  *   - github.com/Fortee2/ListFlow (parser for the real "just sold to" email)
  *   - github.com/ceponatia/label-agent (parser for the real email and its label PDF)
@@ -13,7 +16,14 @@
  * The first processed email logs a distinct 'poshmark_first_live_email' warn so the first real
  * one can be checked against this template.
  *
- * EXPECTED EMAIL:
+ * LIVE EMAIL (2026-10-28, the shape actually sent now):
+ *   From:    Poshmark <orders@poshmark.com>   (SendGrid, DKIM d=poshmark.com, DMARC pass)
+ *   Subject: <title> just sold to @<buyer> on Poshmark!          (no quotes; Gmail may fold it)
+ *   Body:    <h1>You just sold <title> on Poshmark.</h1> ... View Order ... Order Number <24 hex>
+ *            Buyer @<buyer> / Order Date / <title> Size: OS $10.00 / Your Earnings ... / Tax ...
+ *   No label PDF attachment (the label comes after the seller confirms in the app).
+ *
+ * RESEARCH TEMPLATE (older shape, still accepted):
  *   From:    Poshmark <orders@poshmark.com>
  *   Subject: "<title>" just sold to <@buyer | guest Posher> on Poshmark!
  *   Body:    Hi Pat! Great news - you just sold "<title>" on Poshmark. Please package your
@@ -103,21 +113,30 @@ export function normalizeQuotes(s: string): string {
     .replace(/[‘’‚‛′]/g, "'");
 }
 
-// Greedy title: ends at the LAST `" just sold to `, so a title containing that phrase survives.
-const SUBJECT_RE = /^"(.+)" just sold to (.+?) on Poshmark!$/;
+// Greedy title: ends at the LAST ` just sold to `, so a title containing that phrase survives.
+// 2026-10-29: the live subject has NO quotes around the title ('<title> just sold to @buyer on
+// Poshmark!'); the quoted research shape is kept as the first alternative. Whitespace is squashed
+// first because Gmail folds this long subject across two header lines.
+const SUBJECT_RE = /^(?:"(.+)"|(.+)) just sold to (\S.*?) on Poshmark!$/;
 
 /** { title, buyer } from the sale subject, or null when the subject is anything else. */
 export function parsePoshmarkSubject(subject: string | null | undefined): { title: string; buyer: string } | null {
-  const m = SUBJECT_RE.exec(normalizeQuotes(String(subject ?? '')).trim());
+  const text = squash(normalizeQuotes(String(subject ?? '')));
+  // A forwarded or replied copy is never the sale email (the unquoted shape would otherwise take "Fwd: ..." as title).
+  if (/^(?:fwd?|re)\s*:/i.test(text)) return null;
+  const m = SUBJECT_RE.exec(text);
   if (!m) return null;
-  const title = m[1].trim();
-  const buyer = m[2].trim();
+  const title = (m[1] ?? m[2] ?? '').trim();
+  const buyer = m[3].trim();
   if (!title || !buyer) return null;
   return { title: title.slice(0, MAX_TITLE_LEN), buyer };
 }
 
-const BODY_TITLE_RE = /you just sold "(.+?)" on Poshmark\./i;
-const ORDER_ID_RE = /\bOrder ID\s*:?\s*([0-9a-f]{24})\b/i;
+// Quoted research shape first, then the live unquoted '<h1>You just sold <title> on Poshmark.</h1>'.
+const BODY_TITLE_QUOTED_RE = /you just sold "(.+?)" on Poshmark\./i;
+const BODY_TITLE_RE = /you just sold (.+?) on Poshmark\./i;
+// Live email labels the row "Order Number"; the research template said "Order ID".
+const ORDER_ID_RE = /\bOrder (?:ID|Number|#)\s*:?\s*([0-9a-f]{24})(?![0-9a-z])/i;
 const LABEL_OUTAGE_RE = /shipping label system is experiencing delays/i;
 const LABEL_PDF_PREFIX = 'pre-paid mailing label';
 
@@ -130,8 +149,8 @@ export interface PoshmarkBodyFacts {
 /** Title and corroborating facts from the body (HTML stripped, entities decoded). */
 export function parsePoshmarkSoldEmailBody(body: string | null | undefined): PoshmarkBodyFacts {
   if (!body) return { title: null, orderId: null, labelOutageNotice: false };
-  const text = normalizeQuotes(htmlToPlainText(body));
-  const t = BODY_TITLE_RE.exec(text);
+  const text = squash(normalizeQuotes(htmlToPlainText(body)));
+  const t = BODY_TITLE_QUOTED_RE.exec(text) ?? BODY_TITLE_RE.exec(text);
   const title = t ? t[1].trim().slice(0, MAX_TITLE_LEN) || null : null;
   const o = ORDER_ID_RE.exec(text);
   return { title, orderId: o ? o[1].toLowerCase() : null, labelOutageNotice: LABEL_OUTAGE_RE.test(text) };
@@ -186,7 +205,11 @@ export async function processPoshmarkSoldEmail(
   }
   const subject = parsePoshmarkSubject(email.subject);
   if (!subject) {
-    return { kind: 'ignored', reason: 'subject is not "<title>" just sold to <buyer> on Poshmark!' };
+    // Exact sender but an unknown subject: logged with the subject so a template change is visible.
+    console.warn('[PoshmarkSoldEmailDetection] ignoring orders@poshmark.com email with an unrecognised subject', {
+      subject: String(email.subject ?? '').slice(0, 300),
+    });
+    return { kind: 'ignored', reason: 'subject is not <title> just sold to <buyer> on Poshmark!' };
   }
 
   const auth = verifyInboundEmailAuthentication(email, POSHMARK_DKIM_DOMAINS);
@@ -233,7 +256,7 @@ export async function processPoshmarkSoldEmail(
   if (!firstLiveEmailLogged) {
     firstLiveEmailLogged = true;
     console.warn(
-      '[PoshmarkSoldEmailDetection] poshmark_first_live_email -- first Poshmark sale email processed by this research-built branch; check it against the template',
+      '[PoshmarkSoldEmailDetection] poshmark_first_live_email -- first Poshmark sale email processed since this process started',
       { organizerId, subject: email.subject, displayName: displayName || null, ...corroboration },
     );
   }

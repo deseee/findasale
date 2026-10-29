@@ -816,7 +816,8 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                   {isAuction ? 'Current Bid' : isReverseAuction ? 'Current Price' : 'Price'}
                 </div>
                 <div className="flex items-center gap-2 mb-2">
-                  {item.priceBeforeMarkdown && item.priceBeforeMarkdown > currentPrice ? (
+                  {/* 2026-10-29: only a live markdown shows was/now (a manual price or a "Keep out of automatic markdowns" save clears it) */}
+                  {item.markdownApplied !== false && item.priceBeforeMarkdown && item.priceBeforeMarkdown > currentPrice ? (
                     <>
                       <span className="text-2xl line-through text-gray-400 dark:text-gray-500">
                         ${item.priceBeforeMarkdown.toFixed(2)}

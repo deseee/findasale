@@ -159,7 +159,7 @@ test('mercari weight: if no method makes a box keep its value the failure names 
 // ---- wiring ----
 test('wiring: 1.0.19 manifest loads the weight helper before fas-mercari.js; engine and frame carry the new code paths; buildDiag keeps the new codes', () => {
   const man = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8'));
-  assert.strictEqual(man.version, '1.0.82');
+  assert.strictEqual(man.version, '1.0.83');
   const merc = man.content_scripts.find((c) => c.js.indexOf('fas-mercari.js') !== -1).js;
   assert.ok(merc.indexOf('fas-mercari-weight.js') !== -1 && merc.indexOf('fas-mercari-weight.js') < merc.indexOf('fas-mercari.js'));
   const eng = fs.readFileSync(path.join(__dirname, '..', 'fas-edit-engine.js'), 'utf8');

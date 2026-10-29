@@ -2172,7 +2172,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                             ) : (
                               <div className="flex items-center justify-between">
                                 <div>
-                                  {item.priceBeforeMarkdown && item.priceBeforeMarkdown > item.price ? (
+                                  {/* 2026-10-29: only a live markdown shows was/now (a manual price or a "Keep out of automatic markdowns" save clears it) */}
+                                  {item.markdownApplied !== false && item.priceBeforeMarkdown && item.priceBeforeMarkdown > item.price ? (
                                     <>
                                       <div className="flex items-center gap-1">
                                         <div className="text-xs line-through text-gray-400">{formatPrice(item.priceBeforeMarkdown)}</div>

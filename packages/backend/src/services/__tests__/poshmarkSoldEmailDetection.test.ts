@@ -1,8 +1,9 @@
 /**
  * poshmarkSoldEmailDetection.ts -- unit tests (ADR-131 Poshmark branch, 2026-09-23).
  *
- * RESEARCH-BUILT fixtures: no real Poshmark sale email has reached the mailbox yet. The subject,
- * body sentence, Order ID shape and label PDF name follow the sources cited in the module header.
+ * Most fixtures follow the research template (quoted title, "Order ID"). The LIVE shape (first real
+ * sale email, 2026-10-28: unquoted title, "Order Number") is covered below and, end to end from the
+ * real .eml, in poshmarkSoldEmailLive.test.ts.
  */
 
 jest.mock('../../lib/prisma', () => ({ prisma: {} }));
@@ -99,6 +100,27 @@ describe('parsing', () => {
   it('anchors the greedy title on the LAST `" just sold to `', () => {
     const tricky = 'Tee "just sold to" nobody';
     expect(parsePoshmarkSubject(`"${tricky}" just sold to @b on Poshmark!`)).toEqual({ title: tricky, buyer: '@b' });
+  });
+  it('parses the LIVE unquoted subject (2026-10-28), including a folded header', () => {
+    const live = 'Mouse Trap Board Game, Milton Bradley, Vintage 1990s just sold to @crystalbauer00 on Poshmark!';
+    const want = { title: 'Mouse Trap Board Game, Milton Bradley, Vintage 1990s', buyer: '@crystalbauer00' };
+    expect(parsePoshmarkSubject(live)).toEqual(want);
+    expect(parsePoshmarkSubject(live.replace(' just sold to ', ' just sold to\r\n  '))).toEqual(want);
+    expect(parsePoshmarkSubject('Tee just sold to me just sold to @b on Poshmark!')).toEqual({ title: 'Tee just sold to me', buyer: '@b' });
+    expect(parsePoshmarkSubject(`Fwd: ${live}`)).toBeNull();
+    expect(parsePoshmarkSubject(`RE: ${live}`)).toBeNull();
+    expect(parsePoshmarkSubject('Reminder to ship Mouse Trap')).toBeNull();
+  });
+  it('reads the LIVE unquoted body title and the "Order Number" row', () => {
+    const live = '<h1>You just sold Mouse Trap Board Game, Milton Bradley, Vintage 1990s on Poshmark.</h1>' +
+      '<div>Order Number</div><div>6ae1e377fc6d1e98d84076b2</div><div>Buyer</div><div>@crystalbauer00</div>';
+    expect(parsePoshmarkSoldEmailBody(live)).toEqual({
+      title: 'Mouse Trap Board Game, Milton Bradley, Vintage 1990s',
+      orderId: '6ae1e377fc6d1e98d84076b2',
+      labelOutageNotice: false,
+    });
+    // The quoted research shape still wins over the unquoted reading of the same sentence.
+    expect(parsePoshmarkSoldEmailBody(saleHtml()).title).toBe(TITLE);
   });
   it('rejects anything that is not the sale subject', () => {
     expect(parsePoshmarkSubject(`Fwd: ${SUBJECT}`)).toBeNull();

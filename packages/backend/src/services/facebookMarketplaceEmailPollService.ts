@@ -44,8 +44,8 @@
  * email (mercariSoldEmailDetection.ts), same rules.
  *
  * POSHMARK + GRAILED (2026-09-23): two more searches in the same pass, same rules.
- * poshmarkSoldEmailDetection.ts handles '"<title>" just sold to <buyer> on Poshmark!' from
- * orders@poshmark.com (research-built, not yet seen live). grailedSoldEmailDetection.ts is
+ * poshmarkSoldEmailDetection.ts handles '<title> just sold to <buyer> on Poshmark!' from
+ * orders@poshmark.com (seen live 2026-10-28; title quoted or not). grailedSoldEmailDetection.ts is
  * PROVISIONAL: help@grailed.com sale-like subjects, committed only when the body carries the
  * GrailedBot "You just sold <title> in Size ..." sentence, otherwise logged as grailed_unparsed.
  */
@@ -169,6 +169,15 @@ export const SOLD_EMAIL_WINDOW_DAYS = 3;
 const SOLD_EMAIL_WINDOW_TERM = `newer_than:${SOLD_EMAIL_WINDOW_DAYS}d`;
 export const SOLD_EMAIL_EVENT_PREFIX = 'sold-email:';
 
+// Per-branch marker revision. A processed marker is permanent for the window, so a message a branch
+// IGNORED because its parser did not recognise the real template is never looked at again, even after
+// the parser is fixed. Bumping a branch's revision here makes the next poll re-examine every message
+// of that branch still in the window, once. Re-examining is safe: matched sales are idempotent
+// (commit dedupe + order id), and a previously-read message is never re-notified as unmatched.
+// Poshmark r2 (2026-10-29): the first live sale email (2026-10-28, Message-ID
+// <Fw0djysIQYCJc1Qygku-8A@geopod-ismtpd-16>) was ignored by the research-built quoted-title parser.
+export const SOLD_EMAIL_KEY_REVISION: Readonly<Record<string, string>> = { Poshmark: 'r2' };
+
 // Vinted branch: same shape and the same Spam/Trash exclusion. 2026-10-12: NO subject filter any more -- the real
 // bundle subject was never observed, and a subject: word match that misses it hides the email completely. Every
 // Vinted email in the window is looked at ONCE (then marked processed); processVintedSoldEmail re-checks the exact
@@ -182,7 +191,8 @@ const VINTED_SOLD_EMAIL_SEARCH_QUERY =
 const MERCARI_SOLD_EMAIL_SEARCH_QUERY =
   `(from:no-reply@alerts.us.mercari.com subject:"made a sale") ${SOLD_EMAIL_WINDOW_TERM} -in:spam -in:trash`;
 
-// Poshmark branch: '"<title>" just sold to <buyer> on Poshmark!' from orders@poshmark.com.
+// Poshmark branch: '<title> just sold to <buyer> on Poshmark!' from orders@poshmark.com (live
+// 2026-10-28 shape has no quotes; the subject: phrase match below does not depend on them).
 // processPoshmarkSoldEmail re-checks the exact sender and the full subject shape, so shipping
 // reminders, offers and promos that slip through the word match are ignored there.
 const POSHMARK_SOLD_EMAIL_SEARCH_QUERY =
@@ -360,7 +370,8 @@ export interface WindowMessageInfo {
 /** Deterministic idempotency key for one message of one branch. Exported for tests. */
 export function soldEmailEventKey(label: string, info: Pick<WindowMessageInfo, 'uid' | 'messageId'>): string {
   const id = info.messageId ? String(info.messageId).trim().slice(0, 400) : '';
-  return `${SOLD_EMAIL_EVENT_PREFIX}${label}:${id || `uid:${info.uid}`}`;
+  const rev = SOLD_EMAIL_KEY_REVISION[label];
+  return `${SOLD_EMAIL_EVENT_PREFIX}${label}:${rev ? `${rev}:` : ''}${id || `uid:${info.uid}`}`;
 }
 
 function toValidDate(v: unknown): Date | null {
@@ -726,7 +737,7 @@ export async function processMercariBatch(client: ImapFlow, result: FacebookSold
   );
 }
 
-/** Poshmark branch (2026-09-23, research-built): every unread '"..." just sold to ...' email. */
+/** Poshmark branch (2026-09-23; first live email 2026-10-28): every not-yet-processed '... just sold to ...' email. */
 export async function processPoshmarkBatch(client: ImapFlow, result: FacebookSoldEmailPollResult): Promise<void> {
   await processTitleEmailBatch(client, result, 'Poshmark', POSHMARK_SOLD_EMAIL_SEARCH_QUERY, result.poshmark, (email) =>
     processPoshmarkSoldEmail(email),

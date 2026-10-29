@@ -9,7 +9,7 @@
  * Differences from updateItem on purpose (each is pinned by priceBookPriceWrite.test.ts):
  *   - A call whose price does not change writes nothing at all. updateItem can still heal a rarity, an original price or a
  *     failed eBay sync on a same price resave; the price book never does, because an unchanged row is never applied.
- *   - One ItemPriceHistory row is written per change (updateItem writes none).
+ *   - One ItemPriceHistory row is written per change (updateItem writes one too since 2026-10-29).
  * Not done here, because they are not item columns and belong to the caller: the immediate eBay push, the price drop alert and
  * the Standard Envelope shipping resync. The run services hand every change to an injected onPriceChanged hook for those.
  *
@@ -106,6 +106,12 @@ export function buildPriceUpdate(item: ItemRow, newPriceCents: number | null, no
   if (priceChanged && nextPrice && nextPrice > 0 && !item.markdownApplied) {
     data.priceBeforeMarkdown = nextPrice;
     data.markdownApplied = false;
+  }
+  // 2026-10-29: same rule as updateItem: an organizer price on a marked-down item (a run with includeMarkedDown)
+  // replaces the markdown, so the item stops showing as marked down. Cron step pointers are left alone.
+  if (priceChanged && item.markdownApplied) {
+    data.markdownApplied = false;
+    data.priceBeforeMarkdown = null;
   }
   if (priceChanged || item.originalPrice === null || item.originalPrice === undefined) {
     data.originalPrice = nextPrice && nextPrice > 0 ? nextPrice : null;

@@ -189,11 +189,12 @@
     var unclaimed = cands.filter(function (id) { return tg.claimedIds.indexOf(id) === -1; });
     if (!complete) return no('closet_incomplete', 'the closet did not finish loading, so not every listing with this title could be counted.');
     if (tg.unresolved > 1) return no('multiple_unresolved', tg.unresolved + ' FindA.Sale items share this title with no saved listing id and ' + unclaimed.length + ' closet listing(s) are unclaimed; they cannot be told apart, so none was edited. Each needs its Poshmark listing id saved once.');
-    if (unclaimed.length === 1) return { id: unclaimed[0], reason: 'single_unclaimed' };
+    // 1.0.83 (2026-10-29 incident): claimedIds only lists ids saved on items with the SAME FindA.Sale title, so a listing whose id is saved
+    // on a differently titled item (its live title was overwritten) still looks "unclaimed" here. Neither case below is proof, so neither
+    // ever yields an id to edit: both are reported and nothing is edited.
+    if (unclaimed.length === 1) return Object.assign(no('single_unclaimed_unproven', cands.length + ' closet listings share this exact title; one is not tied to a same-titled item, but listings saved on differently titled items are not counted, so it cannot be proven to be this item\'s. None was edited.'), { unclaimed: unclaimed.slice() });
     if (!unclaimed.length) return no('all_claimed', 'every closet listing with this title is already tied to another item.');
-    // Exactly one FindA.Sale item owns this title and several unclaimed closet listings carry it: they are all copies of that one item
-    // (the item was published more than once). Nothing is guessed between different items, so every copy gets the same edit.
-    return { id: '', reason: 'copies_of_single_item', copies: unclaimed.slice() };
+    return Object.assign(no('duplicate_copies_detected', unclaimed.length + ' closet listings carry this item\'s exact title. Editing them as copies of one item is switched off (they may belong to other items), so none was edited. Save this item\'s own Poshmark listing id once.'), { unclaimed: unclaimed.slice() });
   }
   // ---- Multi-copy edits (one FindA.Sale item that exists as several identical live listings) -------------------------
   // State lives in the engine scratch so it survives page navigations: copies (ids, canonical first), copyIdx, copyDone [ids],
@@ -514,6 +515,30 @@
     if (stableJson(before && before.original_price_amount) !== stableJson(after && after.original_price_amount)) diffs.push('original_price_amount');
     return diffs;
   }
+  // 1.0.83: may a price/stock save go to Poshmark listing `targetId` for `item`? The item's own saved id is always allowed (so a listing
+  // whose title was damaged can be repaired; the title is still never written). An item with a saved id may not touch any other id.
+  // Without a saved id the target's CURRENT title must equal the item's title (as saved, Cart form, 80-char trim).
+  function poshEditTargetCheck(item, targetId, listingTitle) {
+    var saved = String((item && item.remoteListingId) || '').toLowerCase();
+    var tid = String(targetId || '').toLowerCase();
+    if (!POSH_ID_RE.test(tid)) return { ok: false, own: false, code: 'listing_title_mismatch', reason: 'No valid Poshmark listing id to check; nothing was saved' };
+    if (POSH_ID_RE.test(saved)) {
+      if (tid === saved) return { ok: true, own: true };
+      return { ok: false, own: false, code: 'remote_id_mismatch', reason: 'Listing ...' + tid.slice(-6) + ' is not this item\'s saved Poshmark listing (...' + saved.slice(-6) + '); nothing was saved' };
+    }
+    var t = String(listingTitle == null ? '' : listingTitle).trim();
+    if (!t) return { ok: false, own: false, code: 'listing_title_mismatch', reason: 'Could not read the current title of listing ...' + tid.slice(-6) + ', so it cannot be proven to be this item\'s; nothing was saved' };
+    if (titleEqualsPoshmark(t, item && item.title)) return { ok: true, own: false };
+    return { ok: false, own: false, code: 'listing_title_mismatch', reason: 'Listing ...' + tid.slice(-6) + ' is titled "' + t.slice(0, 80) + '", not this item\'s title; nothing was saved' };
+  }
+  // 1.0.83: names of the fields a built update would change besides price/quantity (must be empty before any save).
+  function poshmarkUpdateTouched(before, post) {
+    var out = [];
+    ['title', 'description', 'brand', 'condition', 'catalog', 'pictures', 'style_tags'].forEach(function (k) {
+      if (before && before[k] !== undefined && stableJson(before[k]) !== stableJson(post && post[k])) out.push(k);
+    });
+    return out;
+  }
   function sizeQty(p) {
     var sq = p && p.inventory && Array.isArray(p.inventory.size_quantities) ? p.inventory.size_quantities : [];
     return sq.map(function (s) { return [s.size_id, s.quantity_available]; });
@@ -703,7 +728,7 @@
     poshmarkCartTitle: poshmarkCartTitle, poshmarkTitleVariants: poshmarkTitleVariants, titleEqualsPoshmark: titleEqualsPoshmark, poshmarkSearchTitle: poshmarkSearchTitle,
     extractIdFromUrl: extractIdFromUrl, startUrl: startUrl, craigslistPageUrl: craigslistPageUrl,
     isPoshmarkErrorPayload: isPoshmarkErrorPayload, unwrapPoshmarkPost: unwrapPoshmarkPost, poshmarkPriceVal: poshmarkPriceVal,
-    buildPoshmarkUpdate: buildPoshmarkUpdate, poshmarkCollateralDiff: poshmarkCollateralDiff, poshmarkQuantity: poshmarkQuantity,
+    buildPoshmarkUpdate: buildPoshmarkUpdate, poshmarkCollateralDiff: poshmarkCollateralDiff, poshEditTargetCheck: poshEditTargetCheck, poshmarkUpdateTouched: poshmarkUpdateTouched, poshmarkQuantity: poshmarkQuantity,
     classifyBlock: classifyBlock, redact: redact, safeUrl: safeUrl, pathOnly: pathOnly, scrubText: scrubText, scrubDeep: scrubDeep, compactSnapshot: compactSnapshot, buildDiag: buildDiag, diagThrottle: diagThrottle, DIAG_WINDOW_MS: DIAG_WINDOW_MS, DIAG_MAX_CHARS: DIAG_MAX_CHARS, pushRing: pushRing, addDiag: addDiag, describeFailure: describeFailure
   };
   root.FAS_EDIT_CORE = api;

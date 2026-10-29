@@ -80,6 +80,7 @@ import { loadShadowPricingByItemId, shadowDtoFromCompRow, isAudioFormatItem } fr
 import { listedExtensionPlatformsByItemId, getItemMarketplaceStatus, getFailedPushCountsByItemId, getNeedsInfoPushCodesByItemId, ITEM_STATUS_SELECT, EXTENSION_PLATFORMS } from '../services/itemMarketplaceStatusService'; // 2026-10-04 (U3): newest-row-wins listing status shared by the Add Items list and GET /items/:id/marketplace-status
 import { NOT_INFORMATIONAL_PUSH_WHERE, INFORMATIONAL_ONLY_PUSH_WHERE } from '../lib/ebayPushInformational';
 import { normalizeTextField } from '../services/textHomoglyphs'; // 2026-10-27: mixed-script homoglyph fix on title/description writes
+import { recordItemPriceHistory, markdownRestorePrice, MANUAL_PRICE_MARKDOWN_CLEAR, EXCLUDE_MARKDOWN_RESET } from '../utils/itemPriceHistory'; // 2026-10-29: price audit trail + markdown state rules
 
 /**
  * Bug #469: Live-listing edit propagation.
@@ -2081,7 +2082,10 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // "true", 1 and every other truthy value are ignored. The hold columns (ebaySyncHeldAt, ebayHeldFields,
     // ebayContentDirtyAt) are never read from the request body at all: this handler picks its fields explicitly.
     const skipMarketplaceSyncRequested = (req.body as { skipMarketplaceSync?: unknown } | undefined)?.skipMarketplaceSync === true;
-    const { title: rawTitle, description: rawDescription, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal: stockTotalBody, inStock: inStockBody, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, fccId, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown, card } = req.body;
+    const { title: rawTitle, description: rawDescription, price: priceFromBody, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal: stockTotalBody, inStock: inStockBody, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, fccId, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown, card } = req.body;
+    // 2026-10-29: `let` so a "Keep out of automatic markdowns" save can restore the pre-markdown price through the
+    // same price block (eBay sync, rarity, originalPrice) as a typed price. See utils/itemPriceHistory.ts.
+    let price = priceFromBody;
     // 2026-10-27: organizer intent wins, but Cyrillic/Greek lookalikes inside Latin words and zero-width characters are a pure fix (logged when applied).
     const title = normalizeTextField(rawTitle, `updateItem ${id} title`);
     const description = normalizeTextField(rawDescription, `updateItem ${id} description`);
@@ -2341,6 +2345,32 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       updateData.description = description;
       if (fieldValueChanged(item.description, description)) fieldsBeingEdited.push('description');
     }
+    // 2026-10-29 (owner report: an item with "Keep out of automatic markdowns" ticked still showed as marked down).
+    // Turning the opt-out ON for an item a markdown cron already cut removes that markdown: the price goes back to
+    // priceBeforeMarkdown, matching the checkbox copy ("This item's price will never be automatically reduced").
+    // A manual price typed in the same save wins (the organizer's price is the true price), so the restore only
+    // happens when the save does not change the price itself.
+    const excludeRequested = excludeFromMarkdown !== undefined
+      ? excludeFromMarkdown === true || excludeFromMarkdown === 'true'
+      : undefined;
+    const excludeTurningOn = excludeRequested === true && !item.excludeFromMarkdown;
+    let markdownRestoredTo: number | null = null;
+    if (excludeTurningOn && item.markdownApplied) {
+      const typedPrice = price !== undefined ? (price ? parseFloat(price) : null) : undefined;
+      const typedPriceChanged = typedPrice !== undefined &&
+        (typedPrice === null || item.price == null || Math.abs(typedPrice - Number(item.price)) >= 0.005);
+      markdownRestoredTo = markdownRestorePrice(
+        {
+          markdownApplied: item.markdownApplied,
+          status: item.status,
+          price: item.price != null ? Number(item.price) : null,
+          priceBeforeMarkdown: item.priceBeforeMarkdown != null ? Number(item.priceBeforeMarkdown) : null,
+        },
+        typedPriceChanged,
+      );
+      if (markdownRestoredTo !== null) price = markdownRestoredTo;
+    }
+
     // Price-changed guard: a resave that sends the unchanged price must not reset priceUpdatedAt,
     // originalPrice, the markdown anchor or the eBay sync state. Number(item.price) is Prisma Decimal safe.
     let priceChanged = false;
@@ -2437,6 +2467,12 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         updateData.priceBeforeMarkdown = newPrice;
         updateData.markdownApplied = false;
       }
+      // 2026-10-29: a manual price on an item a markdown cron already cut IS the price now (Patrick, 2026-09-29:
+      // manual overrides are the true price). The old code left markdownApplied=true and the cron's
+      // priceBeforeMarkdown in place, so every was/now display and the staff re-tag list kept showing a markdown
+      // that no longer existed (BCW Penny Tubes, 2026-10-17). The cron step pointers are kept on purpose: the same
+      // step must not cut the new price again on the next run.
+      if (priceChanged && item.markdownApplied) Object.assign(updateData, MANUAL_PRICE_MARKDOWN_CLEAR);
 
       // ADR cashier-discretionary-discount (2026-09-25): originalPrice RESETS on every
       // organizer-initiated price change, UNCONDITIONALLY (not gated like
@@ -2644,7 +2680,12 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (conditionNotes !== undefined) updateData.conditionNotes = conditionNotes || null;
     if (allowBestOffer !== undefined) updateData.allowBestOffer = allowBestOffer === true || allowBestOffer === 'true';
     // ADR item-exclude-from-markdown (2026-09-28): organizer opt-out from both auto-markdown crons
-    if (excludeFromMarkdown !== undefined) updateData.excludeFromMarkdown = excludeFromMarkdown === true || excludeFromMarkdown === 'true';
+    if (excludeRequested !== undefined) updateData.excludeFromMarkdown = excludeRequested;
+    // 2026-10-29: opting a marked-down item out of markdowns clears the whole markdown state (the price restore, if
+    // any, happened in the price block above). Reset the cron pointers too, so re-enabling markdowns later starts
+    // the schedule from the organizer's price instead of skipping steps.
+    // Live items only: a SOLD/RESERVED row keeps the markdown it was sold or held at.
+    if (excludeTurningOn && item.markdownApplied && item.status === 'AVAILABLE') Object.assign(updateData, EXCLUDE_MARKDOWN_RESET);
     if (bestOfferAutoAcceptAmt !== undefined) updateData.bestOfferAutoAcceptAmt = bestOfferAutoAcceptAmt === null ? null : Number(bestOfferAutoAcceptAmt);
     if (bestOfferMinimumAmt !== undefined) updateData.bestOfferMinimumAmt = bestOfferMinimumAmt === null ? null : Number(bestOfferMinimumAmt);
     if (ebaySecondaryCategoryId !== undefined) updateData.ebaySecondaryCategoryId = ebaySecondaryCategoryId || null;
@@ -2957,8 +2998,21 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       );
     }
 
+    // 2026-10-29: every organizer price change gets an ItemPriceHistory row (updateItem used to write none, so a
+    // manual price that replaced a markdown left no trace in the item's price history). Never throws.
+    if (priceChanged) {
+      await recordItemPriceHistory(prisma, {
+        itemId: id,
+        price: updatedItem.price,
+        changedBy: 'organizer',
+        note: markdownRestoredTo !== null
+          ? 'Markdown removed: kept out of automatic markdowns'
+          : item.markdownApplied ? 'Manual price edit (replaces markdown)' : 'Manual price edit',
+      });
+    }
+
     // Feature #314: Log price overrides (fire-and-forget, don't block update if logging fails)
-    if (priceChanged && item.saleId) {
+    if (priceChanged && item.saleId && markdownRestoredTo === null) {
       try {
         const newPrice = price ? parseFloat(price) : null;
         const oldAiSuggested = item.aiSuggestedPrice ? parseFloat(item.aiSuggestedPrice.toString()) : null;
@@ -4755,6 +4809,7 @@ export async function publishItemForUser(
         category: true,
         tags: true,
         price: true, // ADR-134 D3 (B2): needed for the card no-price guard below
+        markdownApplied: true, // 2026-10-29: a publish-time price edit replaces any markdown (utils/itemPriceHistory.ts)
         card: { select: { id: true } }, // ADR-134 D3 (B2): marks a card item
         organizerId: true, // B1: inventory items (saleId null) resolve their owner through this
         sale: {
@@ -4828,6 +4883,13 @@ export async function publishItemForUser(
     const publishEditedFields: string[] = [];
     if (title !== undefined) { updateData.title = title; publishEditedFields.push('title'); }
     if (price !== undefined) { updateData.price = price !== null ? parseFloat(price) : null; publishEditedFields.push('price'); }
+    // 2026-10-29: a real price change here is an organizer price: it replaces any markdown and is recorded in
+    // ItemPriceHistory below (utils/itemPriceHistory.ts).
+    const publishPriceChanged = price !== undefined &&
+      (updateData.price === null || item.price === null || item.price === undefined
+        ? updateData.price !== (item.price ?? null)
+        : Math.abs(updateData.price - Number(item.price)) >= 0.005);
+    if (publishPriceChanged && item.markdownApplied) Object.assign(updateData, MANUAL_PRICE_MARKDOWN_CLEAR);
     if (category !== undefined) { updateData.category = category; publishEditedFields.push('category'); }
     // P0 fix: keep ebayShippingClassification in sync when category changes at publish time
     // (tags aren't part of this endpoint's body, so reuse the item's current tags).
@@ -4893,6 +4955,10 @@ export async function publishItemForUser(
         updatedAt: true
       }
     });
+
+    if (publishPriceChanged) {
+      await recordItemPriceHistory(db, { itemId, price: updatedItem.price, changedBy: 'organizer', note: 'Price set at publish' });
+    }
 
     // Post-publish side effects. Deferred when the caller publishes inside a transaction (opts.deferSideEffects),
     // so they only ever fire for a publish that actually committed.

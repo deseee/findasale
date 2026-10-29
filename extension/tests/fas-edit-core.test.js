@@ -219,9 +219,11 @@ test('normalizeEntry carries a sanitized titleGroup', () => {
   assert.strictEqual(C.normalizeEntry({ id: 'i1', title: 'T', price: 5, titleGroup: { unresolved: 0 } }, 'POSHMARK').titleGroup, null);
 });
 
-test('resolveDuplicateTitleId picks only the single unclaimed listing when this is the only unresolved item', () => {
+test('1.0.83: resolveDuplicateTitleId never hands back an id even when only one same-titled listing is unclaimed', () => {
   const r = C.resolveDuplicateTitleId([{ id: A }, { id: B }, { id: D }], { unresolved: 1, claimedIds: [A, B] }, true);
-  assert.strictEqual(r.id, D);
+  assert.strictEqual(r.id, '');
+  assert.strictEqual(r.reason, 'single_unclaimed_unproven');
+  assert.match(r.message, /^Needs info:/);
 });
 
 test('resolveDuplicateTitleId never guesses among identical duplicates and says what is needed', () => {
@@ -230,15 +232,16 @@ test('resolveDuplicateTitleId never guesses among identical duplicates and says 
   assert.strictEqual(r.id, '');
   assert.strictEqual(r.reason, 'multiple_unresolved');
   assert.match(r.message, /^Needs info:/);
-  // unresolved === 1: one FindA.Sale item owns the title, so the nine listings are copies of it (no guessing between items)
+  // 1.0.83: unresolved === 1 used to yield "copies" that were all edited; it is now a report that edits nothing
   const cp = C.resolveDuplicateTitleId(nine, { unresolved: 1, claimedIds: [] }, true);
   assert.strictEqual(cp.id, '');
-  assert.strictEqual(cp.reason, 'copies_of_single_item');
-  assert.strictEqual(cp.copies.length, 9);
-  // copies already tied to a sibling item are never included
+  assert.strictEqual(cp.reason, 'duplicate_copies_detected');
+  assert.strictEqual(cp.copies, undefined);
+  assert.strictEqual(cp.unclaimed.length, 9);
   const cp2 = C.resolveDuplicateTitleId(nine, { unresolved: 1, claimedIds: ['0'.repeat(24)] }, true);
-  assert.strictEqual(cp2.copies.length, 8);
-  assert.ok(cp2.copies.indexOf('0'.repeat(24)) === -1);
+  assert.strictEqual(cp2.reason, 'duplicate_copies_detected');
+  assert.strictEqual(cp2.copies, undefined);
+  assert.ok(cp2.unclaimed.indexOf('0'.repeat(24)) === -1);
   // an incomplete closet read or missing accounting never yields copies
   assert.strictEqual(C.resolveDuplicateTitleId(nine, { unresolved: 1, claimedIds: [] }, false).reason, 'closet_incomplete');
   assert.strictEqual(C.resolveDuplicateTitleId(nine, { unresolved: 2, claimedIds: [] }, true).copies, undefined);

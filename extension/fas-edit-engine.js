@@ -412,6 +412,13 @@
     var json = null; try { json = JSON.parse(text); } catch (e) { /* not json */ }
     return { status: res.status, ok: res.ok, json: json, snippet: json ? '' : text.slice(0, 120) };
   }
+  // 1.0.83: the last /vm-rest/posts read on this page ({ id, title }), so the form fallback can check the title the API returned.
+  var lastPoshRead = { id: '', title: '' };
+  // Current title on the open Poshmark edit form (read only, never written).
+  function poshFormTitleValue() {
+    var el = q('input[data-vv-name="title"]') || q('input[name="title"]') || findInput(/\btitle\b/i, /price|brand|size|search|query|color/i);
+    return el ? String(el.value || '') : '';
+  }
   function poshClosetCards() {
     var byId = {};
     qa('a[href*="/listing/"]').forEach(function (a) {
@@ -462,23 +469,19 @@
       poshClosetCards().forEach(function (c) { if ((c.texts || []).some(function (t) { return C.titleEqualsPoshmark(t, it.title); })) cands.push({ id: c.key, price: poshCandidatePrice(c.key) }); });
     } catch (e) { /* ignore */ }
     var res = C.resolveDuplicateTitleId(cands, it.titleGroup, complete);
-    if (res.copies && res.copies.length > 1) {
-      // One FindA.Sale item owns this title (the backend counted exactly one unresolved item) and several unclaimed closet listings carry it:
-      // they are copies of that single item. Edit every copy, one after another (see poshCopyWrap / the step() hook); nothing is deleted.
-      var cs = C.copyStart(res.copies);
-      tLog('warn', 'posh_copies_found', 'FindA.Sale has ONE item with this title but ' + cs.copies.length + ' identical Poshmark listings exist (it was published more than once). Editing every copy, one at a time, and deleting nothing: ' + cs.copies.map(function (x) { return x.slice(-6); }).join(', '), { copies: cs.copies, price: W_price_for_log(it) });
-      return go('https://poshmark.com/edit-listing/' + cs.remoteId, Object.assign(cs, { phase: 'api', apiTried: false, discovered: true }));
-    }
-    if (res.id) {
-      tLog('info', 'posh_dup_resolved', 'Several closet listings share this title, but only one is not already tied to another FindA.Sale item and this is the only item waiting; using its id', { id: res.id, candidates: cands.slice(0, 10) });
-      return go('https://poshmark.com/edit-listing/' + res.id, { remoteId: res.id, phase: 'api', discovered: true });
-    }
-    tLog('warn', 'ambiguous_title', cands.length + ' Poshmark listings have the exact title "' + String(it.title || '').slice(0, 60) + '" and this item has no saved Poshmark listing id; nothing was edited. ' + res.message, { candidates: cands.slice(0, 10), reason: res.reason });
-    return fail('ambiguous_title', res.message + ' (' + cands.length + ' closet listings: ' + cands.slice(0, 5).map(function (c) { return c.id.slice(-6) + (c.price ? '@$' + c.price : ''); }).join(', ') + ')', 'locate', '.tile-grid-redesign__title', {}, { details: { candidates: cands.slice(0, 10), needsInfo: res.reason } });
+    // 1.0.83 KILL SWITCH (2026-10-29 incident): several closet listings carry this title, so nothing is edited. The old "copies of one
+    // item" path edited every one of them and changed 8 OTHER items' listings (their ids are saved on differently titled items, which the
+    // title-group accounting never counts). A suspected duplicate is now only reported.
+    var dupCode = res.reason === 'duplicate_copies_detected' ? 'duplicate_copies_detected' : 'ambiguous_title';
+    tLog('warn', dupCode, cands.length + ' Poshmark listings have the exact title "' + String(it.title || '').slice(0, 60) + '" and this item has no saved Poshmark listing id; nothing was edited. ' + res.message, { candidates: cands.slice(0, 10), reason: res.reason });
+    return fail(dupCode, res.message + ' (' + cands.length + ' closet listings: ' + cands.slice(0, 5).map(function (c) { return c.id.slice(-6) + (c.price ? '@$' + c.price : ''); }).join(', ') + ')', 'locate', '.tile-grid-redesign__title', {}, { details: { candidates: cands.slice(0, 10), needsInfo: res.reason } });
   }
   async function poshStep(ctx) {
     var S = ctx.scratch || {}, W = wants(ctx), it = ctx.item;
-    var id = S.remoteId || it.remoteListingId || (ctx.idCache && ctx.idCache['POSHMARK:' + it.id]) || '';
+    // 1.0.83 KILL SWITCH: an item with a saved Poshmark listing id is edited on that id and on nothing else.
+    var savedId = /^[0-9a-f]{24}$/i.test(String(it.remoteListingId || '')) ? String(it.remoteListingId).toLowerCase() : '';
+    if (savedId && S.remoteId && String(S.remoteId).toLowerCase() !== savedId) return fail('remote_id_mismatch', 'This run was pointed at Poshmark listing ...' + String(S.remoteId).slice(-6) + ' but the item\'s saved listing is ...' + savedId.slice(-6) + '; only the saved listing may be edited, so nothing was saved', 'guard', 'saved remoteListingId', { remoteId: null });
+    var id = savedId || S.remoteId || (ctx.idCache && ctx.idCache['POSHMARK:' + it.id]) || '';
     var path = location.pathname;
     if (it.remoteListingId && !/^[0-9a-f]{24}$/i.test(String(it.remoteListingId)) && !S.remoteId) tLog('warn', 'remote_id_invalid', 'The saved Poshmark listing id "' + String(it.remoteListingId).slice(0, 30) + '" is not a valid 24-character id; falling back to finding the listing by exact title', {});
     if (!/^[0-9a-f]{24}$/i.test(id)) {
@@ -532,6 +535,12 @@
       return go('https://poshmark.com/edit-listing/' + found, { remoteId: found, phase: 'api', discovered: true });
     }
     if (!/^\/edit-listing\//.test(path) && !S.apiTried) return go('https://poshmark.com/edit-listing/' + id, { remoteId: id, phase: 'api' });
+    // 1.0.83: the open edit page must be this listing's (the form fallback edits whatever form is on the page).
+    var pageId = ((path.match(/^\/edit-listing\/([0-9a-f]{24})/i) || [])[1] || '').toLowerCase();
+    if (pageId && pageId !== String(id).toLowerCase()) {
+      if (!S.pageFixTried) return go('https://poshmark.com/edit-listing/' + id, { remoteId: id, phase: 'api', apiTried: false, pageFixTried: true });
+      return fail('edit_page_mismatch', 'The open Poshmark edit page is listing ...' + pageId.slice(-6) + ', not ...' + String(id).slice(-6) + '; nothing was saved', 'guard', 'location.pathname', { remoteId: null });
+    }
 
     // ---- API apply + verify (one call; several awaits; no navigation expected) ----
     if (S.phase === 'posh_uiverify') return poshUiVerify(id, W, S);
@@ -573,6 +582,14 @@
         return fail('api_get_failed', 'GET post: HTTP ' + g1.status + ' ' + (errG || g1.snippet || ''), 'api', '/vm-rest/posts/<id>', { apiTried: true, remoteId: id });
       }
       var before = C.unwrapPoshmarkPost(g1.json);
+      // 1.0.83 guard: prove this listing is the item's own before anything is saved: its saved id, or a listing whose current title
+      // equals the item's title (Cart form and 80-char trim allowed). The item's own saved id is always allowed so it can be repaired.
+      lastPoshRead = { id: String(id).toLowerCase(), title: before && before.title != null ? String(before.title) : '' };
+      var tgA = C.poshEditTargetCheck(it, id, before && before.title);
+      if (!tgA.ok) {
+        tLog('error', tgA.code, tgA.reason, { id: id, listingTitle: String((before && before.title) || '').slice(0, 100) });
+        return fail(tgA.code, tgA.reason, 'guard', 'title of /vm-rest/posts/<id>', { apiTried: true, remoteId: null }, { details: { targetId: id, listingTitle: String((before && before.title) || '').slice(0, 100) } });
+      }
       var curQty = C.poshmarkQuantity(before);
       var needPrice = W.price != null && !C.pricesMatch('POSHMARK', C.poshmarkPriceVal(before), W.price);
       var needQty = W.qty != null && curQty != null && curQty !== W.qty;
@@ -583,6 +600,9 @@
       }
       var built = C.buildPoshmarkUpdate(before, needPrice ? W.price : null, needQty ? W.qty : null);
       if (built.error) return fail('payload_build_failed', built.error, 'api', 'post payload', { apiTried: true, remoteId: id });
+      // 1.0.83: a price/stock save may only change price and quantity; title, description, brand, condition and photos go back exactly as read.
+      var touched = C.poshmarkUpdateTouched(before, built.body.post);
+      if (touched.length) return fail('payload_would_change_fields', 'The price save would also have changed ' + touched.join(', ') + '; nothing was saved', 'guard', 'post payload', { apiTried: true, remoteId: id });
       await sleep(200 + Math.floor(Math.random() * 400));
       tStep('Saving the new price ' + (W.price != null ? money('POSHMARK', W.price) : '') + (oldSeen != null ? ' (was ' + money('POSHMARK', oldSeen) + ')' : '') + ' to Poshmark', 'sending it through Poshmark\'s own edit service, then I re-read the listing to check');
       var res = await fetch('/vm-rest/posts/' + id, { method: 'POST', credentials: 'same-origin', headers: poshHeaders(csrf, true), body: JSON.stringify(built.body), referrer: location.origin + '/edit-listing/' + id });
@@ -678,6 +698,15 @@
     // background.js HOLDS the item+change (never retried automatically, shown to the organizer) instead of retrying it every cycle.
     if (flagReason) sc.apiFlagged = String(flagReason).slice(0, 24);
     await waitFor(function () { return q('[data-et-name="update"]') || poshPriceInput(); }, 12000);    // Vue SPA: inputs render after ~3s
+    // 1.0.83 guard: the form on this page must be the item's own listing before anything is typed or saved.
+    var pageIdF = (((location.pathname || '').match(/^\/edit-listing\/([0-9a-f]{24})/i) || [])[1] || '').toLowerCase();
+    if (pageIdF !== String(id).toLowerCase()) return fail('edit_page_mismatch', 'The open Poshmark edit page is not listing ...' + String(id).slice(-6) + '; nothing was typed or saved', 'guard', 'location.pathname', Object.assign({}, sc, { remoteId: null }));
+    var formTitle = (lastPoshRead.id === String(id).toLowerCase() && lastPoshRead.title) || poshFormTitleValue();
+    var tgF = C.poshEditTargetCheck(ctx.item || {}, id, formTitle);
+    if (!tgF.ok) {
+      tLog('error', tgF.code, tgF.reason, { id: id, listingTitle: String(formTitle || '').slice(0, 100) });
+      return fail(tgF.code, tgF.reason, 'guard', 'listing title (edit form)', Object.assign({}, sc, { remoteId: null }), { details: { targetId: id, listingTitle: String(formTitle || '').slice(0, 100) } });
+    }
     var price = poshPriceInput();
     if (!price) return fail('form_fallback_price_not_found', 'Poshmark refused the API read/write (' + why + ') and no Listing Price input was found', 'form_fallback', 'input[data-vv-name="listingPrice"] (main form) | #listing-price-modal-listing-price-input', sc, { diag: snapshot('posh_form_fallback') });
     var priceForm = null;
@@ -1415,6 +1444,11 @@
     var r = String(reason || code || '');
     var m = {
       ambiguous_title: ['More than one of your ' + L + ' listings has this exact title, and FindA.Sale has no saved listing id for this item.', 'Editing one at random could change the wrong listing, so nothing was edited.', 'This item is marked as needing its saved listing id and will keep being skipped, with this reason in the activity log, until the id is saved or the listings get different titles. Candidate ids and prices are in the activity log.'],
+      duplicate_copies_detected: ['Several of your ' + L + ' listings carry this exact title and this item has no saved listing id.', 'Some of them may belong to other FindA.Sale items, so editing them as copies could change the wrong listings. Nothing was edited.', 'Save this item\'s own listing id (or give the listings different titles); until then it is reported and skipped.'],
+      listing_title_mismatch: ['The ' + L + ' listing FindA.Sale was about to edit does not carry this item\'s title.', 'It could belong to another item, so nothing was saved.', 'Check that this item\'s saved listing id points at its own listing.'],
+      remote_id_mismatch: ['FindA.Sale was pointed at a different ' + L + ' listing than the one saved for this item.', 'Only the item\'s own saved listing may be edited, so nothing was saved.', 'Nothing is needed unless this keeps happening.'],
+      edit_page_mismatch: ['The ' + L + ' edit page that opened belongs to a different listing.', 'Nothing was typed or saved.', 'FindA.Sale retries later.'],
+      payload_would_change_fields: ['The ' + L + ' save would have changed more than the price and quantity.', 'A price or stock edit never changes the title, description, brand, condition or photos, so nothing was saved.', 'FindA.Sale retries later.'],
       login_required: ['You appear to be signed out of ' + L + '.', 'The marketplace showed a sign-in page instead of your listings.', 'Sign in to ' + L + ' in this browser. FindA.Sale pauses ' + L + ' edits for a while and resumes automatically.'],
       captcha_or_verification: [L + ' asked for a security check.', 'Automatic editing stops at captchas and verification screens so your account is not put at risk.', 'Complete the check in ' + L + ' yourself; FindA.Sale pauses ' + L + ' edits and tries again later.'],
       price_field_not_found: ['The edit form opened but no price box was found.', 'The marketplace page layout may have changed, or this listing type has no price field.', 'Nothing was changed. FindA.Sale will retry later; the page snapshot below shows what was on screen.'],
@@ -1492,51 +1526,9 @@
     } catch (e) { /* narration must never change the result */ }
     return res;
   }
-  // ---- Poshmark multi-copy driver ----------------------------------------------------------------------------------------------
-  // While scratch.copies is set, every per-listing result from poshStep is turned into "next copy" or one final result for the item.
-  function poshCopyWrap(ctx, res) {
-    var S = ctx.scratch || {};
-    if (!S.copies || !S.copies.length || !res) return res;
-    if (res.state === 'continue' || res.state === 'goto') return res;     // still working on the current copy
-    var cur = S.copies[Number(S.copyIdx) || 0];
-    var adv = C.copyAdvance(S, { state: res.state, code: res.code, reason: res.reason });
-    var title = (ctx.item && ctx.item.title) || '';
-    tLog(res.state === 'done' ? 'info' : 'warn', 'posh_copy_' + res.state, 'Copy ' + ((Number(S.copyIdx) || 0) + 1) + ' of ' + S.copies.length + ' (…' + String(cur).slice(-6) + '): ' + (res.state === 'done' ? 'price/quantity verified on the live listing' : 'not finished (' + (res.code || res.state) + ')'), { id: cur, code: res.code || null });
-    if (adv.next === 'goto') {
-      // serial and jittered: a pause of 3 to 7 s on the current page, then the step() hook navigates to the next copy's edit page
-      return cont(3000 + Math.floor(Math.random() * 4000), Object.assign({}, adv.scratch), { details: { copyProgress: (Number(S.copyIdx) || 0) + 1 } });
-    }
-    var sum = adv.summary;
-    var line = C.copySummaryLine(title, sum);
-    tLog(sum.allOk ? 'info' : 'warn', 'posh_copies_summary', line, { summary: sum });
-    var fin = Object.assign({}, adv.scratch, { remoteId: sum.canonical, copySummary: sum });
-    if (sum.blocked) return { state: 'blocked', code: sum.blocked.code, reason: line.slice(0, 220), step: 'copies', scratch: fin, details: { copies: sum } };
-    if (sum.allOk || (sum.edited.length && !sum.failed.length && !sum.untried.length)) {
-      return done({ readBack: { copies: sum.edited.length }, via: 'posh_copies', copies: sum, copyLine: line }, fin);
-    }
-    return fail('copies_partial', line, 'copies', '/vm-rest/posts/<id> per copy', fin, { details: { copies: sum, copyLine: line } });
-  }
-  // Runs before the platform handler on every Poshmark step: starts remembered copy lists and navigates between copies.
-  function poshCopyPre(ctx) {
-    var S = ctx.scratch || {}, it = ctx.item || {};
-    if (S.copies && S.copies.length && S.copyWait) {
-      return go('https://poshmark.com/edit-listing/' + S.remoteId, { copyWait: false, phase: 'api', apiTried: false, formFallback: false });
-    }
-    if (!S.copies) {
-      // A previous run edited several copies of this one item and saved one canonical id; keep every remembered copy in step on later edits.
-      var saved = String(S.remoteId || it.remoteListingId || (ctx.idCache && ctx.idCache['POSHMARK:' + it.id]) || '').toLowerCase();
-      var mem = ctx.copyIds && ctx.copyIds['POSHMARK:' + it.id];
-      if (saved && Array.isArray(mem) && mem.length > 1 && mem.indexOf(saved) !== -1 && S.phase == null) {
-        var ordered = [saved].concat(mem.filter(function (x) { return x !== saved; }));
-        var cs = C.copyStart(ordered);
-        if (cs.copies.length > 1) {
-          tLog('info', 'posh_copies_remembered', 'This item has ' + cs.copies.length + ' identical Poshmark copies from an earlier run; editing all of them, one at a time', { copies: cs.copies });
-          return go('https://poshmark.com/edit-listing/' + cs.remoteId, Object.assign(cs, { phase: 'api', apiTried: false }));
-        }
-      }
-    }
-    return null;
-  }
+  // ---- Poshmark multi-copy driver: REMOVED in 1.0.83 ------------------------------------------------------------------------
+  // On 2026-10-29 the driver edited 8 other items' live Poshmark listings as "copies" of one item and a remembered copy list replayed
+  // it on every later edit. One FindA.Sale item is edited on its own listing only; a stale copy scratch is refused in step().
   var HANDLERS = { FACEBOOK: fbStep, POSHMARK: poshStep, MERCARI: mercStep, GRAILED: grStep, CRAIGSLIST: clStep, GUMTREE_AU: gtStep };
   async function step(ctx) {
     try {
@@ -1547,16 +1539,15 @@
       var bl = pageBlock();
       if (bl && bl.code !== 'login_required') return traceResult(ctx, blocked(bl.code, 'Marketplace page state: ' + bl.code, 'guard'));
       if (bl && bl.code === 'login_required') return traceResult(ctx, blocked('login_required', 'Redirected to a sign-in page', 'guard'));
-      if (ctx.platform === 'POSHMARK') {
-        var pre = poshCopyPre(ctx);
-        if (pre) return traceResult(ctx, pre);
+      if (ctx.platform === 'POSHMARK' && ctx.scratch && Array.isArray(ctx.scratch.copies) && ctx.scratch.copies.length) {
+        // 1.0.83: a multi-copy scratch (from an older run) is never continued.
+        return traceResult(ctx, fail('duplicate_copies_detected', 'Editing several Poshmark listings for one item is switched off; nothing was edited', 'guard', 'scratch.copies', { copies: null, copyIdx: null, copyWait: false, remoteId: null }));
       }
       var res = await h(ctx);
-      if (ctx.platform === 'POSHMARK') res = poshCopyWrap(ctx, res);
       return traceResult(ctx, res);
     } catch (e) {
       return traceResult(ctx, { state: 'fail', code: 'engine_exception', reason: ((e && e.message) || String(e)).slice(0, 200), step: (ctx.scratch && ctx.scratch.phase) || '', diag: (function () { try { return snapshot('exception'); } catch (e2) { return null; } })() });
     }
   }
-  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7', _test: { poshCopyWrap: poshCopyWrap, poshCopyPre: poshCopyPre, clStep: clStep, clPageSig: clPageSig, poshSetPriceViaModal: poshSetPriceViaModal, poshPriceInput: poshPriceInput, grStep: grStep, grFindSave: grFindSave, grFloorTarget: grFloorTarget, grModerationNotice: grModerationNotice } };
+  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7', _test: { poshStep: poshStep, poshAmbiguous: poshAmbiguous, poshClosetCards: poshClosetCards, poshFormFallback: poshFormFallback, clStep: clStep, clPageSig: clPageSig, poshSetPriceViaModal: poshSetPriceViaModal, poshPriceInput: poshPriceInput, grStep: grStep, grFindSave: grFindSave, grFloorTarget: grFloorTarget, grModerationNotice: grModerationNotice } };
 })();

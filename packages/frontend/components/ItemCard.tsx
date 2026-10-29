@@ -434,7 +434,8 @@ const ItemCard: React.FC<ItemCardProps> = ({
           <div className="flex items-center justify-between mt-auto">
             {showPrice && displayPrice !== undefined && (
               <div className="flex items-center gap-1">
-                {(item as any).priceBeforeMarkdown && (item as any).priceBeforeMarkdown > displayPrice ? (
+                {/* 2026-10-29: only a live markdown shows was/now (a manual price or a "Keep out of automatic markdowns" save clears it) */}
+                {(item as any).markdownApplied !== false && (item as any).priceBeforeMarkdown && (item as any).priceBeforeMarkdown > displayPrice ? (
                   <>
                     <span className="line-through text-gray-400 dark:text-gray-500 text-sm">
                       {formatPrice((item as any).priceBeforeMarkdown)}

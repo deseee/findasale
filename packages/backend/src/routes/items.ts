@@ -74,6 +74,7 @@ import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/sea
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
 import { normalizeBulkCategoryValue } from '../utils/bulkCategory';
 import { inStockOf } from '../services/inventoryStockMath'; // 2026-10-15: bulk Mark available on a SOLD item that still has units in stock
+import { recordItemPriceHistory, MANUAL_PRICE_MARKDOWN_CLEAR } from '../utils/itemPriceHistory'; // 2026-10-29: bulk price writes log history and replace markdowns
 import { importedOnlyEditNeedsDirtyMark, importedOnlyIdsNeedingDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: a bulk category/tags/photos edit must survive the next import
 
 // Bulk operations validation schemas
@@ -159,6 +160,16 @@ function belowEbayFloor(
   newPrice: number,
 ): boolean {
   return !!(item.ebayOfferId || item.ebayListingId) && newPrice < EBAY_MIN_PRICE;
+}
+
+// 2026-10-29: the markdown and original-price anchors a bulk organizer price writes, mirroring itemController.updateItem's
+// price block: a marked-down item stops being marked down (the organizer's price is the true price), any other item
+// re-anchors priceBeforeMarkdown on the new price, and originalPrice (the cashier-discretion anchor) resets.
+function bulkPriceAnchors(markdownApplied: boolean | null | undefined, newPrice: number): Record<string, unknown> {
+  const anchors: Record<string, unknown> = { originalPrice: newPrice > 0 ? newPrice : null };
+  if (markdownApplied) Object.assign(anchors, MANUAL_PRICE_MARKDOWN_CLEAR);
+  else if (newPrice > 0) Object.assign(anchors, { priceBeforeMarkdown: newPrice, markdownApplied: false });
+  return anchors;
 }
 
 const highValueSchema = z.object({
@@ -293,6 +304,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         organizerId: true,
         ebayListingId: true,
         ebayOfferId: true,
+        markdownApplied: true, // 2026-10-29: a bulk organizer price replaces a markdown (utils/itemPriceHistory.ts)
         sale: { select: { organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } } } },
       },
     });
@@ -863,12 +875,15 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
             where: { id: i.id },
             data: {
               price: newPrice,
-              ...(priceChanged ? { priceUpdatedAt: adjustNow } : {}),
+              ...(priceChanged ? { priceUpdatedAt: adjustNow, ...bulkPriceAnchors(i.markdownApplied, newPrice) } : {}),
               ...organizerEditStampAlways(adjustNow),
             },
           });
         });
         await Promise.all(updates);
+        await recordItemPriceHistory(prisma, adjustWritable
+          .filter((i) => Math.abs(Number(newValues[i.id]) - i.price!) >= 0.005)
+          .map((i) => ({ itemId: i.id, price: Number(newValues[i.id]), changedBy: 'organizer', note: `Bulk price adjust ${pct > 0 ? '+' : ''}${pct}%` })));
         if (adjustChangedEbayIds.length > 0) {
           await prisma.item.updateMany({
             where: { id: { in: adjustChangedEbayIds } },
@@ -932,12 +947,20 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           .filter((i) => i.price === null || Math.abs(i.price - finalPrice) >= 0.005)
           .map((i) => i.id);
         const unchangedPriceIds = priceWritableIds.filter((id) => !changedPriceIds.includes(id));
-        if (changedPriceIds.length > 0) {
+        // 2026-10-29: marked-down and not-marked-down items get different markdown anchors (bulkPriceAnchors), so
+        // the changed set is written in two groups.
+        const changedMarkedDownIds = priceWritable
+          .filter((i) => changedPriceIds.includes(i.id) && i.markdownApplied)
+          .map((i) => i.id);
+        const changedPlainIds = changedPriceIds.filter((id) => !changedMarkedDownIds.includes(id));
+        for (const [ids, markedDown] of [[changedPlainIds, false], [changedMarkedDownIds, true]] as Array<[string[], boolean]>) {
+          if (ids.length === 0) continue;
           await prisma.item.updateMany({
-            where: { id: { in: changedPriceIds } },
-            data: { price: finalPrice, priceUpdatedAt: priceNow, ...organizerEditStampAlways(priceNow) },
+            where: { id: { in: ids } },
+            data: { price: finalPrice, priceUpdatedAt: priceNow, ...bulkPriceAnchors(markedDown, finalPrice), ...organizerEditStampAlways(priceNow) },
           });
         }
+        await recordItemPriceHistory(prisma, changedPriceIds.map((id) => ({ itemId: id, price: finalPrice, changedBy: 'organizer', note: 'Bulk price set' })));
         if (unchangedPriceIds.length > 0) {
           await prisma.item.updateMany({
             where: { id: { in: unchangedPriceIds } },

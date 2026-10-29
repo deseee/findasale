@@ -3179,6 +3179,9 @@
 
   async function start() {
     await sleep(600); // let the page settle before reading the DOM
+    // 1.0.83: the post flow never fills a queued item on an edit-listing page (that is ANOTHER listing's form). background.js refuses the
+    // item to such tabs since 1.0.57; this is the local backstop so a new item's title/price can never be typed into an existing listing.
+    if (/^\/edit-listing\//.test(location.pathname)) return;
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getPoshmarkQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) { clearPoshNavRetryState(); clearPoshPublishAttemptState(); clearPoshFlagHoldState(); return; } // nothing queued -- stay silent, also clean up any stale bounce-retry/publish-attempt markers

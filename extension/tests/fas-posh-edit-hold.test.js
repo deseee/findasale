@@ -94,6 +94,6 @@ test('the poll prunes holds against the pending queue and reports the rest', () 
   assert.ok(/prunePoshHolds\(editHolds, pend\.POSHMARK/.test(bg));
 });
 
-test('manifest is 1.0.82', () => {
-  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8')).version, '1.0.82');
+test('manifest is 1.0.83', () => {
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8')).version, '1.0.83');
 });

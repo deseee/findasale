@@ -64,6 +64,7 @@ import { reconcileEbayInsertionsUsage, isEbayInsertionsReconciliationStale } fro
 import { isEbayRateLimited } from '../lib/ebayRateLimiter';
 import { ensureConditionValidForCategory } from '../services/ebayPublishService';
 import { desiredEbayCondition } from '../utils/conditionMapping';
+import { recordItemPriceHistory } from '../utils/itemPriceHistory'; // 2026-10-29: a price pulled from eBay is recorded in ItemPriceHistory
 import { canonicalFromEbayCondition, ebayConditionIdOf, fillBlankCondition } from '../utils/ebayConditionImport';
 
 // ADR markdown-cycle-ebay-price-sync (2026-09-15), UX spec Piece 2: an item counts as
@@ -472,6 +473,9 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
           where: { id: item.id },
           data: updates,
         });
+        if (typeof updates.price === 'number') {
+          await recordItemPriceHistory(prisma, { itemId: item.id, price: updates.price, changedBy: 'ebaySync', note: 'Price changed on eBay, pulled into FindA.Sale' });
+        }
         console.log(
           `[eBay PullSync] Item ${item.id} "${item.title}": ${changeLog.join(', ')}`
         );

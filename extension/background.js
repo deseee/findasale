@@ -1324,16 +1324,30 @@ let fasEditPumping = false;
 async function fasEditGetState() {
   const st = await chrome.storage.local.get([FAS_EDIT_STATE_KEY]);
   const s = st[FAS_EDIT_STATE_KEY] || {};
-  return { items: s.items || {}, hourly: s.hourly || {}, idCache: s.idCache || {}, platformBackoff: s.platformBackoff || {}, reportedIds: s.reportedIds || {}, copyIds: s.copyIds || {} };
+  return { items: s.items || {}, hourly: s.hourly || {}, idCache: s.idCache || {}, platformBackoff: s.platformBackoff || {}, reportedIds: s.reportedIds || {} };   // 1.0.83: remembered Poshmark copy lists are never read
 }
 async function fasEditSaveState(s) {
   // keep the id cache bounded
   const keys = Object.keys(s.idCache || {});
   if (keys.length > 500) keys.slice(0, keys.length - 500).forEach((k) => delete s.idCache[k]);
-  const ck = Object.keys(s.copyIds || {});
-  if (ck.length > 200) ck.slice(0, ck.length - 200).forEach((k) => delete s.copyIds[k]);
+  delete s.copyIds;   // 1.0.83: never stored again
   await chrome.storage.local.set({ [FAS_EDIT_STATE_KEY]: s });
 }
+// 1.0.83 (2026-10-29 incident): a remembered Poshmark "copies" list replayed price edits onto 8 other items' listings. Purge every stored
+// list as soon as the extension loads so nothing can replay it (the engine no longer has a copies path either).
+async function fasPurgeRememberedCopies() {
+  try {
+    const st = await chrome.storage.local.get([FAS_EDIT_STATE_KEY]);
+    const s = st && st[FAS_EDIT_STATE_KEY];
+    if (s && s.copyIds) {
+      const n = Object.keys(s.copyIds).length;
+      delete s.copyIds;
+      await chrome.storage.local.set({ [FAS_EDIT_STATE_KEY]: s });
+      console.warn('[FAS] 1.0.83: purged ' + n + ' remembered Poshmark copy list(s)');
+    }
+  } catch (e) { /* best-effort: fasEditGetState never reads copyIds anyway */ }
+}
+fasPurgeRememberedCopies();
 async function fasEditLogEntry(level, platform, entry, code, message, extra) {
   try {
     const st = await chrome.storage.local.get([FAS_EDIT_LOG_KEY]);
@@ -1414,7 +1428,7 @@ async function fasEditApplyItem(tabId, platform, entry, state, itemPos) {
     if (urlBlock) return { state: 'blocked', code: urlBlock.code, reason: 'Tab landed on ' + FAS_EDIT_CORE.safeUrl(tab.url || ''), step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
     let res = null;
     try {
-      res = await fasEditExec(tabId, { platform: platform, item: entry, scratch: scratch, cfg: { MERC_EDIT_URL_PREFIX: CFG.MERC_EDIT_URL_PREFIX, MERC_MANAGE_URL: CFG.MERC_MANAGE_URL, GRAILED_MANAGE_URL: CFG.GRAILED_MANAGE_URL }, idCache: state.idCache, copyIds: state.copyIds, stepNo: i, itemPos: itemPos || '' });
+      res = await fasEditExec(tabId, { platform: platform, item: entry, scratch: scratch, cfg: { MERC_EDIT_URL_PREFIX: CFG.MERC_EDIT_URL_PREFIX, MERC_MANAGE_URL: CFG.MERC_MANAGE_URL, GRAILED_MANAGE_URL: CFG.GRAILED_MANAGE_URL }, idCache: state.idCache, stepNo: i, itemPos: itemPos || '' });
     } catch (e) {
       errs++;
       if (errs > 3) return { state: 'fail', code: 'inject_failed', reason: String((e && e.message) || e).slice(0, 160) + ' @ ' + FAS_EDIT_CORE.safeUrl(tab.url || ''), step: scratch.phase || '', scratch: scratch, diags: diags, trail: trail };
@@ -1698,19 +1712,8 @@ async function fasEditRunPlatform(platform, rawEntries) {
       state.hourly[platform] = stamps;
       const diagRecord = { t: Date.now(), platform: platform, itemId: entry.id, title: String(entry.title || '').slice(0, 60), outcome: res.state, code: res.code || '', step: res.step || '', selector: res.selector || '', reason: res.reason || '', trail: res.trail, snapshots: res.diags, details: res.details };
       fasT(res.state === 'done' ? 'info' : 'warn', 'item_' + res.state, (res.state === 'done' ? 'Verified ' : 'Did not finish ') + 'edit of "' + String(entry.title || '').slice(0, 50) + '" on ' + platform + (entry.priceDrift ? ' (target $' + Core.formatPrice(platform, entry.price) + (res.scratch && res.scratch.oldPrice != null ? ', was $' + res.scratch.oldPrice : '') + ')' : '') + (res.code ? ': ' + res.code : ''), { platform: platform, flow: 'edit', itemId: entry.id, title: entry.title, ctx: { outcome: res.state, code: res.code, reason: res.reason, step: res.step, selector: res.selector, trail: res.trail, ms: Date.now() - itemT0, remoteId: res.scratch && res.scratch.remoteId, candidates: res.details && res.details.candidates } });
-      // Multi-copy edits (one item, several identical Poshmark listings): the id cached/reported is the canonical copy and only after every copy
-      // was edited; a partial result must not cache whichever copy happened to be open last, or the remaining copies would never be retried.
-      const copyRun = !!(res.scratch && res.scratch.copies && res.scratch.copies.length);
-      if (copyRun) {
-        const sc0 = res.scratch;
-        const sum0 = sc0.copySummary || { canonical: sc0.copies[0], total: sc0.copies.length, edited: sc0.copyDone || [], failed: sc0.copyFail || [], gone: sc0.copyGone || [], untried: sc0.copies.slice(Number(sc0.copyIdx) || 0), blocked: null };
-        await fasEditLogEntry(res.state === 'done' && !(sum0.failed || []).length ? 'info' : 'warn', platform, entry, res.state === 'done' ? 'copies_edited' : 'copies_incomplete', FAS_EDIT_CORE.copySummaryLine(entry.title, sum0), { step: 'copies' });
-        for (let x = 1; x < Math.min(sum0.total || 1, 12); x++) stamps.push(Date.now());   // each extra copy is a real edit against the hourly cap
-        if (res.state === 'done' && sc0.copyDone && sc0.copyDone.length) {
-          state.idCache[key] = String(sc0.copies[0]);
-          state.copyIds[key] = sc0.copies.filter((c) => (sc0.copyGone || []).indexOf(c) === -1).slice(0, 12);
-        }
-      } else if (res.scratch && res.scratch.remoteId && /^[0-9a-z]+$/i.test(String(res.scratch.remoteId))) state.idCache[key] = String(res.scratch.remoteId);
+      // 1.0.83: multi-copy Poshmark editing is gone; only the item's own listing id is ever cached (never one a guard refused: remoteId null).
+      if (res.scratch && !(res.scratch.copies && res.scratch.copies.length) && res.scratch.remoteId && /^[0-9a-z]+$/i.test(String(res.scratch.remoteId))) state.idCache[key] = String(res.scratch.remoteId);
       // 1.0.7 after-the-fact capture: the engine found (and, on 'done', verified) this item's live listing by
       // title; record its id on the backend (set-once, idempotent) so later edits go straight to it. Covers
       // Facebook (itemIdFound), Craigslist (postingId) and the platforms whose engine reports remoteId.

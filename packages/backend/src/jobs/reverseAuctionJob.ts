@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
+import { recordItemPriceHistory } from '../utils/itemPriceHistory'; // 2026-10-29: every price write is recorded
 
 /**
  * CD2 Phase 4: Reverse Auction Cron Job
@@ -80,6 +81,7 @@ const job = cron.schedule('6 6 * * *', cronGuard({ jobName: 'reverseAuctionJob' 
           where: { id: item.id },
           data: { price: newPrice },
         });
+        await recordItemPriceHistory(prisma, { itemId: item.id, price: newPrice, changedBy: 'reverseAuction', note: `Reverse auction daily drop (day ${daysElapsed})` });
 
         console.log(
           `[reverseAuctionJob] Item ${item.id} (${item.title}): ${item.price} → ${newPrice}`

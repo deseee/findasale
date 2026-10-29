@@ -13,6 +13,7 @@ import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'
 import { organizerEditStampAlways } from '../utils/organizerEdit'; // 2026-10-04: Item.lastEditedAt, organizer-driven offline replay only
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 Addendum B (#659): bulk lots through the offline queue
 import { findBulkLotItemIds, isBulkLotError } from '../services/bulkLot/bulkLotService';
+import { recordItemPriceHistory, MANUAL_PRICE_MARKDOWN_CLEAR } from '../utils/itemPriceHistory'; // 2026-10-29
 import { evaluateLotItemEdit, lotDeleteBlocker, LOT_INVARIANT_MESSAGES } from '../services/bulkLot/bulkLotInvariants';
 import { BULK_CONFLICT_CODE, BULK_CONFLICT_MESSAGE, isBulkLineCode, previewOfflineBulkLines } from '../services/bulkLot/bulkLotOfflineService';
 
@@ -340,6 +341,11 @@ async function handleUpdateItem(operation: SyncOperation) {
       }
     }
 
+    // 2026-10-29: a replayed offline price is an organizer price: it replaces any markdown and gets a history row.
+    const syncNextPrice = payload.price !== undefined ? payload.price : currentItem.price;
+    const syncPriceChanged = typeof syncNextPrice === 'number' &&
+      (currentItem.price == null || Math.abs(syncNextPrice - currentItem.price) >= 0.005);
+
     // Apply update (last-write-wins)
     const updated = await prisma.item.update({
       where: { id: itemId },
@@ -364,9 +370,13 @@ async function handleUpdateItem(operation: SyncOperation) {
           tags: Array.isArray(payload.tags) ? payload.tags : currentItem.tags,
           photoUrls: Array.isArray(payload.photoUrls) ? payload.photoUrls : currentItem.photoUrls,
         }) ? { ebayContentDirtyAt: new Date() } : {}),
+        ...(syncPriceChanged && currentItem.markdownApplied ? MANUAL_PRICE_MARKDOWN_CLEAR : {}),
         ...lotForced, // ADR-136 Addendum B (#659): the lot invariants win over the queued edit
       },
     });
+    if (syncPriceChanged) {
+      await recordItemPriceHistory(prisma, { itemId: updated.id, price: updated.price, changedBy: 'organizer', note: 'Offline edit synced' });
+    }
 
     return {
       data: {

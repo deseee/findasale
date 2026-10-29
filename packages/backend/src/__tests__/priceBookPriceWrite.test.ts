@@ -54,6 +54,11 @@ function legacyUpdate(item: AnyRow, price: string, now: Date): AnyRow {
     updateData.priceBeforeMarkdown = newPrice;
     updateData.markdownApplied = false;
   }
+  // 2026-10-29: a manual price on a marked-down item clears the markdown display state.
+  if (priceChanged && item.markdownApplied) {
+    updateData.markdownApplied = false;
+    updateData.priceBeforeMarkdown = null;
+  }
   if (priceChanged || item.originalPrice == null) updateData.originalPrice = newPrice && newPrice > 0 ? newPrice : null;
 
   // The eBay hold: computeEbayPushFields for the price field only (the other fields are not in the patch), then the hold block.
@@ -178,12 +183,13 @@ describe('parity with the organizer price block of updateItem', () => {
     expect(plain.ebaySyncState).toBeUndefined();
   });
 
-  test('the markdown anchor is set only while no markdown has been applied, and the original price always resets', () => {
+  test('the markdown anchor follows the price while no markdown has been applied, a price on a marked-down item replaces the markdown, and the original price always resets', () => {
     const fresh = buildPriceUpdate(itemOf({ price: 4 }), 450, NOW).data;
     expect(fresh).toMatchObject({ priceBeforeMarkdown: 4.5, markdownApplied: false, originalPrice: 4.5 });
+    // 2026-10-29: the organizer's price is the true price, so the item stops showing as marked down.
     const marked = buildPriceUpdate(itemOf({ price: 4, markdownApplied: true, priceBeforeMarkdown: 8 }), 450, NOW).data;
-    expect(marked.priceBeforeMarkdown).toBeUndefined();
-    expect(marked.markdownApplied).toBeUndefined();
+    expect(marked.priceBeforeMarkdown).toBeNull();
+    expect(marked.markdownApplied).toBe(false);
     expect(marked.originalPrice).toBe(4.5);
     expect(buildPriceUpdate(itemOf({ price: 4, originalPrice: 4 }), null, NOW).data.originalPrice).toBeNull();
   });

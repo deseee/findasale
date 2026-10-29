@@ -805,7 +805,7 @@ const AddItemsDetailPage = () => {
       changed.excludeFromMarkdown = state.excludeFromMarkdown;
     }
     try {
-      await api.put(`/items/${itemId}`, {
+      const saveRes = await api.put(`/items/${itemId}`, {
         title: state.title,
         price: state.price ? parseFloat(state.price) : undefined,
         category: state.category,
@@ -838,6 +838,10 @@ const AddItemsDetailPage = () => {
           costBasisInitial: cur.costBasis,
           consignorIdInitial: cur.consignorId,
           excludeFromMarkdownInitial: cur.excludeFromMarkdown,
+          // 2026-10-29: the server can change the price itself (ticking "Keep out of automatic markdowns" on a
+          // marked-down item restores its pre-markdown price). Show the saved price so a second Save does not send
+          // the old marked-down price back as a manual edit.
+          ...(typeof saveRes?.data?.price === 'number' ? { price: String(saveRes.data.price) } : {}),
         } };
       });
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
@@ -3913,7 +3917,7 @@ const AddItemsDetailPage = () => {
                                 </label>
                               </div>
                               <p className="mt-1 ml-6 text-[11px] text-warm-500 dark:text-warm-400">
-                                The price of this item will never be automatically reduced, even if the sale or a markdown cycle would otherwise mark it down.
+                                The price of this item will never be automatically reduced, even if the sale or a markdown cycle would otherwise mark it down. If it is marked down now, saving puts it back at its price before the markdown, unless you also change the price.
                               </p>
                             </div>
                           )}

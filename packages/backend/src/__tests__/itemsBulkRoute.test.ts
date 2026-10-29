@@ -49,6 +49,10 @@ const mockPrisma: any = {
     findFirst: jest.fn(),
     findUnique: jest.fn(),
   },
+  // 2026-10-29: bulk price writes record ItemPriceHistory (utils/itemPriceHistory.ts).
+  itemPriceHistory: {
+    create: jest.fn(async () => ({})),
+  },
 };
 jest.mock('../index', () => ({ __esModule: true, prisma: mockPrisma }));
 jest.mock('../lib/prisma', () => ({ __esModule: true, prisma: mockPrisma }));
@@ -323,8 +327,13 @@ describe('POST /bulk: price writes (priceUpdatedAt and eBay PENDING)', () => {
     expect(changedWrite.data).toEqual({
       price: 25.5,
       priceUpdatedAt: expect.any(Date),
+      // 2026-10-29: same anchors as updateItem (markdown anchor follows the price, original price resets).
+      priceBeforeMarkdown: 25.5,
+      markdownApplied: false,
+      originalPrice: 25.5,
       lastEditedAt: expect.any(Date),
     });
+    expect(mockPrisma.itemPriceHistory.create.mock.calls.map((c: any[]) => c[0].data.itemId).sort()).toEqual(['listing', 'offer', 'plain']);
 
     const unchangedWrite = calls.find((c: any) => c.data.price === 25.5 && !c.data.priceUpdatedAt);
     expect(unchangedWrite).toBeDefined();
@@ -359,13 +368,28 @@ describe('POST /bulk: price writes (priceUpdatedAt and eBay PENDING)', () => {
     expect(updates).toHaveLength(2);
     const plain = updates.find((u: any) => u.where.id === 'plain');
     const listing = updates.find((u: any) => u.where.id === 'listing');
-    expect(plain.data).toEqual({ price: 11, priceUpdatedAt: expect.any(Date), lastEditedAt: expect.any(Date) });
-    expect(listing.data).toEqual({ price: 22, priceUpdatedAt: expect.any(Date), lastEditedAt: expect.any(Date) });
+    expect(plain.data).toEqual({ price: 11, priceUpdatedAt: expect.any(Date), priceBeforeMarkdown: 11, markdownApplied: false, originalPrice: 11, lastEditedAt: expect.any(Date) });
+    expect(listing.data).toEqual({ price: 22, priceUpdatedAt: expect.any(Date), priceBeforeMarkdown: 22, markdownApplied: false, originalPrice: 22, lastEditedAt: expect.any(Date) });
+    expect(mockPrisma.itemPriceHistory.create).toHaveBeenCalledWith({ data: { itemId: 'plain', price: 11, changedBy: 'organizer', note: 'Bulk price adjust +10%' } });
 
     const pendingWrites = updateManyCalls();
     expect(pendingWrites).toHaveLength(1);
     expect(pendingWrites[0].where).toEqual({ id: { in: ['listing'] } });
     expect(pendingWrites[0].data).toEqual({ ebaySyncState: 'PENDING', ebaySyncAttempts: 0, ebaySyncFailureReason: null });
+  });
+
+  it('price on a marked-down item replaces the markdown (2026-10-29 owner report)', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([
+      saleItem('marked', { price: 0.99, markdownApplied: true }),
+      saleItem('plain', { price: 2 }),
+    ]);
+    await bulk(makeReq({ itemIds: ['marked', 'plain'], operation: 'price', value: 1.19 }), makeRes());
+    const calls = updateManyCalls().filter((c: any) => c.data.priceUpdatedAt);
+    const marked = calls.find((c: any) => c.where.id.in.includes('marked'));
+    const plain = calls.find((c: any) => c.where.id.in.includes('plain'));
+    expect(marked.where).toEqual({ id: { in: ['marked'] } });
+    expect(marked.data).toMatchObject({ price: 1.19, markdownApplied: false, priceBeforeMarkdown: null, originalPrice: 1.19 });
+    expect(plain.data).toMatchObject({ price: 1.19, markdownApplied: false, priceBeforeMarkdown: 1.19 });
   });
 
   it('price_adjust: an unchanged result (price 0) does not stamp priceUpdatedAt or set PENDING', async () => {
@@ -594,7 +618,7 @@ describe('POST /bulk: ownership is default-deny', () => {
     await bulk(makeReq({ itemIds: ['inv'], operation: 'price', value: 15 }), res);
     expect(res.statusCode).toBe(200);
     const calls = updateManyCalls();
-    expect(calls[0].data).toEqual({ price: 15, priceUpdatedAt: expect.any(Date), lastEditedAt: expect.any(Date) });
+    expect(calls[0].data).toEqual({ price: 15, priceUpdatedAt: expect.any(Date), priceBeforeMarkdown: 15, markdownApplied: false, originalPrice: 15, lastEditedAt: expect.any(Date) });
     expect(calls[1].where).toEqual({ id: { in: ['inv'] } });
     expect(calls[1].data.ebaySyncState).toBe('PENDING');
   });

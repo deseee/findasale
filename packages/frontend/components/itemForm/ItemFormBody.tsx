@@ -2447,7 +2447,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                     </label>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
-                    This item's price will never be automatically reduced, even if the sale or a markdown cycle would otherwise mark it down.
+                    This item's price will never be automatically reduced, even if the sale or a markdown cycle would otherwise mark it down. If it is marked down now, saving puts it back at its price before the markdown, unless you also change the price.
                   </p>
                 </div>
               )}

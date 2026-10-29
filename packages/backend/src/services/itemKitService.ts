@@ -25,6 +25,7 @@ import { userCanPublish } from '../lib/publishGate'; // 2026-10-23: kits are cre
 import { KIT_LISTING_TYPE, computeKitAvailability, materializedKitStockTotal, recomputeKitStock } from './itemKitStock';
 import { organizerEditStampAlways } from '../utils/organizerEdit';
 import { scheduleKitRelatedStockSync } from './kitStockSyncTrigger';
+import { recordItemPriceHistory } from '../utils/itemPriceHistory'; // 2026-10-29
 
 export const KIT_LIMITS = { maxComponents: 25, maxQuantity: 1000, maxTitle: 200, maxDescription: 5000, maxPrice: 1_000_000 } as const;
 
@@ -512,6 +513,8 @@ export async function updateKit(organizerId: string, kitId: string, raw: unknown
       await clearComponentFlags(db, oldIds.filter((id) => !newIds.has(id)));
     }
     if (Object.keys(data).length > 0) await db.item.update({ where: { id: kitId }, data });
+    // 2026-10-29: every price write is recorded in ItemPriceHistory (utils/itemPriceHistory.ts).
+    if (pushPrice !== undefined && pushPrice !== null) await recordItemPriceHistory(db, { itemId: kitId, price: pushPrice, changedBy: 'organizer', note: 'Kit price edit' });
     if (input.components) await recomputeKitStock(db, [kitId]);
     // The recipe changed the kit's derived stock: re-push it to every market once the transaction has committed.
     if (input.components) scheduleKitRelatedStockSync(kitId, 'kit', 'kit components edited');
