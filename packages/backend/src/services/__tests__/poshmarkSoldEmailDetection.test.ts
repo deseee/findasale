@@ -102,8 +102,8 @@ describe('parsing', () => {
     expect(parsePoshmarkSubject(`"${tricky}" just sold to @b on Poshmark!`)).toEqual({ title: tricky, buyer: '@b' });
   });
   it('parses the LIVE unquoted subject (2026-10-28), including a folded header', () => {
-    const live = 'Mouse Trap Board Game, Milton Bradley, Vintage 1990s just sold to @crystalbauer00 on Poshmark!';
-    const want = { title: 'Mouse Trap Board Game, Milton Bradley, Vintage 1990s', buyer: '@crystalbauer00' };
+    const live = 'Mouse Trap Board Game, Milton Bradley, Vintage 1990s just sold to @testbuyer on Poshmark!';
+    const want = { title: 'Mouse Trap Board Game, Milton Bradley, Vintage 1990s', buyer: '@testbuyer' };
     expect(parsePoshmarkSubject(live)).toEqual(want);
     expect(parsePoshmarkSubject(live.replace(' just sold to ', ' just sold to\r\n  '))).toEqual(want);
     expect(parsePoshmarkSubject('Tee just sold to me just sold to @b on Poshmark!')).toEqual({ title: 'Tee just sold to me', buyer: '@b' });
@@ -113,7 +113,7 @@ describe('parsing', () => {
   });
   it('reads the LIVE unquoted body title and the "Order Number" row', () => {
     const live = '<h1>You just sold Mouse Trap Board Game, Milton Bradley, Vintage 1990s on Poshmark.</h1>' +
-      '<div>Order Number</div><div>6ae1e377fc6d1e98d84076b2</div><div>Buyer</div><div>@crystalbauer00</div>';
+      '<div>Order Number</div><div>6ae1e377fc6d1e98d84076b2</div><div>Buyer</div><div>@testbuyer</div>';
     expect(parsePoshmarkSoldEmailBody(live)).toEqual({
       title: 'Mouse Trap Board Game, Milton Bradley, Vintage 1990s',
       orderId: '6ae1e377fc6d1e98d84076b2',

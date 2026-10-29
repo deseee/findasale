@@ -1,16 +1,22 @@
 /**
- * First LIVE Poshmark sale email (2026-10-28), end to end from the real message.
+ * First LIVE Poshmark sale email (2026-10-28), end to end in the live format.
  *
- * Regression: the Mouse Trap sale e-mail reached find@outreach.finda.sale (forwarded via
- * sold-<token>@outreach.finda.sale) and the poller found it, but the research-built parser expected a
+ * Regression: the Mouse Trap sale e-mail reached the polled inbox (forwarded via the organizer's
+ * sold-<token> address) and the poller found it, but the research-built parser expected a
  * quoted title ('"<title>" just sold to ...'). The real subject has no quotes, so the message was
  * IGNORED and given a permanent processed marker; the item stayed AVAILABLE.
  *
- * The fixture is the raw RFC822 source of that message as the poller's IMAP FETCH returns it
- * (fixtures/poshmark-sold-email-2026-10-28.eml). Real mailparser, real header parsing, real
- * DKIM/DMARC check, real subject/body parsing and the real window/marker loop; only the IMAP client,
- * the database and the sale commit are faked.
+ * The fixture (fixtures/poshmark-sold-email-2026-10-28.eml) is a SANITIZED reduction of that message:
+ * the real sender, folded unquoted Subject, Date, Message-ID and the real HTML body structure (h1 title
+ * line, Order Number row, item row), with placeholder recipient addresses, a placeholder buyer handle,
+ * and no Received/DKIM/ARC/Authentication-Results headers or tracking links. Because the signatures are
+ * gone, the DKIM/DMARC verdict is stubbed (its own parsing is covered by poshmarkSoldEmailDetection.test.ts).
+ * Real mailparser, real header parsing, real subject/body parsing and the real window/marker loop; only
+ * the IMAP client, the auth verdict, the database and the sale commit are faked.
  */
+
+// Placeholder forwarding domain used by the fixture (read by organizerEmailForwardingService at load).
+process.env.FACEBOOK_SOLD_EMAIL_DOMAIN = 'outreach.example';
 
 import fs from 'fs';
 import path from 'path';
@@ -31,6 +37,11 @@ jest.mock('../platformSoldDetectionService', () => ({
   processPlatformSoldReport: (...a: any[]) => mockReport(...a),
 }));
 jest.mock('imapflow', () => ({ ImapFlow: jest.fn() }));
+const mockVerifyAuth = jest.fn();
+jest.mock('../inboundEmailAuthService', () => ({
+  ...jest.requireActual('../inboundEmailAuthService'),
+  verifyInboundEmailAuthentication: (...a: any[]) => mockVerifyAuth(...a),
+}));
 
 import {
   processPoshmarkBatch,
@@ -45,7 +56,8 @@ const FIXTURE = path.join(__dirname, 'fixtures', 'poshmark-sold-email-2026-10-28
 // IMAP hands back CRLF; the repo stores the fixture with LF (.gitattributes eol=lf).
 const RAW = Buffer.from(fs.readFileSync(FIXTURE, 'utf8').replace(/\r?\n/g, '\r\n'));
 const MESSAGE_ID = '<Fw0djysIQYCJc1Qygku-8A@geopod-ismtpd-16>';
-const TOKEN = 'n8dd9dewbroxtkwblved9y7n';
+const FORWARDING_ID = 'testtoken'; // fixture recipient: sold-TESTTOKEN@outreach.example
+const BUYER = '@testbuyer';
 const ORGANIZER = 'cmnxueoas0005tfv8brnc0kky';
 const ITEM = 'cmtbh5sq2021pp46dpxr6yr2j';
 const TITLE = 'Mouse Trap Board Game, Milton Bradley, Vintage 1990s';
@@ -58,7 +70,7 @@ function newResult(): FacebookSoldEmailPollResult {
   return { processed: 0, matched: 0, unmatched: 0, ignored: 0, errors: [], vinted: c(), mercari: c(), poshmark: c(), grailed: c() };
 }
 
-// UID 295 in find@outreach.finda.sale, already \Seen (the old poller marked it after ignoring it).
+// UID 295 in the polled inbox, already \Seen (the old poller marked it after ignoring it).
 function fakeClient() {
   return {
     search: jest.fn(async () => [295]),
@@ -88,7 +100,8 @@ beforeEach(() => {
     markers.add(data.eventId);
     return data;
   });
-  mockResolveToken.mockImplementation(async (t: string) => (t.toLowerCase() === TOKEN ? ORGANIZER : null));
+  mockResolveToken.mockImplementation(async (t: string) => (t.toLowerCase() === FORWARDING_ID ? ORGANIZER : null));
+  mockVerifyAuth.mockReturnValue({ ok: true });
   mockReport.mockImplementation(async (_p: string, _s: string, _o: string, r: any) => ({
     platform: 'POSHMARK', remoteListingId: '', title: r.title, result: 'sold', itemId: ITEM, via: 'title',
   }));
@@ -101,12 +114,12 @@ afterEach(() => {
 });
 
 describe('real Poshmark sale e-mail (2026-10-28)', () => {
-  it('parses to the shape the Poshmark branch reads (sender, folded subject, forwarding token, DKIM)', async () => {
+  it('parses to the shape the Poshmark branch reads (sender, folded subject, forwarding address)', async () => {
     const e = await parseImapMessageToInboundEmail(RAW);
     expect(e.from).toBe('orders@poshmark.com');
     expect(e.fromName).toBe('Poshmark');
-    expect(e.subject.replace(/\s+/g, ' ')).toBe(`${TITLE} just sold to @crystalbauer00 on Poshmark!`);
-    expect(e.recipientAddresses).toContain(`sold-${TOKEN}@outreach.finda.sale`);
+    expect(e.subject.replace(/\s+/g, ' ')).toBe(`${TITLE} just sold to ${BUYER} on Poshmark!`);
+    expect(e.recipientAddresses).toContain(`sold-${FORWARDING_ID}@outreach.example`);
     expect(e.attachmentNames).toEqual([]);
   });
 
@@ -115,6 +128,16 @@ describe('real Poshmark sale e-mail (2026-10-28)', () => {
     const r = await processPoshmarkSoldEmail(e);
     expect(mockReport).toHaveBeenCalledWith('POSHMARK', 'POSHMARK', ORGANIZER, { remoteListingId: '', title: TITLE, orderId: ORDER });
     expect(r).toMatchObject({ kind: 'matched', organizerId: ORGANIZER, itemId: ITEM, title: TITLE, poshmarkOrderId: ORDER, alreadySold: false });
+    // The sender-authentication gate is still consulted for Poshmark's DKIM domain.
+    expect(mockVerifyAuth).toHaveBeenCalledWith(expect.objectContaining({ from: 'orders@poshmark.com' }), ['poshmark.com']);
+    expect(mockResolveToken).toHaveBeenCalledWith(FORWARDING_ID);
+  });
+
+  it('fails closed (no sale) when the sender-authentication verdict fails', async () => {
+    mockVerifyAuth.mockReturnValue({ ok: false, reason: 'no dkim=pass for poshmark.com' });
+    const r = await processPoshmarkSoldEmail(await parseImapMessageToInboundEmail(RAW));
+    expect(r.kind).toBe('ignored');
+    expect(mockReport).not.toHaveBeenCalled();
   });
 
   it('the next poll re-examines the e-mail the old parser ignored, commits it once, and then leaves it alone', async () => {
