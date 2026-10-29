@@ -459,7 +459,7 @@
     }
     var cands = [];
     try {
-      poshClosetCards().forEach(function (c) { if ((c.texts || []).some(function (t) { return C.titleEquals(t, it.title); })) cands.push({ id: c.key, price: poshCandidatePrice(c.key) }); });
+      poshClosetCards().forEach(function (c) { if ((c.texts || []).some(function (t) { return C.titleEqualsPoshmark(t, it.title); })) cands.push({ id: c.key, price: poshCandidatePrice(c.key) }); });
     } catch (e) { /* ignore */ }
     var res = C.resolveDuplicateTitleId(cands, it.titleGroup, complete);
     if (res.copies && res.copies.length > 1) {
@@ -486,7 +486,7 @@
       if (!/^\/closet\//.test(path)) {
         var links = qa('a[href*="/closet/"]');
         var mine = links.filter(function (a) { return norm(a.textContent) === 'my closet'; })[0] || links.filter(function (a) { return /^\/closet\/[^/]+$/.test((a.getAttribute('href') || '').split('?')[0].replace(/\/+$/, '')); })[0];
-        if (mine) return go(mine.href.split('?')[0] + '?query=' + encodeURIComponent(String(it.title).split(/\s+/).slice(0, 8).join(' ')), { phase: 'locate' });
+        if (mine) return go(mine.href.split('?')[0] + '?query=' + encodeURIComponent(C.poshmarkSearchTitle(it.title).split(/\s+/).slice(0, 8).join(' ')), { phase: 'locate' });
         if (!S.triedFeed && !/^\/feed/.test(path)) return go('https://poshmark.com/feed', { triedFeed: true });
         return fail('closet_link_not_found', 'No "My Closet" link on the Poshmark feed/closet page', 'locate', 'a[href*="/closet/"] text "My Closet"', {});
       }
@@ -519,7 +519,7 @@
       if (!found && !S.fuzzyTried) {
         // Title may have been edited on FindA.Sale after posting: look again with just the first two words, then try the guarded near-match.
         var base = location.pathname.replace(/\/+$/, '');
-        return go('https://poshmark.com' + base + '?query=' + encodeURIComponent(String(it.title).split(/\s+/).slice(0, 2).join(' ')), { phase: 'locate', fuzzyTried: true });
+        return go('https://poshmark.com' + base + '?query=' + encodeURIComponent(C.poshmarkSearchTitle(it.title).split(/\s+/).slice(0, 2).join(' ')), { phase: 'locate', fuzzyTried: true });
       }
       if (!found && S.fuzzyTried) {
         var fz = C.pickFuzzyPoshmark(poshClosetCards(), it.title);
@@ -849,6 +849,43 @@
     return q('input[type="tel"][name="price"]') || q('input[name="price"]') || findInput(/(^|\|\s*)price(\s*\||$)/i, /floor|minimum|ship|offer|original|retail/i) || findInput(/\bprice\b/i, /floor|minimum|ship|offer|original|retail|\(usd\) floor/i);
   }
   function grFloorInput() { return q('input[name="smartPricing.minimumPrice"]') || q('input[placeholder="Floor Price (USD)"]'); }   // [existing]
+  // 1.0.82 (2026-10-29): save_control_not_found on /listings/104003051/edit (price 225->202 and floor 202->181 were typed, then no
+  // enabled PUBLISH). That listing is held by Grailed moderation ("Our moderators have requested additional photos to verify the
+  // a..." in the page text; GET /api/listings/104003051 -> hidden: true), and the diagnostic only kept the first buttons on the page.
+  // Save detection now accepts every known label, commits the edited fields with real focus-out/blur events so React re-validates,
+  // waits for the control to become enabled, and names a moderation hold instead of a missing button. Nothing is clicked unless
+  // an enabled control with a known label is found; the price is still re-read from the edit page before 'done'.
+  var GR_SAVE_LABEL_RE = /^(publish|save|save changes|save listing|save edits|update|update listing|update item|done|submit|list item)$/;
+  function grSaveCandidates() {
+    return qa('button[type="submit"], input[type="submit"], button, [role="button"]').filter(function (b) { return visible(b) && GR_SAVE_LABEL_RE.test(btnLabel(b)); });
+  }
+  function grFindSave() {
+    var en = grSaveCandidates().filter(function (b) { return !isDisabled(b); });
+    var sub = en.filter(function (b) { return String(b.getAttribute('type') || '').toLowerCase() === 'submit'; });
+    return sub[sub.length - 1] || en[en.length - 1] || null;
+  }
+  function grCommitField(el) {
+    if (!el) return;
+    function fe(type) { try { return typeof FocusEvent === 'function' ? new FocusEvent(type, { bubbles: type === 'focusout', relatedTarget: null }) : new Event(type, { bubbles: type === 'focusout' }); } catch (e) { return new Event(type); } }
+    try {
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      el.dispatchEvent(fe('focusout'));
+      el.dispatchEvent(fe('blur'));
+      if (typeof el.blur === 'function') el.blur();
+    } catch (e) { /* never break the edit */ }
+  }
+  function grModerationNotice() {
+    var t = pageText().replace(/\s+/g, ' ');
+    var m = /(our moderators have requested[^.]{0,140}|additional photos to verify[^.]{0,100}|listing is (?:currently )?(?:under review|on hold|hidden)[^.]{0,100})/i.exec(t);
+    return m ? m[1].trim().slice(0, 160) : '';
+  }
+  // Grailed's Smart Pricing floor must be strictly below the listing price ("Floor price must be below $104", live 2026-08-20).
+  function grFloorTarget(price) {
+    var p = C.wholeDollars(price);
+    var f = Math.max(1, Math.min(Math.floor(p * 0.9), p - 1));
+    return f < p ? f : null;
+  }
   function grCards() {
     var byId = {};
     qa('a[href*="/listings/"]').forEach(function (a) {
@@ -902,11 +939,31 @@
         if (!ok && !C.pricesMatch('GRAILED', price.value, W.price)) return fail('price_value_did_not_stick', 'Price input kept "' + price.value + '"', 'form', 'price input', {});
       }
       var floor = grFloorInput();
-      if (floor && W.price != null) { var fv = C.parsePriceText(floor.value); if (fv != null && fv >= C.wholeDollars(W.price)) await writeField(floor, String(Math.max(1, Math.floor(C.wholeDollars(W.price) * 0.9)))); }
-      // verified-in-DOM 2026-10-13: the edit page's only submit is "PUBLISH" (no Save/Update label); the form has no action (JS-driven).
-      var save = qa('button[type="submit"], input[type="submit"]').filter(function (b) { return visible(b) && !isDisabled(b) && /^publish$/.test(btnLabel(b)); })[0] ||
-        findButton(/^(publish|save|save changes|update|update listing|done)$/);
-      if (!save) return fail('save_control_not_found', 'No PUBLISH/Save control enabled on the edit page', 'form', 'button[type=submit] text PUBLISH', {}, { diag: diag });
+      if (floor && W.price != null) {
+        var fv = C.parsePriceText(floor.value);
+        if (fv != null && fv >= C.wholeDollars(W.price)) {
+          // A floor at or above the new price would be rejected by Grailed: lower it to 90% of the price (always below it).
+          var ft = grFloorTarget(W.price);
+          if (ft != null) await writeField(floor, String(ft));
+          var fNow = C.parsePriceText(floor.value);
+          if (fNow != null && fNow >= C.wholeDollars(W.price)) return fail('floor_price_not_below_price', 'Smart Pricing floor stays at ' + floor.value + ', not below the new price ' + C.formatPrice('GRAILED', W.price), 'form', 'input[name="smartPricing.minimumPrice"]', {}, { diag: diag });
+        }
+      }
+      // verified-in-DOM 2026-10-13: the edit page's submit was "PUBLISH"; the form has no action (JS-driven). 1.0.82: any known label.
+      var save = grFindSave();
+      if (!save) {
+        grCommitField(price);
+        if (floor) grCommitField(floor);
+        save = await waitFor(grFindSave, 8000, 300);
+      }
+      if (!save) {
+        var disabledSaves = grSaveCandidates().map(function (b) { return btnLabel(b); }).slice(0, 4);
+        var allLabels = qa(BTN_SEL).filter(visible).map(function (b) { return btnLabel(b).slice(0, 30); }).filter(Boolean);
+        var gDetails = { disabledSave: disabledSaves, lastButtons: allLabels.slice(-20), priceNow: price.value, floorNow: floor ? floor.value : undefined };
+        var mod = grModerationNotice();
+        if (mod) return fail('listing_under_moderation', 'Grailed is holding this listing for moderation (' + mod + '); its save control stays disabled', 'form', 'moderation notice', {}, { diag: diag, details: gDetails });
+        return fail('save_control_not_found', disabledSaves.length ? 'The ' + disabledSaves.join('/') + ' control stayed disabled after the edit (waited 8 s)' : 'No Publish/Save/Update control on the edit page', 'form', 'button[type=submit] text publish|save|save changes|update', {}, { diag: diag, details: gDetails });
+      }
       deferClick(save);
       return cont(3500, { phase: 'saved', formSnap: true, editUrl: editUrl, remoteId: id || (location.pathname.match(/\/listings\/(\d+)/) || [])[1] }, { diag: diag });
     }
@@ -1369,6 +1426,8 @@
       price_value_did_not_stick: ['The price box would not keep the new value.', 'The page rewrote the field after FindA.Sale typed in it.', 'Nothing was saved. FindA.Sale will retry later.'],
       verify_mismatch: ['FindA.Sale saved the new price but the live listing still shows something different.', 'The marketplace may not have accepted the change yet, or it changed another value.', 'The item is not marked synced, so FindA.Sale re-checks it on the next retry. Look at the listing yourself if this repeats.'],
       save_control_not_found: ['The price was entered but no Save/Update button could be found.', 'The marketplace page layout may have changed.', 'Nothing was saved. FindA.Sale will retry later.'],
+      listing_under_moderation: ['Grailed is holding this listing for moderation, so it cannot be saved right now.', 'Grailed asked for more photos to verify the item, and keeps the save button disabled until that is done.', 'Nothing was saved. Add the photos Grailed asked for on the listing; FindA.Sale retries the price change later.'],
+      floor_price_not_below_price: ['The Grailed Smart Pricing floor could not be set below the new price.', 'Grailed rejects a floor price at or above the listing price.', 'Nothing was saved. FindA.Sale will retry later.'],
       listing_gone_on_dashboard: ['This post is already ' + 'deleted or expired on your ' + L + ' dashboard.', 'The dashboard shows a post with this title, but its status is Deleted or Expired, so there is nothing live to edit.', 'Nothing was changed and no new post was made. FindA.Sale clears the Craigslist sync for this item on its next removal check.'],
       dashboard_scan_failed: ['Could not read your ' + L + ' dashboard pages.', 'A dashboard page did not load completely, so I cannot tell whether the post exists.', 'Nothing was changed. FindA.Sale will retry later.'],
       listing_not_found_on_dashboard: ['The listing was not found on your ' + L + ' dashboard.', 'I searched your posts and then read every dashboard page (all statuses) and none matched, so it may have a different title there or be missing from this account.', 'FindA.Sale will retry later; if the listing is gone the sync will be cleared by the next removal check.'],
@@ -1499,5 +1558,5 @@
       return traceResult(ctx, { state: 'fail', code: 'engine_exception', reason: ((e && e.message) || String(e)).slice(0, 200), step: (ctx.scratch && ctx.scratch.phase) || '', diag: (function () { try { return snapshot('exception'); } catch (e2) { return null; } })() });
     }
   }
-  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7', _test: { poshCopyWrap: poshCopyWrap, poshCopyPre: poshCopyPre, clStep: clStep, clPageSig: clPageSig, poshSetPriceViaModal: poshSetPriceViaModal, poshPriceInput: poshPriceInput } };
+  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7', _test: { poshCopyWrap: poshCopyWrap, poshCopyPre: poshCopyPre, clStep: clStep, clPageSig: clPageSig, poshSetPriceViaModal: poshSetPriceViaModal, poshPriceInput: poshPriceInput, grStep: grStep, grFindSave: grFindSave, grFloorTarget: grFloorTarget, grModerationNotice: grModerationNotice } };
 })();

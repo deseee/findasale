@@ -191,6 +191,11 @@ interface CategoryAllowlistRule {
    * count -- same carve-out pattern as CategoryBlocklistRule.excludeKeywords, just inverted: here it
    * takes an item OUT of "eligible" instead of OUT of "blocked". */
   excludeKeywords?: readonly string[];
+  /**
+   * 2026-10-29: keywords too generic to allow an item on their own. One of `keywords` counts only when the item ALSO shows
+   * fashion context (a whole-word match from `requireAny`) and none of `unlessAny`. Whole-word matching (hasWholeWordMatch).
+   */
+  contextGatedKeywords?: { keywords: readonly string[]; requireAny: readonly string[]; unlessAny: readonly string[] };
   reason: string;
 }
 
@@ -714,7 +719,7 @@ const RULES: EligibilityRule[] = [
       'clothing', 'apparel', 'shirt', 't-shirt', 'tee', 'pant', 'trouser', 'jean', 'denim',
       'jacket', 'coat', 'outerwear', 'dress', 'skirt', 'suit', 'sportswear', 'activewear',
       'streetwear', 'sweatshirt', 'sweater', 'hoodie', 'shoe', 'sneaker', 'footwear', 'boot',
-      'sandal', 'bag', 'backpack', 'wallet', 'belt', 'accessory', 'accessories', 'jewelry', 'jewellery', 'watch',
+      'sandal', 'bag', 'backpack', 'wallet', 'belt', 'jewelry', 'jewellery', 'watch',
       'sunglasses', 'hat', 'cap', 'beanie', 'scarf', 'scarves', 'glove', 'sock', 'underwear', 'swimwear',
       'romper', 'jumpsuit',
       // BUG FIX 2026-08-23 (Patrick-reported live: "Bored Ape Yacht Club Adidas Tracksuit" incorrectly
@@ -775,6 +780,25 @@ const RULES: EligibilityRule[] = [
       // the fixes above, applied to the new 'vest'-adjacent keyword 'belt' risk noted this audit.
       'belt sander', 'conveyor belt', 'seatbelt',
     ],
+    // 2026-10-29: 'accessory'/'accessories' moved here from nameKeywords. On their own they also name video game, phone,
+    // computer, car and guitar parts: prod item cmu5sk3ck005trd9brmzusqld ("Samurai Shodown, SNK Arcade Game Cartridge with
+    // Box & Accessories NEGEO MVS", category Video Games & Consoles) came out ELIGIBLE for Grailed only because of that word.
+    // Now the word counts only alongside fashion context and never alongside electronics/gaming/vehicle/instrument context.
+    contextGatedKeywords: {
+      keywords: ['accessory', 'accessories'],
+      requireAny: [
+        'fashion', 'clothing', 'apparel', 'menswear', 'womenswear', "men's", 'mens', "women's", 'womens', 'unisex',
+        'bag', 'handbag', 'purse', 'tote', 'wallet', 'belt', 'jewelry', 'jewellery', 'necklace', 'bracelet', 'earring',
+        'cufflink', 'watch', 'eyewear', 'sunglasses', 'hat', 'cap', 'beanie', 'headwear', 'hair', 'scarf', 'scarves',
+        'tie', 'glove', 'sock', 'shoe', 'sneaker', 'footwear', 'boot',
+      ],
+      unlessAny: [
+        'electronic', 'electronics', 'video game', 'game', 'gaming', 'console', 'arcade', 'nintendo', 'playstation', 'xbox', 'sega',
+        'computer', 'laptop', 'tablet', 'phone', 'cell phone', 'smartphone', 'camera', 'audio', 'tv', 'car', 'auto', 'automotive',
+        'vehicle', 'motorcycle', 'truck', 'boat', 'bike', 'bicycle', 'guitar', 'bass', 'musical', 'instrument', 'drum', 'tool',
+        'kitchen', 'pet', 'frame', 'replacement part', 'replacement parts',
+      ],
+    },
     reason: 'Grailed is a fashion/streetwear-only marketplace -- this item’s category doesn’t look like apparel, footwear, or accessories.',
   },
 
@@ -1607,7 +1631,12 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
       // Whole-word match for nameKeywords (see hasWholeWordMatch's own comment) -- excludeKeywords
       // stays plain substring since every entry there is already a multi-word phrase or a term that
       // only ever appears as a genuine standalone token in real data (no embedded-substring risk).
-      const isAllowed = rule.nameKeywords.some((kw) => hasWholeWordMatch(haystack, kw));
+      const gated = rule.contextGatedKeywords;
+      const isAllowed = rule.nameKeywords.some((kw) => hasWholeWordMatch(haystack, kw))
+        || (!!gated
+          && gated.keywords.some((kw) => hasWholeWordMatch(haystack, kw))
+          && gated.requireAny.some((kw) => hasWholeWordMatch(haystack, kw))
+          && !gated.unlessAny.some((kw) => hasWholeWordMatch(haystack, kw)));
       const isExcluded = (rule.excludeKeywords || []).some((kw) => haystack.includes(kw));
       if (!isAllowed || isExcluded) return { eligible: false, reason: rule.reason };
     }

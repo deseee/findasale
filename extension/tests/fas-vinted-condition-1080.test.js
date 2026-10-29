@@ -110,9 +110,9 @@ test('the fill flow uses the strict path and warns instead of guessing when unma
   assert.ok(!/Needs repair \(electronics only\)'/.test(src));
 });
 
-test('manifest is 1.0.81 and loads fas-condition.js before fas-vinted.js', () => {
+test('manifest is 1.0.82 and loads fas-condition.js before fas-vinted.js', () => {
   const man = JSON.parse(rd('manifest.json'));
-  assert.strictEqual(man.version, '1.0.81');
+  assert.strictEqual(man.version, '1.0.82');
   const vs = man.content_scripts.find((c) => c.js.indexOf('fas-vinted.js') !== -1).js;
   assert.ok(vs.indexOf('fas-condition.js') !== -1 && vs.indexOf('fas-condition.js') < vs.indexOf('fas-vinted.js'));
 });

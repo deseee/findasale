@@ -28,6 +28,7 @@ import {
   matchVintedSoldEntry,
   type VintedSoldCandidateItem,
 } from './vintedSoldDetectionService';
+import { addPoshmarkTitleKeys } from './poshmarkTitle';
 
 // Each value must also exist in the MarketplaceJobPlatform Prisma enum (it is used as the
 // marketplaceListingJob.platform filter). GRAILED already does; no schema change.
@@ -174,6 +175,8 @@ export async function processPlatformSoldReport(
 
   const [items, jobs] = await Promise.all([loadCandidateItems(organizerId), loadPlatformJobs(organizerId, platform)]);
   const ctx = buildVintedSoldMatchContext(items, jobs);
+  // 2026-10-29: Poshmark listings may carry "Cart" where the item says "Cartridge" (see poshmarkTitle.ts).
+  if (platform === 'POSHMARK') addPoshmarkTitleKeys(ctx, items);
   const m = matchVintedSoldEntry({ vintedId: remoteListingId, title }, ctx);
   if (m.kind === 'ambiguous') return { ...base, result: 'ambiguous', via: m.via, candidateCount: m.candidateCount };
   if (m.kind === 'notFound') return { ...base, result: 'notFound', reason: m.reason };

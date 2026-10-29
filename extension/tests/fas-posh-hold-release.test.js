@@ -75,6 +75,6 @@ test('a re-flag on retry of an item the organizer did not confirm follows the 20
   assert.ok(!/Certify Listing['"]?\)?\s*\.click|realClick\([^)]*[Cc]ertify/.test(posh));
 });
 
-test('manifest is 1.0.81', () => {
-  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.81');
+test('manifest is 1.0.82', () => {
+  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.82');
 });

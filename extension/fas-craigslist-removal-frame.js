@@ -102,11 +102,13 @@
     };
     if (map[r]) return { title: map[r][0], why: map[r][1], next: map[r][2] };
     if (r.indexOf('delete_unverified:') === 0) return { title: 'Could not confirm the Craigslist posting was deleted', why: 'The delete was sent, but a fresh read of your postings did not show it as deleted (' + r.slice(18) + ').', next: 'FindA.Sale will check again on a later run. If the posting is still live, delete it yourself.' };
-    if (r.indexOf('page_read_failed') === 0 || r === 'too_many_pages') return { title: 'Could not read all of your Craigslist postings', why: 'Every page of postings must be read to be sure only one matches (' + r + '), and that did not complete.', next: 'Nothing was deleted. FindA.Sale will try again later.' };
+    if (r.indexOf('page_read_failed') === 0 || r === 'too_many_pages' || r === 'pagination_stalled' || r.indexOf('incomplete_read') === 0) return { title: 'Could not read all of your Craigslist postings', why: 'Every page of postings must be read to be sure only one matches (' + r + '), and that did not complete.', next: 'Nothing was deleted. FindA.Sale will try again later.' };
     if (r.indexOf('exception:') === 0) return { title: 'Something went wrong removing the posting', why: 'An unexpected error stopped the removal (' + r.slice(10) + ').', next: 'Nothing further was done. FindA.Sale will try again later.' };
     if (r === 'renew_all_control_not_found') return { title: 'Could not find "renew all postings"', why: 'The Renew All button did not appear on the dashboard (signed out, nothing eligible, or the page changed).', next: 'Nothing was renewed. FindA.Sale will try again later; check Craigslist yourself if this keeps happening.' };
     if (r === 'renew_all_form_disappeared_unverified') return { title: 'Renew All clicked, result not verified', why: 'After clicking, the page changed and the Renew All area did not come back, so success could not be confirmed.', next: 'FindA.Sale does not count this as renewed. Check your Craigslist postings manually.' };
-    if (r === 'renew_all_timed_out_unverified') return { title: 'Renew All clicked, but it never finished', why: 'The button still said "renewing, please wait" after 45 seconds.', next: 'FindA.Sale does not count this as renewed. Check your Craigslist postings manually.' };
+    if (r === 'renew_all_timed_out_unverified') return { title: 'Renew All clicked, but it never finished', why: 'The button still said "renewing, please wait" for the whole wait (it scales with how many postings you have, up to 6 minutes), and a fresh read of your postings did not show them renewed.', next: 'FindA.Sale does not count this as renewed. It was not clicked a second time. FindA.Sale checks again on the next renewal run.' };
+    if (r.indexOf('renew_all_timed_out_partial') === 0) return { title: 'Renew All was still working when the wait ran out', why: 'Some postings were renewed (' + r.slice(28) + ' renew buttons before/after), but not all of them by the end of the wait.', next: 'FindA.Sale does not count this as renewed. It was not clicked a second time. FindA.Sale checks again on the next renewal run.' };
+    if (r.indexOf('renew_all_finished_still_renewable') === 0) return { title: 'Renew All finished, but postings still show "renew"', why: 'The button returned to normal, yet a fresh read of your postings still shows the same renew buttons (' + r.slice(35) + ' before/after).', next: 'FindA.Sale does not count this as renewed. Check your Craigslist postings manually.' };
     if (r === 'reloaded_after_click_unverified') return { title: 'Craigslist reloaded after Renew All', why: 'The page reloaded after the click, so the result could not be seen. The extension will not click a second time.', next: 'FindA.Sale does not count this as renewed. Check your Craigslist postings manually.' };
     return { title: 'Craigslist step did not complete', why: 'Reason code: ' + r, next: 'FindA.Sale will try again later.' };
   }
@@ -148,8 +150,31 @@
   }
 
   const CR_MIN_SAFE_TITLE_LEN = 8;
-  const CR_MAX_PAGES = 30;
+  // 1.0.82 (2026-10-29): hard ceiling raised 30 -> 80 pages (4,000 postings, all statuses). When the dashboard shows its
+  // "of N total" count the read stops at ceil(N/50)+2 pages instead, so a normal account never comes near the ceiling.
+  const CR_MAX_PAGES = 80;
   const CR_PAGE_SIZE = 50;
+  // Craigslist cuts posting titles at 70 characters (live: "Jefferson Airplane ... Vinyl LP Record, 1970s" is 72 chars on
+  // FindA.Sale). Same rule as the price-edit flow's clTitleMatches: an exact match, or a dashboard title of 60-72 characters that
+  // is a pure prefix of the wanted title (that long a prefix cannot belong to a different listing). The exactly-one rule still applies.
+  function crTitleMatches(row, wanted) {
+    if (!row || !wanted) return false;
+    if (row.title === wanted || row.rawTitle === wanted) return true;
+    const c = String(row.title || '').replace(/\s*\.{3,}\s*$/, '').trim();
+    const w = String(wanted).replace(/\s*\.{3,}\s*$/, '');
+    return c.length >= 60 && c.length <= 72 && w.length > c.length && w.indexOf(c) === 0;
+  }
+  // A saved Craigslist reference may be the bare posting id or the posting URL (".../d/<slug>/7986095940.html").
+  function crPostingIdFromRef(ref) {
+    const s = String(ref == null ? '' : ref).trim();
+    if (/^\d{9,12}$/.test(s)) return s;
+    const m = /\/(\d{9,12})\.html(?:[?#]|$)/.exec(s) || /\/manage\/(\d{9,12})(?:[/?#]|$)/.exec(s) || /[?&](?:postingid|postid)=(\d{9,12})(?:[&#]|$)/i.exec(s);
+    return m ? m[1] : '';
+  }
+  function crParseTotal(text) {
+    const m = /\bof\s+([\d,]+)\s+total\b/i.exec(String(text || ''));
+    return m ? parseInt(m[1].replace(/,/g, ''), 10) : null;
+  }
   const CR_PENDING_TTL_MS = 5 * 60 * 1000;
   const CR_PENDING_KEY = 'fasClRemovalPending';
 
@@ -170,48 +195,84 @@
       };
     }).filter((r) => /^\d{6,}$/.test(r.postingId));
   }
+  // 1.0.82 (2026-10-29): every read and every navigation uses the explicit all-statuses view (filter_active=all). Without it,
+  // filter_page was not honoured (live 2026-10-29: ~164 active postings, 30 "full" pages read, too_many_pages), while the
+  // reconcile scan and price-edit scan, which always sent filter_active=all, read all 347 postings in 7 pages. Page numbers from a
+  // scan are only valid in that same view, so the frame navigates to it before using a row's delete control.
   function crRemPageUrl(n) {
-    return 'https://accounts.craigslist.org/login/home?filter_page=' + n + '&show_tab=postings';
+    return 'https://accounts.craigslist.org/login/home?filter_page=' + n + '&show_tab=postings&filter_active=all';
   }
+  function crRemOnScanView() { return /[?&]filter_active=all(?:[&#]|$)/.test(location.search); }
+  // 0 = this frame is not showing the all-statuses view, so its rows can't be mixed with scanned pages.
   function crRemCurrentPage() {
+    if (!crRemOnScanView()) return 0;
     const m = /[?&]filter_page=(\d+)/.exec(location.search);
     return m ? parseInt(m[1], 10) : 1;
   }
   async function crRemFetchPage(n) {
-    const res = await fetch(crRemPageUrl(n), { credentials: 'include', cache: 'no-store' });
+    let res = null;
+    // Rate-aware: a 429/503 waits (5 s, then 15 s) and tries the same page again before giving up.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      res = await fetch(crRemPageUrl(n), { credentials: 'include', cache: 'no-store' });
+      if (res.status !== 429 && res.status !== 503) break;
+      if (attempt < 2) await sleep(attempt === 0 ? 5000 : 15000);
+    }
     if (!res.ok) throw new Error('page_fetch_' + res.status);
     const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
     const rows = crRemParseRows(doc);
     if (!rows) throw new Error('page_' + n + '_no_postings_table');
     return { doc, rows };
   }
-  // Every row across every dashboard page, each tagged with its page number. Any page failing to
-  // load aborts (returns ok:false) -- uniqueness can't be proven from a partial read.
-  async function crRemAllRows() {
+  // Every row across every dashboard page (all statuses), each tagged with its page number. Any page failing to load aborts
+  // (ok:false) -- uniqueness can't be proven from a partial read. Don't trust the pager links: read filter_page=n until a page
+  // comes back short (hacker re-review 2026-09-23, P2).
+  // 1.0.82: opts.stopAtId (a saved posting id) ends the read as soon as that id's row is seen -- an id match needs no
+  // uniqueness proof. A page that adds no new posting id means Craigslist ignored filter_page: complete only if the
+  // dashboard's own "of N total" count is already covered, otherwise refused as pagination_stalled. A finished read that
+  // holds fewer rows than that total is refused too (incomplete_read).
+  async function crRemAllRows(opts) {
+    opts = opts || {};
+    const stopAtId = opts.stopAtId ? String(opts.stopAtId) : '';
     const here = crRemCurrentPage();
     const hereRows = crRemParseRows(document);
     if (!hereRows) return { ok: false, reason: 'dashboard_table_missing' };
-    // Don't trust the pager links (they may show only a window of pages): keep reading
-    // filter_page=n until a page comes back short. Hitting the cap on a full page = can't prove
-    // uniqueness, so refuse (hacker re-review 2026-09-23, P2).
-    const all = hereRows.map((r) => Object.assign({ page: here }, r));
-    let lastLen = here === 1 ? hereRows.length : CR_PAGE_SIZE;
-    for (let n = 1; n <= CR_MAX_PAGES; n++) {
-      if (n === here) { if (hereRows.length < CR_PAGE_SIZE) break; continue; }
-      if (n > 1 && lastLen < CR_PAGE_SIZE) break;
-      let rows;
-      try {
-        rows = (await crRemFetchPage(n)).rows;
-      } catch (e) {
-        return { ok: false, reason: 'page_read_failed:' + ((e && e.message) || 'unknown') };
+    // The "of N total" count is taken from page 1 of the all-statuses view itself (the frame's own page may be another view).
+    let total = null;
+    let maxPages = CR_MAX_PAGES;
+    const all = [];
+    const seen = new Set();
+    let pages = 0;
+    for (let n = 1; n <= maxPages; n++) {
+      let rows, doc;
+      if (n === here) { rows = hereRows; doc = document; }
+      else {
+        if (pages > 0) await sleep((pages % 10 === 0 ? 2500 : 400) + Math.random() * 400);
+        try {
+          const pg = await crRemFetchPage(n);
+          rows = pg.rows; doc = pg.doc;
+        } catch (e) {
+          return { ok: false, reason: 'page_read_failed:' + ((e && e.message) || 'unknown'), pages: pages };
+        }
       }
-      rows.forEach((r) => all.push(Object.assign({ page: n }, r)));
-      lastLen = rows.length;
-      if (rows.length < CR_PAGE_SIZE) break;
-      if (n === CR_MAX_PAGES) return { ok: false, reason: 'too_many_pages' };
-      await sleep(400 + Math.random() * 400);
+      if (n === 1) {
+        total = crParseTotal((doc && doc.body && (doc.body.innerText || doc.body.textContent)) || '');
+        if (total != null) maxPages = Math.max(1, Math.min(CR_MAX_PAGES, Math.ceil(total / CR_PAGE_SIZE) + 2));
+      }
+      pages++;
+      let fresh = 0;
+      rows.forEach((r) => { if (!seen.has(r.postingId)) { seen.add(r.postingId); fresh++; all.push(Object.assign({ page: n }, r)); } });
+      if (stopAtId && rows.some((r) => r.postingId === stopAtId)) return { ok: true, rows: all, pages: pages, total: total, stoppedAtId: true };
+      if (rows.length < CR_PAGE_SIZE) {
+        if (total != null && seen.size < total) return { ok: false, reason: 'incomplete_read:' + seen.size + '/' + total, pages: pages };
+        return { ok: true, rows: all, pages: pages, total: total };
+      }
+      if (!fresh) {
+        if (total != null && seen.size >= total) return { ok: true, rows: all, pages: pages, total: total };
+        return { ok: false, reason: 'pagination_stalled', pages: pages };
+      }
+      if (total != null && seen.size >= total && n >= Math.ceil(total / CR_PAGE_SIZE)) return { ok: true, rows: all, pages: pages, total: total };
     }
-    return { ok: true, rows: all };
+    return { ok: false, reason: 'too_many_pages', pages: pages };
   }
 
   async function report(type, item, reason) {
@@ -282,7 +343,7 @@
     if (item.deleteAllMatches !== true || crRemDupLoop >= 6) return false;
     const all = await crRemAllRows();
     if (!all.ok) return false;
-    const left = all.rows.filter((r) => r.active && (r.title === wanted || r.rawTitle === wanted));
+    const left = all.rows.filter((r) => r.active && crTitleMatches(r, wanted));
     if (!left.length) return false;
     crRemDupLoop++;
     return true;
@@ -331,25 +392,27 @@
     // Find the target: navigate straight to its page when a prior load already located it.
     let target = null;
     if (pending && pending.itemId === item.id && pending.postingId && !pending.submittedAt && pending.page === crRemCurrentPage()) {
-      target = { postingId: pending.postingId, page: pending.page };
+      target = { postingId: pending.postingId, page: pending.page, viaId: !!pending.viaId };
     } else {
-      FTA('step', 'Reading every page of your Craigslist postings', 'To delete safely the extension must prove exactly one active posting has this exact title, which means reading all pages (50 postings each).');
-      const all = await crRemAllRows();
-      FTA('info', 'postings_read', all.ok ? 'Read ' + all.rows.length + ' postings' : 'Reading postings failed: ' + all.reason, { ok: all.ok, rows: all.ok ? all.rows.length : undefined, reason: all.ok ? undefined : all.reason });
+      // 1.0.19 / 1.0.82: a saved Craigslist posting id (listingRefs; the backend turns a stored posting URL into its id, and a
+      // URL is parsed here too) is looked for first, by id only, in every status, and the read stops at the page that holds it.
+      const savedId = item.listingRefs && item.listingRefs.CRAIGSLIST ? crPostingIdFromRef(item.listingRefs.CRAIGSLIST) : '';
+      FTA('step', savedId ? 'Finding the saved Craigslist posting id in your postings' : 'Reading every page of your Craigslist postings', savedId ? 'FindA.Sale saved this posting\'s id, so the extension reads your postings (50 per page, all statuses) until it reaches that id.' : 'To delete safely the extension must prove exactly one active posting has this exact title, which means reading all pages (50 postings each, all statuses).', { savedId: savedId || undefined });
+      const all = await crRemAllRows({ stopAtId: savedId });
+      FTA('info', 'postings_read', all.ok ? 'Read ' + all.rows.length + ' postings on ' + all.pages + ' page(s)' + (all.total != null ? ' (dashboard total ' + all.total + ')' : '') + (all.stoppedAtId ? ', stopped at the saved id' : '') : 'Reading postings failed: ' + all.reason, { ok: all.ok, rows: all.ok ? all.rows.length : undefined, pages: all.pages, total: all.ok ? all.total : undefined, reason: all.ok ? undefined : all.reason });
       if (!all.ok) {
         overlayWarn('Could not read all of your Craigslist postings (' + escapeHtml(all.reason) + '). Will try again.');
         await report('crossPlatformRemovalAttemptFailed', item, all.reason);
         return;
       }
-      // 1.0.19: a saved Craigslist posting id (listingRefs) is looked for first, by id only, in every status. A row for that id that is
-      // no longer Active means the posting is already gone. An id that is on no page falls back to the exact-title rule below.
-      const savedId = item.listingRefs && item.listingRefs.CRAIGSLIST ? String(item.listingRefs.CRAIGSLIST) : '';
+      // A row for the saved id that is no longer Active means the posting is already gone. An id that is on no page (the read
+      // then covered every page) falls back to the exact-title rule below.
       const idRows = savedId ? all.rows.filter((r) => r.postingId === savedId) : [];
       let matches = idRows.filter((r) => r.active);
       let goneRows = idRows.filter((r) => !r.active);
       if (!idRows.length) {
-        matches = all.rows.filter((r) => r.active && (r.title === wanted || r.rawTitle === wanted));
-        goneRows = matches.length ? [] : all.rows.filter((r) => !r.active && (r.title === wanted || r.rawTitle === wanted));
+        matches = all.rows.filter((r) => r.active && crTitleMatches(r, wanted));
+        goneRows = matches.length ? [] : all.rows.filter((r) => !r.active && crTitleMatches(r, wanted));
       }
       const ids = Array.from(new Set(matches.map((r) => r.postingId)));
       if (!ids.length && goneRows.length) FTA('info', 'already_deleted', 'The posting for this item is already deleted or expired on Craigslist (' + goneRows.slice(0, 5).map((r) => r.postingId).join(', ') + '); nothing to delete', { ids: goneRows.slice(0, 5).map((r) => r.postingId), viaSavedId: !!idRows.length });
@@ -364,10 +427,10 @@
         await report('crossPlatformRemovalSkipped', item, reason);
         return;
       }
-      target = { postingId: ids[0], page: matches[0].page };
+      target = { postingId: ids[0], page: matches[0].page, viaId: !!idRows.length };
       if (target.page !== crRemCurrentPage()) {
         FTA('step', 'Going to the page that holds the posting', 'The matching posting is on page ' + target.page + ' of your list; the delete button must be used from that page.', { page: target.page });
-        await setPending({ itemId: item.id, postingId: target.postingId, page: target.page });
+        await setPending({ itemId: item.id, postingId: target.postingId, page: target.page, viaId: target.viaId });
         location.href = crRemPageUrl(target.page);
         return;
       }
@@ -377,7 +440,9 @@
     FTA('step', 'Double-checking the posting before deleting', 'Title and active status are re-checked on the live page right before the delete button is used.', { page: target.page });
     const rows = crRemParseRows(document) || [];
     const row = rows.find((r) => r.postingId === target.postingId);
-    if (!row || !row.active || !(row.title === wanted || row.rawTitle === wanted)) {
+    // An id-matched posting may have been retitled on Craigslist; the id itself is the identity there (same standard as
+    // Poshmark/Mercari/Vinted/Grailed). A title-matched posting must still match the title.
+    if (!row || !row.active || !(target.viaId || crTitleMatches(row, wanted))) {
       await setPending(null);
       overlayWarn('The matching Craigslist posting changed before it could be deleted. Will try again.');
       await report('crossPlatformRemovalAttemptFailed', item, row ? 'row_revalidation_failed' : 'row_not_on_page');
@@ -465,7 +530,58 @@
   //     currently believes is listed+active on Craigslist as renewed, not just the ones that were
   //     technically due -- because Craigslist itself doesn't distinguish, so FindA.Sale can't either.
   const CR_RENEWALL_WAIT_TEXT_RE = /renewing|please wait/i;
-  const CR_RENEWALL_COMPLETION_TIMEOUT_MS = 45000;
+  // 1.0.82 (2026-10-29): the wait scales with the number of postings (live: ~164 due, still "renewing, please wait" at 45 s).
+  // 45 s + 1.5 s per posting, at most 6 minutes (background treats a removal/renew tab older than 10 minutes as dead).
+  const CR_RENEWALL_MIN_WAIT_MS = 45000;
+  const CR_RENEWALL_PER_POSTING_MS = 1500;
+  const CR_RENEWALL_MAX_WAIT_MS = 6 * 60 * 1000;
+  function crRenewAllWaitMs(count) {
+    const n = Number(count) > 0 ? Number(count) : 100;
+    return Math.max(CR_RENEWALL_MIN_WAIT_MS, Math.min(CR_RENEWALL_MAX_WAIT_MS, CR_RENEWALL_MIN_WAIT_MS + n * CR_RENEWALL_PER_POSTING_MS));
+  }
+  // Per-posting "renew" controls in the postings table (live diag 2026-10-29: rows show display/delete/edit/renew controls,
+  // renew only on rows that can be renewed now). The Renew All button sits outside the table and is never counted.
+  function crRowRenewables(rows) {
+    let n = 0;
+    (rows || []).forEach((r) => {
+      const ctl = Array.from(r.tr.querySelectorAll('input[type="submit"], button')).filter((b) => fasFoldTitle(b.value || b.textContent) === 'renew');
+      if (ctl.length) n++;
+    });
+    return n;
+  }
+  // Fresh read of every page: how many postings still offer "renew". null when any page could not be read.
+  async function crCountRenewables() {
+    let count = 0, rows = 0, total = null;
+    const seen = new Set();
+    for (let n = 1; n <= CR_MAX_PAGES; n++) {
+      if (n > 1) await sleep(400 + Math.random() * 400);
+      let page;
+      try { page = await crRemFetchPage(n); } catch (e) { return null; }
+      if (n === 1) total = crParseTotal((page.doc.body && (page.doc.body.innerText || page.doc.body.textContent)) || '');
+      const fresh = page.rows.filter((r) => !seen.has(r.postingId));
+      fresh.forEach((r) => seen.add(r.postingId));
+      count += crRowRenewables(fresh);
+      rows += fresh.length;
+      if (page.rows.length < CR_PAGE_SIZE || !fresh.length) break;
+      if (total != null && seen.size >= total) break;
+    }
+    return { renewable: count, rows: rows, total: total };
+  }
+  // Decides the outcome from what was seen. Success needs either the button returning to normal (live-observed completion
+  // signal) without the same renew buttons still showing, or -- when the button never returned -- a fresh read showing that
+  // every posting that offered "renew" before the click no longer does.
+  function crRenewAllVerdict(o) {
+    const before = o.before, after = o.after;
+    const known = before && after && before.renewable > 0;
+    if (o.reverted) {
+      if (known && after.renewable >= before.renewable) return { ok: false, reason: 'renew_all_finished_still_renewable:' + before.renewable + '/' + after.renewable };
+      return { ok: true, verified: known ? 'renew_buttons_cleared' : 'button_returned' };
+    }
+    if (known && after.renewable === 0) return { ok: true, verified: 'renew_buttons_cleared' };
+    if (o.formGone) return { ok: false, reason: 'renew_all_form_disappeared_unverified' };
+    if (known && after.renewable < before.renewable) return { ok: false, reason: 'renew_all_timed_out_partial:' + before.renewable + '/' + after.renewable };
+    return { ok: false, reason: 'renew_all_timed_out_unverified' };
+  }
 
   function crRenewAllControl() {
     const form = document.getElementById('accountRenewAllForm');
@@ -504,6 +620,14 @@
       // simply hasn't finished loading (already handled by the wait above).
       return { ok: false, reason: 'renew_all_control_not_found' };
     }
+    // Baseline for verification and for the wait: how many postings offer "renew" right now (all pages, all statuses).
+    FTA('step', 'Counting postings that can be renewed', 'This sets how long to wait for Craigslist and lets the result be checked afterwards by re-reading your postings.');
+    const before = await crCountRenewables();
+    const pageTotal = crParseTotal((document.body && (document.body.innerText || document.body.textContent)) || '');
+    const waitMs = crRenewAllWaitMs((before && before.renewable) || pageTotal || (before && before.rows));
+    FTA('info', 'renew_baseline', before ? before.renewable + ' posting(s) offer renew out of ' + before.rows + ' read' : 'Could not count renewable postings before the click', { renewable: before ? before.renewable : undefined, rows: before ? before.rows : undefined, total: pageTotal, waitSeconds: Math.round(waitMs / 1000) });
+    control = crRenewAllControl();   // re-find: the count above only fetched pages, but never act on a stale node
+    if (!control) return { ok: false, reason: 'renew_all_control_not_found' };
     FTA('step', 'Clicking "renew all postings"', 'Renewing keeps your Craigslist postings from expiring. Craigslist does this for all eligible postings at once, not per item.');
     overlayInfo('Renewing all eligible Craigslist postings...');
     // The background already consumed the one-shot request when it granted this run, so even if
@@ -511,35 +635,37 @@
     console.log('[FAS Craigslist Renew All] clicking Renew All (one-shot granted by background)');
     control.btn.click(); // live-confirmed 2026-09-27: triggers Craigslist's own async bulk-renew request
 
-    const completionDeadline = Date.now() + CR_RENEWALL_COMPLETION_TIMEOUT_MS;
+    const completionDeadline = Date.now() + waitMs;
     const FORM_GONE_GRACE_MS = 10000;
     let formGoneSince = 0;
-    FTA('step', 'Waiting for Craigslist to finish renewing', 'The button says "renewing, please wait" while it works; the extension waits up to 45 seconds for it to return to normal.');
+    let reverted = false, formGone = false;
+    FTA('step', 'Waiting for Craigslist to finish renewing', 'The button says "renewing, please wait" while it works; with ' + ((before && before.renewable) || pageTotal || 'your') + ' postings the extension waits up to ' + Math.round(waitMs / 1000) + ' seconds for it to return to normal, and never clicks it twice.');
     await sleep(1500); // let the "please wait" state actually appear before polling for its exit
     while (Date.now() < completionDeadline) {
       if (!crRenewAllFormPresent()) {
         // Form momentarily absent (re-render / navigation in flight): keep waiting, only give up
         // if it stays gone. Never report success from absence alone.
         if (!formGoneSince) formGoneSince = Date.now();
-        if (Date.now() - formGoneSince >= FORM_GONE_GRACE_MS) {
-          overlayWarn('Clicked "renew all postings" but the page changed and the result could not be verified. Check your Craigslist postings manually.');
-          return { ok: false, reason: 'renew_all_form_disappeared_unverified' };
-        }
+        if (Date.now() - formGoneSince >= FORM_GONE_GRACE_MS) { formGone = true; break; }
       } else {
         formGoneSince = 0;
         const still = crRenewAllControl(); // null while the button is disabled => still in progress
         if (still && still.btn) {
           const text = still.btn.textContent || '';
-          if (!CR_RENEWALL_WAIT_TEXT_RE.test(text)) {
-            overlayInfo('Renewed your eligible Craigslist postings.');
-            return { ok: true };
-          }
+          if (!CR_RENEWALL_WAIT_TEXT_RE.test(text)) { reverted = true; break; }
         }
       }
       await sleep(2000);
     }
-    overlayWarn('Clicked "renew all postings" but never saw it finish (UNVERIFIED) -- check your Craigslist postings manually.');
-    return { ok: false, reason: 'renew_all_timed_out_unverified' };
+    // Verify with a fresh read of every page (never another click).
+    FTA('step', 'Checking the result by re-reading your postings', 'A posting that was renewed no longer offers "renew", so the extension counts those buttons again.');
+    await sleep(2000);
+    const after = await crCountRenewables();
+    const verdict = crRenewAllVerdict({ reverted: reverted, formGone: formGone, before: before, after: after });
+    FTA('info', 'renew_verify', 'Renew buttons before/after: ' + (before ? before.renewable : '?') + '/' + (after ? after.renewable : '?') + (reverted ? ' (button returned to normal)' : ' (button still busy or gone)'), { before: before ? before.renewable : undefined, after: after ? after.renewable : undefined, reverted: reverted, formGone: formGone, ok: verdict.ok, verified: verdict.verified, reason: verdict.reason });
+    if (verdict.ok) overlayInfo('Renewed your eligible Craigslist postings.');
+    else overlayWarn('Clicked "renew all postings" once but could not confirm every posting renewed (' + escapeHtml(verdict.reason) + '). Check your Craigslist postings manually.');
+    return verdict;
   }
 
   async function maybeRunCraigslistRenewAll() {

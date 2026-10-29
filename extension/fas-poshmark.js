@@ -2757,6 +2757,31 @@
     return (lastSpace > MAX - 15 ? cut.slice(0, lastSpace) : cut).trimEnd();
   }
 
+  // 2026-10-29 (owner-approved): Poshmark's own form validator flags titles containing "Cartridge" as a "potential prohibited
+  // item" (vape cartridges). Evidence: FAS_FLOW_DIAG poshmark_prohibited_flag on Neo Geo MVS arcade cartridges, while Neo Geo
+  // mini marquees in the same category posted fine. Only the title SENT TO POSHMARK changes: whole-word "Cartridge"/"Cartridges"
+  // (any case) become "Cart"/"Carts", and a doubled word this creates ("Arcade Cartridge Cartridge," -> "Arcade Cart,") collapses.
+  // The FindA.Sale title and every other marketplace are untouched. A title that is really about vaping (vape, e-cig, THC, oil,
+  // 510) is left exactly as it is. Kept in step with poshmarkCartTitle in fas-edit-core.js and the backend's poshmarkTitle.ts.
+  const POSH_CART_VAPE_RE = /\b(?:vapes?|vaping|vaper|e-?cigs?|e-?cigarettes?|thc|oils?|510)\b/i;
+  function poshmarkCartTitle(title) {
+    const t = String(title == null ? '' : title);
+    if (!/\bcartridges?\b/i.test(t) || POSH_CART_VAPE_RE.test(t)) return t;
+    const upper = (w) => w === w.toUpperCase();
+    let out = t.replace(/\b(cartridge)(s?)\b/gi, (m, w, pl) => {
+      const base = upper(w) ? 'CART' : (w.charAt(0) === 'C' ? 'Cart' : 'cart');
+      return base + (pl ? (upper(w) ? 'S' : 's') : '');
+    });
+    let prev;
+    do {
+      prev = out;
+      out = out.replace(/\b(carts?)\s+(carts?)\b/i, (m, a, b) => (/s$/i.test(a) || !/s$/i.test(b)) ? a : a + (upper(a) ? 'S' : 's'));
+    } while (out !== prev);
+    return out;
+  }
+  // The exact title FindA.Sale types into Poshmark's Title field.
+  function poshmarkListingTitle(title) { return truncatePoshmarkTitle(poshmarkCartTitle(title)); }
+
   // BUG FIX 2026-09-01 (S-EXT-POSHMARK-PRICE-EMPTY-ROUND-3, findasale-dev BUG MODE dispatch):
   // Shared helper extracted from the 2026-08-31 end-of-fill Price safety-check below (see that call
   // site's own comment for the original incident). Root-caused as far as the code can confirm
@@ -2846,10 +2871,15 @@
     // truncation note below can push to it too -- the rest of this function's own fieldNotes-
     // collection block (Category/Size/Color) appears further down.
     const fieldNotes = [];
-    const poshTitle = truncatePoshmarkTitle(item.title);
-    if (poshTitle !== (item.title || '')) {
-      fieldNotes.push('Title was ' + (item.title || '').length + ' characters -- Poshmark\'s real limit is 80, so it was trimmed to fit. Double-check the trimmed title reads OK.');
-      tWarn('title_trimmed', 'Title was ' + (item.title || '').length + ' characters; trimmed to fit Poshmark\'s 80-character limit', { originalLen: (item.title || '').length, newLen: poshTitle.length });
+    const poshCartTitle = poshmarkCartTitle(item.title);
+    if (poshCartTitle !== String(item.title == null ? '' : item.title)) {
+      fieldNotes.push('Poshmark flags the word "Cartridge" as a possible vape item, so the Poshmark title says "Cart" instead. Your FindA.Sale title is unchanged.');
+      tInfo('title_cart_swap', 'Used "Cart" instead of "Cartridge" in the Poshmark title (Poshmark flags "Cartridge" as a possible prohibited vape item)', { before: String(item.title || '').slice(0, 80), after: poshCartTitle.slice(0, 80) });
+    }
+    const poshTitle = truncatePoshmarkTitle(poshCartTitle);
+    if (poshTitle !== poshCartTitle) {
+      fieldNotes.push('Title was ' + poshCartTitle.length + ' characters -- Poshmark\'s real limit is 80, so it was trimmed to fit. Double-check the trimmed title reads OK.');
+      tWarn('title_trimmed', 'Title was ' + poshCartTitle.length + ' characters; trimmed to fit Poshmark\'s 80-character limit', { originalLen: poshCartTitle.length, newLen: poshTitle.length });
     }
     tStep('Title', 'Typing the item title into the form (Poshmark allows up to 80 characters)', { len: poshTitle.length });
     if (await tryFill('Title', poshTitle, (v) => fillText('Title', v))) tOk('Title set');
@@ -3436,7 +3466,7 @@
   // never match the Martha case (card text carried a "$90 OS" tail) and (b) was unsafely loose. A
   // card title now matches the queued title ONLY when, after identical folding on both sides:
   //   1. it equals the queued title, or equals truncatePoshmarkTitle(queued) (the exact transform
-  //      applied when the listing was posted); or
+  //      applied when the listing was posted), or either of those with poshmarkCartTitle applied; or
   //   2. the queued title is >= 75 chars (i.e. at the platform limit), the card title is >= 60
   //      chars, and the card title is the queued title minus exactly ONE trailing token at a word
   //      boundary (Poshmark's own dangling-fragment trim).
@@ -3456,7 +3486,9 @@
     const c = poshRemCleanCardText(candidateText);
     if (!c) return false;
     const targets = [];
-    [queuedTitle, truncatePoshmarkTitle(queuedTitle)].forEach((q) => {
+    // 2026-10-29: also the "Cart" title actually sent to Poshmark (poshmarkCartTitle), full and trimmed, so a listing posted
+    // either way is recognised by the removal, sold and duplicate-guard checks.
+    [queuedTitle, truncatePoshmarkTitle(queuedTitle), poshmarkCartTitle(queuedTitle), poshmarkListingTitle(queuedTitle)].forEach((q) => {
       const t = poshRemStripTrailingEllipsis(poshRemNorm(q));
       if (t && targets.indexOf(t) === -1) targets.push(t);
     });
@@ -3542,9 +3574,13 @@
   // exact/one-token-trim rules above keep the result safe however broad the query is.
   const POSH_REM_SEARCH_STOPWORDS = ['a', 'an', 'the', 'and', 'of', 'for', 'with', 'in', 'on', '&'];
   function poshRemSearchQuery(title, maxWords) {
+    // 2026-10-29: when the Poshmark title says "Cart" for "Cartridge", leave that word out so the search finds the listing
+    // whichever of the two titles it was posted with.
+    const cartSwapped = poshmarkCartTitle(title) !== String(title == null ? '' : title);
     const words = String(title || '').split(/\s+/)
       .map((w) => w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, ''))
-      .filter((w) => w && POSH_REM_SEARCH_STOPWORDS.indexOf(w.toLowerCase()) === -1);
+      .filter((w) => w && POSH_REM_SEARCH_STOPWORDS.indexOf(w.toLowerCase()) === -1)
+      .filter((w) => !cartSwapped || !/^cart(?:ridge)?s?$/i.test(w));
     let q = '';
     let n = 0;
     for (const w of words) {

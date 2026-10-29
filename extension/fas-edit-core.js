@@ -317,12 +317,50 @@
     var cut = t.slice(0, MAX), sp = cut.lastIndexOf(' ');
     return (sp > MAX - 15 ? cut.slice(0, sp) : cut).replace(/\s+$/, '');
   }
-  // Closet lookup: the full title first, then the 80-char title that Poshmark actually shows. Only tries the second when the first found nothing.
+  // 2026-10-29 (owner-approved): Poshmark's validator flags "Cartridge" in a title as a possible vape item, so fas-poshmark.js posts
+  // "Cart"/"Carts" instead (whole word, any case; a doubled word this creates collapses). Titles about vaping (vape, e-cig, THC,
+  // oil, 510) are left alone. Keep in step with poshmarkCartTitle in fas-poshmark.js and the backend's poshmarkTitle.ts.
+  var POSH_CART_VAPE_RE = /\b(?:vapes?|vaping|vaper|e-?cigs?|e-?cigarettes?|thc|oils?|510)\b/i;
+  function poshmarkCartTitle(title) {
+    var t = String(title == null ? '' : title);
+    if (!/\bcartridges?\b/i.test(t) || POSH_CART_VAPE_RE.test(t)) return t;
+    var upper = function (w) { return w === w.toUpperCase(); };
+    var out = t.replace(/\b(cartridge)(s?)\b/gi, function (m, w, pl) {
+      var base = upper(w) ? 'CART' : (w.charAt(0) === 'C' ? 'Cart' : 'cart');
+      return base + (pl ? (upper(w) ? 'S' : 's') : '');
+    });
+    var prev;
+    do {
+      prev = out;
+      out = out.replace(/\b(carts?)\s+(carts?)\b/i, function (m, a, b) { return (/s$/i.test(a) || !/s$/i.test(b)) ? a : a + (upper(a) ? 'S' : 's'); });
+    } while (out !== prev);
+    return out;
+  }
+  // Every title a Poshmark listing of this item can carry: as saved, 80-char trimmed, and the "Cart" form (full and trimmed).
+  function poshmarkTitleVariants(wanted) {
+    var w = String(wanted == null ? '' : wanted), out = [];
+    [w, poshmarkTitle(w), poshmarkCartTitle(w), poshmarkTitle(poshmarkCartTitle(w))].forEach(function (v) { if (out.indexOf(v) === -1) out.push(v); });
+    return out;
+  }
+  function titleEqualsPoshmark(candidateText, wanted) {
+    return poshmarkTitleVariants(wanted).some(function (v) { return titleEquals(candidateText, v); });
+  }
+  // Closet search words: the "Cart"/"Cartridge" word is dropped when the two titles differ, so either posted form is found.
+  function poshmarkSearchTitle(title) {
+    var t = String(title == null ? '' : title);
+    if (poshmarkCartTitle(t) === t) return t;
+    var kept = t.split(/\s+/).filter(function (w) { return !/^cart(?:ridge)?s?$/i.test(w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '')); }).join(' ');
+    return kept || t;
+  }
+  // Closet lookup: the full title first, then the 80-char title that Poshmark actually shows, then the "Cart" forms. Each later
+  // form is tried only when the earlier ones found nothing.
   function pickUniquePoshmark(candidates, wanted) {
-    var r = pickUnique(candidates, wanted, 'equals');
-    if (r.reason !== 'none') return r;
-    var t80 = poshmarkTitle(wanted);
-    return t80 !== String(wanted == null ? '' : wanted) ? pickUnique(candidates, t80, 'equals') : r;
+    var vs = poshmarkTitleVariants(wanted), r = null;
+    for (var i = 0; i < vs.length; i++) {
+      r = pickUnique(candidates, vs[i], 'equals');
+      if (r.reason !== 'none') return r;
+    }
+    return r;
   }
   // 2026-10-20: last resort for a Poshmark listing whose title was edited on FindA.Sale after it was posted (Celestion, banker's lamp,
   // microphone cable were all live under an older title). Guarded: >= 4 shared words, >= 60% of the shorter title's words shared,
@@ -662,6 +700,7 @@
     copyStart: copyStart, copyAdvance: copyAdvance, copySummaryLine: copySummaryLine, isListingGone: isListingGone, hasWork: hasWork, wantsQuantity: wantsQuantity,
     wholeDollars: wholeDollars, formatPrice: formatPrice, parsePriceText: parsePriceText, pricesMatch: pricesMatch,
     foldTitle: foldTitle, cleanCandidateTitle: cleanCandidateTitle, titleEquals: titleEquals, titleContained: titleContained, pickUnique: pickUnique, pickUniquePoshmark: pickUniquePoshmark, pickFuzzyPoshmark: pickFuzzyPoshmark, fuzzyTitleScore: fuzzyTitleScore, poshmarkTitle: poshmarkTitle,
+    poshmarkCartTitle: poshmarkCartTitle, poshmarkTitleVariants: poshmarkTitleVariants, titleEqualsPoshmark: titleEqualsPoshmark, poshmarkSearchTitle: poshmarkSearchTitle,
     extractIdFromUrl: extractIdFromUrl, startUrl: startUrl, craigslistPageUrl: craigslistPageUrl,
     isPoshmarkErrorPayload: isPoshmarkErrorPayload, unwrapPoshmarkPost: unwrapPoshmarkPost, poshmarkPriceVal: poshmarkPriceVal,
     buildPoshmarkUpdate: buildPoshmarkUpdate, poshmarkCollateralDiff: poshmarkCollateralDiff, poshmarkQuantity: poshmarkQuantity,
