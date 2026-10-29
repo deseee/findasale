@@ -111,6 +111,11 @@ describe('classifyLiveEtsyListing (acceptance 4: what the sweep selects)', () =>
     ['units remain, Etsy count matches', { state: 'ACTIVE', syncedQuantity: 3 }, { status: 'AVAILABLE', stockTotal: 5, stockSold: 2 }, 'none'],
     ['units remain, never synced', { state: 'ACTIVE', syncedQuantity: null }, { status: 'AVAILABLE', stockTotal: 5, stockSold: 2 }, 'none'],
     ['units remain on a draft', { state: 'DRAFT_READY', syncedQuantity: 5 }, { status: 'AVAILABLE', stockTotal: 5, stockSold: 2 }, 'none'],
+    ['marked local pickup only (Etsy only ships)', live, { status: 'AVAILABLE', stockTotal: 1, stockSold: 0, ebayShippingOverride: 'LOCAL_PICKUP_ONLY' }, 'withdraw'],
+    ['pickup only, units remain and count differs', { state: 'ACTIVE', syncedQuantity: 5 }, { status: 'AVAILABLE', stockTotal: 5, stockSold: 2, ebayShippingOverride: 'LOCAL_PICKUP_ONLY' }, 'withdraw'],
+    ['pickup-only draft is withdrawn too', { state: 'DRAFT_READY', syncedQuantity: null }, { status: 'AVAILABLE', stockTotal: 1, stockSold: 0, ebayShippingOverride: 'LOCAL_PICKUP_ONLY' }, 'withdraw'],
+    ['sold on Etsy, now marked pickup only, stays', live, { status: 'SOLD', stockTotal: 1, stockSold: 1, lastSoldVia: 'ETSY', ebayShippingOverride: 'LOCAL_PICKUP_ONLY' }, 'none'],
+    ['shippable override changes nothing', live, { status: 'AVAILABLE', stockTotal: 1, stockSold: 0, ebayShippingOverride: 'SHIPPABLE' }, 'none'],
   ])('%s -> %s', (_label, listing, item, expected) => {
     expect(classifyLiveEtsyListing(listing as any, item as any)).toBe(expected);
   });

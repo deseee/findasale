@@ -609,7 +609,7 @@ export function shouldPollEtsyListing(state: string | null | undefined, elapsedM
 // { eligible: false, reason, code? }, the Discogs shape named in ADR-135 D2.3).
 // ---------------------------------------------------------------------------------------------
 
-export type EtsyEligibilityCode = 'OK' | 'NO_ERA' | 'ERA_TOO_RECENT' | 'CARD_YEAR_TOO_RECENT';
+export type EtsyEligibilityCode = 'OK' | 'NO_ERA' | 'ERA_TOO_RECENT' | 'CARD_YEAR_TOO_RECENT' | 'PICKUP_ONLY';
 
 export interface EtsyEligibilityInfo {
   eligible: boolean;
@@ -621,6 +621,10 @@ export interface EtsyEligibilityInfo {
 export const ETSY_MSG_NO_ERA =
   'To list this item on Etsy, tell us when it was made. Etsy only accepts items that are 20 or more years old, items you made or designed, or craft and party supplies.';
 
+/** Copied from backend etsyEligibility.ts ETSY_MSG_PICKUP_ONLY (2026-10-29: Etsy only sells with shipping). */
+export const ETSY_MSG_PICKUP_ONLY =
+  'This item is marked local pickup only. Etsy only sells with shipping, so it cannot be listed on Etsy.';
+
 export function etsyMsgEraTooRecent(eraLabel: string): string {
   return `This item is marked as made in ${eraLabel}. Etsy only accepts items that are 20 or more years old, items you made or designed, or craft and party supplies, so it cannot be listed on Etsy.`;
 }
@@ -630,9 +634,11 @@ export function etsyMsgCardYearTooRecent(year: number): string {
 }
 
 export function checkEtsyEligibilityLocal(
-  input: { releaseYear?: number | null; whenMade?: string | null; isSupply?: boolean | null },
+  input: { releaseYear?: number | null; whenMade?: string | null; isSupply?: boolean | null; ebayShippingOverride?: string | null },
   asOfYear: number
 ): EtsyEligibilityInfo {
+  // Same order as the backend wrapper: pickup only is refused before any age check.
+  if (input.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') return { eligible: false, reason: ETSY_MSG_PICKUP_ONLY, code: 'PICKUP_ONLY' };
   const cutoff = asOfYear - 20;
   const year = typeof input.releaseYear === 'number' && isFinite(input.releaseYear) ? input.releaseYear : null;
   // Same order as the backend registry: a card's own release year decides alone.
@@ -652,7 +658,7 @@ export function normalizeEtsyEligibility(status: number, data: unknown): EtsyEli
   const d: Rec = isRecord(data) ? data : {};
   const eligible = status >= 200 && status < 300 && d.eligible !== false;
   const code = asString(d.code);
-  const knownCodes: readonly string[] = ['OK', 'NO_ERA', 'ERA_TOO_RECENT', 'CARD_YEAR_TOO_RECENT'];
+  const knownCodes: readonly string[] = ['OK', 'NO_ERA', 'ERA_TOO_RECENT', 'CARD_YEAR_TOO_RECENT', 'PICKUP_ONLY'];
   return {
     eligible,
     reason: eligible ? null : safeServerMessage(d, 'reason'),
@@ -754,6 +760,8 @@ export interface EtsyItemInput {
   stockSold?: number | null;
   /** Card release year (Item.card.releaseYear, ADR-134) when the item is a card. */
   releaseYear?: number | null;
+  /** Item.ebayShippingOverride; 'LOCAL_PICKUP_ONLY' blocks Etsy (shipping only). */
+  ebayShippingOverride?: string | null;
 }
 
 /** Mirrors ETSY_CONDITION_LABELS and ETSY_GRADE_LABELS in backend etsyMapping.ts (ADR-135 D3.2). */
@@ -905,7 +913,7 @@ export function getEtsyDraftProblems(args: {
   if (preview.quantity === 0) blocking.push(ETSY_PROBLEM_MESSAGES.soldOut);
 
   const eligibility = checkEtsyEligibilityLocal(
-    { releaseYear: item.releaseYear ?? null, whenMade: form.whenMade || null, isSupply: form.isSupply },
+    { releaseYear: item.releaseYear ?? null, whenMade: form.whenMade || null, isSupply: form.isSupply, ebayShippingOverride: item.ebayShippingOverride ?? null },
     args.asOfYear
   );
   if (!eligibility.eligible && eligibility.code !== 'NO_ERA' && eligibility.reason) blocking.push(eligibility.reason);

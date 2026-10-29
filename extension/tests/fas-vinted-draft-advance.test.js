@@ -66,10 +66,10 @@ test('popup marks (1.0.78): recorded live and live guard results only; drafts an
   const now = START;
   assert.strictEqual(D.popupPresence({ id: 'a', marketplaceListedVinted: true }, [], {}, now), 'live');
   assert.strictEqual(D.popupPresence({ id: 'b' }, [], { b: { kind: 'draft', at: now - 1000 } }, now), null);
-  assert.strictEqual(D.popupPresence({ id: 'b' }, [], { b: { kind: 'live', at: now - 1000 } }, now), 'live');
-  assert.strictEqual(D.popupPresence({ id: 'b' }, [], { b: { kind: 'live', at: now - 31 * 24 * 3600 * 1000 } }, now), null);
+  assert.strictEqual(D.popupPresence({ id: 'b' }, [], { b: { kind: 'live', remoteId: '7001', at: now - 1000 } }, now), 'live');
+  assert.strictEqual(D.popupPresence({ id: 'b' }, [], { b: { kind: 'live', remoteId: '7001', at: now - 31 * 24 * 3600 * 1000 } }, now), null);
   assert.strictEqual(D.popupPresence({ id: 'c' }, [{ itemId: 'c', draftId: '9', at: now }], {}, now), null);
-  assert.deepStrictEqual(D.prunePresent({ b: { kind: 'draft', at: now }, l: { kind: 'live', at: now } }, now), { l: { kind: 'live', at: now } });
+  assert.deepStrictEqual(D.prunePresent({ b: { kind: 'draft', at: now }, l: { kind: 'live', remoteId: '7002', at: now } }, now), { l: { kind: 'live', remoteId: '7002', at: now } });
   assert.strictEqual(D.popupPresence({ id: 'c' }, [{ itemId: 'c', draftId: '9', at: now, listedAt: now }], {}, now), null);
   assert.strictEqual(D.popupPresence({ id: 'd' }, [], {}, now), null);
 });
@@ -388,10 +388,12 @@ test('duplicate guard: a live listing (recorded by FindA.Sale, or same title in 
   const h = harness({ pathname: '/items/new', store: {}, onMessage: queueOn('it1', 'it2', listedReply(true)) });
   assert.strictEqual(await h.api.skip(ITEM), true);
   assert.strictEqual(h.events.find((x) => x.code === 'vinted_already_present').ctx.kind, 'live');
-  assert.strictEqual(h.store.fasVintedPresent.it1.kind, 'live');
+  // 2026-10-29: a hit from FindA.Sale's own record is not stored for the popup (it reads the record fresh; a copy went stale).
+  assert.strictEqual(h.store.fasVintedPresent.it1, undefined);
   const h2 = harness({ pathname: '/items/new', store: { fasVintedOwnProfileUrl: ME }, wardrobe: () => [row(62, 'blue wool scarf', false)], onMessage: queueOn('it1', 'it2', listedReply(false)) });
   assert.strictEqual(await h2.api.skip(ITEM), true);
   assert.strictEqual(h2.events.find((x) => x.code === 'vinted_already_present').ctx.remoteId, '62');
+  assert.deepStrictEqual([h2.store.fasVintedPresent.it1.kind, h2.store.fasVintedPresent.it1.remoteId], ['live', '62'], 'a listing seen on Vinted is remembered');
   const h3 = harness({ pathname: '/items/new', store: { fasVintedOwnProfileUrl: ME, fasVintedDrafts: [{ itemId: 'it1', draftId: '50', at: Date.now() }] }, wardrobe: () => [row(50, 'Edited title', true)], onMessage: queueOn('it1', 'it2', listedReply(false)) });
   assert.strictEqual(await h3.api.skip(ITEM), false, '1.0.78: a recorded draft still a draft does not block');
   const h4 = harness({ pathname: '/items/new', store: { fasVintedOwnProfileUrl: ME, fasVintedDrafts: [{ itemId: 'it1', draftId: '50', at: Date.now() }] }, wardrobe: () => [row(50, 'Edited title', false)], onMessage: queueOn('it1', 'it2', listedReply(false)) });
@@ -432,9 +434,10 @@ test('popup (1.0.78): live Vinted items are marked, left out of Select all, but 
   let ch = 'vinted';
   const fn = new Function('self', 'currentChannel', 'chrome', 'VINTED_PRESENT',
     p.slice(i, j) + '\nreturn { vintedPresenceOf, vintedLiveOnVinted };');
-  const api = fn({ FAS_VINTED_DRAFTS: D }, () => ch, {}, { g1: { kind: 'live', at: Date.now() }, d1: { kind: 'draft', at: Date.now() } });
+  const api = fn({ FAS_VINTED_DRAFTS: D }, () => ch, {}, { g1: { kind: 'live', remoteId: '7003', at: Date.now() }, d1: { kind: 'draft', at: Date.now() }, r1: { kind: 'live', remoteId: null, at: Date.now() } });
   assert.strictEqual(api.vintedPresenceOf({ id: 'd1' }), null, 'a 1.0.77 draft guard result is not a mark');
   assert.strictEqual(api.vintedPresenceOf({ id: 'g1' }), 'live');
+  assert.strictEqual(api.vintedPresenceOf({ id: 'r1', marketplaceListedVinted: false }), null, '2026-10-29: a record-only mark never outlives the record');
   assert.strictEqual(api.vintedPresenceOf({ id: 'x', marketplaceListedVinted: true }), 'live');
   assert.strictEqual(api.vintedLiveOnVinted({ id: 'n1' }), false);
   ch = 'poshmark';

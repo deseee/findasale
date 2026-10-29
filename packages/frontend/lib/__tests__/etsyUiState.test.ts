@@ -276,6 +276,19 @@ test('eligibility messages match the backend wrapper text (ADR-135 D4.3)', { ski
   assert.ok(src.includes(ui.ETSY_MSG_NO_ERA), 'no-era message differs');
   assert.ok(src.includes(ui.etsyMsgEraTooRecent('{era}')), 'era-too-recent template differs');
   assert.ok(src.includes(ui.etsyMsgCardYearTooRecent(0).replace('0', '{year}')), 'card-year template differs');
+  assert.ok(src.includes(ui.ETSY_MSG_PICKUP_ONLY), 'pickup-only message differs');
+});
+
+test('pickup only blocks Etsy locally before any age check, and the server code is understood', () => {
+  const pickup = { ebayShippingOverride: 'LOCAL_PICKUP_ONLY' };
+  for (const x of [{ whenMade: '1970s' }, { isSupply: true }, { releaseYear: 1990 }, {}]) {
+    const r = ui.checkEtsyEligibilityLocal({ ...x, ...pickup }, 2026);
+    assert.deepEqual(r, { eligible: false, reason: ui.ETSY_MSG_PICKUP_ONLY, code: 'PICKUP_ONLY' });
+  }
+  assert.equal(ui.checkEtsyEligibilityLocal({ whenMade: '1970s', ebayShippingOverride: 'SHIPPABLE' }, 2026).eligible, true);
+  const n = ui.normalizeEtsyEligibility(422, { eligible: false, reason: ui.ETSY_MSG_PICKUP_ONLY, code: 'PICKUP_ONLY' });
+  assert.equal(n.code, 'PICKUP_ONLY');
+  assert.equal(ui.isNoEraEligibility(n), false);
 });
 
 test('condition and grade labels in the preview match the backend mapper', { skip: !fs.existsSync(path.join(BACKEND_MKT, 'etsyMapping.ts')) }, () => {

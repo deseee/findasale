@@ -39,6 +39,8 @@ export interface PlatformSoldReport {
   /** The platform's own listing id if the email carries one (Mercari "m55401730709"), else ''. */
   remoteListingId: string;
   title: string;
+  /** The platform's order id when the sold notice carries one (Poshmark "Order ID", 2026-10-29): the sale's own identity. */
+  orderId?: string | null;
 }
 
 export interface PlatformSoldResult {
@@ -67,6 +69,7 @@ export interface PlatformSoldDeps {
     soldVia: string,
     platform?: SoldDetectionPlatform,
     remoteListingId?: string,
+    orderId?: string,
   ) => Promise<{ alreadyCommitted: boolean; partial?: boolean }>;
   getItemStatus?: (itemId: string) => Promise<string | null>;
 }
@@ -128,13 +131,14 @@ async function defaultCommitSale(
   soldVia: string,
   platform?: SoldDetectionPlatform,
   remoteListingId?: string,
+  orderId?: string,
 ) {
   const r = await commitFacebookNativeSale(
     itemId,
     soldVia,
     // No platform named (not reachable from processPlatformSoldReport, which always passes one): commitFacebookNativeSale's own
     // multi-unit default (2026-10-13) still takes one unit instead of a full SOLD; there is simply no event identity to dedupe on.
-    platform ? { soldOnPlatform: { platform, remoteListingId: remoteListingId || null } } : {},
+    platform ? { soldOnPlatform: { platform, remoteListingId: remoteListingId || null, ...(orderId ? { orderId } : {}) } } : {},
   );
   return { alreadyCommitted: r.alreadyCommitted, partial: r.partial === true };
 }
@@ -165,6 +169,7 @@ export async function processPlatformSoldReport(
 
   const remoteListingId = String(report.remoteListingId ?? '').trim().slice(0, 100);
   const title = String(report.title ?? '').slice(0, 500);
+  const orderId = String(report.orderId ?? '').trim().slice(0, 100);
   const base = { platform, remoteListingId, title };
 
   const [items, jobs] = await Promise.all([loadCandidateItems(organizerId), loadPlatformJobs(organizerId, platform)]);
@@ -180,7 +185,10 @@ export async function processPlatformSoldReport(
   let partial = false;
   try {
     listingClosed = await closeListingRecord(m.itemId, platform);
-    ({ alreadyCommitted, partial = false } = await commitSale(m.itemId, soldVia, platform, remoteListingId));
+    // 2026-10-29: the order id rides along only when there is one (unchanged call shape otherwise).
+    ({ alreadyCommitted, partial = false } = await (orderId
+      ? commitSale(m.itemId, soldVia, platform, remoteListingId, orderId)
+      : commitSale(m.itemId, soldVia, platform, remoteListingId)));
   } catch (err: any) {
     console.error(`[PlatformSoldDetection] ${platform} commit failed for item`, m.itemId, err?.message || err);
     return { ...base, result: 'error', itemId: m.itemId, via: m.via, listingClosed, reason: 'commit_failed' };

@@ -13,6 +13,7 @@ import { isEbayRateLimited, trackEbayCall } from '../../lib/ebayRateLimiter';
 import { ebayProxyHeaders, ebayProxyUrl, ebayUserHeaders, refreshEbayAccessToken } from '../ebayHttp';
 import { buildCustomLabel, endEbayListingIfExists, pushItemsToEbayLive } from '../../controllers/ebayController';
 import { isBulkEbayEnabled } from './bulkLotEbayConfig';
+import { sanitizeOfferBestOfferTerms } from '../../utils/ebayBestOfferThresholds';
 import { reconcileBulkLotEbay, reconcileBulkLotEbayInBackground, type BundleDb, type BundleEbayOps, type BundleOpResult, type ReconcileResult } from './bulkLotEbayService';
 
 export const bundleDb = prisma as unknown as BundleDb;
@@ -55,6 +56,30 @@ async function ebayContextFor(itemId: string): Promise<
   return { ok: true, accessToken, sku: buildCustomLabel(itemId, organizer, item), offerId: item.ebayOfferId };
 }
 
+/** Offer fields eBay returns on GET but refuses on PUT (same strip list as ebayPriceRevisionService / heal25005). */
+const OFFER_READ_ONLY_FIELDS = ['offerId', 'status', 'listing', 'listingId', 'listingStatus', 'marketplaceId'] as const;
+
+/**
+ * bulkUpdatePriceQuantity carries no bestOfferTerms. When a lot's new price is at or below the offer's existing
+ * auto-accept or auto-decline amount, eBay can reject the price change. Given the offer as GET returned it, this
+ * returns the full updateOffer (PUT) body that sets the new price and quantity together with Best Offer thresholds made
+ * valid for that price (sanitizeOfferBestOfferTerms, the same repair every other eBay path uses), or null when the
+ * existing thresholds are already valid (the common case: no extra call is made). Pure.
+ */
+export function buildBulkLotBestOfferRepairOffer(
+  offer: Record<string, unknown>,
+  price: number,
+  quantity: number
+): Record<string, unknown> | null {
+  const next: Record<string, unknown> = { ...offer };
+  if (!sanitizeOfferBestOfferTerms(next, price)) return null;
+  const pricingSummary = (offer.pricingSummary && typeof offer.pricingSummary === 'object' ? offer.pricingSummary : {}) as Record<string, unknown>;
+  next.pricingSummary = { ...pricingSummary, price: { currency: 'USD', value: price.toFixed(2) } };
+  next.availableQuantity = quantity;
+  for (const ro of OFFER_READ_ONLY_FIELDS) delete next[ro];
+  return next;
+}
+
 /**
  * Revises quantity and price of a LIVE offer with bulkUpdatePriceQuantity (one request, one SKU, one offer). The offer
  * is read first: bulkUpdatePriceQuantity only works on a PUBLISHED offer, and a listing the organizer ended on eBay
@@ -76,9 +101,29 @@ async function reviseOnEbay(ctx: { itemId: string; quantity: number; priceCents:
     return { ok: false, code: 'OFFER_READ_FAILED', message: ebayMessage(text) };
   }
   trackEbayCall();
-  const offer = (await offerRes.json()) as { status?: string };
+  const offer = (await offerRes.json()) as Record<string, unknown> & { status?: string };
   if (String(offer.status ?? '').toUpperCase() !== 'PUBLISHED') {
     return { ok: false, code: 'NOT_LIVE', message: 'The eBay offer is not published.' };
+  }
+
+  // 2026-10-29: bulkUpdatePriceQuantity cannot carry Best Offer thresholds. Only when the new price leaves the offer's
+  // existing auto-accept or auto-decline at or above it, update the offer first with updateOffer (the GET body echoed
+  // back with the new price, quantity and repaired thresholds), so the price change is not rejected. One extra call,
+  // only for affected offers, and only while under the daily eBay call budget.
+  const repairBody = buildBulkLotBestOfferRepairOffer(offer, ctx.priceCents / 100, ctx.quantity);
+  if (repairBody) {
+    if (isEbayRateLimited()) return { ok: false, code: 'RATE_LIMITED', message: 'eBay daily limit reached. It will be tried again later.' };
+    const putRes = await fetch(ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/offer/${e.offerId}`)), {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(repairBody),
+    });
+    trackEbayCall();
+    if (!putRes.ok && putRes.status !== 204) {
+      const putText = await putRes.text().catch(() => '');
+      return { ok: false, code: 'BEST_OFFER_UPDATE_FAILED', message: ebayMessage(putText) || `eBay answered ${putRes.status}` };
+    }
+    console.log(`[bulkLotEbay] item=${ctx.itemId} offer=${e.offerId}: Best Offer thresholds adjusted for price ${(ctx.priceCents / 100).toFixed(2)} before the bulk update`);
   }
 
   const body = {

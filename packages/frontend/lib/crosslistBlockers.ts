@@ -31,7 +31,7 @@ export const DIMENSIONS_BADGE_TEXT = 'No dimensions';
 export const DIMENSIONS_BADGE_TITLE =
   'Length, width and height are missing. Poshmark and Mercari use package dimensions for their size checks. Open the item and add them.';
 export const PICKUP_BADGE_TEXT = 'Pickup only';
-export const PICKUP_BADGE_TITLE = 'Marked local pickup only, so this item is not listed on Poshmark, Mercari, Vinted or Grailed, and any listing already there is taken down.';
+export const PICKUP_BADGE_TITLE = 'Marked local pickup only, so this item is not listed on Poshmark, Mercari, Vinted, Grailed or Etsy, and any listing already there is taken down.';
 export const DONT_LIST_BADGE_TEXT = 'Not for crosslisting';
 export const DONT_LIST_BADGE_TITLE = 'Marked do not list, so this item is not sent to any shipping marketplace.';
 

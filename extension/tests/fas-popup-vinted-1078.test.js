@@ -84,7 +84,7 @@ test('a draft no longer blocks selection: a 1.0.77 draft guard result or a recor
 });
 
 test('a live item is selectable; ticking it shows the one-line post-again note, unticking hides it', () => {
-  const { row, selected } = loadRow({ present: { kit1: { kind: 'live', at: Date.now() } } });
+  const { row, selected } = loadRow({ present: { kit1: { kind: 'live', remoteId: '7001', at: Date.now() } } });
   const d = row(KIT);
   assert.ok(!/ disabled/.test(d.html), 'checkbox is enabled');
   assert.ok(/<span class="badge badge-live"[^>]*>On Vinted<\/span>/.test(d.html), 'small live badge');
@@ -99,7 +99,7 @@ test('a live item is selectable; ticking it shows the one-line post-again note, 
 });
 
 test('row layout: the title has its own line; meta, badges and "Already posted?" share the line below it', () => {
-  const { row } = loadRow({ present: { kit1: { kind: 'live', at: Date.now() } } });
+  const { row } = loadRow({ present: { kit1: { kind: 'live', remoteId: '7001', at: Date.now() } } });
   const h = row(KIT).html;
   const t = h.indexOf('<div class="t"'), sub = h.indexOf('<div class="sub">'), kit = h.indexOf('>KIT<'), link = h.indexOf('class="markPostedBtn"'), meta = h.indexOf('<div class="meta">');
   assert.ok(meta >= 0 && meta < t && t < sub && sub < kit && kit < link, 'title first, then the meta line with badges and the link');

@@ -2,8 +2,8 @@
 // listingRefs. Shapes read live 2026-10-27 in Patrick's signed-in Chrome: GET /api/listings/105000124 -> 200 { data: { seller: { id:
 // 19099637 }, sold: false, deleted: false, hidden: false } } (retitled on Grailed: "REBECCA STONE Graphic T-Shirt, ..."), 104003051 is
 // hidden: true (moderation), GET /api/listings/1 -> 404 { error: { error_id: 'not_found' } }, GET /api/users/me -> { data: { id } }.
-// Live deletion is NOT automated (the Delete button's confirm flow is unverified): live+owned stays a retriable
-// grailed_delete_control_unconfirmed attempt-failure, now with the exact listing link. Only "already gone" resolves.
+// 2026-10-29: live+owned is no longer handed to the organizer: the tab goes to /listings/<id> (a sessionStorage mark says why) and
+// grDeleteOnListingPage deletes it there (tests: fas-grailed-auto-delete.test.js). Only "already gone" resolves without a page visit.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -21,8 +21,8 @@ function extract(src, name) {
   }
   throw new Error('unterminated ' + name);
 }
-const ASYNC = new Set(['grLookupListingById', 'grRemoveByListingId']);
-const NAMES = ['grRemovalListingId', 'grClassifyListingLookup', 'grLookupListingById', 'grRemoveByListingId'];
+const ASYNC = new Set(['grLookupListingById', 'grRemoveByListingId', 'grGoToListingForDelete']);
+const NAMES = ['grRemovalListingId', 'grClassifyListingLookup', 'grLookupListingById', 'grRemoveByListingId', 'grWriteMark', 'grGoToListingForDelete'];
 const body = NAMES.map((n) => (ASYNC.has(n) ? 'async ' : '') + extract(gr, n)).join('\n');
 
 const LIVE = '105000124';
@@ -48,10 +48,13 @@ function harness(listingResp, opts) {
     chrome: { runtime: { sendMessage: (m) => { sent.push(m); } } },
     overlay: () => {}, overlayWarn: (t) => { warns.push(t); }, button: () => '', escapeHtml: (s) => String(s),
     console: { log: () => {} },
+    sessionStorage: { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: (k) => { delete store[k]; } },
+    humanPause: async () => {},
   };
-  const pre = 'const GRAILED_REMOVAL_CONTINUE_URL = null;\n';
-  const fns = new Function('deps', 'const { fetch, location, chrome, overlay, overlayWarn, button, escapeHtml, console } = deps;\n' + pre + body + '\nreturn { ' + NAMES.join(', ') + ' };')(deps);
-  return { fns, sent, warns, loc, fetchCalls };
+  const store = {};
+  const pre = 'const GRAILED_REMOVAL_CONTINUE_URL = null;\nconst GR_DEL_NAV_KEY = \'fasGrDeleteNav\';\n';
+  const fns = new Function('deps', 'const { fetch, location, chrome, overlay, overlayWarn, button, escapeHtml, console, sessionStorage, humanPause } = deps;\n' + pre + body + '\nreturn { ' + NAMES.join(', ') + ' };')(deps);
+  return { fns, sent, warns, loc, fetchCalls, store };
 }
 const item = (over) => Object.assign({ id: 'cmg1', title: 'Graphic T-Shirt, Rebecca Stone, Black Cotton', reason: 'POLICY_INELIGIBLE', listingRefs: { GRAILED: LIVE } }, over || {});
 
@@ -70,13 +73,14 @@ test('own listing flagged deleted: true -> reported REMOVED', async () => {
   assert.deepStrictEqual(h.sent.map((m) => m.type), ['crossPlatformRemovalDeleted']);
 });
 
-test('live and owned (retitled, or hidden by moderation) -> no delete: retriable grailed_delete_control_unconfirmed with the listing link', async () => {
+test('live and owned (retitled, or hidden by moderation) -> the tab goes to the listing page to delete it; nothing reported yet', async () => {
   for (const [id, over] of [[LIVE, {}], [HIDDEN, { id: Number(HIDDEN), hidden: true }]]) {
     const h = harness({ status: 200, json: listing(over) });
     assert.strictEqual(await h.fns.grRemoveByListingId(item({ listingRefs: { GRAILED: id } })), true);
-    assert.deepStrictEqual(h.sent.map((m) => [m.type, m.reason]), [['crossPlatformRemovalAttemptFailed', 'grailed_delete_control_unconfirmed']]);
-    assert.ok(h.warns[0].indexOf('https://www.grailed.com/listings/' + id) !== -1);
-    assert.strictEqual(h.loc.href, 'https://www.grailed.com/sell/for-sale');
+    assert.deepStrictEqual(h.sent, []);
+    assert.strictEqual(h.loc.href, 'https://www.grailed.com/listings/' + id);
+    const mark = JSON.parse(h.store.fasGrDeleteNav);
+    assert.deepStrictEqual([mark.id, mark.itemId, mark.source], [id, 'cmg1', 'id']);
   }
 });
 
@@ -120,6 +124,7 @@ test('no stored id -> no fetch; ids and Grailed URLs resolve, foreign URLs do no
 
 test('wiring: id-first runs before the title flow, and a verify run never reaches the title flow', () => {
   const run = gr.slice(gr.indexOf('async function runGrailedRemovalQueue('));
+  assert.strictEqual(gr.indexOf('grailed_delete_control_unconfirmed\''), -1, 'the hand-off-to-organizer reason is gone');
   const idFirst = run.indexOf('if (await grRemoveByListingId(item)) return;');
   assert.ok(idFirst > 0);
   const verifyGuard = run.indexOf("reason: 'verify_unresolved', verifyOnly: true");

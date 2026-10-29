@@ -2331,35 +2331,178 @@
     return matches.length === 1 ? matches[0] : null;
   }
 
-  // BUG FIX 2026-09-04 (S-EXT-REMOVAL-FALSE-REMOVED + S-EXT-GRAILED-DELETE-SYNCHRONOUS, propagated
-  // from the live-confirmed Poshmark fix). Two defects, both fixed here:
-  //   1. It returned `true` the moment a delete BUTTON was found and clicked -- whether or not a
-  //      confirmation control ever appeared, and whether or not the listing actually went away. The
-  //      caller then reported the item as REMOVED to the FindA.Sale backend, producing a false
-  //      "removed" record for a listing still live on Grailed -- the worst possible outcome (the
-  //      organizer stops watching it and it can still sell a second time). Now returns 'deleted'
-  //      ONLY when a confirmation control was actually found AND clicked; every other exit returns a
-  //      specific reason string the caller reports as a retriable attempt-failure, not a removal.
-  //   2. It was fully SYNCHRONOUS: it clicked the kebab menu and then looked for the delete item in
-  //      the same tick, with zero wait, so on any real page the menu has not rendered yet and this
-  //      could never succeed. Now async, with a real settle awaited between each step.
-  async function deleteGrailedListingOnDetailPage() {
-    const menuBtn = qa('button, [role="button"]').find((el) => {
-      const label = (el.getAttribute('aria-label') || '').toLowerCase();
-      return label.indexOf('more') !== -1 || label.indexOf('option') !== -1 || el.textContent.trim() === '...';
-    });
-    if (!menuBtn) return 'no_menu_button';
-    syntheticClick(menuBtn);
-    await sleep(600);
-    const deleteBtn = grRemFindButtonByText('Delete listing') || grRemFindButtonByText('Delete') || grRemFindButtonByText('Remove listing');
-    if (!deleteBtn) return 'no_delete_action';
-    syntheticClick(deleteBtn);
-    await sleep(600);
-    const confirmBtn = grRemFindButtonByText('Yes') || grRemFindButtonByText('Confirm') || grRemFindButtonByText('Delete');
-    if (!confirmBtn) return 'no_confirm_button';
-    syntheticClick(confirmBtn);
-    await sleep(600);
-    return 'deleted';
+  // ---- AUTOMATED LIVE-LISTING DELETE (2026-10-29) ------------------------------------------------------------------------------
+  // Until now a live Grailed listing that had to come down (sold elsewhere, pickup-only, unpublished, policy) was only ever linked
+  // for the organizer to delete by hand (grailed_delete_control_unconfirmed). It is now deleted automatically, to the same standard
+  // as Poshmark/Mercari/Vinted (id-first, 1.0.74/1.0.75), and only when every check below passes:
+  //   1. The listing id comes from FindA.Sale's own record (listingRefs.GRAILED), or from exactly ONE card on /sell/for-sale whose
+  //      text contains the full FindA.Sale title (findGrailedListingMatchByTitle). Zero or several matches: nothing is touched.
+  //   2. The tab is sent to that listing's own page (/listings/<id>), and there Grailed's same-origin JSON must say the listing is
+  //      live and belongs to the signed-in seller (grClassifyListingLookup 'live_own'). A title-matched id must also carry the
+  //      FindA.Sale title in Grailed's own listing title.
+  //   3. The page itself must be that listing (URL id) and must show Grailed's listing title in a heading.
+  //   4. Exactly one visible, enabled "Delete" button outside any dialog (the owner sidebar ListingActions control, read live
+  //      2026-10-27); then exactly one confirm control inside the dialog it opens. Nothing is clicked when either is ambiguous.
+  //   5. REMOVED is reported only after Grailed's own JSON says the listing is gone (404 not_found or deleted: true). A click
+  //      Grailed accepts but that does not delete is a retriable attempt failure, never a removal.
+  // A hard reload after the confirm click is covered by a sessionStorage mark: the next load settles the item by the listing id
+  // and never clicks again.
+  const GR_DEL_NAV_KEY = 'fasGrDeleteNav';         // { id, itemId, source: 'id' | 'title', at }: sent to /listings/<id> to delete it
+  const GR_DEL_CLICKED_KEY = 'fasGrDeleteClicked'; // { id, itemId, at }: the Delete control was clicked for this listing
+  const GR_DEL_MARK_TTL_MS = 10 * 60 * 1000;
+  const GR_DEL_CONFIRM_TEXTS = ['delete', 'delete listing', 'yes, delete', 'yes, delete it', 'yes, delete listing', 'delete it', 'confirm', 'confirm delete', 'yes', 'remove', 'remove listing'];
+
+  function grReadMark(key) {
+    try { return JSON.parse(sessionStorage.getItem(key) || 'null'); } catch (e) { return null; }
+  }
+  function grWriteMark(key, value) {
+    try { if (value) sessionStorage.setItem(key, JSON.stringify(value)); else sessionStorage.removeItem(key); } catch (e) { /* optional */ }
+  }
+  // Pure: the mark when it is for this item, carries a listing id and is recent; else null.
+  function grMarkFor(mark, item, now) {
+    if (!mark || !item || item.id == null || String(mark.itemId) !== String(item.id)) return null;
+    if (!/^\d{1,20}$/.test(String(mark.id == null ? '' : mark.id))) return null;
+    const age = Number(now) - (Number(mark.at) || 0);
+    return age >= 0 && age < GR_DEL_MARK_TTL_MS ? mark : null;
+  }
+  // Pure: the listing id of a /listings/<id> or /listings/<id>-<slug> page (never the /edit page); else null.
+  function grListingPageId(pathname) {
+    const m = /^\/listings\/(\d{1,20})(?:-[^/]*)?\/?$/.exec(String(pathname || ''));
+    return m ? m[1] : null;
+  }
+  // Pure: does one of the page's heading texts show Grailed's title for this listing?
+  function grPageShowsListing(headingTexts, apiTitle) {
+    const want = grRemNorm(apiTitle);
+    if (want.length < 3) return false;
+    return (headingTexts || []).some((t) => { const n = grRemNorm(t); return n === want || (want.length >= 8 && n.indexOf(want) !== -1); });
+  }
+  // Pure: a title-matched id is only trusted when Grailed's own title carries the full FindA.Sale title.
+  function grTitleMatchesItem(apiTitle, itemTitle) {
+    const want = grRemNorm(itemTitle);
+    return want.length > 0 && grRemNorm(apiTitle).indexOf(want) !== -1;
+  }
+  function grIsVisible(el) { return !!el && el.offsetParent !== null; }
+  function grInDialog(el) {
+    return !!(el && el.closest && el.closest('[role="dialog"], [role="alertdialog"], [aria-modal="true"]'));
+  }
+  function grPageHeadingTexts() {
+    return qa('h1, h2, [class*="title" i]')
+      .filter((el) => grIsVisible(el) && !/subtitle/i.test(String(el.className || '')))
+      .map((el) => String(el.textContent || '').slice(0, 400));
+  }
+  // Exactly one visible, enabled "Delete" button outside any dialog. The owner sidebar's ListingActions control wins when several match.
+  function grFindDeleteButton() {
+    const all = qa('button, [role="button"]').filter((el) => grIsVisible(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true' &&
+      !grInDialog(el) && /^(delete|delete listing)$/.test(grRemNorm(el.textContent)));
+    const preferred = all.filter((el) => /ListingActions/i.test(String(el.className || '')));
+    const pick = preferred.length ? preferred : all;
+    return pick.length === 1 ? pick[0] : null;
+  }
+  function grOpenDialogs() { return qa('[role="dialog"], [role="alertdialog"], [aria-modal="true"]').filter(grIsVisible); }
+  // Exactly one open dialog, and in it the confirm control (first match by GR_DEL_CONFIRM_TEXTS order). Never the trigger itself.
+  function grFindConfirmButton(trigger) {
+    const dialogs = grOpenDialogs();
+    if (dialogs.length !== 1) return null;
+    const buttons = Array.from(dialogs[0].querySelectorAll('button, [role="button"]')).filter((el) => el !== trigger && grIsVisible(el) &&
+      !el.disabled && el.getAttribute('aria-disabled') !== 'true');
+    for (const want of GR_DEL_CONFIRM_TEXTS) {
+      const hit = buttons.filter((el) => grRemNorm(el.textContent) === want);
+      if (hit.length === 1) return hit[0];
+      if (hit.length > 1) return null;
+    }
+    return null;
+  }
+  async function grPoll(getter, timeoutMs, stepMs) {
+    const end = Date.now() + timeoutMs;
+    for (;;) {
+      let v = null;
+      try { v = await getter(); } catch (e) { v = null; }
+      if (v) return v;
+      if (Date.now() >= end) return null;
+      await sleep(stepMs || 400);
+    }
+  }
+  // true once Grailed's own JSON says the listing is gone (signed-in seller verified); polls up to timeoutMs.
+  async function grWaitListingGone(id, timeoutMs) {
+    const gone = await grPoll(async () => {
+      const look = await grLookupListingById(id);
+      if (!look.ok) return null;
+      return grClassifyListingLookup(look.status, look.json, look.meId).kind === 'removed' ? true : null;
+    }, timeoutMs, 1500);
+    return gone === true;
+  }
+
+  // Sends the removal tab to the listing's own page; the next load runs grDeleteOnListingPage (see runGrailedRemovalQueue).
+  async function grGoToListingForDelete(item, id, source) {
+    grWriteMark(GR_DEL_NAV_KEY, { id: String(id), itemId: String(item.id), source: source, at: Date.now() });
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening <b>' + escapeHtml(item.title) + '</b> on Grailed to remove it…</div>');
+    await humanPause(1200, 2200);
+    location.href = 'https://www.grailed.com/listings/' + id;
+  }
+
+  // On /listings/<id>: verify, delete, verify gone. Returns a result string (see grReportDeleteResult). Clicks only when every check passes.
+  async function grDeleteOnListingPage(item, id, source) {
+    const look = await grLookupListingById(id);
+    if (!look.ok) return 'listing_lookup_failed';
+    const verdict = grClassifyListingLookup(look.status, look.json, look.meId);
+    if (verdict.kind === 'removed') return 'already_gone';
+    if (verdict.kind === 'sold') return 'sold_on_grailed';
+    if (verdict.kind === 'live_other') return 'not_own_listing';
+    if (verdict.kind !== 'live_own') return 'owner_unverified';
+    const apiTitle = look.json && look.json.data ? String(look.json.data.title || '') : '';
+    if (source === 'title' && !grTitleMatchesItem(apiTitle, item.title)) return 'title_mismatch';
+    if (grListingPageId(location.pathname) !== String(id)) return 'wrong_listing_page';
+    const shown = await grPoll(() => (grPageShowsListing(grPageHeadingTexts(), apiTitle) ? true : null), 8000, 400);
+    if (!shown) return 'listing_not_shown_on_page';
+    const del = await grPoll(() => grFindDeleteButton(), 6000, 400);
+    if (!del) return 'no_delete_button';
+    await humanPause(500, 900);
+    grWriteMark(GR_DEL_CLICKED_KEY, { id: String(id), itemId: String(item.id), at: Date.now() });
+    syntheticClick(del);
+    let confirm = await grPoll(() => grFindConfirmButton(del), 5000, 300);
+    if (!confirm) {
+      if (await grWaitListingGone(id, 3000)) return 'deleted'; // no confirm step: the click itself deleted it
+      // A synthetic click Grailed ignored (no dialog opened at all): one real (trusted) click on the same, still-present control.
+      // An open dialog without one clear confirm control is left alone.
+      const again = grFindDeleteButton();
+      if (again === del && grOpenDialogs().length === 0) {
+        await trustedClick(del);
+        confirm = await grPoll(() => grFindConfirmButton(del), 5000, 300);
+      }
+      if (!confirm) return (await grWaitListingGone(id, 3000)) ? 'deleted' : 'no_confirm_dialog';
+    }
+    await humanPause(400, 800);
+    syntheticClick(confirm);
+    if (await grWaitListingGone(id, 9000)) return 'deleted';
+    // Confirm still on screen: the synthetic click was ignored -- one trusted click on it.
+    if (grFindConfirmButton(del) === confirm) {
+      await trustedClick(confirm);
+      if (await grWaitListingGone(id, 9000)) return 'deleted';
+    }
+    return 'delete_unverified';
+  }
+
+  // One place that turns a delete result into the background message. REMOVED only for a listing Grailed says is gone.
+  function grReportDeleteResult(item, id, result) {
+    const href = 'https://www.grailed.com/listings/' + id;
+    const link = '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener" style="color:#9ad9b0">' + escapeHtml(href) + '</a>';
+    grWriteMark(GR_DEL_CLICKED_KEY, null);
+    grWriteMark(GR_DEL_NAV_KEY, null);
+    const send = (m) => { try { chrome.runtime.sendMessage(Object.assign({ platform: 'GRAILED', itemId: item.id, continueUrl: GRAILED_REMOVAL_CONTINUE_URL }, m)); } catch (e) {} };
+    if (result === 'deleted' || result === 'already_gone') {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">' + (result === 'deleted' ? 'Removed <b>' + escapeHtml(item.title) + '</b> from Grailed.' : '<b>' + escapeHtml(item.title) + '</b> was already removed on Grailed -- recorded as removed.') + '</div>');
+      send({ type: 'crossPlatformRemovalDeleted', note: result === 'deleted' ? 'deleted on Grailed; listing ' + id + ' confirmed gone' : 'already removed on Grailed' });
+      return;
+    }
+    if (result === 'not_own_listing' || result === 'title_mismatch' || result === 'sold_on_grailed') {
+      // Permanent: never delete someone else's listing, a listing that is not this item, or one that sold on Grailed itself.
+      const why = result === 'sold_on_grailed' ? 'it shows as sold on Grailed, which cannot be deleted' : 'it could not be confirmed as your listing of this item';
+      overlayWarn('<b>' + escapeHtml(item.title) + '</b> was NOT removed from Grailed: ' + why + ' (' + link + '). Nothing was deleted.' + button('fas-gr-close', 'Close', false));
+      send({ type: 'crossPlatformRemovalSkipped', reason: result === 'sold_on_grailed' ? 'listing_sold_on_grailed' : (result === 'title_mismatch' ? 'no_confident_listing_match' : 'listing_not_owned') });
+      return;
+    }
+    overlayWarn('Could not finish removing <b>' + escapeHtml(item.title) + '</b> from Grailed (' + escapeHtml(result) + '). It has NOT been marked removed; FindA.Sale will try again. Listing: ' + link + button('fas-gr-close', 'Close', false));
+    send({ type: 'crossPlatformRemovalAttemptFailed', reason: 'grailed_' + result });
   }
 
   // Retained for reference/back-compat only. As of the 2026-09-04 fix below, background.js owns
@@ -2400,10 +2543,8 @@
   //                           sold/deleted listings carry data.sold / data.sold_at / data.deleted (fields present on every listing;
   //                           no sold or deleted Grailed listing exists on this account to observe live)
   //   GET /api/users/me       200 { data: { id: <me>, username } } -- the signed-in seller; without it nothing here is trusted.
-  // DELETE: the owner's /listings/<id> page DOES render a sidebar <button class="...ListingActions_action...">Delete</button>
-  // (read from the DOM only, never clicked), but what it opens next (confirm dialog markup, success signal) is unverified. So a
-  // live, owned listing is NOT deleted here: it gets the same honest grailed_delete_control_unconfirmed attempt-failure as today's
-  // matched path, now with the exact listing link. Only "already gone" is resolved automatically.
+  // DELETE (2026-10-29): a live, owned listing is now deleted automatically on its own /listings/<id> page -- see
+  // grDeleteOnListingPage above for every check that has to pass first, and for the gone-check that gates REMOVED.
   function grRemovalListingId(item) {
     const refs = item && item.listingRefs && typeof item.listingRefs === 'object' ? item.listingRefs : null;
     const v = refs ? refs.GRAILED : null;
@@ -2478,10 +2619,8 @@
         try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'GRAILED', itemId: item.id, reason: 'verify_still_live', verifyOnly: true, continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
         return true;
       }
-      // Live deletion is unchanged from today (no confirmed delete flow, see above): honest retriable attempt-failure + the link.
-      const href = 'https://www.grailed.com/listings/' + id;
-      overlayWarn('<b>' + escapeHtml(item.title) + '</b> is still live on Grailed, but FindA.Sale does not yet have a confirmed way to delete a Grailed listing. Please remove it on Grailed yourself: <a href="' + escapeHtml(href) + '" target="_blank" rel="noopener" style="color:#9ad9b0">' + escapeHtml(href) + '</a> -- this item has NOT been marked removed on FindA.Sale.' + button('fas-gr-close', 'Close', false));
-      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'GRAILED', itemId: item.id, reason: 'grailed_delete_control_unconfirmed', continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
+      // 2026-10-29: delete it on its own page (grDeleteOnListingPage re-verifies everything there before any click).
+      await grGoToListingForDelete(item, id, 'id');
       return true;
     }
     return false; // live_other, unknown, or sold (Grailed has no sold path of its own): today's title flow decides
@@ -2490,6 +2629,27 @@
   async function runGrailedRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 ' + (window.FAS_REMOVAL_REASON ? window.FAS_REMOVAL_REASON.overlayLine(item, index, total) : 'removing item ' + (index + 1) + ' of ' + total) + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
     await humanPause(400, 800);
+    const verifyOnly = item.reason === 'RESYNC_VERIFY';
+    const now = Date.now();
+    // 2026-10-29: the Delete control was already clicked for this item and the page then reloaded. Settle it by the listing id
+    // (REMOVED only when Grailed says it is gone) and never click again from here.
+    const clicked = grMarkFor(grReadMark(GR_DEL_CLICKED_KEY), item, now);
+    if (clicked && !verifyOnly) {
+      const gone = await grWaitListingGone(clicked.id, 6000);
+      grReportDeleteResult(item, clicked.id, gone ? 'deleted' : 'delete_unverified');
+      return;
+    }
+    // 2026-10-29: this run sent the tab to the listing's own page to delete it.
+    const nav = grMarkFor(grReadMark(GR_DEL_NAV_KEY), item, now);
+    if (nav && !verifyOnly) {
+      if (grListingPageId(location.pathname) === nav.id) {
+        const result = await grDeleteOnListingPage(item, nav.id, nav.source === 'title' ? 'title' : 'id');
+        grReportDeleteResult(item, nav.id, result);
+      } else {
+        grReportDeleteResult(item, nav.id, 'listing_page_not_reached'); // sent there and did not arrive: retry later, never loop
+      }
+      return;
+    }
     // 1.0.75: the stored Grailed listing id decides first (removed / live); the title flow below is the fallback.
     if (await grRemoveByListingId(item)) return;
     if (item.reason === 'RESYNC_VERIFY') {
@@ -2497,17 +2657,12 @@
       try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'GRAILED', itemId: item.id, reason: 'verify_unresolved', verifyOnly: true, continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
+    // 2026-10-29: already on a listing page whose heading carries this item's title (no stored id): delete it here with the
+    // same checks as the id path (the title must also be in Grailed's own title for this listing id).
     const pageTitleEl = grRemFindListingTitleEl();
-    const onListingDetailPage = pageTitleEl && grRemNorm(pageTitleEl.textContent).indexOf(grRemNorm(item.title)) !== -1;
-    if (onListingDetailPage) {
-      const result = await deleteGrailedListingOnDetailPage();
-      if (result === 'deleted') {
-        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Grailed.</div>');
-        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'GRAILED', itemId: item.id, continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
-        return;
-      }
-      overlayWarn('Found the listing but couldn\'t confirm the delete action (' + escapeHtml(result) + ') -- please remove it yourself. FindA.Sale will try this item again rather than marking it removed.' + button('fas-gr-close', 'Close', false));
-      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'GRAILED', itemId: item.id, reason: result, continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
+    const pageListingId = grListingPageId(location.pathname);
+    if (pageListingId && pageTitleEl && grRemNorm(pageTitleEl.textContent).indexOf(grRemNorm(item.title)) !== -1) {
+      grReportDeleteResult(item, pageListingId, await grDeleteOnListingPage(item, pageListingId, 'title'));
       return;
     }
     // LIVE FINDING 2026-09-04 (S-EXT-GRAILED-DELETE-CONTROL-NOT-FOUND): Grailed's delete control
@@ -2518,8 +2673,9 @@
     // empty, and "Edit Listing") with no kebab or overflow menu. Caveat worth preserving: the one
     // listing available to inspect was in a "Requires Action" moderation state, which may suppress
     // controls a normal listing would show -- so this is "NOT FOUND", not "proven absent". Either
-    // way Grailed's delete path is UNCONFIRMED and must not be guessed. This is the remaining
-    // blocker for Grailed removal being end-to-end.
+    // way Grailed's delete path is UNCONFIRMED and must not be guessed. RESOLVED 2026-10-29: the Delete control lives on the
+    // listing's own /listings/<id> page (owner sidebar), so a single confident match is opened there and deleted by
+    // grDeleteOnListingPage (verified before and after).
     const match = findGrailedListingMatchByTitle(item.title);
     if (!match) {
       // BUG FIX 2026-09-04 (S-EXT-GRAILED-WRONG-PAGE-GUARD-TOO-BROAD): the previous guard tested
@@ -2538,14 +2694,9 @@
       try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'GRAILED', itemId: item.id, reason: 'no_confident_listing_match', continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
-    // The listing was matched, but there is no confirmed way to delete it (see the note above), so
-    // be honest about it: name the listing, link the organizer straight to it, and say plainly that
-    // FindA.Sale has NOT marked it removed. Reported as a RETRIABLE attempt-failure -- never as a
-    // removal (that would be a false "removed" on a still-live listing) and never as a skip (that
-    // would permanently consume it from the queue). After background.js's 3-attempt cap this
-    // surfaces to the organizer as manual review, which is the honest outcome for an unbuilt path.
-    overlayWarn('Found <b>' + escapeHtml(item.title) + '</b> in your Grailed listings, but FindA.Sale does not yet have a confirmed way to delete a Grailed listing. Please remove it on Grailed yourself: <a href="' + escapeHtml(match.href) + '" target="_blank" rel="noopener" style="color:#9ad9b0">' + escapeHtml(match.href) + '</a> -- this item has NOT been marked removed on FindA.Sale.' + button('fas-gr-close', 'Close', false));
-    try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'GRAILED', itemId: item.id, reason: 'grailed_delete_control_unconfirmed', continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
+    // 2026-10-29: exactly one card carries the full title -> open that listing and delete it there. grDeleteOnListingPage
+    // re-checks ownership and that Grailed's own title for this id contains the FindA.Sale title before any click.
+    await grGoToListingForDelete(item, match.id, 'title');
   }
 
   async function maybeRunGrailedRemoval() {

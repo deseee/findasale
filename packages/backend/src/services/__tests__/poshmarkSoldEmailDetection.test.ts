@@ -125,7 +125,8 @@ describe('processPoshmarkSoldEmail -- sale email', () => {
   it('commits through the platform matcher and logs the first-live-email warn once', async () => {
     const processReport = jest.fn(async () => soldReport());
     const r = await processPoshmarkSoldEmail(email(), { processReport });
-    expect(processReport).toHaveBeenCalledWith('organizer_1', TITLE);
+    // 2026-10-29: the body's Order ID rides along as the sale's identity (Multi Item 2nd+ unit sales, same-order dedupe).
+    expect(processReport).toHaveBeenCalledWith('organizer_1', TITLE, ORDER_ID);
     expect(r).toMatchObject({ kind: 'matched', itemId: 'item_lulu', soldVia: SOLD_VIA_POSHMARK, poshmarkOrderId: ORDER_ID, alreadySold: false });
     const firstLive = warnSpy.mock.calls.filter((c) => String(c[0]).includes('poshmark_first_live_email'));
     expect(firstLive).toHaveLength(1);
@@ -150,7 +151,7 @@ describe('processPoshmarkSoldEmail -- sale email', () => {
   it('prefers the body title when subject and body disagree', async () => {
     const processReport = jest.fn(async () => soldReport());
     await processPoshmarkSoldEmail(email({ subject: '"Lululemon Work It Out Sho" just sold to @buyer on Poshmark!' }), { processReport });
-    expect(processReport).toHaveBeenCalledWith('organizer_1', TITLE);
+    expect(processReport).toHaveBeenCalledWith('organizer_1', TITLE, ORDER_ID);
   });
 
   it('falls back to the subject title when the body sentence is missing', async () => {

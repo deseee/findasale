@@ -38,8 +38,8 @@ test('the duplicate-listing guard still runs before a Mercari or Grailed fill (o
   for (const f of ['fas-mercari.js', 'fas-grailed.js']) assert.ok(/type: 'checkItemListedStatus'/.test(rd(f)), f);
 });
 
-test('manifest is 1.0.80', () => {
-  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.80');
+test('manifest is 1.0.81', () => {
+  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.81');
 });
 
 test('Mercari cap (1.0.73): the limit report carries the number for the server, and the poll logs the server note', () => {

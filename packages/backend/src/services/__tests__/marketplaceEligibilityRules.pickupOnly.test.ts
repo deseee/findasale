@@ -1,7 +1,7 @@
 /**
  * 2026-10-27 (Patrick: "take them off Poshmark and do the pull when marked pickup"). An item marked local pickup only
  * (Item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') is ineligible on every marketplace that only sells with shipping
- * (Poshmark, Mercari, Vinted, Grailed), for new listings and for the takedown sweep alike, and stays eligible on the
+ * (Poshmark, Mercari, Vinted, Grailed, and since 2026-10-29 Etsy), for new listings and for the takedown sweep alike, and stays eligible on the
  * marketplaces that support pickup (Facebook, Craigslist, Gumtree AU, Reverb).
  */
 
@@ -25,7 +25,18 @@ const pickup = { ...base, ebayShippingOverride: 'LOCAL_PICKUP_ONLY' };
 
 describe('pickup-only eligibility', () => {
   it('lists exactly the shipping-only marketplaces', () => {
-    expect([...PICKUP_INCOMPATIBLE_PLATFORMS].sort()).toEqual(['GRAILED', 'MERCARI', 'POSHMARK', 'VINTED']);
+    expect([...PICKUP_INCOMPATIBLE_PLATFORMS].sort()).toEqual(['ETSY', 'GRAILED', 'MERCARI', 'POSHMARK', 'VINTED']);
+  });
+
+  it('ETSY: pickup-only is ineligible even for an item old enough for Etsy, new listing and takedown', () => {
+    const vintage = { category: null, ebayCategoryId: null, etsyWhenMade: '1970s', asOfYear: 2026 };
+    expect(checkEligibility('ETSY', vintage).eligible).toBe(true); // control: fine when it ships
+    for (const forNewListing of [true, false]) {
+      const r = checkEligibility('ETSY', { ...vintage, ebayShippingOverride: 'LOCAL_PICKUP_ONLY', forNewListing });
+      expect(r).toEqual({ eligible: false, reason: pickupOnlyEligibilityReason('ETSY') });
+    }
+    expect(isPickupOnlyBlocked('ETSY', 'LOCAL_PICKUP_ONLY')).toBe(true);
+    expect(isPickupOnlyBlocked('ETSY', 'SHIPPABLE')).toBe(false);
   });
 
   it.each(['POSHMARK', 'MERCARI', 'VINTED', 'GRAILED'] as EligibilityPlatform[])('%s: pickup-only is ineligible, new listing and takedown', (platform) => {
@@ -42,6 +53,7 @@ describe('pickup-only eligibility', () => {
     expect(pickupOnlyEligibilityReason('MERCARI')).toBe('Marked pickup only, and Mercari only sells with shipping.');
     expect(pickupOnlyEligibilityReason('VINTED')).toBe('Marked pickup only, and Vinted only sells with shipping.');
     expect(pickupOnlyEligibilityReason('GRAILED')).toBe('Marked pickup only, and Grailed only sells with shipping.');
+    expect(pickupOnlyEligibilityReason('ETSY')).toBe('Marked pickup only, and Etsy only sells with shipping.');
   });
 
   it.each(['FACEBOOK', 'CRAIGSLIST', 'GUMTREE_AU'] as EligibilityPlatform[])('%s supports pickup: pickup-only stays eligible', (platform) => {
@@ -89,5 +101,17 @@ describe('pickup-only eligibility', () => {
     expect(out.poshmark).toBe('PUBLISHED_INELIGIBLE');
     expect(out.facebook).toBe('PUBLISHED');
     expect(out.mercari).toBeNull(); // not live there and not eligible for a new listing
+  });
+
+  it('the Add Items dot flags a live pickup-only Etsy listing as needing removal, and shows no dot otherwise', () => {
+    const org = { hasEbayConnection: false, shopifyEnabled: false, subscriptionTier: 'PRO', hasActiveDiscogsAccount: false, hasActiveReverbAccount: false, hasActiveEtsyAccount: true };
+    const used = { facebook: false, craigslist: false, gumtreeAu: false, grailed: false, poshmark: false, mercari: false, vinted: false };
+    const vintage = { id: 'e1', category: null, ebayCategoryId: null, etsyWhenMade: '1970s', ebayListingId: null, discogsListingId: null, reverbListingId: null, shopifyListing: null };
+    const live: any = { ...vintage, etsyListingState: 'ACTIVE', ebayShippingOverride: 'LOCAL_PICKUP_ONLY' };
+    expect(computeChannelStatusForItems([live], org as any, used, new Map() as any)['e1'].etsy).toBe('PUBLISHED_INELIGIBLE');
+    const notListed: any = { ...vintage, ebayShippingOverride: 'LOCAL_PICKUP_ONLY' };
+    expect(computeChannelStatusForItems([notListed], org as any, used, new Map() as any)['e1'].etsy).toBeNull();
+    const ships: any = { ...vintage };
+    expect(computeChannelStatusForItems([ships], org as any, used, new Map() as any)['e1'].etsy).toBe('ELIGIBLE');
   });
 });

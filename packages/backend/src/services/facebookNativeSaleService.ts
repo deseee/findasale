@@ -58,6 +58,7 @@ import { lotChannelRefusal } from './bulkLot/bulkLotInvariants'; // ADR-136 Adde
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
 import { soldEmailStaleReason, soldEmailAlreadyApplied, soldRowMessage, getSoldEmailSource, parseSoldRowSentAtMs } from './soldEmailSourceGuard'; // 2026-10-12: an e-mail replayed after marker loss / relist must not consume a unit twice
 import { isReportOfCancelledReopenedSale } from './saleReopenGuard'; // reopen-sale (2026-10-10): a sold signal for a sale the organizer reopened must not re-sell it
+import { QUANTITY_LISTING_PLATFORMS, isSoldOnPlatformRow, unitsLeftOnQuantityListing } from './singleUnitRepost'; // 2026-10-29: Poshmark Multi Item 2nd+ unit sale
 
 export interface CommitFacebookNativeSaleResult {
   ok: true;
@@ -123,6 +124,10 @@ export interface CommitFacebookNativeSaleOptions {
     /** Only with trustedOrder: creation time of the order's notice. A sold_on_<platform> REMOVE row written at/after it (e.g. by the
      * sold-email retry) is treated as this order's own sale already counted. Absent = any such row within the last 14 days. */
     orderCreatedAt?: Date;
+    /** The marketplace's own order id for this sale, when the sold notice carries one (Poshmark sold e-mail "Order ID", 2026-10-29).
+     * Stamped on the unit-sale REMOVE row as `|order:<id>`; a later report of the same order takes no second unit, and on a quantity
+     * platform (Poshmark Multi Item) it lets the 2nd and later unit sales of a listing that is still live be counted. */
+    orderId?: string | null;
   };
   /** Idempotency key for a sale seen on a market that has NO MarketplaceListingJob row (Discogs, Reverb, operator route), used only
    * when the item holds more than one unit (2026-10-13, S-SINGLE-INVENTORY-NUMBER). Shape `sold-unit:<SOURCE>:<externalEventId>:<itemId>`,
@@ -137,6 +142,21 @@ const CLOSED_BY_EMAIL_SALE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 /** Relist-without-POSTED-row rule: an e-mail sent more than this after the last sold_on_<platform> REMOVE row's reference time is a new sale. Also
  * the slack that keeps a bundle notice / e-mail pair for the SAME sale (sent a little after the row) from counting twice. */
 export const NEW_EMAIL_SALE_TOLERANCE_MS = 10 * 60 * 1000;
+
+/** Tag on a unit-sale REMOVE row's lastErrorMessage naming the marketplace order it recorded (`sold_on_<platform>|order:<id>|...`). */
+export const SALE_ORDER_TAG = '|order:';
+
+/** A marketplace order id safe to store and compare (letters, digits, _ and -, 4 to 64 chars, lower-cased), else null. Pure. */
+export function normalizeSaleOrderId(raw: unknown): string | null {
+  const s = String(raw ?? '').trim().toLowerCase();
+  return /^[a-z0-9_-]{4,64}$/.test(s) ? s : null;
+}
+
+/** The order id stamped on a unit-sale row's lastErrorMessage, or null. Pure. */
+export function parseSaleOrderId(message: string | null | undefined): string | null {
+  const m = /\|order:([a-z0-9_-]{4,64})(?:\||$)/.exec(String(message ?? ''));
+  return m ? m[1] : null;
+}
 
 /** True when the item holds more than one unit, i.e. a sale elsewhere is a unit sale, not a SOLD. */
 export async function isMultiStockItem(itemId: string): Promise<boolean> {
@@ -288,7 +308,51 @@ async function commitPlatformUnitSale(
       const refMs = parseSoldRowSentAtMs(live.lastErrorMessage) ?? new Date(live.createdAt).getTime();
       if (!Number.isNaN(refMs) && emailSentMs > refMs + NEW_EMAIL_SALE_TOLERANCE_MS) newEmailSaleAfterLastRemove = true;
     }
-    if (!newEmailSaleAfterLastRemove && (!live || live.action !== 'POST' || live.status !== 'POSTED')) {
+    // POSHMARK MULTI ITEM, 2ND AND LATER UNIT SALES (2026-10-29). A Multi Item listing stays live after a unit sells there, so its newest
+    // row is the previous unit sale's sold_on_poshmark REMOVE row, not a POST/POSTED row. The rule below read that as "no live listing"
+    // and dropped every later sale unless its e-mail came more than NEW_EMAIL_SALE_TOLERANCE_MS after the previous one (two sales
+    // within 10 minutes, or an e-mail with no date, lost a unit: stock stayed high while Poshmark showed fewer, an oversell risk).
+    //  - an order already recorded on a unit-sale row of this item+platform is the same sale again: no unit, no row (any platform);
+    //  - on a quantity platform, a sale with its own identity (a new marketplace order id, or a sold e-mail, whose replay the
+    //    source-key guard in commitFacebookNativeSale already stops) while the Multi Item listing still shows units
+    //    (liveListingState.ts baseline rule) is a new unit sale of that live listing and takes exactly one unit, however soon
+    //    after the previous one. A caller with neither (no e-mail, no order) cannot tell a repeat from a new sale: unchanged no-op.
+    const orderId = normalizeSaleOrderId(sold.orderId);
+    let multiItemUnitSale = false;
+    if (orderId) {
+      const sameOrder: Array<{ lastErrorMessage: string | null }> = await tx.marketplaceListingJob.findMany({
+        where: { itemId, platform, action: 'REMOVE', status: 'REMOVED', lastErrorMessage: { contains: `${SALE_ORDER_TAG}${orderId}` } },
+        select: { lastErrorMessage: true },
+      });
+      if ((sameOrder || []).some((r) => String(r.lastErrorMessage ?? '').startsWith('sold_on_') && parseSaleOrderId(r.lastErrorMessage) === orderId)) {
+        return { kind: 'noop', reason: 'order_already_counted', counted: true } as UnitSaleOutcome;
+      }
+    }
+    if (orderId || getSoldEmailSource()) {
+      if (
+        !newEmailSaleAfterLastRemove &&
+        QUANTITY_LISTING_PLATFORMS.includes(platform) &&
+        live &&
+        isSoldOnPlatformRow({ action: live.action, status: live.status, createdAt: live.createdAt ?? new Date(0), lastErrorMessage: live.lastErrorMessage ?? null }, platform)
+      ) {
+        const rows: Array<{ action: string; status: string; createdAt: Date; lastErrorMessage: string | null; syncedQuantity: number | null; remoteListingId: string | null }> =
+          await tx.marketplaceListingJob.findMany({
+            where: { itemId, platform },
+            select: { action: true, status: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true, remoteListingId: true },
+          });
+        if (unitsLeftOnQuantityListing(rows || [], platform) > 0) {
+          const post = (rows || [])
+            .filter((r) => r.action === 'POST' && r.status === 'POSTED')
+            .reduce<(typeof rows)[number] | null>((a, b) => (!a || new Date(b.createdAt).getTime() > new Date(a.createdAt).getTime() ? b : a), null);
+          if (reportedId && post?.remoteListingId && post.remoteListingId !== reportedId) {
+            return { kind: 'noop', reason: 'reported_id_differs_from_live_row_id' } as UnitSaleOutcome;
+          }
+          multiItemUnitSale = true;
+        }
+      }
+    }
+
+    if (!newEmailSaleAfterLastRemove && !multiItemUnitSale && (!live || live.action !== 'POST' || live.status !== 'POSTED')) {
       // CLOSED-BY-EMAIL-SALE (2026-10-12, Nickel Coin Tube bundle): for a fresh ORDER (trustedOrder) the sold-email retry may have
       // already recorded this very sale and closed the listing (latest row = REMOVE/REMOVED sold_on_<platform>, no Vinted id on it),
       // so exactReported-id counting cannot see it. Treat it as already counted: no stock change, no row. A genuine second sale
@@ -308,7 +372,7 @@ async function commitPlatformUnitSale(
       return { kind: 'noop', reason: 'no_live_posted_row', counted: await alreadyCountedFor() } as UnitSaleOutcome;
     }
 
-    if (reportedId && live && !newEmailSaleAfterLastRemove) {
+    if (reportedId && live && !newEmailSaleAfterLastRemove && !multiItemUnitSale) {
       if (live.remoteListingId) {
         if (live.remoteListingId !== reportedId) {
           return { kind: 'noop', reason: 'reported_id_differs_from_live_row_id', counted: await alreadyCountedFor() } as UnitSaleOutcome;
@@ -358,7 +422,8 @@ async function commitPlatformUnitSale(
         platform,
         lastAttemptAt: new Date(),
         // With a poller e-mail context this is `sold_on_<platform>|src:<hash of the e-mail's marker key>` so the same e-mail is recognised later.
-        lastErrorMessage: soldRowMessage(`sold_on_${platform.toLowerCase()}`),
+        // 2026-10-29: `|order:<id>` right after the base when the sale names its marketplace order (see SALE_ORDER_TAG above).
+        lastErrorMessage: soldRowMessage(`sold_on_${platform.toLowerCase()}${orderId ? `${SALE_ORDER_TAG}${orderId}` : ''}`),
         // Remember WHICH listing sold (when reported) so a repeat report of it is recognised as already counted.
         remoteListingId: reportedId || null,
       },

@@ -12,6 +12,7 @@ import {
   etsyMsgCardYearTooRecent,
   etsyMsgEraTooRecent,
   ETSY_MSG_NO_ERA,
+  ETSY_MSG_PICKUP_ONLY,
 } from '../etsyEligibility';
 import { ETSY_WHEN_MADE } from '../../../config/etsyWhenMade';
 
@@ -70,6 +71,21 @@ describe('checkEtsyEligibility messages (ADR-135 D4.3)', () => {
     expect(checkEtsyEligibility({ releaseYear: 2006 }, { asOfYear })).toEqual({ eligible: true, reason: null, code: 'OK' });
   });
 
+  it('message 4, marked local pickup only, wins over every age answer (Etsy only sells with shipping)', () => {
+    const msg = 'This item is marked local pickup only. Etsy only sells with shipping, so it cannot be listed on Etsy.';
+    expect(ETSY_MSG_PICKUP_ONLY).toBe(msg);
+    const pickup = { ebayShippingOverride: 'LOCAL_PICKUP_ONLY' };
+    expect(checkEtsyEligibility(pickup, { whenMade: '1970s', asOfYear })).toEqual({ eligible: false, reason: msg, code: 'PICKUP_ONLY' });
+    expect(checkEtsyEligibility(pickup, { isSupply: true, asOfYear })).toEqual({ eligible: false, reason: msg, code: 'PICKUP_ONLY' });
+    expect(checkEtsyEligibility({ ...pickup, releaseYear: 1999 }, { asOfYear }).code).toBe('PICKUP_ONLY');
+    expect(checkEtsyEligibility({ ...pickup, releaseYear: 2015 }, { asOfYear }).code).toBe('PICKUP_ONLY');
+    expect(checkEtsyEligibility(pickup, { asOfYear }).code).toBe('PICKUP_ONLY');
+    // Other overrides leave the age rule in charge.
+    for (const o of ['SHIPPABLE', 'DONT_LIST', null, undefined]) {
+      expect(checkEtsyEligibility({ ebayShippingOverride: o }, { whenMade: '1970s', asOfYear }).code).toBe('OK');
+    }
+  });
+
   it('has no override: nothing but era, supply tick or release year changes the outcome', () => {
     const r = checkEtsyEligibility({}, { whenMade: '2020_2026', isSupply: false, asOfYear });
     expect(r.eligible).toBe(false);
@@ -79,6 +95,7 @@ describe('checkEtsyEligibility messages (ADR-135 D4.3)', () => {
 describe('Etsy eligibility copy lint', () => {
   const messages: string[] = [
     ETSY_MSG_NO_ERA,
+    ETSY_MSG_PICKUP_ONLY,
     etsyMsgCardYearTooRecent(2015),
     ...ETSY_WHEN_MADE.map((e) => etsyMsgEraTooRecent(e.label)),
   ];

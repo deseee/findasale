@@ -18,7 +18,8 @@
  *        - Item row gone or soft-deleted, or Item.status SOLD (except lastSoldVia 'ETSY'), or no stock
  *          left (max(stockTotal - stockSold, 0) is 0): withdrawEtsyListingIfExists (up to
  *          ETSY_WITHDRAW_SWEEP_LIMIT per organizer per tick, oldest first; failures stay live and are
- *          retried on a later tick).
+ *          retried on a later tick). 2026-10-29: an Item marked local pickup only (ebayShippingOverride
+ *          'LOCAL_PICKUP_ONLY') is withdrawn the same way, because Etsy only sells with shipping.
  *        - Units remain on an ACTIVE listing whose syncedQuantity differs from what Etsy should hold
  *          (computeEtsyQuantity): updateEtsyListingInventory instead of withdrawing (BACKGROUND, at most
  *          ETSY_RECONCILE_LIMIT per tick across all organizers). Quantity 0 always withdraws, never a
@@ -45,6 +46,7 @@ import {
 } from '../services/marketplace/etsyConnector';
 import type { EtsyInventoryUpdateResult, EtsyWithdrawOutcome } from '../services/marketplace/etsyConnector';
 import { computeEtsyQuantity } from '../services/marketplace/etsyMapping';
+import { isPickupOnlyBlocked } from '../services/marketplaceEligibilityRules';
 import { ETSY_RECEIPT_PAGE_LIMIT, ETSY_MIN_LAST_MODIFIED_SECONDS, fetchEtsyReceiptsPage } from '../services/marketplace/etsyReceipts';
 import type { EtsyReceiptsPageResult } from '../services/marketplace/etsyReceipts';
 import { processEtsyTransactions } from '../services/marketplace/etsySoldService';
@@ -173,10 +175,12 @@ export type EtsySweepAction = 'withdraw' | 'reconcile' | 'none';
  */
 export function classifyLiveEtsyListing(
   listing: { state: string; syncedQuantity: number | null },
-  item: { status?: string | null; deletedAt?: Date | null; lastSoldVia?: string | null; stockTotal?: number | null; stockSold?: number | null } | null | undefined
+  item: { status?: string | null; deletedAt?: Date | null; lastSoldVia?: string | null; stockTotal?: number | null; stockSold?: number | null; ebayShippingOverride?: string | null } | null | undefined
 ): EtsySweepAction {
   if (!item || item.deletedAt) return 'withdraw';
   if (item.status === 'SOLD') return item.lastSoldVia === 'ETSY' ? 'none' : 'withdraw';
+  // 2026-10-29: pickup-only items cannot sell on Etsy (shipping only), so a live listing is pulled.
+  if (isPickupOnlyBlocked('ETSY', item.ebayShippingOverride)) return 'withdraw';
   const remaining = Math.max((item.stockTotal ?? 1) - (item.stockSold ?? 0), 0);
   if (remaining === 0) return 'withdraw';
   if (listing.state === 'ACTIVE' && typeof listing.syncedQuantity === 'number') {
@@ -318,7 +322,7 @@ export async function sweepEtsyLiveListingsForOrganizer(
     const chunk = ids.slice(i, i + ITEM_LOOKUP_CHUNK);
     const items: any[] = await db.item.findMany({
       where: { id: { in: chunk } },
-      select: { id: true, status: true, deletedAt: true, lastSoldVia: true, stockTotal: true, stockSold: true },
+      select: { id: true, status: true, deletedAt: true, lastSoldVia: true, stockTotal: true, stockSold: true, ebayShippingOverride: true },
     });
     for (const it of items) itemById.set(it.id, it);
   }

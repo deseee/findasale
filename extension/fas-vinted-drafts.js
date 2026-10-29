@@ -195,6 +195,15 @@
     return live;
   }
 
+  // A stored guard result only counts when it saw a real Vinted listing (a remote id from the wardrobe or an uploaded draft).
+  // 2026-10-29: a result with no remote id only echoed FindA.Sale's own record ('recorded_listing'). The popup reads that record
+  // fresh on every open (item.marketplaceListedVinted), so a stored copy can only ever be stale: live, a "Mugig Guitar Instrument
+  // Cable" whose Vinted record was closed on 2026-10-28 (stale_record_not_on_vinted) kept its "Already on Vinted" mark and was
+  // left out of Select all, so it was never re-listed with the other reset items.
+  function isObservedLiveMark(p) {
+    return !!p && p.kind === 'live' && /^\d{1,20}$/.test(String(p.remoteId == null ? '' : p.remoteId));
+  }
+
   // Popup mark for an item on the Vinted tab: 'live' ("Already on Vinted") or null. 1.0.78: drafts are never marked
   // (the `drafts` argument is kept for callers and ignored), and a stored 'draft' guard result from 1.0.77 is ignored.
   function popupPresence(item, drafts, presentMap, now) {
@@ -203,17 +212,18 @@
     var t = Number(now) || Date.now();
     if (item.marketplaceListedVinted === true) return 'live';
     var p = presentMap && typeof presentMap === 'object' ? presentMap[id] : null;
-    if (p && p.kind === 'live' && t - (Number(p.at) || 0) <= PRESENT_KEEP_MS) return 'live';
+    if (isObservedLiveMark(p) && t - (Number(p.at) || 0) <= PRESENT_KEEP_MS) return 'live';
     return null;
   }
 
-  // Keeps only live guard results (1.0.77 'draft' entries are dropped), newest MAX_PRESENT, none older than 30 days.
+  // Keeps only live guard results that saw a real Vinted listing (1.0.77 'draft' entries and 2026-10-29 record-only entries are
+  // dropped), newest MAX_PRESENT, none older than 30 days.
   function prunePresent(map, now) {
     var t = Number(now) || Date.now();
     var src = map && typeof map === 'object' && !Array.isArray(map) ? map : {};
     var keys = Object.keys(src).filter(function (k) {
       var p = src[k];
-      return p && p.kind === 'live' && t - (Number(p.at) || 0) <= PRESENT_KEEP_MS;
+      return isObservedLiveMark(p) && t - (Number(p.at) || 0) <= PRESENT_KEEP_MS;
     });
     keys.sort(function (a, b) { return (Number(src[a].at) || 0) - (Number(src[b].at) || 0); });
     var out = {};

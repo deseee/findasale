@@ -164,7 +164,7 @@ export function makeEtsyListingHandlers(deps: EtsyListingControllerDeps = {}) {
       const whenMade = qWhenMade ?? (typeof saved?.whenMade === 'string' ? saved.whenMade : null);
       const isSupply = qSupply !== undefined ? qSupply === 'true' : saved?.isSupply === true;
 
-      const result = checkEtsyEligibility({ card: item.card ?? null }, { whenMade, isSupply, asOfYear: deps.asOfYear });
+      const result = checkEtsyEligibility({ card: item.card ?? null, ebayShippingOverride: item.ebayShippingOverride ?? null }, { whenMade, isSupply, asOfYear: deps.asOfYear });
       const extras = {
         code: result.code,
         cardReleaseYear: typeof item.card?.releaseYear === 'number' ? item.card.releaseYear : null,

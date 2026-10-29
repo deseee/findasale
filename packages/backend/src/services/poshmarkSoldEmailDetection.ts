@@ -89,7 +89,7 @@ export type PoshmarkSoldEmailResult =
 
 export interface PoshmarkSoldEmailDeps {
   resolveOrganizerIdByToken?: (token: string) => Promise<string | null>;
-  processReport?: (organizerId: string, title: string) => Promise<PlatformSoldResult>;
+  processReport?: (organizerId: string, title: string, orderId?: string) => Promise<PlatformSoldResult>;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -174,8 +174,8 @@ export async function processPoshmarkSoldEmail(
   const resolveOrganizerIdByToken = deps.resolveOrganizerIdByToken ?? resolveOrganizerIdByForwardingToken;
   const processReport =
     deps.processReport ??
-    ((orgId: string, title: string) =>
-      processPlatformSoldReport('POSHMARK', SOLD_VIA_POSHMARK, orgId, { remoteListingId: '', title }));
+    ((orgId: string, title: string, orderId?: string) =>
+      processPlatformSoldReport('POSHMARK', SOLD_VIA_POSHMARK, orgId, { remoteListingId: '', title, ...(orderId ? { orderId } : {}) }));
 
   if (!isExactSender(email.from)) {
     return { kind: 'ignored', reason: `sender "${email.from}" is not ${POSHMARK_SOLD_EMAIL_SENDER}` };
@@ -264,7 +264,9 @@ export async function processPoshmarkSoldEmail(
     return { kind: 'unmatched', organizerId, title, reason: 'bundle_sale' };
   }
 
-  const r = await processReport(organizerId, title);
+  // 2026-10-29: the Poshmark order id is the sale's identity: it keeps a repeat of the same order from taking a second unit and lets
+  // the 2nd and later unit sales of a Multi Item listing count (facebookNativeSaleService commitPlatformUnitSale).
+  const r = await (body.orderId ? processReport(organizerId, title, body.orderId) : processReport(organizerId, title));
   switch (r.result) {
     case 'sold':
     case 'alreadySold':

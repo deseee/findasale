@@ -407,7 +407,7 @@ function assertItemAvailable(item: any): void {
 
 /** The eligibility re-check, run on every draft and publish call. No override exists. */
 export function assertEtsyEligible(item: any, attestation: { whenMade: string | null; isSupply: boolean }, deps: EtsyConnectorDeps = {}): void {
-  const result = checkEtsyEligibility({ card: item.card ?? null }, { ...attestation, asOfYear: deps.asOfYear });
+  const result = checkEtsyEligibility({ card: item.card ?? null, ebayShippingOverride: item.ebayShippingOverride ?? null }, { ...attestation, asOfYear: deps.asOfYear });
   if (!result.eligible) {
     throw new EtsyListingError('ETSY_NOT_ELIGIBLE', 422, result.reason ?? ETSY_LISTING_MESSAGES.generic, {
       eligible: false,
@@ -679,7 +679,7 @@ export async function runEtsyDraftWorker(listingRowId: string, deps: EtsyConnect
     const shopPath = `/v3/application/shops/${encodeURIComponent(String(row.shopId))}`;
 
     // Never create or extend an Etsy listing for an item that is no longer eligible.
-    const eligibility = checkEtsyEligibility({ card: item.card ?? null }, { whenMade: row.whenMade, isSupply: row.isSupply === true, asOfYear: deps.asOfYear });
+    const eligibility = checkEtsyEligibility({ card: item.card ?? null, ebayShippingOverride: item.ebayShippingOverride ?? null }, { whenMade: row.whenMade, isSupply: row.isSupply === true, asOfYear: deps.asOfYear });
     if (!eligibility.eligible) return fail('CREATE', eligibility.reason ?? ETSY_LISTING_MESSAGES.generic);
 
     // 1. Create the draft (skipped on a resume).

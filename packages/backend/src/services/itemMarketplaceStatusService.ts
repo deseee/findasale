@@ -396,7 +396,7 @@ export const ITEM_STATUS_SELECT = {
   aiPackageDimsJson: true, // 2026-10-27: Poshmark's label note (length plus girth) falls back to the photo estimate
   stockTotal: true, // 1.0.76: Vinted "sold one, N left" note (vintedReadyToListAgain)
   stockSold: true,
-  ebayShippingOverride: true, // 2026-10-27: pickup-only is ineligible on Poshmark, Mercari, Vinted and Grailed (live listing flagged for removal)
+  ebayShippingOverride: true, // 2026-10-27: pickup-only is ineligible on Poshmark, Mercari, Vinted, Grailed and Etsy (live listing flagged for removal)
 } as const;
 
 /** Longest the status endpoint waits for eBay's condition policy; the lookup keeps running and fills its cache. */

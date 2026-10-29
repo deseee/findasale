@@ -131,14 +131,19 @@ export interface EligibilityCheckItem {
  *   MERCARI: every sale ships (Mercari label or ship-on-your-own); no buyer pickup.
  *   VINTED: the buyer always pays for shipping at checkout; no pickup option (see S-VINTED-PICKUP-ONLY, 2026-10-05).
  *   GRAILED: every sale ships with tracking (Grailed label or own label); no pickup option.
+ *   ETSY (added 2026-10-29): Etsy has no local pickup tool and every physical listing needs a shipping profile; a buyer
+ *     outside the area must be shipped to or refunded (help.etsy.com/hc/en-us/articles/360000338067, and
+ *     developers.etsy.com/documentation/tutorials/listings: "Every physical listing requires a shipping profile").
+ *     Etsy is listed through the API connector, not the extension: the draft and publish paths refuse a pickup-only
+ *     item (etsyEligibility.ts) and the Etsy sold-sync sweep withdraws a live one (etsySoldSyncCron.ts).
  * Facebook, Craigslist, Gumtree AU, eBay (local pickup policy) and Reverb (local pickup) all support pickup, so they stay
  * eligible. Depop is shipping-only too but is not a FindA.Sale marketplace. Mirrors extension popup.js
  * PICKUP_INCOMPATIBLE_PLATFORMS (VINTED, MERCARI, POSHMARK; GRAILED is covered there by the eligibility map).
  */
-export const PICKUP_INCOMPATIBLE_PLATFORMS: readonly EligibilityPlatform[] = ['POSHMARK', 'MERCARI', 'VINTED', 'GRAILED'];
+export const PICKUP_INCOMPATIBLE_PLATFORMS: readonly EligibilityPlatform[] = ['POSHMARK', 'MERCARI', 'VINTED', 'GRAILED', 'ETSY'];
 
 const PICKUP_PLATFORM_LABEL: Partial<Record<EligibilityPlatform, string>> = {
-  POSHMARK: 'Poshmark', MERCARI: 'Mercari', VINTED: 'Vinted', GRAILED: 'Grailed',
+  POSHMARK: 'Poshmark', MERCARI: 'Mercari', VINTED: 'Vinted', GRAILED: 'Grailed', ETSY: 'Etsy',
 };
 
 /** Plain reason shown when a pickup-only item is checked against a shipping-only marketplace. */

@@ -57,7 +57,7 @@ export function parseAutoQueuePatch(body: unknown): AutoQueueParse {
 }
 
 // Marketplaces with no local pickup option, limited to auto queue platforms. Must equal
-// marketplaceEligibilityRules.PICKUP_INCOMPATIBLE_PLATFORMS minus VINTED (not an auto queue platform); a unit test pins
+// marketplaceEligibilityRules.PICKUP_INCOMPATIBLE_PLATFORMS minus VINTED and ETSY (not auto queue platforms); a unit test pins
 // that. Since 2026-10-27 checkEligibility itself also blocks pickup-only items on these (and the takedown sweep pulls
 // live ones), so this early skip is belt and braces. Kept as a literal so this pure module stays import-free.
 export const PICKUP_INCOMPATIBLE_AUTO_QUEUE_PLATFORMS: readonly string[] = ['MERCARI', 'POSHMARK', 'GRAILED'];

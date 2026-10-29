@@ -3382,7 +3382,10 @@
       if (rawPresent && typeof rawPresent === 'object' && rawPresent[id]) { delete present[id]; await vintRemStorageSet(FAS_VINTED_PRESENT_KEY, present); }
       return false;
     }
-    present[id] = { kind: found.hit.kind, remoteId: found.hit.remoteId || null, at: Date.now() };
+    // 2026-10-29: only a listing actually seen on Vinted (remote id) is remembered for the popup. A hit from FindA.Sale's own
+    // record is not stored: the popup reads that record fresh, and a stored copy outlived the record (Mugig, 2026-10-28).
+    if (found.hit.remoteId) present[id] = { kind: found.hit.kind, remoteId: String(found.hit.remoteId), at: Date.now() };
+    else delete present[id];
     await vintRemStorageSet(FAS_VINTED_PRESENT_KEY, present);
     const title = String(item.title || 'This item');
     console.warn('[FAS Vinted] duplicate guard: skipping ' + id + ' (' + found.hit.kind + ' via ' + found.hit.source + ').');
