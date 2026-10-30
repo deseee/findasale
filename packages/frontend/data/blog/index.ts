@@ -45,8 +45,9 @@ import { postAF } from './posts/flat-cataloging-fee-same-bill-slow-sale-or-big-o
 import { postAG } from './posts/timed-online-auction-reserves-soft-close-bidder-trust';
 import { postAH } from './posts/flea-market-booth-and-market-operator-setup-guide';
 import { postAI } from './posts/consignment-splits-statements-unsold-items-guide';
+import { postAJ } from './posts/buyers-skip-sales-with-too-few-photos';
 
-export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR, postS, postT, postU, postV, postW, postX, postY, postZ, postAA, postAB, postAC, postAD, postAE, postAF, postAG, postAH, postAI];
+export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR, postS, postT, postU, postV, postW, postX, postY, postZ, postAA, postAB, postAC, postAD, postAE, postAF, postAG, postAH, postAI, postAJ];
 
 // Today's date (YYYY-MM-DD) in America/New_York. Date-only comparison, so a post
 // dated D goes live at 00:00 Eastern on D.
