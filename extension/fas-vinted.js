@@ -1446,6 +1446,87 @@
     };
     return w;
   }
+  // 1.0.84 (2026-10-29, owner report: Mugig instrument cable, Vinted category 4957 "Instrument cables", posted fine as
+  // 10585529359): the fill log said "Size has no value ... set it by hand" and the same for Material three times each,
+  // plus "please set it manually before publishing" review warnings for both. That category has no Size field at all,
+  // and Material is labelled "Material (recommended)", so it is optional. tryFill now asks the live form first:
+  //  - 'absent'   : the field is not on the form -> one quiet info line, no warning.
+  //  - 'optional' : Vinted labels it "(recommended)" / "(optional)" -> one soft info line, no review warning.
+  //  - 'required' : the field is shown and not marked optional -> the warning stays (Condition, Brand, Colors, Size...).
+  //  - 'n/a'      : not a picker field (Title, Description, Category, Price) -> unchanged behaviour.
+  const VINTED_FIELD_PRESENCE_SPEC = {
+    Brand: { id: 'brand', names: ['brand'] },
+    Size: { id: 'size', names: ['size'] },
+    Color: { id: 'color', names: ['color', 'colors', 'colour', 'colours'] },
+    Material: { id: 'material', names: ['material', 'materials'] },
+    Condition: { id: 'condition', names: ['condition'] },
+  };
+  const VINTED_OPTIONAL_LABEL_RE = /\((?:recommended|optional)\)|\boptional\b/i;
+  // An exact field label: the name, optionally followed by "*" or a "(...)" note. "Package size" never matches "size".
+  function vintedFieldLabelMatches(text, names) {
+    const t = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!t) return false;
+    return names.some((n) => new RegExp('^' + n + '\\s*(?:\\*|\\([^)]*\\))?\\s*\\*?$').test(t));
+  }
+  function vintedFieldLabelEl(spec, control) {
+    try {
+      const txt = (el) => (el ? ((el.getAttribute && el.getAttribute('aria-label')) || el.textContent || '') : '');
+      if (control && control.id) {
+        const byFor = document.querySelector('label[for="' + String(control.id).replace(/"/g, '\\"') + '"]');
+        if (byFor && vintedFieldLabelMatches(txt(byFor), spec.names)) return byFor;
+      }
+      const lb = control && control.getAttribute ? control.getAttribute('aria-labelledby') : '';
+      if (lb) {
+        for (const id of String(lb).split(/\s+/)) {
+          const el = id ? document.getElementById(id) : null;
+          if (el && vintedFieldLabelMatches(txt(el), spec.names)) return el;
+        }
+      }
+      let anc = control ? control.parentElement : null;
+      for (let up = 0; up < 4 && anc; up++) {
+        const cands = Array.from(anc.querySelectorAll('label, legend, h2, h3, h4, p, span, [class*="label" i], [class*="title" i], [data-testid*="label" i], [data-testid*="title" i]'));
+        const hit = cands.find((c) => vintedFieldLabelMatches(txt(c), spec.names));
+        if (hit) return hit;
+        anc = anc.parentElement;
+      }
+      const lab = qa('label').find((l) => vintedFieldLabelMatches(txt(l), spec.names));
+      return lab || null;
+    } catch (e) { return null; }
+  }
+  // 'n/a' | 'absent' | 'optional' | 'required' for the field as the current Vinted form shows it.
+  function vintedFieldState(fieldLabel) {
+    const spec = VINTED_FIELD_PRESENCE_SPEC[fieldLabel];
+    if (!spec) return 'n/a';
+    try {
+      const control = vintedPickerControl(spec.id);
+      const labelEl = vintedFieldLabelEl(spec, control);
+      if (!control && !labelEl) return 'absent';
+      const labelText = labelEl ? String((labelEl.getAttribute && labelEl.getAttribute('aria-label')) || labelEl.textContent || '') : '';
+      if (VINTED_OPTIONAL_LABEL_RE.test(labelText)) return 'optional';
+      if (control && control.getAttribute) {
+        const ph = control.getAttribute('placeholder') || control.getAttribute('aria-label') || '';
+        if (VINTED_OPTIONAL_LABEL_RE.test(ph)) return 'optional';
+      }
+      return 'required';
+    } catch (e) { return 'required'; }
+  }
+  // Once-per-item-fill gate for log lines. The first pass, the post-Language sweep, the deferred (after category)
+  // fill and a form-reset refill all run for the same item fill; each notice is logged only the first time.
+  // A new item, or a fresh fill of the same item (new fasVintedFillStartedAt), starts a new set.
+  let fasVintedNoticeFill = '';
+  let fasVintedNoticeSeen = new Set();
+  function fasVintedNoticeOnce(key, item) {
+    try {
+      const it = item || fasCurrentDiagItem;
+      let started = '';
+      try { started = String(fasVintedFillStartedAt || ''); } catch (e) { started = ''; }
+      const fill = String(it && it.id != null ? it.id : '') + '|' + started;
+      if (fill !== fasVintedNoticeFill) { fasVintedNoticeFill = fill; fasVintedNoticeSeen = new Set(); }
+      if (fasVintedNoticeSeen.has(key)) return false;
+      fasVintedNoticeSeen.add(key);
+      return true;
+    } catch (e) { return true; }
+  }
   async function tryFill(fieldLabel, value, fillFn, warnings) {
     fasMarkStep('tryFill:' + fieldLabel);
     // BUG FIX 2026-08-29 (S-EXT-ROUND-9, P1): this guard used to skip completely silently when the
@@ -1459,8 +1540,26 @@
     // two messages, and do not invent/guess a default value here -- the fix is honest visibility
     // into missing source data, not fabricating data that doesn't exist.
     if (value === undefined || value === null || value === '') {
-      T.warn('field_empty', fieldLabel + ' has no value on the FindA.Sale item, so it cannot be filled; set it by hand', { field: fieldLabel });
-      console.warn('[FAS Vinted] Field "' + fieldLabel + '" -- no value set on this item, skipped.');
+      // 1.0.84: only warn about a field the live form actually shows and Vinted does not mark optional.
+      const fieldState = vintedFieldState(fieldLabel);
+      if (fieldState === 'absent') {
+        if (fasVintedNoticeOnce('absent:' + fieldLabel)) {
+          T.info('field_absent', fieldLabel + ' is not on the Vinted form for this category, so nothing is needed', { field: fieldLabel });
+          console.log('[FAS Vinted] Field "' + fieldLabel + '" -- not on this Vinted form, nothing to fill.');
+        }
+        return false;
+      }
+      if (fieldState === 'optional') {
+        if (fasVintedNoticeOnce('optional:' + fieldLabel)) {
+          T.info('field_empty_optional', fieldLabel + ' is optional on Vinted and the FindA.Sale item has no value, so it was left blank', { field: fieldLabel });
+          console.log('[FAS Vinted] Field "' + fieldLabel + '" -- optional on Vinted, no value on this item, left blank.');
+        }
+        return false;
+      }
+      if (fasVintedNoticeOnce('empty:' + fieldLabel)) {
+        T.warn('field_empty', fieldLabel + ' has no value on the FindA.Sale item, so it cannot be filled; set it by hand', { field: fieldLabel });
+        console.warn('[FAS Vinted] Field "' + fieldLabel + '" -- no value set on this item, skipped.');
+      }
       if (warnings) warnings.push(fieldLabel + ' has no value set on this item -- please set it manually before publishing.');
       return false;
     }
@@ -2885,7 +2984,8 @@
     // S-EXT-VINTED-REMOTE-LISTING-ID: remember (per tab, 15 min) that this item was just filled, so
     // the organizer's own post-publish page can be tied back to it (see vintCapMaybeCapture).
     vintCapRecordFill(item);
-    try { (warnings || []).forEach((w) => T.warn('review_warning', String(w).slice(0, 300))); } catch (e) { /* diagnostics only */ }
+    // 1.0.84: each review warning is logged once per item fill, however many times this screen is redrawn (refills).
+    try { (warnings || []).forEach((w) => { const line = String(w).slice(0, 300); if (fasVintedNoticeOnce('review:' + line, item)) T.warn('review_warning', line); }); } catch (e) { /* diagnostics only */ }
     T.step(deferred ? 'Waiting for you to pick a category' : 'Waiting for you to review and click Upload', deferred ? 'Vinted hides most fields until a category is chosen; once you pick one the rest fills in automatically. Then click Upload yourself.' : 'FindA.Sale never presses Vinted\'s Upload or Save draft (a human must publish). Check every field and click Upload; FindA.Sale notices the upload and moves on.', { warnings: (warnings || []).length, photosOk: !!photosOk, deferred: !!deferred, refill: !!fasVintedRefillNote });
     scrollToVintedUploadButton();
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): render every collected fillListing() warning

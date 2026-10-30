@@ -113,9 +113,9 @@ test('popup copy: you click Upload (no more "saves a draft"), and the helper loa
   assert.ok(!/id="vintedPresentNote"/.test(html) && !/id="eligibilityNote"/.test(html) && !/id="pickupOnlyNote"/.test(html));
 });
 
-test('manifest is 1.0.83 and loads the helper before fas-vinted.js', () => {
+test('manifest is 1.0.84 and loads the helper before fas-vinted.js', () => {
   const man = JSON.parse(rd('manifest.json'));
-  assert.strictEqual(man.version, '1.0.83');
+  assert.strictEqual(man.version, '1.0.84');
   const vs = man.content_scripts.find((c) => c.js.indexOf('fas-vinted.js') !== -1).js;
   assert.ok(vs.indexOf('fas-vinted-drafts.js') !== -1 && vs.indexOf('fas-vinted-drafts.js') < vs.indexOf('fas-vinted.js'));
 });
