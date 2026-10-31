@@ -18,7 +18,7 @@ import { useAuth } from '../../components/AuthContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import MarketplaceSyncHealthCard from '../../components/MarketplaceSyncHealthCard';
 import FacebookSoldAlertsCard from '../../components/FacebookSoldAlertsCard';
-import AutoQueueCard from '../../components/AutoQueueCard';
+import AutoQueueCard, { HeldBackNotice } from '../../components/AutoQueueCard';
 
 const MarketplaceExtensionPage = () => {
   const router = useRouter();
@@ -123,6 +123,9 @@ const MarketplaceExtensionPage = () => {
             description, and photos. Straight from your FindA.Sale inventory, then walks through
             publishing. You review before anything goes live.
           </p>
+
+          {/* 2026-10-30: items held back from Poshmark, near the top so they are not missed; links to the list in AutoQueueCard. */}
+          <HeldBackNotice />
 
           {/* Download CTA */}
           <div className="card p-8 mb-8">

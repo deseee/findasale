@@ -96,7 +96,7 @@ const buildPersonalizedPicks = async (
 };
 
 // Build HTML email using the FindA.Sale design system
-const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubToken: string): string => {
+export const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubToken: string): string => {
   const formatDate = (d: Date) => {
     const now = new Date();
     const daysUntil = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -107,7 +107,7 @@ const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubToken: strin
   };
 
   const itemCardsHtml = picks.map((item) => {
-    const price = item.price ? item.price / 100 : 0;
+    const price = item.price ? item.price : 0; // Item.price is dollars (Float), not cents
     const priceStr = price > 0 ? `$${price.toFixed(2)}` : '';
     const photoHtml = item.photoUrls?.[0]
       ? `<img src="${item.photoUrls[0]}" alt="${item.title}" style="width:100%; max-height:160px; object-fit:cover; border-radius:6px; margin-bottom:10px; display:block;" />`
@@ -123,8 +123,8 @@ const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubToken: strin
 </div>`;
   }).join('');
 
-  const priceMin = picks.some(p => p.price) ? Math.min(...picks.filter(p => p.price).map(p => p.price!)) / 100 : 0;
-  const priceMax = picks.some(p => p.price) ? Math.max(...picks.filter(p => p.price).map(p => p.price!)) / 100 : 0;
+  const priceMin = picks.some(p => p.price) ? Math.min(...picks.filter(p => p.price).map(p => p.price!)) : 0;
+  const priceMax = picks.some(p => p.price) ? Math.max(...picks.filter(p => p.price).map(p => p.price!)) : 0;
   const priceRange = picks.some(p => p.price) ? ` Prices from $${priceMin.toFixed(0)} to $${priceMax.toFixed(0)}.` : '';
 
   return buildEmail({

@@ -1142,6 +1142,7 @@ const FAS_EDIT_PENDING_KEY = 'fasEditPending';   // { PLATFORM: [raw backend ent
 // 1.0.42: when an edit run stops on something only the organizer can do (sign in, a verification check, Poshmark's suspicious flag), its tab
 // is left open and focused instead of being closed; this remembers it so the next run can close the stale one first.
 const FAS_EDIT_NEEDS_USER_CODES = ['login_required', 'captcha_or_verification', 'poshmark_flagged'];
+const FAS_EDIT_TARGET_REFUSED_CODES = ['listing_title_mismatch', 'remote_id_mismatch', 'edit_page_mismatch', 'payload_would_change_fields'];   // 1.0.85
 const FAS_EDIT_KEPT_TAB_KEY = 'fasEditKeptTab';
 // 1.0.66: Poshmark price/stock edits its API refused with a certify flag (fragile / oversized / prohibited) AND its own Edit Listing form
 // then failed on. Held per item: { itemId: { at, price, qty, reason, code, title } }. Never retried automatically (certifying is the
@@ -1714,6 +1715,8 @@ async function fasEditRunPlatform(platform, rawEntries) {
       fasT(res.state === 'done' ? 'info' : 'warn', 'item_' + res.state, (res.state === 'done' ? 'Verified ' : 'Did not finish ') + 'edit of "' + String(entry.title || '').slice(0, 50) + '" on ' + platform + (entry.priceDrift ? ' (target $' + Core.formatPrice(platform, entry.price) + (res.scratch && res.scratch.oldPrice != null ? ', was $' + res.scratch.oldPrice : '') + ')' : '') + (res.code ? ': ' + res.code : ''), { platform: platform, flow: 'edit', itemId: entry.id, title: entry.title, ctx: { outcome: res.state, code: res.code, reason: res.reason, step: res.step, selector: res.selector, trail: res.trail, ms: Date.now() - itemT0, remoteId: res.scratch && res.scratch.remoteId, candidates: res.details && res.details.candidates } });
       // 1.0.83: multi-copy Poshmark editing is gone; only the item's own listing id is ever cached (never one a guard refused: remoteId null).
       if (res.scratch && !(res.scratch.copies && res.scratch.copies.length) && res.scratch.remoteId && /^[0-9a-z]+$/i.test(String(res.scratch.remoteId))) state.idCache[key] = String(res.scratch.remoteId);
+      // 1.0.85: a listing the pre-save title guard refused is dropped from the cache too (it may have been cached by an earlier run).
+      if (FAS_EDIT_TARGET_REFUSED_CODES.indexOf(res.code) !== -1) delete state.idCache[key];
       // 1.0.7 after-the-fact capture: the engine found (and, on 'done', verified) this item's live listing by
       // title; record its id on the backend (set-once, idempotent) so later edits go straight to it. Covers
       // Facebook (itemIdFound), Craigslist (postingId) and the platforms whose engine reports remoteId.

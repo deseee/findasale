@@ -372,7 +372,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                   suggestedDescription: undefined,
                   suggestedCategory: gateItem.category ?? undefined,
                   suggestedCondition: gateItem.condition ?? undefined,
-                  suggestedPrice: gateItem.price ? gateItem.price / 100 : undefined,
+                  suggestedPrice: gateItem.price ? gateItem.price : undefined, // Item.price is dollars (Float), no cents conversion
                   suggestedTags: [],
                   aiConfidence: undefined,
                 } as ClusterSummary;
@@ -605,7 +605,9 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 description: nextDescription,
                 category: summary.suggestedCategory,
                 condition: summary.suggestedCondition,
-                price: summary.suggestedPrice ? summary.suggestedPrice * 100 : undefined,
+                // Item.price is dollars (Float?), and suggestedPrice is dollars (cloudAIService converts the orchestrator's cents).
+                // This used to write suggestedPrice * 100, so a $12 suggestion landed as $1,200.
+                price: summary.suggestedPrice ? summary.suggestedPrice : undefined,
                 tags: summary.suggestedTags,
                 // P0 fix: ebayShippingClassification was never written by any backend
                 // write path — classifyEbayShipping was only ever computed ephemeral for

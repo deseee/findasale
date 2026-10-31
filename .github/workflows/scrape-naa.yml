@@ -11,9 +11,27 @@ name: Scrape NAA Find an Auctioneer Directory
 # simply absent, no red X ever fired"). This comment is that re-arming touch,
 # which forces GitHub to re-register the trigger. If it goes silent again
 # after a future billing incident, repeat this (touch any line in this file).
+# SCHEDULE DISABLED 2026-10-30 (next run would have been 2026-11-01 08:00 UTC).
+# The Novi AMS list endpoint this scraper posts to,
+# members.auctioneers.org/members/directory-customer-list, now answers 404 while the
+# landing page members.auctioneers.org/find-an-auctioneer still answers 200. The landing
+# page renders no members in its HTML ("Loading..." until a script fills it) and says
+# "More results may be available to logged in members"; Novi documents "technical
+# safeguards in place to help protect against robo-scrapers" on its directories. No
+# replacement public list endpoint could be identified, so a monthly run can only fail.
+# Checked 2026-10-30: robots.txt does not disallow /find-an-auctioneer (only /api/,
+# /novi-api/, /admin/, /login...; Crawl-delay 1 for ClaudeBot), and
+# www.auctioneers.org/legal/ has no scraping clause. sitemap.xml does list individual
+# public profiles (/find-an-auctioneer/<slug>, lastmod 2025-09-19) which a profile-page
+# parser could use instead -- not built yet. The 1,944 NAA organizers already ingested
+# (last created 2026-09-01) are unaffected.
+# To re-enable: find the directory's current XHR endpoint (browser dev tools on the
+# landing page), update DIRECTORY_ENDPOINT / the request body in
+# packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts, run this
+# workflow once by hand (workflow_dispatch), then restore the schedule below.
 on:
-  schedule:
-    - cron: '0 8 1 * *'  # 1st of each month at 08:00 UTC (membership directory — monthly refresh)
+  # schedule:
+  #   - cron: '0 8 1 * *'  # 1st of each month at 08:00 UTC (membership directory — monthly refresh)
   workflow_dispatch:
 
 jobs:

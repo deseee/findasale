@@ -10,6 +10,7 @@ import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { createNotification } from '../lib/notificationService';
 import { MAX_REMOVAL_SKIP_ATTEMPTS } from './extensionController';
 import { liveListingsByItemPlatform, livePlatformsByItem } from '../services/liveListingState'; // 2026-10-27: shared live-listing rule
+import { removalSkipStatsByItemPlatform } from '../utils/removalSkipStats'; // 2026-10-30: skips count only since the newest POST/POSTED
 import { executeVerifiedRefund, RefundError } from '../services/refundService';
 import { resolvePlatformRevenueDollars } from '../utils/feeCalculator'; // 2026-09-30: platform revenue from the stored fee snapshot (inclusive model), legacy 10/8 only for pre-2026-09-24 rows without a snapshot
 import { executeVerifiedSquareRefund } from '../services/squareRefundService'; // Square migration Wave 1 #4 (2026-09-07): one added branch in bulkRefundPurchases below routes SQUARE-processor purchases through the Square-side choke point.
@@ -2419,16 +2420,12 @@ export const getMarketplaceReviewBacklog = async (req: AuthRequest, res: Respons
     const skipCountByItemPlatform = new Map<string, number>();
     const lastSkipReasonByItemPlatform = new Map<string, string | null>();
     const lastSkipAtByItemPlatform = new Map<string, Date>();
-    for (const j of jobs) {
-      if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
-        const skipKey = j.itemId + ':' + j.platform;
-        skipCountByItemPlatform.set(skipKey, (skipCountByItemPlatform.get(skipKey) || 0) + 1);
-        lastSkipReasonByItemPlatform.set(skipKey, j.lastErrorMessage ?? null);
-        const attemptedAt = j.lastAttemptAt;
-        if (attemptedAt && (!lastSkipAtByItemPlatform.has(skipKey) || attemptedAt > lastSkipAtByItemPlatform.get(skipKey)!)) {
-          lastSkipAtByItemPlatform.set(skipKey, attemptedAt);
-        }
-      }
+    // 2026-10-30: same skip counter as getPendingRemovals (utils/removalSkipStats.ts) -- only skips since the newest
+    // POST/POSTED count, so a reposted listing is not kept in the backlog by failures against the old one.
+    for (const [skipKey, st] of removalSkipStatsByItemPlatform(jobs)) {
+      skipCountByItemPlatform.set(skipKey, st.count);
+      lastSkipReasonByItemPlatform.set(skipKey, st.lastReason);
+      if (st.lastAttemptAt) lastSkipAtByItemPlatform.set(skipKey, st.lastAttemptAt);
     }
 
     // Worst-affected stuck platform per item (highest skip count), plus all stuck platform names.

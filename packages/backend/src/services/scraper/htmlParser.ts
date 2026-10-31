@@ -116,62 +116,183 @@ export function parseEstateSalesNetListing(html: string): Partial<ParsedListing>
  *              (GarageSaleFinder hides street until sale day for some listings)
  */
 export function parseGarageSalesFinderListing(html: string): Partial<ParsedListing> | null {
+  return parseGarageSalesFinderListingWithReason(html).listing;
+}
+
+const GSF_MONTHS = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+];
+
+/** Parse a date-like string (ISO date / ISO datetime / "October 31, 2026"); date-only -> UTC midnight. */
+function gsfParseDate(raw: string | undefined | null): Date | null {
+  const v = (raw || '').trim();
+  if (!v) return null;
+  const iso = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3]));
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Fallback date extraction from visible text: weekday-prefixed dates such as
+ * "Saturday, October 31, 2026". Returns UTC-midnight dates (the same shape the old
+ * date-only microdata produced). Dates more than 31 days after the first match are ignored
+ * so a stray "posted"/comment date cannot stretch the range.
+ */
+export function gsfDatesFromText(text: string): { start: Date; end: Date } | null {
+  // No leading \b: cheerio .text() glues adjacent elements ("2:00 pmSunday, ...").
+  const re = /(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day,?\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})\b/gi;
+  const found: Date[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const month = GSF_MONTHS.indexOf(m[1].toLowerCase());
+    const day = Number(m[2]);
+    const year = Number(m[3]);
+    if (month < 0 || day < 1 || day > 31) continue;
+    found.push(new Date(Date.UTC(year, month, day)));
+  }
+  if (found.length === 0) return null;
+  const first = found[0].getTime();
+  const window = found.filter((d) => d.getTime() >= first - 31 * 86400000 && d.getTime() <= first + 31 * 86400000);
+  const times = window.map((d) => d.getTime());
+  return { start: new Date(Math.min(...times)), end: new Date(Math.max(...times)) };
+}
+
+/** Pull startDate/endDate out of any JSON-LD block (Event or @graph member). */
+function gsfDatesFromJsonLd($: cheerio.CheerioAPI): { start: Date; end: Date } | null {
+  let out: { start: Date; end: Date } | null = null;
+  $('script[type="application/ld+json"]').each((_, el) => {
+    if (out) return;
+    try {
+      const data = JSON.parse($(el).contents().text());
+      const nodes: any[] = Array.isArray(data) ? data : data && Array.isArray(data['@graph']) ? data['@graph'] : [data];
+      for (const n of nodes) {
+        const s = gsfParseDate(n && n.startDate);
+        const e = gsfParseDate(n && (n.endDate || n.startDate));
+        if (s && e) {
+          out = { start: s, end: e };
+          return;
+        }
+      }
+    } catch {
+      /* ignore malformed JSON-LD */
+    }
+  });
+  return out;
+}
+
+/** Split "Street, City, ST 12345" or "City, ST 12345" into parts; null when it does not match. */
+function gsfSplitAddress(text: string): { street: string; city: string; state: string; zip?: string } | null {
+  const t = text.replace(/\s+/g, ' ').trim();
+  const full = t.match(/^(.+?),\s*(.+?),\s*([A-Z]{2})\s+(\d{5})/);
+  if (full) return { street: full[1].trim(), city: full[2].trim(), state: full[3], zip: full[4] };
+  const partial = t.match(/^(.+?),\s*([A-Z]{2})\s+(\d{5})/);
+  if (partial) return { street: '', city: partial[1].trim(), state: partial[2], zip: partial[3] };
+  return null;
+}
+
+/**
+ * GarageSaleFinder detail-page parser with a failure reason.
+ *
+ * 2026-10-30: from the 2026-10-28 06:00 UTC run onward every detail page fetched 2xx but
+ * none parsed (itemsFailed = itemsFound on 10-28/29/30, 0 created) and the metro pages
+ * stopped exposing img[itemprop="image"] -- GSF removed or changed its schema.org
+ * microdata. The microdata selectors stay first (unchanged behaviour when present); each
+ * field now has a non-microdata fallback taken from markup the live page was confirmed to
+ * carry on 2026-10-30: og:title, the <title> tag ("58 Hyland Ave, East Greenwich, RI
+ * 02818 | 21811163 | GarageSaleFinder.com"), og:image/og:description, and visible
+ * weekday dates ("Saturday, October 31, 2026"). JSON-LD is also accepted if present.
+ */
+export function parseGarageSalesFinderListingWithReason(html: string): {
+  listing: Partial<ParsedListing> | null;
+  reason?: string;
+} {
   try {
     const $ = cheerio.load(html);
 
-    const title = $('h2[itemprop="name"]').text().trim();
-    // Strip HTML tags from address block before text extraction (hidden-address notice uses <br><small>)
+    const title =
+      $('h2[itemprop="name"]').first().text().trim() ||
+      ($('meta[property="og:title"]').attr('content') || '').trim() ||
+      $('h1').first().text().trim();
+    if (!title) return { listing: null, reason: 'no_title' };
+
+    // Address: microdata block first, then the <title> tag's first segment, then body text.
+    let addr: ReturnType<typeof gsfSplitAddress> = null;
     const addressRaw = $('[itemprop="address"]').text().trim().replace(/\s+/g, ' ');
     // Strip "* Address hidden..." notice so it doesn't pollute parsing
     const addressText = addressRaw.replace(/\*?\s*Address hidden[^.]*.\s*/i, '').trim();
-    const startDateStr = $('meta[itemprop="startDate"]').attr('content') ?? '';
-    const endDateStr = $('meta[itemprop="endDate"]').attr('content') ?? '';
-
-    if (!title || !addressText) return null;
-
-    let street: string = '';
-    let city: string;
-    let state: string;
-    let zip: string | undefined;
-
-    // Try full address first: "Street, City, ST 12345"
-    const fullMatch = addressText.match(/^(.+?),\s*(.+?),\s*([A-Z]{2})\s+(\d{5})/);
-    if (fullMatch) {
-      [, street, city, state, zip] = fullMatch;
-    } else {
-      // Fallback: hidden/partial address "City, ST 12345" (no street)
-      const partialMatch = addressText.match(/^(.+?),\s*([A-Z]{2})\s+(\d{5})/);
-      if (!partialMatch) return null;
-      [, city, state, zip] = partialMatch;
-      // city value may still have trailing noise — trim it
-      city = city.trim();
+    if (addressText) addr = gsfSplitAddress(addressText);
+    if (!addr) {
+      const docTitle = $('title').first().text().trim();
+      const firstSeg = docTitle.split('|')[0] || '';
+      addr = gsfSplitAddress(firstSeg);
     }
+    if (!addr) {
+      const bodyText = $('body').text().replace(/\s+/g, ' ');
+      const m = bodyText.match(/([A-Z][A-Za-z.'-]*(?: [A-Z][A-Za-z.'-]*){0,4}),\s*([A-Z]{2})\s+(\d{5})\b/);
+      if (m) addr = { street: '', city: m[1].trim(), state: m[2], zip: m[3] };
+    }
+    if (!addr) return { listing: null, reason: 'no_address' };
 
-    if (!startDateStr || !endDateStr) return null;
-    const startDate = new Date(startDateStr);
-    const endDate = new Date(endDateStr);
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
+    // Dates: microdata (meta or element) -> JSON-LD -> visible weekday dates.
+    const itemStart =
+      $('meta[itemprop="startDate"]').attr('content') ||
+      $('[itemprop="startDate"]').attr('content') ||
+      $('[itemprop="startDate"]').attr('datetime');
+    const itemEnd =
+      $('meta[itemprop="endDate"]').attr('content') ||
+      $('[itemprop="endDate"]').attr('content') ||
+      $('[itemprop="endDate"]').attr('datetime');
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+    if (itemStart && itemEnd) {
+      startDate = new Date(itemStart);
+      endDate = new Date(itemEnd);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return { listing: null, reason: 'bad_microdata_date' };
+      }
+    } else {
+      const ld = gsfDatesFromJsonLd($);
+      const fromText = ld ?? gsfDatesFromText($('body').text().replace(/\s+/g, ' '));
+      if (fromText) {
+        startDate = fromText.start;
+        endDate = fromText.end;
+      }
+    }
+    if (!startDate || !endDate) return { listing: null, reason: 'no_dates' };
 
-    const photoUrls: string[] = $('img[itemprop="image"]')
+    let photoUrls: string[] = $('img[itemprop="image"]')
       .map((_, el) => $(el).attr('src'))
       .get()
       .filter((src): src is string => !!src);
+    if (photoUrls.length === 0) {
+      const og = ($('meta[property="og:image"]').attr('content') || '').trim();
+      if (og) photoUrls = [og];
+    }
+
+    const description =
+      $('[itemprop="description"].description').text().trim() ||
+      ($('meta[property="og:description"]').attr('content') || '').trim() ||
+      undefined;
 
     return {
-      title,
-      address: street,   // empty string for hidden-address listings — allowed by ingestScrapedListing
-      city,
-      state,
-      zip,
-      startDate,
-      endDate,
-      description: $('[itemprop="description"].description').text().trim() || undefined,
-      photoUrls: photoUrls.length > 0 ? photoUrls.slice(0, 5) : undefined,
-      saleType: 'YARD',
+      listing: {
+        title,
+        address: addr.street, // empty string for hidden-address listings — allowed by ingestScrapedListing
+        city: addr.city,
+        state: addr.state,
+        zip: addr.zip,
+        startDate,
+        endDate,
+        description,
+        photoUrls: photoUrls.length > 0 ? photoUrls.slice(0, 5) : undefined,
+        saleType: 'YARD',
+      },
     };
   } catch (error) {
     console.error('Error parsing GarageSaleFinder listing:', error);
-    return null;
+    return { listing: null, reason: 'exception' };
   }
 }
 

@@ -580,6 +580,7 @@ router.get('/city-slugs', async (req, res) => {
     return res.json({ slugs, total: slugs.length });
   } catch (err) {
     console.error('[sales/city-slugs] error:', err);
+    if (res.headersSent) return; // Sentry FINDASALE-NODEJS-91: the request timeout already answered 503
     return res.status(500).json({ error: 'Failed to fetch city slugs' });
   }
 });

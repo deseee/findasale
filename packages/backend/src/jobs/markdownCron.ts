@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { cronGuard } from '../utils/cronGuard';
 import { notifyPriceDropAlerts } from '../services/priceDropService';
 import { applyCharmPricing } from '../utils/charmPricing';
+import { recordItemPriceHistory } from '../utils/itemPriceHistory';
 
 /**
  * Auto-apply markdown to items based on sale age.
@@ -22,9 +23,22 @@ import { applyCharmPricing } from '../utils/charmPricing';
  * intentionally no organizer-tier filter here. Only markdown CYCLES (markdownCycleCron.ts) and
  * marketplace price propagation are PRO/TEAMS.
  *
- * Known overlap (not fixed here): if a sale is covered by both this cron and an active PRO
- * MarkdownCycle, both can discount the same item (this cron works off the current price, the
- * cycle off priceBeforeMarkdown), so the price can be cut twice.
+ * 2026-10-30 (owner rules: markdowns land on the nearest keystone .49/.99; a manual organizer price is the true
+ * price; excludeFromMarkdown items are never marked down):
+ *  - Every tier is computed from the ORIGINAL pre-markdown price (priceBeforeMarkdown ?? price), never the
+ *    current price. Before this, Day-3's 75% was taken off Day-2's already-halved price ($20 -> $9.99 -> $2.49
+ *    instead of $4.99) and Day-3 overwrote priceBeforeMarkdown with the Day-2 price. priceBeforeMarkdown is now
+ *    written only when it is null (the first step) and never overwritten by a later step. A manual organizer
+ *    price edit clears it (utils/itemPriceHistory.ts MANUAL_PRICE_MARKDOWN_CLEAR), so a later tier then anchors on
+ *    the organizer's price.
+ *  - One mechanism per item: this cron never touches an item a MarkdownCycle step has been applied to
+ *    (markdownStepIndexApplied > 0) and markdownCycleCron never touches an item this cron has tiered
+ *    (markdownTierApplied > 0). Both conditions sit in the query AND in the conditional write (updateMany WHERE),
+ *    so the two crons cannot both cut one item even when they run at the same moment. Turning
+ *    "Keep out of automatic markdowns" on resets both pointers (EXCLUDE_MARKDOWN_RESET).
+ *  - Every price write records an ItemPriceHistory row via recordItemPriceHistory (never throws).
+ *  - A computed price that is not below the current one is never written (no price increase): the tier is
+ *    stamped and nothing else happens.
  *
  * Runs every 5 minutes.
  */
@@ -101,15 +115,20 @@ export function scheduleMarkdownCron(): void {
             markdownTierApplied: { lt: targetTier },
             price: { gt: 0 }, // Only items with a price
             excludeFromMarkdown: false, // ADR item-exclude-from-markdown (2026-09-28): organizer opt-out
+            // 2026-10-30: never an item a PRO MarkdownCycle step already marked down (one mechanism per item).
+            OR: [{ markdownStepIndexApplied: null }, { markdownStepIndexApplied: 0 }],
           },
           select: {
             id: true,
             price: true,
+            priceBeforeMarkdown: true,
           },
         });
 
         for (const item of itemsToMarkdown) {
-          const originalPrice = item.price!;
+          const currentPrice = item.price!;
+          // 2026-10-30: the ORIGINAL pre-markdown price, captured once at the first tier and never overwritten.
+          const originalPrice = item.priceBeforeMarkdown ?? currentPrice;
           // ADR-128 follow-up (2026-09-19): add eBay's own $0.99 minimum-price floor alongside
           // the organizer's own markdownFloor -- an organizer-set floor of $0 (or none) used to
           // let this cron compute a sub-$0.99 price that eBay silently rejects forever after.
@@ -122,12 +141,31 @@ export function scheduleMarkdownCron(): void {
             0.99
           );
 
-          // Update item
-          await prisma.item.update({
-            where: { id: item.id },
+          // 2026-10-30: the conditional write is the cross-cron lock -- it lands only while the item is still
+          // untouched by a MarkdownCycle step, below this tier, still eligible, and at the price read above
+          // (an organizer edit or the cycle cron in between makes it a no-op instead of a second cut).
+          const lockWhere = {
+            id: item.id,
+            status: 'AVAILABLE' as const,
+            deletedAt: null,
+            excludeFromMarkdown: false,
+            markdownTierApplied: { lt: targetTier },
+            OR: [{ markdownStepIndexApplied: null }, { markdownStepIndexApplied: 0 }],
+          };
+
+          if (newPrice >= currentPrice - 0.005) {
+            // Already at (or below) this tier's price, e.g. the floor: stamp the tier, no price write, no
+            // history row, no alert. Never raises a price.
+            await prisma.item.updateMany({ where: lockWhere, data: { markdownTierApplied: targetTier } });
+            continue;
+          }
+
+          const written = await prisma.item.updateMany({
+            where: { ...lockWhere, price: currentPrice },
             data: {
               price: newPrice,
-              priceBeforeMarkdown: originalPrice,
+              // Set once (first tier); a later tier leaves the original in place.
+              ...(item.priceBeforeMarkdown == null ? { priceBeforeMarkdown: originalPrice } : {}),
               // markdownTierApplied is this cron's own tier-progress counter (fixes the stuck-
               // at-one-tier bug above). markdownApplied is kept in lockstep (always true from
               // tier 1 onward) purely so markdownCycleCron.ts, itemController.ts's manual-edit
@@ -143,20 +181,18 @@ export function scheduleMarkdownCron(): void {
               markdownPhysicallyAppliedAt: null,
             },
           });
+          if (written.count === 0) continue; // lost the race (cycle cron, organizer edit, status change)
 
-          // Record price history
-          await prisma.itemPriceHistory.create({
-            data: {
-              itemId: item.id,
-              price: newPrice,
-              changedBy: 'markdown',
-              note: `Day ${Math.floor(dayOffset) + 1} markdown (tier ${targetTier}, ${(discount * 100).toFixed(0)}% off)`,
-            },
+          await recordItemPriceHistory(prisma, {
+            itemId: item.id,
+            price: newPrice,
+            changedBy: 'markdown',
+            note: `Day ${Math.floor(dayOffset) + 1} markdown (tier ${targetTier}, ${(discount * 100).toFixed(0)}% off original $${originalPrice.toFixed(2)})`,
           });
 
           // Tell anyone who favorited this item that its price just dropped —
           // reuses the same alert used for manual organizer price edits.
-          notifyPriceDropAlerts(item.id, originalPrice, newPrice).catch(err =>
+          notifyPriceDropAlerts(item.id, currentPrice, newPrice).catch(err =>
             console.warn(`[markdown-cron] price drop alert failed for item ${item.id}:`, err)
           );
 

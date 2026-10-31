@@ -26,6 +26,13 @@ import Skeleton from './Skeleton';
  * 1.0.71 (2026-10-27, Patrick): the 1.0.69 certify buttons for oversized holds are gone. The extension never clicks
  * Publish Listing in Poshmark's flag box; for an oversized hold the card tells the organizer to click it themselves.
  *
+ * 2026-10-30 (Patrick did not see "Try again on Poshmark" for 3 held Neo Geo carts and re-selected them by hand): the
+ * buttons were in the page text but easy to miss. The held list sat at the bottom of a long install page, inside this
+ * card after the toggles, and each "Try again on Poshmark" was a small text link. Now: HeldBackNotice (exported below)
+ * puts an amber notice near the top of the page with a jump link, the held list is an amber callout, both buttons are
+ * full-size buttons (44px tap targets), each row stacks on phones, and a #auto-queue-held link scrolls to the list
+ * once it has loaded. useAutoQueueData shares the card's query, so the notice adds no extra request.
+ *
  * Types are local on purpose (a @findasale/shared import breaks the Vercel build).
  */
 
@@ -91,14 +98,71 @@ const HELD_KIND_LABEL: Record<string, string> = {
   edit: 'Poshmark needs you to confirm this edit',
 };
 
-const AutoQueueCard: React.FC = () => {
-  const queryClient = useQueryClient();
-
-  const { data, isLoading, isError, refetch } = useQuery<AutoQueueData>({
+// 2026-10-30: the card and HeldBackNotice share this query (same key), so the page makes one request.
+export const useAutoQueueData = () =>
+  useQuery<AutoQueueData>({
     queryKey: QUERY_KEY,
     queryFn: async () => toData((await api.get(ENDPOINT)).data),
     staleTime: 30 * 1000,
   });
+
+const HELD_ANCHOR = 'auto-queue-held';
+const heldNotEdit = (d: AutoQueueData | undefined): HeldItem[] =>
+  d ? d.extension.heldFlagged.filter((h) => h.kind !== 'edit') : [];
+const scrollToHeld = () => {
+  if (typeof document === 'undefined') return;
+  const el = document.getElementById(HELD_ANCHOR);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+/**
+ * 2026-10-30: amber notice for the top of pages/organizer/marketplace-extension.tsx when items are held back from
+ * Poshmark, with a link that jumps to the held list in the Auto queue card. Renders nothing otherwise.
+ */
+export const HeldBackNotice: React.FC = () => {
+  const { data } = useAutoQueueData();
+  const held = heldNotEdit(data);
+  if (!held.length) return null;
+  return (
+    <div
+      className="mb-8 rounded-lg border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/30 p-4 text-sm text-warm-900 dark:text-amber-50"
+      role="status"
+      data-testid="held-back-notice"
+    >
+      <p className="font-semibold">
+        {held.length === 1 ? '1 item is' : held.length + ' items are'} held back from Poshmark.
+      </p>
+      <p className="mt-1 text-warm-700 dark:text-amber-100">
+        Poshmark flagged {held.length === 1 ? 'it' : 'them'}, so the auto queue is not offering{' '}
+        {held.length === 1 ? 'it' : 'them'} to Poshmark. You can send {held.length === 1 ? 'it' : 'them'} to Poshmark again.
+      </p>
+      <a
+        href={'#' + HELD_ANCHOR}
+        onClick={(e) => {
+          e.preventDefault();
+          scrollToHeld();
+          if (typeof window !== 'undefined') window.history.replaceState(null, '', '#' + HELD_ANCHOR);
+        }}
+        className="mt-3 inline-flex min-h-[44px] items-center rounded-md bg-amber-600 hover:bg-amber-700 px-4 py-2 text-sm font-semibold text-white"
+      >
+        Review and try again on Poshmark
+      </a>
+    </div>
+  );
+};
+
+const AutoQueueCard: React.FC = () => {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, isError, refetch } = useAutoQueueData();
+
+  // 2026-10-30: a #auto-queue-held link (the notice above, or a shared link) lands on the held list once it exists.
+  // The browser's own hash jump runs before this data loads, when the list is not on the page yet.
+  const heldCount = heldNotEdit(data).length;
+  useEffect(() => {
+    if (!heldCount || typeof window === 'undefined') return;
+    if (window.location.hash === '#' + HELD_ANCHOR) scrollToHeld();
+  }, [heldCount]);
 
   const toggle = useMutation({
     mutationFn: async (vars: { key: Platform; value: boolean }) =>
@@ -316,31 +380,33 @@ const AutoQueueCard: React.FC = () => {
           </div>
         )}
 
-        {!isLoading && !isError && data && data.extension.heldFlagged.some((h) => h.kind !== 'edit') && (
-          <div className="mt-6 pt-4 border-t border-warm-200 dark:border-gray-700" id="auto-queue-held">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h4 className="text-sm font-semibold text-warm-900 dark:text-gray-100">
-                Held back from Poshmark ({data.extension.heldFlagged.filter((h) => h.kind !== 'edit').length})
+        {!isLoading && !isError && data && heldCount > 0 && (
+          <div
+            className="mt-6 scroll-mt-24 rounded-lg border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 p-4"
+            id={HELD_ANCHOR}
+            data-testid="auto-queue-held"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h4 className="text-base font-semibold text-warm-900 dark:text-gray-100">
+                Held back from Poshmark ({heldCount})
               </h4>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => releaseHolds.mutate({ all: true })}
-                  disabled={releaseHolds.isPending}
-                  className="rounded-md border border-warm-300 dark:border-gray-600 px-3 py-1.5 text-xs font-medium text-warm-800 dark:text-gray-200 disabled:opacity-60"
-                >
-                  Try all again
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => releaseHolds.mutate({ all: true })}
+                disabled={releaseHolds.isPending}
+                className="inline-flex min-h-[44px] items-center rounded-md bg-amber-600 hover:bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {releaseHolds.isPending ? 'Saving...' : 'Try all again'}
+              </button>
             </div>
-            <p className="text-xs text-warm-600 dark:text-gray-400 mt-1 mb-3 leading-relaxed">
+            <p className="text-sm text-warm-700 dark:text-gray-300 mt-2 mb-3 leading-relaxed">
               Poshmark&apos;s own listing check flagged these items, so the auto queue does not offer them to Poshmark
               again for 30 days from the flag. Other marketplaces are not affected. If an item is fine for Poshmark, use
               Try again and the extension offers it to Poshmark on its next check. If Poshmark flags it again, the
               extension leaves that tab open for you to decide, and holds it again if you skip it.
             </p>
             {data.extension.heldFlagged.some((h) => h.kind === 'oversized') && (
-              <p className="text-xs text-warm-600 dark:text-gray-400 -mt-1 mb-3 leading-relaxed">
+              <p className="text-sm text-warm-700 dark:text-gray-300 mb-3 leading-relaxed">
                 Poshmark flagged these as possibly oversized. Its box still says 10 lb max, but its labels now go past
                 15 lb and the seller pays for heavier ones out of earnings: $5 for 5-10 lb, $10 for 10-15 lb, $15 for
                 15-25 lb, and the full shipping cost over 25 lb. If the package is under 108 inches (length plus girth)
@@ -348,28 +414,27 @@ const AutoQueueCard: React.FC = () => {
               </p>
             )}
             {releaseError && (
-              <p className="text-xs text-red-600 dark:text-red-400 mb-2" role="alert">{releaseError}</p>
+              <p className="text-sm text-red-700 dark:text-red-300 mb-2" role="alert">{releaseError}</p>
             )}
-            <ul className="divide-y divide-warm-200 dark:divide-gray-700">
-              {data.extension.heldFlagged.filter((h) => h.kind !== 'edit').map((h) => (
-                <li key={h.itemId} className="py-2 text-sm flex items-start justify-between gap-3">
+            <ul className="divide-y divide-amber-200 dark:divide-amber-800/60">
+              {heldNotEdit(data).map((h) => (
+                <li key={h.itemId} className="py-3 text-sm flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <span className="min-w-0">
-                    <span className="font-medium text-warm-900 dark:text-gray-100">{h.title}</span>
+                    <span className="font-medium text-warm-900 dark:text-gray-100 break-words">{h.title}</span>
                     <span className="block text-xs text-warm-600 dark:text-gray-400">
                       {HELD_KIND_LABEL[h.kind] || 'Poshmark flagged it'}
                       {formatWhen(h.at) ? ' on ' + formatWhen(h.at) : ''}
                     </span>
                   </span>
-                  <span className="shrink-0 flex flex-col items-end gap-1">
-                    <button
-                      type="button"
-                      onClick={() => releaseHolds.mutate({ itemIds: [h.itemId] })}
-                      disabled={releaseHolds.isPending}
-                      className="text-xs font-medium text-amber-600 hover:underline disabled:opacity-60"
-                    >
-                      Try again on Poshmark
-                    </button>
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => releaseHolds.mutate({ itemIds: [h.itemId] })}
+                    disabled={releaseHolds.isPending}
+                    aria-label={'Try again on Poshmark: ' + h.title}
+                    className="shrink-0 self-start sm:self-auto inline-flex min-h-[44px] items-center justify-center rounded-md border-2 border-amber-600 bg-white dark:bg-gray-900 hover:bg-amber-100 dark:hover:bg-gray-800 px-4 py-2 text-sm font-semibold text-amber-800 dark:text-amber-200 disabled:opacity-60"
+                  >
+                    Try again on Poshmark
+                  </button>
                 </li>
               ))}
             </ul>

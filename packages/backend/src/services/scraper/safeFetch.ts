@@ -22,7 +22,7 @@
  */
 
 import * as Sentry from '@sentry/node';
-import { getBreakerDecision, recordOutcome } from './domainFetchState';
+import { getBreakerDecision, recordOutcome, domainKey } from './domainFetchState';
 import { defaultRateLimiter } from './rateLimiter';
 
 export type SafeFetchStatus =
@@ -39,6 +39,19 @@ export interface SafeFetchOptions {
   body?: any;
   /** Override the default 15s fetch timeout for callers with different SLAs. */
   timeoutMs?: number;
+  /**
+   * Domain breaker policy (2026-10-30). 'strict' (default, unchanged behaviour): any
+   * 429/503/403/404 records a domain failure, and a self-imposed hourly-cap breach also
+   * records one. 'tolerant': for multi-page aggregator sources (GarageSaleFinder) where a
+   * single dead listing page or our own hourly cap must not cool the whole domain down.
+   * See TOLERANT POLICY below.
+   */
+  breakerPolicy?: 'strict' | 'tolerant';
+  /**
+   * Tolerant policy only: the sub-area this request belongs to (e.g. a metro slug). Soft
+   * failures only trip the domain breaker once they span several distinct scopes.
+   */
+  breakerScope?: string;
 }
 
 export interface SafeFetchResult {
@@ -61,6 +74,59 @@ const FETCH_TIMEOUT_MS = 15_000;
 // was false-incident noise. Add a host here ONLY after confirming the same way — do not
 // preemptively add hosts that haven't been checked.
 const KNOWN_SELF_HEALING_CAP_HOSTS = new Set<string>(['garagesalefinder.com']);
+
+// ---------------------------------------------------------------------------
+// TOLERANT POLICY (2026-10-30, GarageSaleFinder blank-harvest incident)
+// ---------------------------------------------------------------------------
+// On 2026-10-29 and 2026-10-30 the 06:00 UTC GarageSaleFinder run tripped the single
+// shared garagesalefinder.com DomainFetchState row ~6 minutes in (the 10-30 trigger was
+// our own SKIPPED_CAP at 06:05:52), which put the whole domain in a 6h COOLDOWN and
+// skipped the remaining ~300 of 351 metros. Under 'tolerant':
+//   - Real block signals (429, 503, 403) still record a domain failure immediately.
+//   - Our own hourly-cap breach does NOT record a domain failure (the host did nothing
+//     wrong; the in-process cap already stops further requests for the rest of the hour).
+//   - Soft failures (404, other non-2xx, network errors/timeouts) only record a domain
+//     failure once the CONSECUTIVE soft-failure streak reaches TOLERANT_MIN_ATTEMPTS
+//     AND spans at least TOLERANT_MIN_DISTINCT_SCOPES distinct scopes (metros). Any 2xx
+//     resets the streak. After a trip the streak restarts, so the floor applies again.
+export const TOLERANT_MIN_ATTEMPTS = 10;
+export const TOLERANT_MIN_DISTINCT_SCOPES = 3;
+
+interface SoftStreak {
+  count: number;
+  scopes: Set<string>;
+}
+/** domainKey -> consecutive soft-failure streak (process-local). */
+const softStreaks: Map<string, SoftStreak> = new Map();
+
+/** Test-only: reset the process-local tolerant-policy and cap state. */
+export function __resetSafeFetchStateForTests(): void {
+  softStreaks.clear();
+  hostCounters.clear();
+}
+
+/**
+ * Record a soft failure under the tolerant policy. Returns true when the streak crossed
+ * both floors, i.e. the caller must record a real domain failure now.
+ */
+export function noteSoftFailure(url: string, scope: string | undefined): boolean {
+  const key = domainKey(url) ?? resolveHost(url) ?? url;
+  const streak = softStreaks.get(key) ?? { count: 0, scopes: new Set<string>() };
+  streak.count += 1;
+  streak.scopes.add(scope || '(none)');
+  softStreaks.set(key, streak);
+  if (streak.count >= TOLERANT_MIN_ATTEMPTS && streak.scopes.size >= TOLERANT_MIN_DISTINCT_SCOPES) {
+    softStreaks.delete(key);
+    return true;
+  }
+  return false;
+}
+
+/** Reset the soft-failure streak for a domain (any 2xx). */
+export function noteSoftSuccess(url: string): void {
+  const key = domainKey(url) ?? resolveHost(url) ?? url;
+  softStreaks.delete(key);
+}
 
 /** Module-level monitoring counter: host -> { count, windowStart }. */
 const hostCounters: Map<string, { count: number; windowStart: number }> = new Map();
@@ -98,6 +164,7 @@ export async function safeFetch(
   opts: SafeFetchOptions = {}
 ): Promise<SafeFetchResult> {
   const host = resolveHost(url) ?? url;
+  const tolerant = opts.breakerPolicy === 'tolerant';
 
   // 1) Circuit-breaker consult (fail open on infra error).
   try {
@@ -117,7 +184,8 @@ export async function safeFetch(
   if (count > CAP) {
     try {
       defaultRateLimiter.recordBackoff(host, 3600);
-      await recordOutcome(url, false);
+      // Tolerant: our own cap is not a host failure — never cool the domain down for it.
+      if (!tolerant) await recordOutcome(url, false);
     } catch (err) {
       console.warn(
         `[safeFetch] cap-breach bookkeeping failed for ${host}:`,
@@ -166,12 +234,26 @@ export async function safeFetch(
   }
 
   // Execute the fetch with a hard timeout (caller-overridable, defaults to 15s).
-  const response = await fetch(fetchUrl, {
-    method: opts.method,
-    headers: fetchHeaders,
-    body: opts.body,
-    signal: AbortSignal.timeout(opts.timeoutMs ?? FETCH_TIMEOUT_MS),
-  });
+  let response: Response;
+  try {
+    response = await fetch(fetchUrl, {
+      method: opts.method,
+      headers: fetchHeaders,
+      body: opts.body,
+      signal: AbortSignal.timeout(opts.timeoutMs ?? FETCH_TIMEOUT_MS),
+    });
+  } catch (err) {
+    // Network error / timeout: a soft failure under the tolerant policy. Strict keeps the
+    // historical behaviour (no bookkeeping). Either way the error propagates to the caller.
+    if (tolerant && noteSoftFailure(url, opts.breakerScope)) {
+      try {
+        await recordOutcome(url, false);
+      } catch {
+        /* fail open */
+      }
+    }
+    throw err;
+  }
 
   // 5) Response handling + breaker bookkeeping (fail open on bookkeeping errors).
   try {
@@ -183,12 +265,20 @@ export async function safeFetch(
           ? retryAfterSeconds
           : 3600;
       defaultRateLimiter.recordBackoff(host, backoff);
+      if (tolerant) noteSoftSuccess(url); // the hard signal itself is recorded below
       await recordOutcome(url, false);
-    } else if (response.status === 403 || response.status === 404) {
+    } else if (response.status === 403) {
+      if (tolerant) noteSoftSuccess(url);
       await recordOutcome(url, false);
     } else if (response.ok) {
+      if (tolerant) noteSoftSuccess(url);
       await recordOutcome(url, true);
       defaultRateLimiter.clearBackoff(host);
+    } else if (tolerant) {
+      // 404 / other non-2xx: page-level, not proof the host is down.
+      if (noteSoftFailure(url, opts.breakerScope)) await recordOutcome(url, false);
+    } else if (response.status === 404) {
+      await recordOutcome(url, false);
     }
   } catch (err) {
     console.warn(

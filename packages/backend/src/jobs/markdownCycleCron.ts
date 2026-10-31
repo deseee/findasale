@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { cronGuard } from '../utils/cronGuard';
 import { notifyPriceDropAlerts } from '../services/priceDropService';
 import { applyCharmPricing } from '../utils/charmPricing';
+import { recordItemPriceHistory } from '../utils/itemPriceHistory';
 import {
   classifyPropagationFailure,
   resolveSyncStateAfterFailure,
@@ -56,8 +57,9 @@ const MANUAL_RESCHEDULE_2026_09_28 = new Set<string>([
  *    (Item.markdownStepIndexApplied -- null treated as 0). Every markdown percentage is off the
  *    ORIGINAL price (Item.priceBeforeMarkdown, captured once at the first-ever step applied),
  *    never cumulative -- unchanged from before.
- * 4. Per-item update (never updateMany -- each item needs its own current price and its own
- *    computed new price).
+ * 4. Per-item write (each item needs its own current price and its own computed new price). Since
+ *    2026-10-30 it is an updateMany scoped to that one id plus guard conditions, so it is a no-op when
+ *    markdownCron.ts (or an organizer edit) got to the item first.
  * 5. Log counts.
  *
  * Runs nightly at 3:00 AM UTC (after shopAutoRenewJob at 1:00 AM UTC, before reverseAuctionJob at 6:00 AM UTC)
@@ -107,6 +109,11 @@ export function scheduleMarkdownCycleCron(): void {
             status: 'AVAILABLE',
             price: { gt: 0 }, // Only items with a price
             excludeFromMarkdown: false, // ADR item-exclude-from-markdown (2026-09-28): organizer opt-out
+            deletedAt: null,
+            // 2026-10-30: one mechanism per item -- never an item the free Day-2/Day-3 cron (markdownCron.ts) has
+            // already tiered. That cron in turn skips items a cycle step has been applied to, and both writes
+            // below repeat the condition, so the two crons can never both cut the same item.
+            markdownTierApplied: 0,
           };
 
           if (cycle.saleId) {
@@ -202,15 +209,24 @@ export function scheduleMarkdownCycleCron(): void {
               // marked down under the OLD 2-step logic (or a previous run of this same loop)
               // is already sitting at this step's target price. Just stamp the pointer --
               // no price write, no history row, no alert, no marketplace push.
-              await prisma.item.update({
-                where: { id: item.id },
+              await prisma.item.updateMany({
+                where: { id: item.id, markdownTierApplied: 0, markdownStepIndexApplied: item.markdownStepIndexApplied },
                 data: { markdownStepIndexApplied: targetStep.stepOrder },
               });
               continue;
             }
 
-            await prisma.item.update({
-              where: { id: item.id },
+            // 2026-10-30: conditional write = the cross-cron lock (see itemFilter above). It lands only while the item
+            // is still untiered by markdownCron.ts, still at the step and price read above, and still eligible.
+            const written = await prisma.item.updateMany({
+              where: {
+                id: item.id,
+                status: 'AVAILABLE',
+                excludeFromMarkdown: false,
+                markdownTierApplied: 0,
+                markdownStepIndexApplied: item.markdownStepIndexApplied,
+                price: currentPrice,
+              },
               data: {
                 priceBeforeMarkdown: originalPrice,
                 price: newPrice,
@@ -232,24 +248,16 @@ export function scheduleMarkdownCycleCron(): void {
                   : {}),
               },
             });
+            if (written.count === 0) continue; // lost the race (markdownCron.ts, organizer edit, status change)
 
-            // Audit trail: every markdown step writes an ItemPriceHistory row. Wrapped so a
-            // history-write failure can never break the markdown loop itself.
-            try {
-              await prisma.itemPriceHistory.create({
-                data: {
-                  itemId: item.id,
-                  price: newPrice,
-                  changedBy: 'markdown',
-                  note: `Markdown step ${targetStep.stepOrder} (${effectivePct}% off, cycle ${cycle.id})`,
-                },
-              });
-            } catch (historyErr) {
-              console.warn(
-                `[markdown-cycle-cron] price history write failed for item ${item.id}:`,
-                historyErr
-              );
-            }
+            // Audit trail: every markdown step writes an ItemPriceHistory row (recordItemPriceHistory never throws,
+            // so a history-write failure can never break the markdown loop itself).
+            await recordItemPriceHistory(prisma, {
+              itemId: item.id,
+              price: newPrice,
+              changedBy: 'markdown',
+              note: `Markdown step ${targetStep.stepOrder} (${effectivePct}% off original $${originalPrice.toFixed(2)}, cycle ${cycle.id})`,
+            });
 
             // Tell anyone who favorited this item that its price just dropped.
             notifyPriceDropAlerts(item.id, currentPrice, newPrice).catch(err =>

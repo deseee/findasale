@@ -539,6 +539,60 @@
     });
     return out;
   }
+
+  // 1.0.85: the same pre-save guard for every other edit path (Mercari, Grailed, Craigslist, Gumtree AU, Facebook).
+  // Title limits each marketplace applies to a FindA.Sale title when it is posted: Mercari maxlength 80 (fas-mercari.js),
+  // Grailed 60 cut at a word (truncateGrailedTitle, fas-grailed.js), Craigslist 70 (fas-craigslist-removal-frame.js, live 1.0.82),
+  // Facebook 100 and Gumtree AU 65 [unverified: no FindA.Sale poster truncates for them]. A truncated title only matches as a
+  // pure prefix of the item title that is at most a couple of characters off the limit (never a loose prefix).
+  var TITLE_LIMITS = { MERCARI: 80, GRAILED: 60, CRAIGSLIST: 70, GUMTREE_AU: 65, FACEBOOK: 100, POSHMARK: 80 };
+  function truncAtWord(t, max) {
+    var s = String(t == null ? '' : t);
+    if (s.length <= max) return s;
+    var cut = s.slice(0, max), sp = cut.lastIndexOf(' ');
+    return (sp > 0 ? cut.slice(0, sp) : cut).replace(/\s+$/, '');
+  }
+  function titleEqualsFor(platform, candidateText, wanted) {
+    if (platform === 'POSHMARK') return titleEqualsPoshmark(candidateText, wanted);
+    var w = String(wanted == null ? '' : wanted), lim = TITLE_LIMITS[platform] || 0;
+    var vs = [w];
+    if (lim && w.length > lim) { vs.push(w.slice(0, lim)); vs.push(truncAtWord(w, lim)); }
+    if (vs.some(function (v) { return titleEquals(candidateText, v); })) return true;
+    if (!lim) return false;
+    var fw = foldTitle(w).replace(/\s*\.{3,}\s*$/, '');
+    if (fw.length <= lim) return false;
+    return [foldTitle(candidateText).replace(/\s*\.{3,}\s*$/, ''), cleanCandidateTitle(candidateText)].some(function (c) {
+      return !!c && c.length >= Math.max(MIN_TITLE, lim - 15) && c.length <= lim + 2 && c.length < fw.length && fw.indexOf(c) === 0;
+    });
+  }
+  // The item's own saved listing id on `platform`, normalized ('' when none or unparseable). Craigslist also keeps it in listingRefs.
+  function savedListingId(platform, item) {
+    var raw = item && item.remoteListingId;
+    if (!raw && platform === 'CRAIGSLIST' && item && item.listingRefs) raw = item.listingRefs.CRAIGSLIST;
+    raw = raw == null ? '' : String(raw).trim();
+    return raw ? extractIdFromUrl(platform, raw) : '';
+  }
+  // May a price/stock save go to `targetId` (the listing whose edit page is open; '' when unknown) for `item`?
+  //  - the item's own saved remoteListingId is always allowed (a damaged listing can be repaired; the title is never written)
+  //  - an item with a saved id may not touch a different known id (remote_id_mismatch)
+  //  - otherwise the listing's CURRENT title must equal the item's title (platform truncation allowed), else listing_title_mismatch
+  // Callers clear the target id from scratch on a refusal, so a refused id is never cached.
+  function editTargetCheck(platform, item, targetId, listingTitle) {
+    if (platform === 'POSHMARK') return poshEditTargetCheck(item, targetId, listingTitle);
+    var L = LABELS[platform] || platform;
+    var saved = savedListingId(platform, item);
+    var rawT = targetId == null ? '' : String(targetId).trim();
+    var tid = rawT ? (extractIdFromUrl(platform, rawT) || rawT.toLowerCase()) : '';
+    if (saved && tid) {
+      if (tid === saved) return { ok: true, own: true };
+      return { ok: false, own: false, code: 'remote_id_mismatch', reason: L + ' listing ...' + tid.slice(-6) + ' is not this item\'s saved listing (...' + saved.slice(-6) + '); nothing was saved' };
+    }
+    var t = String(listingTitle == null ? '' : listingTitle).trim();
+    var where = tid ? ' ...' + tid.slice(-6) : '';
+    if (!t) return { ok: false, own: false, code: 'listing_title_mismatch', reason: 'Could not read the current title of the ' + L + ' listing' + where + ', so it cannot be proven to be this item\'s; nothing was saved' };
+    if (titleEqualsFor(platform, t, item && item.title)) return { ok: true, own: false };
+    return { ok: false, own: false, code: 'listing_title_mismatch', reason: L + ' listing' + where + ' is titled "' + t.slice(0, 80) + '", not this item\'s title; nothing was saved' };
+  }
   function sizeQty(p) {
     var sq = p && p.inventory && Array.isArray(p.inventory.size_quantities) ? p.inventory.size_quantities : [];
     return sq.map(function (s) { return [s.size_id, s.quantity_available]; });
@@ -728,7 +782,7 @@
     poshmarkCartTitle: poshmarkCartTitle, poshmarkTitleVariants: poshmarkTitleVariants, titleEqualsPoshmark: titleEqualsPoshmark, poshmarkSearchTitle: poshmarkSearchTitle,
     extractIdFromUrl: extractIdFromUrl, startUrl: startUrl, craigslistPageUrl: craigslistPageUrl,
     isPoshmarkErrorPayload: isPoshmarkErrorPayload, unwrapPoshmarkPost: unwrapPoshmarkPost, poshmarkPriceVal: poshmarkPriceVal,
-    buildPoshmarkUpdate: buildPoshmarkUpdate, poshmarkCollateralDiff: poshmarkCollateralDiff, poshEditTargetCheck: poshEditTargetCheck, poshmarkUpdateTouched: poshmarkUpdateTouched, poshmarkQuantity: poshmarkQuantity,
+    buildPoshmarkUpdate: buildPoshmarkUpdate, poshmarkCollateralDiff: poshmarkCollateralDiff, poshEditTargetCheck: poshEditTargetCheck, poshmarkUpdateTouched: poshmarkUpdateTouched, TITLE_LIMITS: TITLE_LIMITS, titleEqualsFor: titleEqualsFor, savedListingId: savedListingId, editTargetCheck: editTargetCheck, poshmarkQuantity: poshmarkQuantity,
     classifyBlock: classifyBlock, redact: redact, safeUrl: safeUrl, pathOnly: pathOnly, scrubText: scrubText, scrubDeep: scrubDeep, compactSnapshot: compactSnapshot, buildDiag: buildDiag, diagThrottle: diagThrottle, DIAG_WINDOW_MS: DIAG_WINDOW_MS, DIAG_MAX_CHARS: DIAG_MAX_CHARS, pushRing: pushRing, addDiag: addDiag, describeFailure: describeFailure
   };
   root.FAS_EDIT_CORE = api;

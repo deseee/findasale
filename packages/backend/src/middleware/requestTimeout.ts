@@ -10,6 +10,31 @@ import { Request, Response, NextFunction } from 'express';
  * Registration order: AFTER body parsers, BEFORE routes.
  * This ensures the timeout guard wraps all business logic.
  */
+// Response methods a handler may still call after the timeout has answered 503. Each becomes a no-op that
+// returns the response (so chained calls like res.status(500).json(...) still work) once the 503 is sent.
+const LATE_RESPONSE_METHODS = [
+  'status', 'set', 'header', 'append', 'type', 'location', 'vary', 'links', 'cookie', 'clearCookie', 'attachment',
+  'json', 'jsonp', 'send', 'sendStatus', 'sendFile', 'download', 'redirect', 'render', 'format',
+  // setHeader/removeHeader can only throw once the 503 has gone out, so silencing them loses nothing. writeHead,
+  // write and end are left alone: Node calls this.writeHead internally, and a second end() is already harmless.
+  'setHeader', 'removeHeader',
+] as const;
+
+export function suppressLateResponse(req: Request, res: Response): void {
+  (req as any).timedout = true;
+  let warned = false;
+  const r = res as any;
+  for (const name of LATE_RESPONSE_METHODS) {
+    r[name] = function lateResponseNoop() {
+      if (!warned) {
+        warned = true;
+        console.warn(`[requestTimeout] late response suppressed after 503: ${req.method} ${req.originalUrl || req.path} (res.${name})`);
+      }
+      return res;
+    };
+  }
+}
+
 export const requestTimeout = (timeoutMs: number = 30000) => {
   return (req: Request, res: Response, next: NextFunction) => {
     // Skip timeout guard for health check endpoints, internal pipeline routes,
@@ -44,6 +69,11 @@ export const requestTimeout = (timeoutMs: number = 30000) => {
           error: 'Request timeout',
           message: 'The server took too long to respond. Please try again.',
         });
+        // Sentry FINDASALE-NODEJS-91 / -93: the handler is still running after the 503 goes out. When it
+        // finishes it calls res.json(), which throws ERR_HTTP_HEADERS_SENT ("Cannot set headers after they
+        // are sent to the client"); a catch block that answers 500 throws again and the async handler ends
+        // in an unhandled rejection. Mark the request timed out and make every later response write a no-op.
+        suppressLateResponse(req, res);
       }
     }, timeoutMs);
 

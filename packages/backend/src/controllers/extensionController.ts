@@ -23,6 +23,7 @@ import { AUTO_QUEUE_FLAG_SELECT, toAutoQueueSettings, parseAutoQueuePatch, isPic
 import { loadExtensionHeartbeat, parseHeldParam, parseVersionParam, heartbeatStatus, heldStillUnlisted, parseIdListParam, staleFlagHoldIds, loadHeldItemState, addHeldReleases, recordExtensionPoll, parseReleaseHoldsBody } from '../services/extensionHeartbeat'; // 2026-10-26: extension heartbeat + held-back items (+ 1.0.67 release / stale-hold drop)
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { postCapRetryEligible } from '../utils/removalRetryGate'; // 2026-10-25: past the hard stop, re-probe daily instead of never
+import { removalSkipStatsByItemPlatform } from '../utils/removalSkipStats'; // 2026-10-30: skips count only since the newest POST/POSTED (a repost resets them)
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
 import { poshmarkLabelInfo } from '../services/poshmarkLabelSurcharge'; // 2026-10-27: Poshmark label deduction (never blocks)
 import { listingStateForAutoQueue, blocksAutoQueue, unitsLeftOnQuantityListing, isSoldOnPlatformRow, QUANTITY_LISTING_PLATFORMS, type ListingJobRow } from '../services/singleUnitRepost'; // 2026-10-27: repost after a sale on one-unit marketplaces
@@ -1548,7 +1549,6 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   // uses (split back apart with lastIndexOf(':') -- item ids are cuids and contain no colon).
   const skipCountByItemPlatform = new Map<string, number>();
   const lastSkipReasonByItemPlatform = new Map<string, string | null>();
-  const lastSkipReasonAtByItemPlatform = new Map<string, Date>();
   const lastSkipAtByItemPlatform = new Map<string, Date>();
   // FEATURE 2026-08-22 (S-EXT-CROSS-PLATFORM-AUTOREMOVE, Patrick-directed: "it must be built for
   // all of them, that's part of the extension" -- extending Facebook's existing sold-elsewhere
@@ -1569,24 +1569,15 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   for (const j of jobs) {
     if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
     if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
-    if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
-      const skipKey = j.itemId + ':' + j.platform;
-      skipCountByItemPlatform.set(skipKey, (skipCountByItemPlatform.get(skipKey) || 0) + 1);
-      // 2026-10-25: the reason is the NEWEST skip's (jobs are unordered); the retry gate keys off a
-      // trailing 'listing_not_found' (utils/removalRetryGate.ts), so iteration order must not decide it.
-      const reasonAt = j.lastAttemptAt || j.createdAt;
-      if (!lastSkipReasonAtByItemPlatform.has(skipKey) || reasonAt >= lastSkipReasonAtByItemPlatform.get(skipKey)!) {
-        lastSkipReasonAtByItemPlatform.set(skipKey, reasonAt);
-        lastSkipReasonByItemPlatform.set(skipKey, j.lastErrorMessage ?? null);
-      }
-      // S1179: track the MOST RECENT skip per item+platform (jobs aren't guaranteed ordered) so we
-      // can gate the cooldown off it -- a fresh retry is only offered once RETRY_COOLDOWN_MS has
-      // elapsed since the last actual failure, not since it first crossed the cap.
-      const attemptedAt = j.lastAttemptAt;
-      if (attemptedAt && (!lastSkipAtByItemPlatform.has(skipKey) || attemptedAt > lastSkipAtByItemPlatform.get(skipKey)!)) {
-        lastSkipAtByItemPlatform.set(skipKey, attemptedAt);
-      }
-    }
+  }
+  // 2026-10-30 (utils/removalSkipStats.ts): only REMOVE/SKIPPED rows since the item+platform's newest POST/POSTED row count,
+  // so a repost starts the skip counter over (it used to count every skip ever, and reposted live listings stayed flagged
+  // for manual review forever). Reason = the NEWEST counted skip's (2026-10-25: the retry gate keys off a trailing
+  // 'listing_not_found'); lastSkipAt = newest lastAttemptAt (S1179: the cooldown runs from the last actual failure).
+  for (const [skipKey, st] of removalSkipStatsByItemPlatform(jobs)) {
+    skipCountByItemPlatform.set(skipKey, st.count);
+    lastSkipReasonByItemPlatform.set(skipKey, st.lastReason);
+    if (st.lastAttemptAt) lastSkipAtByItemPlatform.set(skipKey, st.lastAttemptAt);
   }
 
   const now = Date.now();
@@ -1750,18 +1741,12 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   const complianceSkipCount = new Map<string, number>();
   const complianceLastSkipAt = new Map<string, Date>();
   const complianceLastReason = new Map<string, string | null>();
-  for (const j of availableCandidateJobs) {
-    // Same rule as the sold-item computation above: a REMOVE/SKIPPED row is a failed removal
-    // attempt, not a state change -- the listing is still live.
-    if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
-      const sk = j.itemId + ':' + j.platform;
-      complianceSkipCount.set(sk, (complianceSkipCount.get(sk) || 0) + 1);
-      const at = j.lastAttemptAt || j.createdAt;
-      if (!complianceLastSkipAt.has(sk) || at > complianceLastSkipAt.get(sk)!) {
-        complianceLastSkipAt.set(sk, at);
-        complianceLastReason.set(sk, j.lastErrorMessage ?? null);
-      }
-    }
+  // Same rule as the sold-item computation above: a REMOVE/SKIPPED row is a failed removal attempt, not a state change
+  // (the listing is still live), and 2026-10-30 only skips since the newest POST/POSTED count (utils/removalSkipStats.ts).
+  for (const [sk, st] of removalSkipStatsByItemPlatform(availableCandidateJobs)) {
+    complianceSkipCount.set(sk, st.count);
+    complianceLastSkipAt.set(sk, st.lastActivityAt);
+    complianceLastReason.set(sk, st.lastReason);
   }
   const stillLiveAvailablePlatformsByItem = livePlatformsByItem(liveAvailableByItemPlatform);
 
@@ -2620,16 +2605,11 @@ export const getSyncHealth = async (req: AuthRequest, res: Response): Promise<vo
   const skipCountByItemPlatform = new Map<string, number>();
   const lastSkipReasonByItemPlatform = new Map<string, string | null>();
   const lastSkipAtByItemPlatform = new Map<string, Date>();
-  for (const j of removalJobs) {
-    if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
-      const skipKey = j.itemId + ':' + j.platform;
-      skipCountByItemPlatform.set(skipKey, (skipCountByItemPlatform.get(skipKey) || 0) + 1);
-      lastSkipReasonByItemPlatform.set(skipKey, j.lastErrorMessage ?? null);
-      const attemptedAt = j.lastAttemptAt;
-      if (attemptedAt && (!lastSkipAtByItemPlatform.has(skipKey) || attemptedAt > lastSkipAtByItemPlatform.get(skipKey)!)) {
-        lastSkipAtByItemPlatform.set(skipKey, attemptedAt);
-      }
-    }
+  // 2026-10-30: same skip counter as getPendingRemovals (utils/removalSkipStats.ts) -- only skips since the newest POST/POSTED.
+  for (const [skipKey, st] of removalSkipStatsByItemPlatform(removalJobs)) {
+    skipCountByItemPlatform.set(skipKey, st.count);
+    lastSkipReasonByItemPlatform.set(skipKey, st.lastReason);
+    if (st.lastAttemptAt) lastSkipAtByItemPlatform.set(skipKey, st.lastAttemptAt);
   }
   const stillPendingRemoval = soldItems.filter((i) => (stillListedPlatformsByRemovalItem.get(i.id) || []).length > 0);
   const manualReviewBacklog: Array<{

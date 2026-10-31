@@ -222,6 +222,39 @@
     return { n: n, over: n > max };
   }
 
+  // ---- 1.0.85 pre-save guards for the DOM edit paths ---------------------------------------------------------------------
+  // titleGuard: null when the save may go ahead, else the fail result. Every id this run found is cleared from scratch, so a
+  // refused listing id is never cached (background.js caches scratch.remoteId) or reported as discovered.
+  function titleGuard(ctx, targetId, listingTitle, where) {
+    var it = ctx.item || {};
+    var tg = C.editTargetCheck(ctx.platform, it, targetId, listingTitle);
+    if (tg.ok) {
+      tLog('info', 'listing_title_checked', tg.own ? 'This is the item\'s own saved listing; only its price/stock will be changed' : 'The listing\'s current title matches this item; only its price/stock will be changed', { targetId: String(targetId || ''), own: !!tg.own });
+      return null;
+    }
+    var lt = String(listingTitle == null ? '' : listingTitle).slice(0, 100);
+    tLog('error', tg.code, tg.reason, { targetId: String(targetId || ''), listingTitle: lt });
+    return fail(tg.code, tg.reason, 'guard', where, { remoteId: null, itemIdFound: null, postingId: null, targetId: null, discovered: false }, { details: { targetId: String(targetId || ''), listingTitle: lt } });
+  }
+  // Every visible, editable text field / textarea / select that a price or stock edit must leave alone (price, floor, earnings,
+  // quantity and shipping fields are skipped). Compared right before the save click: any difference refuses the save.
+  var GUARD_SKIP_RE = /price|earn|fee|profit|floor|minimum|quantity|qty|stock|ship|deliver|recaptcha|captcha|search|smart ?pric|offer|discount|postal|zip/i;
+  function guardVal(el) { return String(el.value == null ? '' : el.value); }
+  function fieldSnapshot(root) {
+    return qa('input, textarea, select', root).filter(function (el) {
+      var ty = String(el.type || el.getAttribute && el.getAttribute('type') || '').toLowerCase();
+      if (['hidden', 'file', 'password', 'submit', 'button', 'image', 'reset', 'checkbox', 'radio'].indexOf(ty) !== -1) return false;
+      if (el.disabled || el.readOnly || !visible(el)) return false;
+      return !GUARD_SKIP_RE.test(hintsOf(el));
+    }).map(function (el) { return { el: el, v: guardVal(el), h: (hintsOf(el) || el.tagName || '').slice(0, 40) }; });
+  }
+  function changedFields(snap) {
+    return (snap || []).filter(function (s) { return s.el.isConnected !== false && guardVal(s.el) !== s.v; }).map(function (s) { return s.h || 'field'; });
+  }
+  function fieldsChangedFail(changed, where, scratch) {
+    return fail('payload_would_change_fields', 'The price save would also have changed ' + changed.slice(0, 4).join(', ') + '; nothing was saved', 'guard', where, Object.assign({ remoteId: null, itemIdFound: null, postingId: null }, scratch || {}), { details: { changed: changed.slice(0, 8) } });
+  }
+
   // ===================================================================================================================
   // FACEBOOK MARKETPLACE -- UI driven. No API. Start: /marketplace/item/<id>/ (documented public URL) or /you/selling.
   // Selectors: aria-label / visible text only (classes are obfuscated). [existing]=fas-selectors.js/fas-remove.js,
@@ -265,6 +298,10 @@
     return inputAfterLabelSpan(/^price$/, root) ||                                   // [documented] //span[text()="Price"]/following-sibling::input[1]
       findInput(/(^|\|\s*)price(\s*\||$)/i, /original|compare|shipping|minimum|floor|offer/i, root) ||  // [existing] label "Price"
       findInput(/\bprice\b/i, /original|compare|shipping|minimum|floor|offer|list price/i, root);
+  }
+  // 1.0.85: the edit dialog's Title box (read only, never written) for the pre-save title guard.
+  function fbTitleInput(root) {
+    return inputAfterLabelSpan(/^title$/, root) || findInput(/(^|\|\s*)title(\s*\||$)/i, /search|price/i, root);
   }
   function fbCloseDialog() {
     var close = qa('[aria-label="Close"], [aria-label="close"]').filter(visible)[0];
@@ -330,6 +367,14 @@
         if (okP && okQ) return done({ readBack: { price: shown, quantity: qtyShown }, quantityControl: !!qin });
         return fail('verify_mismatch', 'After reload Facebook shows price "' + shown + '"' + (qin ? ' quantity "' + (qin.value) + '"' : '') + ', wanted ' + (W.price != null ? C.formatPrice('FACEBOOK', W.price) : '-') + (W.qty != null ? ' qty ' + W.qty : ''), 'verify', 'price input value', {});
       }
+      // 1.0.85 guard: the dialog must be this item's listing (its saved id, or a listing whose current title equals the item's) before anything is typed.
+      if (!S.titleOk) {
+        var fbT = fbTitleInput(root) || fbTitleInput(document);
+        var fbTid = (location.pathname.match(/\/marketplace\/item\/(\d+)/) || [])[1] || S.itemIdFound || '';
+        var gF = titleGuard(ctx, fbTid, fbT ? fbT.value : '', 'Title box in the Facebook edit dialog');
+        if (gF) { fbCloseDialog(); return gF; }
+      }
+      var fbSnap = fieldSnapshot(root);
       var diag = S.formSnap ? undefined : snapshot('fb_form');
       var warn = [];
       if (W.price != null && !C.pricesMatch('FACEBOOK', shown, W.price)) {
@@ -350,11 +395,13 @@
       if (!save) {
         var next = findButton(/^next$/, root) || findButton(/^next$/, document);
         var nt = bumpTries(ctx, 'nextClicks', 4);
-        if (next && !nt.over) { deferClick(next); return cont(1800, { nextClicks: nt.n, formSnap: true }, { diag: diag }); }
+        if (next && !nt.over) { var fbCh0 = changedFields(fbSnap); if (fbCh0.length) return fieldsChangedFail(fbCh0, 'Facebook edit dialog'); deferClick(next); return cont(1800, { nextClicks: nt.n, formSnap: true, titleOk: true }, { diag: diag }); }
         return fail('save_control_not_found', 'No Save/Update/Publish/Next control enabled in the edit dialog', 'form', 'button|[role=button] aria-label|text ^(save|update|publish|next)$', {});
       }
+      var fbCh = changedFields(fbSnap);
+      if (fbCh.length) return fieldsChangedFail(fbCh, 'Facebook edit dialog');
       deferClick(save);
-      return cont(3500, { phase: 'saved', formSnap: true, qtyNote: qtyNote }, { diag: diag });
+      return cont(3500, { phase: 'saved', formSnap: true, qtyNote: qtyNote, titleOk: true }, { diag: diag });
     }
 
     if (phase === 'saved') {
@@ -764,6 +811,33 @@
     });
     return Object.keys(byId).map(function (k) { return byId[k]; });
   }
+  // 1.0.85 (prod 2026-10-29 04:23 UTC, 1.0.80/1.0.84): save_control_not_found on three price edits (1950-C $50 Minneapolis star note
+  // 260->231, Iron Man #300 5->4, 1994 Motor City Comic Con program 11->10) and the Supreme pump at 06:03: the edit-page snapshot shows a
+  // visible "Update" control, so it was there but still disabled when the step looked for it right after typing. Same fix as Grailed
+  // 1.0.82: every known label, commit the typed fields with input/change/focus-out/blur so React re-validates, wait for the control to
+  // become enabled, and name a disabled control (save_control_disabled) apart from a missing one. Deactivate/Delete are never matched.
+  var MERC_SAVE_LABEL_RE = /^(update|update listing|update item|save|save changes|save listing|done)$/;
+  function mercSaveCandidates() {
+    var seen = [];
+    return qa('button[data-testid="ListButton"], button[type="submit"], button, [role="button"]').filter(function (b) {
+      if (seen.indexOf(b) !== -1) return false;
+      seen.push(b);
+      if (/deactivate|delete|remove/i.test(String((b.getAttribute && b.getAttribute('data-testid')) || ''))) return false;
+      return visible(b) && MERC_SAVE_LABEL_RE.test(btnLabel(b));
+    });
+  }
+  function mercFindSave() {
+    var en = mercSaveCandidates().filter(function (b) { return !isDisabled(b); });
+    var lb = en.filter(function (b) { return b.getAttribute && b.getAttribute('data-testid') === 'ListButton'; });
+    var sub = en.filter(function (b) { return String((b.getAttribute && b.getAttribute('type')) || '').toLowerCase() === 'submit'; });
+    return lb[0] || sub[sub.length - 1] || en[en.length - 1] || null;
+  }
+  // Current title on the open Mercari edit page (read only): the Title box, else the page title "Edit <title> | Mercari".
+  function mercTitleValue() {
+    var el = q('input[name="sellName"]') || findInput(/\btitle\b/i, /price|search|brand|description|tag/i);
+    if (el && String(el.value || '').trim()) return String(el.value);
+    return ((/^edit (.+?) \| mercari$/i.exec(String(document.title || '').trim()) || [])[1] || '');
+  }
   async function mercShippingLabelPrompt() {
     // After a price change Mercari may require re-picking a shipping label ("you may need to select a new label"). [documented] text, [guess] markup.
     var dlg = qa('[role="dialog"]').filter(visible).pop();
@@ -823,6 +897,11 @@
         if (!vt.over) return go(S.editUrl || location.href, { verifyTries: vt.n });
         return fail('verify_mismatch', 'Edit page re-read shows price "' + price.value + '", wanted ' + C.formatPrice('MERCARI', W.price), 'verify', 'input#Price', {});
       }
+      // 1.0.85 guard: this edit page must be the item's own listing (saved id) or one whose current title equals the item's title.
+      var mTid = (location.pathname.match(/\/sell\/edit\/(m\d+)/i) || [])[1] || '';
+      var gM = titleGuard(ctx, mTid, mercTitleValue(), 'input[name="sellName"] (Mercari edit page title)');
+      if (gM) return gM;
+      var mSnap = fieldSnapshot(document);
       var diag = S.formSnap ? undefined : snapshot('merc_form');
       var mercChanged = false;   // 1.0.48: nothing to save when the live price already equals the wanted one (Update stays disabled on an untouched form)
       if (W.price != null) {
@@ -844,8 +923,21 @@
         if (!mercChanged) return done({ readBack: { price: price.value }, editUrl: S.editUrl || location.href, alreadyCurrent: true });
       }
       var lb = q('button[data-testid="ListButton"]');   // verified-in-DOM: "Update", type=submit. Deactivate/Delete are different testids and are never matched.
-      var save = (lb && visible(lb) && !isDisabled(lb) && /^(update|save)/.test(btnLabel(lb))) ? lb : findButton(/^(save|save changes|update|update listing|done)$/);
-      if (!save) return fail('save_control_not_found', 'No Update control (button[data-testid="ListButton"]) enabled on the edit page', 'form', 'button[data-testid="ListButton"]', {}, { diag: diag });
+      var save = mercFindSave();
+      if (!save) {
+        grCommitField(price);
+        if (floor) grCommitField(floor);
+        save = await waitFor(mercFindSave, 8000, 300);
+      }
+      if (!save) {
+        var mDisabled = mercSaveCandidates().map(function (b) { return btnLabel(b); }).slice(0, 4);
+        var mErr = visibleErrorText();
+        var mDetails = { disabledSave: mDisabled, listButton: lb ? { label: btnLabel(lb).slice(0, 30), disabled: isDisabled(lb), visible: visible(lb) } : null, lastButtons: qa(BTN_SEL).filter(visible).map(function (b) { return btnLabel(b).slice(0, 30); }).filter(Boolean).slice(-20), priceNow: price.value, errors: mErr || undefined };
+        if (mDisabled.length) return fail('save_control_disabled', 'The ' + mDisabled.join('/') + ' control stayed disabled after the price change (fields committed, waited 8 s)' + (mErr ? '; Mercari shows: ' + mErr : ''), 'form', 'button[data-testid="ListButton"]', {}, { diag: diag, details: mDetails });
+        return fail('save_control_not_found', 'No Update/Save control (button[data-testid="ListButton"]) on the edit page', 'form', 'button[data-testid="ListButton"]', {}, { diag: diag, details: mDetails });
+      }
+      var mCh = changedFields(mSnap);
+      if (mCh.length) return fieldsChangedFail(mCh, 'Mercari edit page');
       deferClick(save);
       return cont(3000, { phase: 'saved', formSnap: true, editUrl: S.editUrl || location.href, remoteId: id || (location.pathname.match(/\/sell\/edit\/(m\d+)/i) || [])[1] }, { diag: diag });
     }
@@ -903,6 +995,11 @@
       el.dispatchEvent(fe('blur'));
       if (typeof el.blur === 'function') el.blur();
     } catch (e) { /* never break the edit */ }
+  }
+  // 1.0.85: current title on the Grailed edit page (read only) for the pre-save title guard.
+  function grTitleValue() {
+    var el = q('input[name="title"]') || findInput(/\b(title|item name|listing name)\b/i, /price|search|designer|brand|size|floor|color|description|tag/i);
+    return el ? String(el.value || '') : '';
   }
   function grModerationNotice() {
     var t = pageText().replace(/\s+/g, ' ');
@@ -962,6 +1059,11 @@
         if (!vt.over) return go(editUrl, { verifyTries: vt.n });
         return fail('verify_mismatch', 'Edit page re-read shows price "' + price.value + '", wanted ' + C.formatPrice('GRAILED', W.price), 'verify', 'input[name="price"]', {});
       }
+      // 1.0.85 guard: the item's own saved listing, or a listing whose current title equals the item's (Grailed's 60-char cut allowed).
+      var gTid = (location.pathname.match(/\/listings\/(\d+)/) || [])[1] || '';
+      var gG = titleGuard(ctx, gTid, grTitleValue(), 'Grailed edit page title');
+      if (gG) return gG;
+      var gSnap = fieldSnapshot(document);
       var diag = S.formSnap ? undefined : snapshot('grailed_form');
       if (W.price != null && !C.pricesMatch('GRAILED', price.value, W.price)) {
         var ok = await writeField(price, C.formatPrice('GRAILED', W.price));
@@ -993,6 +1095,8 @@
         if (mod) return fail('listing_under_moderation', 'Grailed is holding this listing for moderation (' + mod + '); its save control stays disabled', 'form', 'moderation notice', {}, { diag: diag, details: gDetails });
         return fail('save_control_not_found', disabledSaves.length ? 'The ' + disabledSaves.join('/') + ' control stayed disabled after the edit (waited 8 s)' : 'No Publish/Save/Update control on the edit page', 'form', 'button[type=submit] text publish|save|save changes|update', {}, { diag: diag, details: gDetails });
       }
+      var gCh = changedFields(gSnap);
+      if (gCh.length) return fieldsChangedFail(gCh, 'Grailed edit page');
       deferClick(save);
       return cont(3500, { phase: 'saved', formSnap: true, editUrl: editUrl, remoteId: id || (location.pathname.match(/\/listings\/(\d+)/) || [])[1] }, { diag: diag });
     }
@@ -1267,6 +1371,13 @@
       // 1.0.22: hops counts real page TRANSITIONS only (a new page signature), not polling steps on the same page. The same signature seen again
       // is a page that did not advance: the step after the first sighting only waits, the next one may retry the click once, and the fourth
       // consecutive sighting fails fast with the signature in the diag. mark carries this bookkeeping into every continue below.
+      // 1.0.85 strict title guard (on top of the identity check above, which also accepts the dashboard row title and loose 20-char
+      // prefixes): before the price form's Continue and before publish, the posting's current title must equal the FindA.Sale title
+      // (Craigslist's 70-character cut allowed), unless the posting is the item's own saved id. Checked once per run (clTitleOk).
+      function clTitleGuard(what) {
+        if (S.clTitleOk) return null;
+        return titleGuard(ctx, S.postingId || '', pgTitle, '#PostingTitle | preview heading (before ' + what + ')');
+      }
       var sig = clPageSig();
       var sameAsLast = S.sig === sig;
       var rep = sameAsLast ? (S.sigRep || 1) + 1 : 1;
@@ -1287,16 +1398,21 @@
       var price = q('input[name="price"]') || q('#price') || findInput(/(^|\|\s*)(asking )?price(\s*\||$)/i, /ship|original/i);   // name unverified by inspection: documented input[name=price] first
       if (price && visible(price)) {
         var diag = S.formSnap ? undefined : snapshot('cl_edit_form');
+        // 1.0.85: identity + title are proven BEFORE the price is typed (they used to be checked only before Continue).
+        var g1 = idGate(true, 'continue'); if (g1) return g1;
+        var t1 = clTitleGuard('continue'); if (t1) return t1;
+        var clSnap = fieldSnapshot(document);
         if (W.price != null && !C.pricesMatch('CRAIGSLIST', price.value, W.price)) {
           var ok = await writeField(price, C.formatPrice('CRAIGSLIST', W.price));
           if (!ok && !C.pricesMatch('CRAIGSLIST', price.value, W.price)) return fail('price_value_did_not_stick', 'input[name="price"] kept "' + price.value + '"', 'edit', 'input[name="price"]', { hops: hops });
         }
         var cont1 = visibleContinue() || findButton(/^continue$/) || qa('input[type="submit"]').filter(function (b) { return /continue/i.test(b.value || ''); })[0];
         if (!cont1) return fail('continue_button_not_found', 'No Continue button after setting the price', 'edit', 'button.continue | input[type=submit][value=Continue]', { hops: hops });
-        var g1 = idGate(true, 'continue'); if (g1) return g1;
+        var clCh = changedFields(clSnap);
+        if (clCh.length) return fieldsChangedFail(clCh, 'Craigslist edit form', { hops: hops });
         tStep('Pressing Continue to keep the new price ' + (W.price != null ? money('CRAIGSLIST', W.price) : ''), 'Craigslist saves the change when the edit steps are continued and published');
         deferClick(cont1);
-        return cont(3000, Object.assign({}, mark, { priceSet: true, formSnap: true }), { diag: diag });
+        return cont(3000, Object.assign({}, mark, { priceSet: true, formSnap: true, clTitleOk: true }), { diag: diag });
       }
       // 2026-10-16: the edit flow lands on a PREVIEW page (publish / edit post / edit location / edit images / cancel edit). The price
       // input only exists after "edit post". Without this the generic Publish click below re-published the listing UNCHANGED
@@ -1313,9 +1429,9 @@
       // elements around, which the old q('button.continue') picked first (click on an invisible control = nothing happens, 13 times).
       // Only VISIBLE controls count, and with the price already typed publish wins over continue.
       var pubBtn = S.priceSet ? clPublishButton() : null;
-      if (pubBtn) { var g5 = idGate(true, 'publish'); if (g5) return g5; tStep('Pressing "publish" to apply the Craigslist edit', 'the preview page shows the new price; publish applies it, then Craigslist shows its confirmation page'); deferClick(pubBtn); return cont(3000, Object.assign({}, mark, { published: true })); }
+      if (pubBtn) { var g5 = idGate(true, 'publish'); if (g5) return g5; var t5 = clTitleGuard('publish'); if (t5) return t5; tStep('Pressing "publish" to apply the Craigslist edit', 'the preview page shows the new price; publish applies it, then Craigslist shows its confirmation page'); deferClick(pubBtn); return cont(3000, Object.assign({}, mark, { published: true })); }
       var anyCont = visibleContinue() || findButton(/^(continue|publish|done|ok)$/) || qa('input[type="submit"]').filter(function (b) { return /^(continue|publish|done)/i.test(b.value || ''); })[0];
-      if (anyCont && S.priceSet) { var g6 = idGate(!/^(continue|done|ok)$/.test(btnLabel(anyCont).toLowerCase()), btnLabel(anyCont) || 'continue'); if (g6) return g6; tStep('Pressing "' + (btnLabel(anyCont) || 'continue') + '" to finish the Craigslist edit', 'the price is already changed; this publishes it'); deferClick(anyCont); return cont(3000, mark); }
+      if (anyCont && S.priceSet) { var a6 = !/^(continue|done|ok)$/.test(btnLabel(anyCont).toLowerCase()); var g6 = idGate(a6, btnLabel(anyCont) || 'continue'); if (g6) return g6; if (a6) { var t6 = clTitleGuard(btnLabel(anyCont) || 'publish'); if (t6) return t6; } tStep('Pressing "' + (btnLabel(anyCont) || 'continue') + '" to finish the Craigslist edit', 'the price is already changed; this publishes it'); deferClick(anyCont); return cont(3000, mark); }
       // 2026-10-17: price_field_not_found now means exactly one thing: the real posting form (it has the Title box) is on screen and, after a
       // wait for a late-rendering price box, still has no price input. Any other page (preview, images, confirmation, a hijacked page) just keeps
       // going until the 12 page limit and is reported as edit_flow_stuck, so it can no longer be mislabelled as "category has no price field".
@@ -1351,6 +1467,12 @@
       if (card) out.push({ key: cardKey(card), ctl: ctl, el: card, texts: [card.textContent], idMatch: idHint ? card.innerHTML.indexOf(idHint) !== -1 : false });
     });
     return out;
+  }
+  // 1.0.85: current ad title on the Gumtree edit form (read only) for the pre-save title guard.
+  function gtTitleValue() {
+    var form = q('form#pstad-main-form');
+    var el = q('form#pstad-main-form input[name="title"]') || findInput(/\btitle\b/i, /price|search/i, form || undefined);
+    return el ? String(el.value || '') : '';
   }
   async function gtStep(ctx) {
     var S = ctx.scratch || {}, W = wants(ctx), it = ctx.item;
@@ -1388,6 +1510,11 @@
         if (C.pricesMatch('GUMTREE_AU', amount.value, W.price)) return done({ readBack: { price: amount.value } });
         return fail('verify_mismatch', 'Edit page re-read shows "' + amount.value + '", wanted ' + C.formatPrice('GUMTREE_AU', W.price), 'verify', 'input[name="price.amount"]', {});
       }
+      // 1.0.85 guard: the ad must be the item's own saved ad (id in the edit URL) or carry the item's exact title.
+      var gtTid = C.extractIdFromUrl('GUMTREE_AU', location.href) || '';
+      var gGt = titleGuard(ctx, gtTid, gtTitleValue(), 'form#pstad-main-form input[name="title"]');
+      if (gGt) return gGt;
+      var gtSnap = fieldSnapshot(q('form#pstad-main-form') || document);
       var diag = S.formSnap ? undefined : snapshot('gt_form');
       var type = q('select[name="price.type"]');
       if (type && /^(GIVE_AWAY|SWAP_TRADE)$/.test(type.value) && W.price != null) {
@@ -1400,6 +1527,8 @@
       var save = findButton(/^save ad$/, document) || findButton(/^(save|update|post|post ad|update ad)( changes)?$/, qa('form#pstad-main-form')[0] || document) ||
         qa('form#pstad-main-form button[type="submit"], form#pstad-main-form input[type="submit"]').filter(function (b) { return visible(b) && !isDisabled(b); })[0];
       if (!save) return fail('save_control_not_found', 'No "Save ad" control on the edit form', 'form', 'button text "Save ad"', {}, { diag: diag });
+      var gtCh = changedFields(gtSnap);
+      if (gtCh.length) return fieldsChangedFail(gtCh, 'Gumtree edit form');
       deferClick(save);
       return cont(3500, { phase: 'saved', formSnap: true, editUrl: S.editUrl || location.href }, { diag: diag });
     }
@@ -1459,6 +1588,7 @@
       edit_flow_stuck: ['The Craigslist edit pages kept going past the expected number of steps.', 'Craigslist did not reach its confirmation page.', 'Nothing was confirmed as changed. FindA.Sale will retry later; the page snapshot below shows what was on screen.'],
       price_value_did_not_stick: ['The price box would not keep the new value.', 'The page rewrote the field after FindA.Sale typed in it.', 'Nothing was saved. FindA.Sale will retry later.'],
       verify_mismatch: ['FindA.Sale saved the new price but the live listing still shows something different.', 'The marketplace may not have accepted the change yet, or it changed another value.', 'The item is not marked synced, so FindA.Sale re-checks it on the next retry. Look at the listing yourself if this repeats.'],
+      save_control_disabled: ['The price was entered but the ' + L + ' Save/Update button stayed disabled.', 'The marketplace did not accept the form as changed (or shows a validation message), so it would not let the change be saved.', 'Nothing was saved. FindA.Sale will retry later; the details list the button and any message the page showed.'],
       save_control_not_found: ['The price was entered but no Save/Update button could be found.', 'The marketplace page layout may have changed.', 'Nothing was saved. FindA.Sale will retry later.'],
       listing_under_moderation: ['Grailed is holding this listing for moderation, so it cannot be saved right now.', 'Grailed asked for more photos to verify the item, and keeps the save button disabled until that is done.', 'Nothing was saved. Add the photos Grailed asked for on the listing; FindA.Sale retries the price change later.'],
       floor_price_not_below_price: ['The Grailed Smart Pricing floor could not be set below the new price.', 'Grailed rejects a floor price at or above the listing price.', 'Nothing was saved. FindA.Sale will retry later.'],
@@ -1549,5 +1679,5 @@
       return traceResult(ctx, { state: 'fail', code: 'engine_exception', reason: ((e && e.message) || String(e)).slice(0, 200), step: (ctx.scratch && ctx.scratch.phase) || '', diag: (function () { try { return snapshot('exception'); } catch (e2) { return null; } })() });
     }
   }
-  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7', _test: { poshStep: poshStep, poshAmbiguous: poshAmbiguous, poshClosetCards: poshClosetCards, poshFormFallback: poshFormFallback, clStep: clStep, clPageSig: clPageSig, poshSetPriceViaModal: poshSetPriceViaModal, poshPriceInput: poshPriceInput, grStep: grStep, grFindSave: grFindSave, grFloorTarget: grFloorTarget, grModerationNotice: grModerationNotice } };
+  self.FAS_EDIT_ENGINE = { step: step, snapshot: snapshot, version: '1.0.7', _test: { poshStep: poshStep, poshAmbiguous: poshAmbiguous, poshClosetCards: poshClosetCards, poshFormFallback: poshFormFallback, clStep: clStep, clPageSig: clPageSig, poshSetPriceViaModal: poshSetPriceViaModal, poshPriceInput: poshPriceInput, grStep: grStep, grFindSave: grFindSave, grFloorTarget: grFloorTarget, grModerationNotice: grModerationNotice, mercStep: mercStep, mercFindSave: mercFindSave, mercSaveCandidates: mercSaveCandidates, fbStep: fbStep, gtStep: gtStep, titleGuard: titleGuard, fieldSnapshot: fieldSnapshot, changedFields: changedFields } };
 })();

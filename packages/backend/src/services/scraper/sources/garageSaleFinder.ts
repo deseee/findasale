@@ -12,7 +12,7 @@
  */
 import * as cheerio from 'cheerio';
 import { RateLimiter } from '../rateLimiter';
-import { parseGarageSalesFinderListing, parseGarageSalesFinderGallery, extractEmails } from '../htmlParser';
+import { parseGarageSalesFinderListingWithReason, parseGarageSalesFinderGallery, extractEmails } from '../htmlParser';
 import { ingestScrapedListing, flushFreshnessTouches, flushScraperRevalidation, ScrapedItem } from '../index';
 import { getRandomUserAgent, jitterDelay } from '../userAgents';
 import { safeFetch } from '../safeFetch';
@@ -40,6 +40,35 @@ const GARAGE_SALES_BASE_URL = 'https://www.garagesalefinder.com';
 // worst-case ~20h staleness window for eliminating the redundant-fetch volume that was
 // actually causing the alert; it is not a cache-forever shortcut.
 const FRESHNESS_WINDOW_MS = 20 * 60 * 60 * 1000; // 20 hours
+
+// Per-metro breaker (2026-10-30). The domain-wide DomainFetchState row is shared by all
+// 351 metros; every safeFetch here now uses breakerPolicy 'tolerant' scoped to the metro
+// (see safeFetch.ts TOLERANT POLICY), so one bad page or our own hourly cap no longer
+// cools the whole domain down. Inside a metro, this many CONSECUTIVE fetch failures
+// (non-2xx, network error) end that metro only; the next metro starts fresh. A skip by
+// the domain breaker or the hourly cap ends the metro at once (every further request in
+// it would be skipped the same way).
+export const METRO_MAX_CONSECUTIVE_FETCH_FAILURES = 5;
+
+/** Why one sale detail page produced no item (diagnostics + per-metro breaker). */
+export type GsfDetailReason =
+  | 'robots'
+  | 'skipped_breaker'
+  | 'skipped_cap'
+  | 'skipped_no_proxy'
+  | 'http_error'
+  | 'network_error'
+  | string; // parse_<reason> from parseGarageSalesFinderListingWithReason
+
+/** Fetch-level failures count toward the per-metro breaker; parse failures do not. */
+export function isFetchFailureReason(reason: string | undefined): boolean {
+  return reason === 'http_error' || reason === 'network_error';
+}
+
+/** Reasons after which every further request in this metro would be skipped the same way. */
+export function isMetroStopReason(reason: string | undefined): boolean {
+  return reason === 'skipped_breaker' || reason === 'skipped_cap' || reason === 'skipped_no_proxy';
+}
 
 /**
  * Convert metro slug to GarageSaleFinder URL.
@@ -80,6 +109,8 @@ export async function scrapeGarageSaleFinder(
       headers: { 'User-Agent': getRandomUserAgent() },
       requireProxy: true,
       timeoutMs: 20000,
+      breakerPolicy: 'tolerant',
+      breakerScope: metro,
     });
 
     if (result.status !== 'FETCHED') {
@@ -106,7 +137,10 @@ export async function scrapeGarageSaleFinder(
     const galleryMap = new Map<string, { galleryUrl: string; thumbnailUrl: string }>();
     $('a[href*="/gallery"]').each((_, el) => {
       const galleryHref = $(el).attr('href') ?? '';
-      const img = $(el).find('img[itemprop="image"]');
+      // 2026-10-28 markup change dropped itemprop on these thumbnails; accept any <img>.
+      const img = $(el).find('img[itemprop="image"]').length
+        ? $(el).find('img[itemprop="image"]')
+        : $(el).find('img').first();
       const thumbSrc = img.attr('src');
       const idMatch = galleryHref.match(/\/s\/([A-Za-z0-9]+)\//);
       if (idMatch && thumbSrc && galleryHref.includes('/gallery')) {
@@ -174,6 +208,8 @@ export async function scrapeGarageSaleFinder(
     }
 
     // Process each sale link
+    const failureReasons: Record<string, number> = {};
+    let consecutiveFetchFailures = 0;
     for (const saleUrl of candidateUrls) {
       if (freshSourceUrls.has(saleUrl)) {
         stats.skippedFresh++;
@@ -184,11 +220,28 @@ export async function scrapeGarageSaleFinder(
       const idMatch = saleUrl.match(/\/s\/([A-Za-z0-9]+)\//);
       const saleId = idMatch ? idMatch[1] : '';
       const galleryInfo = galleryMap.get(saleId);
-      const item = await parseGarageSalesFinderSale(saleUrl, rateLimiter, galleryInfo, byteTracker);
+      const diag: { reason?: GsfDetailReason } = {};
+      const item = await parseGarageSalesFinderSale(saleUrl, rateLimiter, galleryInfo, byteTracker, metro, diag);
       if (!item) {
         stats.failed++;
+        const reason = diag.reason || 'unknown';
+        failureReasons[reason] = (failureReasons[reason] || 0) + 1;
+        if (isMetroStopReason(reason)) {
+          console.warn(`[GarageSaleFinder] ${metro}: ${reason} — ending this metro early (other metros unaffected)`);
+          break;
+        }
+        if (isFetchFailureReason(reason)) {
+          consecutiveFetchFailures++;
+          if (consecutiveFetchFailures >= METRO_MAX_CONSECUTIVE_FETCH_FAILURES) {
+            console.warn(`[GarageSaleFinder] ${metro}: ${consecutiveFetchFailures} consecutive fetch failures — ending this metro early (other metros unaffected)`);
+            break;
+          }
+        } else {
+          consecutiveFetchFailures = 0;
+        }
         continue;
       }
+      consecutiveFetchFailures = 0;
 
       const result = await ingestScrapedListing(item, organizerId);
       if (result.status === 'created') stats.created++;
@@ -199,6 +252,9 @@ export async function scrapeGarageSaleFinder(
     await flushFreshnessTouches();
     await flushScraperRevalidation();
 
+    if (Object.keys(failureReasons).length > 0) {
+      console.warn(`[GarageSaleFinder] ${metro} detail failures by reason: ${JSON.stringify(failureReasons)}`);
+    }
     console.log(`[GarageSaleFinder] ${metro} done — created=${stats.created} updated=${stats.updated} skipped=${stats.skipped} skippedFresh=${stats.skippedFresh} failed=${stats.failed}`);
 
     rateLimiter.clearBackoff(domain);
@@ -218,26 +274,40 @@ export async function parseGarageSalesFinderSale(
   saleUrl: string,
   rateLimiter: RateLimiter,
   galleryInfo?: { galleryUrl: string; thumbnailUrl: string },
-  byteTracker?: { totalBytes: number; fetchCount: number }
+  byteTracker?: { totalBytes: number; fetchCount: number },
+  metro?: string,
+  diag?: { reason?: GsfDetailReason }
 ): Promise<ScrapedItem | null> {
+  const fail = (reason: GsfDetailReason): null => {
+    if (diag) diag.reason = reason;
+    return null;
+  };
   try {
     const domain = new URL(saleUrl).hostname;
     await rateLimiter.waitBeforeRequest(domain);
 
     if (!rateLimiter.isAllowed(saleUrl)) {
       console.warn(`[GarageSaleFinder] Robots.txt blocked: ${saleUrl}`);
-      return null;
+      return fail('robots');
     }
 
-    const result = await safeFetch(saleUrl, {
-      headers: { 'User-Agent': getRandomUserAgent() },
-      requireProxy: true,
-      timeoutMs: 15000,
-    });
+    let result;
+    try {
+      result = await safeFetch(saleUrl, {
+        headers: { 'User-Agent': getRandomUserAgent() },
+        requireProxy: true,
+        timeoutMs: 15000,
+        breakerPolicy: 'tolerant',
+        breakerScope: metro,
+      });
+    } catch (fetchErr) {
+      console.warn(`[GarageSaleFinder] fetch error for ${saleUrl}:`, fetchErr instanceof Error ? fetchErr.message : String(fetchErr));
+      return fail('network_error');
+    }
 
     if (result.status !== 'FETCHED') {
       console.warn(`[GarageSaleFinder] safeFetch ${result.status} for ${saleUrl} — skipping`);
-      return null;
+      return fail(result.status.toLowerCase());
     }
     const response = result.response!;
 
@@ -246,7 +316,7 @@ export async function parseGarageSalesFinderSale(
         const retryAfter = response.headers.get('Retry-After');
         rateLimiter.recordBackoff(domain, retryAfter ? parseInt(retryAfter) : 60);
       }
-      return null;
+      return fail('http_error');
     }
 
     const html = await response.text();
@@ -254,12 +324,12 @@ export async function parseGarageSalesFinderSale(
       byteTracker.totalBytes += Number(response.headers.get('content-length')) || Buffer.byteLength(html, 'utf8');
       byteTracker.fetchCount += 1;
     }
-    const parsed = parseGarageSalesFinderListing(html);
+    const { listing: parsed, reason: parseReason } = parseGarageSalesFinderListingWithReason(html);
 
     // address and zip intentionally omitted — GSF hides street addresses on many
     // listings (empty string). ingestScrapedListing handles empty addresses fine.
     if (!parsed || !parsed.title || !parsed.city || !parsed.state || !parsed.startDate || !parsed.endDate) {
-      return null;
+      return fail(`parse_${parseReason || 'incomplete'}`);
     }
 
     // Attempt gallery photo fetch if galleryInfo was found on the metro page
@@ -278,6 +348,8 @@ export async function parseGarageSalesFinderSale(
             headers: { 'User-Agent': getRandomUserAgent() },
             requireProxy: true,
             timeoutMs: 10000,
+            breakerPolicy: 'tolerant',
+            breakerScope: metro,
           });
 
           if (galleryResult.status === 'FETCHED' && galleryResult.response!.ok) {
@@ -325,6 +397,6 @@ export async function parseGarageSalesFinderSale(
     };
   } catch (error) {
     console.error(`[GarageSaleFinder] Parse failed for ${saleUrl}:`, error);
-    return null;
+    return fail('exception');
   }
 }
