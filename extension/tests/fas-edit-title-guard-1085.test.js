@@ -334,8 +334,8 @@ test('Craigslist guard: publish on a preview whose heading is a different (loose
   assert.strictEqual(r.code, 'listing_title_mismatch');
   assert.deepStrictEqual(e.clicks, []);
 });
-test('Craigslist price edits are staged (owner decision 2026-11-01): canary mode, one item, title guard unchanged', () => {
-  assert.match(read('config.js'), /FAS_CL_PRICE_EDIT_MODE:\s*'canary'/);
+test('Craigslist price edits are on after the verified canary (owner decision 2026-11-01); canary still caps at one; title guard unchanged', () => {
+  assert.match(read('config.js'), /FAS_CL_PRICE_EDIT_MODE:\s*'on'/);
   assert.strictEqual(C.isEditPausedByConfig('CRAIGSLIST', { FAS_CL_PRICE_EDIT_MODE: 'paused' }), true);
   assert.strictEqual(C.clEditGate({ FAS_CL_PRICE_EDIT_MODE: 'canary' }, null, Date.now()).cap, 1);
 });

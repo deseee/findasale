@@ -67,7 +67,7 @@ self.FAS_CONFIG = {
   //   'on'     -- normal runs, capped per run (FAS_EDIT_CORE.CL_ON_RUN_CAP and LIMITS.CRAIGSLIST), 1.0.85 pre-save title guard unchanged.
   // Craigslist posting, removal, Renew All and the stale-flag reconcile are NOT affected by this. Any other value means 'paused' (fail closed).
   // Change it by editing this line and bumping the extension version.
-  FAS_CL_PRICE_EDIT_MODE: 'canary'
+  FAS_CL_PRICE_EDIT_MODE: 'on'
 };
 
 // ---- Kits / bundles (Item.listingType 'KIT') -- shared, pure helpers (2026-10-16) ----

@@ -19,7 +19,7 @@ const HOUR = 3600 * 1000;
 const M = (mode) => ({ FAS_CL_PRICE_EDIT_MODE: mode });
 test('mode: config ships canary, the old boolean is gone, and anything unknown fails closed to paused', () => {
   const cfgSrc = read('config.js');
-  assert.match(cfgSrc, /FAS_CL_PRICE_EDIT_MODE:\s*'canary'/);
+  assert.match(cfgSrc, /FAS_CL_PRICE_EDIT_MODE:\s*'on'/); // 2026-11-01: canary edit verified live (Celestion, $256), owner approved opening it up
   assert.ok(!/FAS_CL_PRICE_EDITS_PAUSED:/.test(cfgSrc), 'old boolean removed from config');
   assert.strictEqual(Core.clPriceEditMode(M('canary')), 'canary');
   assert.strictEqual(Core.clPriceEditMode(M('on')), 'on');
