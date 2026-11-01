@@ -172,6 +172,6 @@ test('the live keep-clear also removes a stray FindA.Sale modal and hides the tr
   assert.ok(/#fas-poshmark-bar, #fas-trace-host/.test(extract(posh, 'poshFindVisibleDialog')), 'never mistakes its own UI for Poshmark\'s box');
 });
 
-test('manifest is 1.0.85', () => {
-  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.85');
+test('manifest is at least 1.0.86', () => {
+  assert.ok(require('./_version').atLeast(JSON.parse(rd('manifest.json')).version, '1.0.86'));
 });

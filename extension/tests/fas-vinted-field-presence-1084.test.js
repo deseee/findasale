@@ -194,6 +194,6 @@ test('Color and Brand fallback wording is unchanged', () => {
   assert.ok(src.includes("'Brand was not set on this item -- selected Vinted\\'s own \"No brand\" option, please verify.'"));
 });
 
-test('manifest is 1.0.85', () => {
-  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.85');
+test('manifest is at least 1.0.86', () => {
+  assert.ok(require('./_version').atLeast(JSON.parse(rd('manifest.json')).version, '1.0.86'));
 });

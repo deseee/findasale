@@ -78,7 +78,7 @@ import { runUtahLicensingScraper } from '../services/scraper/sources/utahLicensi
 import { runOsmScraper } from '../services/scraper/osmScraper';
 import { scrapeGarageSaleFinder } from '../services/scraper/sources/garageSaleFinder';
 import { runFacebookMarketplaceScraper } from '../services/scraper/sources/facebook-marketplace';
-import { scrapeNAADirectory } from '../services/scraper/sources/naaAuctioneerDirectory';
+import { scrapeNAAProfiles } from '../services/scraper/sources/naaProfileScraper';
 import { runAlaskaPhase2Scraper } from '../services/scraper/sources/alaskaPhase2Scraper';
 import { runArizonaPhase2Scraper } from '../services/scraper/sources/arizonaPhase2Scraper';
 import { runCaliforniaPhase2Scraper } from '../services/scraper/sources/californiaPhase2Scraper';
@@ -658,9 +658,8 @@ router.post('/scraper/run-facebook-marketplace', requireSecret, async (req: expr
 // POST /api/internal/scraper/run-naa
 router.post('/scraper/run-naa', requireSecret, async (req: express.Request, res: express.Response) => {
   res.status(202).json({ message: 'NAA scraper started' });
-  const { RateLimiter } = await import('../services/scraper/rateLimiter');
-  const naaLimiter = new RateLimiter({ requestsPerSecond: 0.5 });
-  scrapeNAADirectory('national', '', naaLimiter).catch(err => {
+  // 2026-11-01: the Novi list endpoint 404s; the sitemap-driven profile scraper paces itself.
+  scrapeNAAProfiles('national', '').catch(err => {
     console.error('[NAA] scraper error:', err);
     Sentry.captureException(err, { tags: { scraper: '[NAA]', type: 'scraper_failure' } });
   });

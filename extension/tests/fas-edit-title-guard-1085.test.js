@@ -334,9 +334,10 @@ test('Craigslist guard: publish on a preview whose heading is a different (loose
   assert.strictEqual(r.code, 'listing_title_mismatch');
   assert.deepStrictEqual(e.clicks, []);
 });
-test('Craigslist price edits stay paused (owner decision, FAS_CL_PRICE_EDITS_PAUSED true)', () => {
-  assert.match(read('config.js'), /FAS_CL_PRICE_EDITS_PAUSED:\s*true/);
-  assert.strictEqual(C.isEditPausedByConfig('CRAIGSLIST', { FAS_CL_PRICE_EDITS_PAUSED: true }), true);
+test('Craigslist price edits are staged (owner decision 2026-11-01): canary mode, one item, title guard unchanged', () => {
+  assert.match(read('config.js'), /FAS_CL_PRICE_EDIT_MODE:\s*'canary'/);
+  assert.strictEqual(C.isEditPausedByConfig('CRAIGSLIST', { FAS_CL_PRICE_EDIT_MODE: 'paused' }), true);
+  assert.strictEqual(C.clEditGate({ FAS_CL_PRICE_EDIT_MODE: 'canary' }, null, Date.now()).cap, 1);
 });
 
 // ------------------------------------------------------------------------------------------------ wiring
@@ -351,7 +352,7 @@ test('background drops a refused listing id from the id cache; every guard refus
     assert.ok(/titleGuard\(ctx,|clTitleGuard\(/.test(body.slice(0, 20000)), fn + ' runs the title guard');
   }
 });
-test('manifest is 1.0.85 and the changed files carry no NUL bytes', () => {
-  assert.strictEqual(JSON.parse(read('manifest.json')).version, '1.0.85');
+test('manifest is at least 1.0.86 and the changed files carry no NUL bytes', () => {
+  assert.ok(require('./_version').atLeast(JSON.parse(read('manifest.json')).version, '1.0.86'));
   for (const f of ['background.js', 'fas-edit-core.js', 'fas-edit-engine.js', 'manifest.json', 'tests/fas-edit-title-guard-1085.test.js']) assert.ok(!fs.readFileSync(path.join(root, f)).includes(0), f);
 });

@@ -9,7 +9,7 @@ import { ParsedListing } from './htmlParser';
 import { checkDuplicate } from './dedupe';
 import { RateLimiter, defaultRateLimiter } from './rateLimiter';
 import { enrichOrganizer } from './enrichment';
-import { getSourceById } from './sourceRegistry';
+import { getSourceById, ScrapeStats } from './sourceRegistry';
 import {
   isGenericEmail,
   registrableDomain,
@@ -1709,7 +1709,7 @@ export async function batchUpsertScrapedOrganizers(
  * Main scraping entry point.
  * Dispatches to the registered source handler via SOURCE_REGISTRY.
  */
-export async function runScrapeRun(source: string, metro: string): Promise<void> {
+export async function runScrapeRun(source: string, metro: string): Promise<ScrapeStats | undefined> {
   const jobId = await createScrapeJob(source, metro);
   const rateLimiter = new RateLimiter({ requestsPerSecond: 1, maxRetries: 3 });
 
@@ -1734,15 +1734,20 @@ export async function runScrapeRun(source: string, metro: string): Promise<void>
     const stats = await sourceDef.run(metro, systemOrganizerId, rateLimiter);
 
     console.log(
-      `[scraper] Job ${jobId} complete — found ${stats.itemsFound}, created ${stats.itemsCreated}, updated ${stats.itemsUpdated}, skipped ${stats.itemsSkipped}, failed ${stats.itemsFailed}`
+      `[scraper] Job ${jobId} complete — found ${stats.itemsFound}, created ${stats.itemsCreated}, updated ${stats.itemsUpdated}, skipped ${stats.itemsSkipped}, failed ${stats.itemsFailed}` +
+        (stats.incompleteReason ? ` — INCOMPLETE (${stats.incompleteReason})` : '')
     );
 
-    await finishScrapeJob(jobId, 'SUCCESS', {
+    // A run that stopped early (hourly cap, breaker, block signal) is recorded as
+    // PARTIAL_FAILURE with the reason, never as a clean SUCCESS -- metro rotation
+    // (metroRotation.ts) only counts SUCCESS as "covered".
+    await finishScrapeJob(jobId, stats.incompleteReason ? 'PARTIAL_FAILURE' : 'SUCCESS', {
       itemsFound: stats.itemsFound,
       itemsCreated: stats.itemsCreated,
       itemsUpdated: stats.itemsUpdated,
       itemsSkipped: stats.itemsSkipped,
       itemsFailed: stats.itemsFailed,
+      ...(stats.incompleteReason ? { error: `incomplete: ${stats.incompleteReason}` } : {}),
     });
 
     if (stats.itemsFound === 0) {
@@ -1751,6 +1756,7 @@ export async function runScrapeRun(source: string, metro: string): Promise<void>
       // captured in the catch block below. Do NOT Sentry-capture here (noise).
       console.log(`[scraper] ${source} (${metro}) returned 0 results — no listings this run`);
     }
+    return stats;
   } catch (error) {
     console.error(`[scraper] Job ${jobId} failed:`, error);
     await finishScrapeJob(jobId, 'FAILED', {

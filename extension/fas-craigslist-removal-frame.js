@@ -710,7 +710,10 @@
       const st = tr.querySelector('td.status[data-postingid]'); const a = tr.querySelector('td.title a');
       const cls = st ? st.classList : null;
       const status = cls ? (['active', 'deleted', 'expired', 'pending', 'removed', 'flagged'].find((k) => cls.contains(k)) || ((/\b(active|deleted|expired|pending|removed|flagged)\b/i.exec(st.textContent || '') || [])[1] || '').toLowerCase()) : '';
-      return { postingId: st ? String(st.getAttribute('data-postingid') || '') : '', status, titleRaw: a ? (a.textContent || '').replace(/\s+/g, ' ').trim() : '' };
+      // 2026-11-01: href (resolved against the dashboard URL) lets background.js store the public posting link when it backfills a missing posting id.
+      let href = '';
+      try { href = a && a.getAttribute('href') ? new URL(a.getAttribute('href'), 'https://accounts.craigslist.org/login/home').href : ''; } catch (e) { href = ''; }
+      return { postingId: st ? String(st.getAttribute('data-postingid') || '') : '', status, titleRaw: a ? (a.textContent || '').replace(/\s+/g, ' ').trim() : '', href };
     }).filter((r) => /^\d{6,}$/.test(r.postingId));
     const seen = new Set(); let lastLen = 0;
     for (let n = 1; n <= CR_MAX_PAGES; n++) {

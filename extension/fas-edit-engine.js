@@ -1123,7 +1123,7 @@
       var a = tr.querySelector('td.title a');
       var cls = st ? st.classList : null;
       return { tr: tr, postingId: st ? String(st.getAttribute('data-postingid') || '') : '', active: !!(cls && cls.contains('active')),
-        deleted: !!(cls && cls.contains('deleted')), titleRaw: a ? a.textContent : '' };
+        deleted: !!(cls && cls.contains('deleted')), titleRaw: a ? a.textContent : '', href: a ? String(a.href || a.getAttribute('href') || '') : '' };   // 2026-11-01: href = the posting's public link (canary record)
     }).filter(function (r) { return /^\d{6,}$/.test(r.postingId); });
   }
   // Craigslist cuts posting titles to ~70 chars, so a long FindA.Sale title shows on the dashboard as its first 60-72 characters (plus "- $price").
@@ -1324,7 +1324,7 @@
       var btn = qa('input[type="submit"], input.managebtn, button', chosen.tr).filter(function (b) { return /^edit$/.test(btnLabel(b)); })[0];
       if (!btn) return fail('edit_button_not_found', 'Row for posting ' + chosen.postingId + ' has no "edit" submit control', 'locate', 'tr.posting-row input.managebtn[value=edit]', {}, { diag: snapshot('cl_row') });
       deferClick(btn);
-      return cont(3000, { phase: 'edit', postingId: chosen.postingId, page: page, hops: 0, priceSet: false, rowTitle: String(chosen.titleRaw || '').replace(/\s+/g, ' ').trim().slice(0, 140) }, { diag: snapshot('cl_dashboard') });
+      return cont(3000, { phase: 'edit', postingId: chosen.postingId, postingUrl: C.clPublicPostingUrl(chosen.href, chosen.postingId), page: page, hops: 0, priceSet: false, rowTitle: String(chosen.titleRaw || '').replace(/\s+/g, ' ').trim().slice(0, 140) }, { diag: snapshot('cl_dashboard') });
     }
     if (phase === 'edit') {
       var bl = pageBlock();

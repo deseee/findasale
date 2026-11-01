@@ -270,6 +270,6 @@ test('vintedCategoryValue reads the menu trigger; pickers and the deferred field
   assert.ok(/'material \(recommended\)'/.test(d));
 });
 
-test('manifest is 1.0.85', () => {
-  assert.strictEqual(JSON.parse(rd('manifest.json')).version, '1.0.85');
+test('manifest is at least 1.0.86', () => {
+  assert.ok(require('./_version').atLeast(JSON.parse(rd('manifest.json')).version, '1.0.86'));
 });

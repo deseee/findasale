@@ -26,6 +26,7 @@ import { sendOutreachEmails, syncLeadTierGroups } from '../jobs/outreachEmailsCr
 import { runLeadScoringBackfill } from '../services/leadScoringService';
 import { runWebsiteEnrichmentBackfill } from '../jobs/websiteEnrichmentJob';
 import { emailDiscoveryJob } from '../jobs/emailDiscoveryJob';
+import { trackActivity } from '../lib/eventLoopMonitor';
 import { runOrganizerWebsiteAddressEnrichment } from '../jobs/organizerWebsiteAddressCron';
 import { runAutoSeedOutreach } from '../jobs/autoSeedOutreachCron';
 import { runMonthlyTrendReport } from '../jobs/monthlyTrendReportJob';
@@ -114,6 +115,7 @@ export async function runInternalJob(req: Request, res: Response): Promise<void>
   setImmediate(async () => {
     const startedAt = Date.now();
     console.log(`[InternalJobRunner] Starting "${job}"`);
+    const endActivity = trackActivity(`internalJob:${job}`); // named in [eventLoop] stall logs
     try {
       await jobFn();
       console.log(`[InternalJobRunner] Completed "${job}" in ${Date.now() - startedAt}ms`);
@@ -123,6 +125,7 @@ export async function runInternalJob(req: Request, res: Response): Promise<void>
         err instanceof Error ? err.message : String(err)
       );
     } finally {
+      endActivity();
       runningJobs.delete(job);
     }
   });

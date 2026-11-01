@@ -3192,7 +3192,10 @@
     try {
       const gk = 'fasPoshAutoNav'; let g = null;
       try { g = JSON.parse(sessionStorage.getItem(gk) || 'null'); } catch (e) { g = null; }
-      if (poshShouldAutoNavToCreate(location.pathname, g, queued.item.id, Date.now(), readPoshNavRetryState()) && !looksLikeInterstitial()) {
+      // 1.0.87: a tab that just clicked List this item lands on the closet; settle that click first instead of reopening the form (reopening it made the check ambiguous).
+      const recentClick = readPoshPublishAttemptState();
+      const justClicked = !!(recentClick && recentClick.itemId === queued.item.id && (Date.now() - recentClick.ts) < POSH_PUBLISH_ATTEMPT_WINDOW_MS);
+      if (!justClicked && poshShouldAutoNavToCreate(location.pathname, g, queued.item.id, Date.now(), readPoshNavRetryState()) && !looksLikeInterstitial()) {
         try { sessionStorage.setItem(gk, JSON.stringify({ id: queued.item.id, at: Date.now() })); } catch (e) { /* guard is best-effort */ }
         writePoshNavRetryState({ ts: Date.now(), attempt: 0 });
         tInfo('auto_nav_create_listing', 'Opening the create-listing page first (this tab was on "' + location.pathname + '")', { path: location.pathname, itemId: queued.item.id });
@@ -3277,8 +3280,17 @@
       //                    everywhere else in this file, never guessed past.
       tWarn('publish_attempt_marker', 'This tab already clicked List this item for this item moments ago; checking what happened before doing anything', { ageSec: Math.round((Date.now() - publishAttempt.ts) / 1000) });
       tStep('Checking the earlier publish click', 'The page reloaded right after List this item was clicked; checking whether it went through before touching anything');
-      const outcomeState = await waitForFormReady(5000);
+      let outcomeState = await waitForFormReady(5000);
       tInfo('publish_attempt_outcome', 'Earlier-click check: ' + outcomeState, { outcomeState: outcomeState });
+      // 1.0.87: a fresh form alone does not mean the click failed; a live exact-title listing in the closet settles it as published.
+      if (outcomeState === 'ready') {
+        for (let attempt = 0; attempt < 3 && outcomeState === 'ready'; attempt++) {
+          if (attempt) await sleep(4000);
+          let r = null;
+          try { r = await fasPoshClosetDupCheck(queued.item); } catch (e) { r = null; }
+          if (r && r.state === 'dup') { tInfo('publish_attempt_closet_found', 'The earlier click is live in your closet', { attempt: attempt }); outcomeState = 'timeout'; }
+        }
+      }
       if (outcomeState === 'interstitial') {
         tProblem({ code: 'interstitial_after_reload', title: 'Poshmark is asking for a security check', what: 'A verification screen is showing after the page reloaded.', why: 'FindA.Sale never tries to solve these checks; only you can.', next: 'Finish the check yourself, then reopen the extension to continue.' });
         overlayWarn('Poshmark is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-posh-close', 'Close', false));

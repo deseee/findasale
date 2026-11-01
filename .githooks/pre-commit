@@ -151,7 +151,10 @@ Real-worker-hostname|[a-z0-9][a-z0-9-]*\.workers\.dev'
 # that does not apply here. Any OTHER/new worker.dev hostname is still blocked
 # by the unchanged blanket rule below; only this one confirmed-public hostname
 # is exempt.
-WORKER_PLACEHOLDER_RE='(your-worker|<worker>|<your-worker>|example-worker|my-worker|findasale-image-proxy\.findasale)\.workers\.dev'
+# eso-cdn.tlcdn.workers.dev is EstateSales.org's public listing-photo CDN, embedded in every public
+# GarageSaleFinder page; it is not a FindA.Sale worker. Exempted 2026-11-01 (Patrick approved) so the GSF
+# photo parser tests can name it. Only that exact host is exempt.
+WORKER_PLACEHOLDER_RE='(your-worker|<worker>|<your-worker>|example-worker|my-worker|findasale-image-proxy\.findasale|eso-cdn\.tlcdn)\.workers\.dev'
 
 for file in $STAGED_ALL; do
   case "$file" in

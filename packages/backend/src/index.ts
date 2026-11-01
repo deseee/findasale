@@ -241,6 +241,7 @@ import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
 import { requestTimeout } from './middleware/requestTimeout'; // Feature #108: Global request timeout (30s)
+import { startEventLoopMonitor } from './lib/eventLoopMonitor'; // 2026-11-01: logs event-loop stalls (FINDASALE-NODEJS-91 / -93)
 import { correlationIdMiddleware } from './middleware/correlationId'; // #98: Request tracing
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import { initLiveFeed } from './services/liveFeedService'; // Feature #70: Live Sale Feed
@@ -702,6 +703,7 @@ app.use(degradationMode);
 // Feature #108: Global request timeout guard (30 seconds)
 // Prevents handlers from blocking indefinitely; returns 503 on timeout
 app.use(requestTimeout(30000));
+startEventLoopMonitor();
 
 // Health check endpoint
 app.get('/', (req, res) => {

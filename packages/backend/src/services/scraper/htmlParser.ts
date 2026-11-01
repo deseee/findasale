@@ -267,8 +267,14 @@ export function parseGarageSalesFinderListingWithReason(html: string): {
       .get()
       .filter((src): src is string => !!src);
     if (photoUrls.length === 0) {
+      // 2026-11-01: the detail page itself carries every sale photo as a thumbnail
+      // (gsf.tlstatic.com/image/w150-h100/... or EstateSales.org's tlcdn photo CDN, .../s-<id>-...-t.webp), so the
+      // separate /gallery fetch is no longer needed (its <img> tags are now lazy spacer.png).
+      photoUrls = gsfPhotosFromHtml(html);
+    }
+    if (photoUrls.length === 0) {
       const og = ($('meta[property="og:image"]').attr('content') || '').trim();
-      if (og) photoUrls = [og];
+      if (og) photoUrls = [gsfFullSizePhotoUrl(og)];
     }
 
     const description =
@@ -309,7 +315,57 @@ export function parseGarageSalesFinderGallery(html: string): string[] {
       photos.push(src);
     }
   });
+  // 2026-11-01: gallery <img> src is now a lazy spacer.png; fall back to any photo URL in
+  // the markup (data-src, srcset, links), upgraded to the w700-h500 size.
+  if (photos.length === 0) return gsfPhotosFromHtml(html);
   return photos.slice(0, 5);
+}
+
+/**
+ * GarageSaleFinder photo CDN size segment, e.g. /image/w150-h100/ or /image/w300-c300:300/.
+ * The same photo is served at /image/w700-h500/ (the size GSF itself uses in its Pinterest
+ * share link, confirmed on a live listing 2026-11-01).
+ */
+const GSF_SIZE_SEGMENT_RE = /\/image\/w\d+-(?:h\d+|c\d+(?::\d+)?)\//;
+
+/** Upgrade a gsf/ysn tlstatic thumbnail URL to the w700-h500 size; other URLs unchanged. */
+export function gsfFullSizePhotoUrl(url: string): string {
+  if (!/\.tlstatic\.com\//i.test(url)) return url;
+  return url.replace(GSF_SIZE_SEGMENT_RE, '/image/w700-h500/');
+}
+
+/**
+ * Every sale photo URL in a GarageSaleFinder page, in page order, de-duplicated, max 5.
+ * Attribute-agnostic (src, data-src, srcset, href, og:image all match) so a lazy-loading
+ * markup change does not lose the photos. Site assets (/images/... logos, social icons,
+ * spacer.png) are excluded; only photo paths are kept:
+ *   - *.tlstatic.com/image/<size>/...   (GSF-hosted photos; upgraded to w700-h500)
+ *   - tlcdn CDN /s-<id>-...           (photos of listings syndicated from EstateSales.org;
+ *                                        kept as served, no larger size is confirmed)
+ */
+export function gsfPhotosFromHtml(html: string): string[] {
+  const re = /https?:\/\/[a-z0-9.-]+\.(?:tlstatic\.com|tlcdn\.workers\.dev)\/[^\s"'<>()\\]+?\.(?:jpe?g|png|webp)/gi;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const raw = m[0].replace(/&amp;/g, '&');
+    let path: string;
+    try {
+      path = new URL(raw).pathname;
+    } catch {
+      continue;
+    }
+    const isGsfPhoto = /\.tlstatic\.com$/i.test(new URL(raw).hostname) && GSF_SIZE_SEGMENT_RE.test(path);
+    const isEsoPhoto = /\.tlcdn\.workers\.dev$/i.test(new URL(raw).hostname) && /^\/s-\d+-/.test(path);
+    if (!isGsfPhoto && !isEsoPhoto) continue;
+    const url = gsfFullSizePhotoUrl(raw);
+    if (seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+    if (out.length >= 5) break;
+  }
+  return out;
 }
 
 /**

@@ -758,18 +758,102 @@
     return { platform: platform, itemId: entry && entry.id, title: entry && String(entry.title || '').slice(0, 80), code: code, step: step || '', selector: selector || '' };
   }
 
-  // 1.0.23: hard pause of Craigslist PRICE-EDIT runs. cfg = self.FAS_CONFIG. Only the literal false turns the pause off (fail closed).
-  function isEditPausedByConfig(platform, cfg) {
-    return platform === 'CRAIGSLIST' && !(cfg && cfg.FAS_CL_PRICE_EDITS_PAUSED === false);
+  // 1.0.23: hard pause of Craigslist PRICE-EDIT runs. 2026-11-01 (owner decision: lift the pause safely, one item first): the boolean became
+  // a staged mode, cfg.FAS_CL_PRICE_EDIT_MODE (config.js):
+  //   'paused' -- no Craigslist price edit runs at all (the 1.0.23 behaviour).
+  //   'canary' -- at most ONE Craigslist item is edited per CL_CANARY_GAP_MS (24 h rolling, counted from when the attempt STARTED, so a crash
+  //               mid-edit still uses up the day), then Craigslist edits stop. The attempt and its verified outcome are recorded (chrome.storage
+  //               fasClCanary + an ExtensionRuntimeLog warn line, source cl_canary_edit) so the posting can be checked before switching to 'on'.
+  //   'on'     -- normal runs, never more than CL_ON_RUN_CAP items per run (on top of LIMITS.CRAIGSLIST and the 1.0.85 pre-save title guard).
+  // Anything else (missing, misspelt, the old FAS_CL_PRICE_EDITS_PAUSED key) is 'paused': fail closed.
+  var CL_CANARY_GAP_MS = 24 * 60 * 60 * 1000;
+  var CL_ON_RUN_CAP = 25;
+  function clPriceEditMode(cfg) {
+    var m = cfg && cfg.FAS_CL_PRICE_EDIT_MODE;
+    return m === 'canary' || m === 'on' ? m : 'paused';
+  }
+  // canary: the stored fasClCanary record ({ at, ... }) or null. -> { mode, allowed, cap, reason, nextAt }
+  function clEditGate(cfg, canary, now) {
+    var mode = clPriceEditMode(cfg), t = typeof now === 'number' ? now : Date.now();
+    if (mode === 'on') return { mode: mode, allowed: true, cap: CL_ON_RUN_CAP, reason: '', nextAt: null };
+    if (mode === 'canary') {
+      var last = canary && Number(canary.at);
+      // a record from the future (clock moved back) also counts as "used": fail closed
+      if (last && isFinite(last) && t - last < CL_CANARY_GAP_MS) return { mode: mode, allowed: false, cap: 0, reason: 'canary_used', nextAt: last + CL_CANARY_GAP_MS };
+      return { mode: mode, allowed: true, cap: 1, reason: '', nextAt: null };
+    }
+    return { mode: 'paused', allowed: false, cap: 0, reason: 'paused', nextAt: null };
+  }
+  function isEditPausedByConfig(platform, cfg, canary, now) {
+    return platform === 'CRAIGSLIST' && !clEditGate(cfg, canary, now).allowed;
   }
   // Which queued platform the edit pump works on next: first in PLATFORM_ORDER that has entries, is not in `busy` (a Set) and is not paused by config.
-  function nextEditPlatform(pending, busy, cfg) {
+  function nextEditPlatform(pending, busy, cfg, canary, now) {
     pending = pending || {};
-    return PLATFORM_ORDER.filter(function (p) { return !(busy && busy.has(p)) && !isEditPausedByConfig(p, cfg) && Array.isArray(pending[p]) && pending[p].length; })[0];
+    return PLATFORM_ORDER.filter(function (p) { return !(busy && busy.has(p)) && !isEditPausedByConfig(p, cfg, canary, now) && Array.isArray(pending[p]) && pending[p].length; })[0];
+  }
+  // The canary item: a plain price change (finite positive price, no quantity work), preferring one whose posting URL is stored (it can be
+  // checked publicly afterwards), then one with a stored posting id, then a title-only one. Entries are normalizeEntry() output. null = none.
+  function pickCanaryEntry(entries) {
+    var ok = (entries || []).filter(function (e) { return e && e.id && e.priceDrift && typeof e.price === 'number' && isFinite(e.price) && e.price > 0 && !e.quantityDrift; });
+    var rank = function (e) { return /^https?:\/\/[^/]*craigslist\.org\//i.test(String(e.remoteListingUrl || '')) && e.remoteListingId ? 0 : (e.remoteListingId ? 1 : 2); };
+    var best = null;
+    ok.forEach(function (e) { if (!best || rank(e) < rank(best)) best = e; });
+    return best;
+  }
+
+  // ---- Craigslist posting-id backfill (2026-11-01) --------------------------------------------------------------------
+  // About half of the live Craigslist POSTED rows have no saved posting id, so removal and edits fall back to 70-char title matching.
+  // The reconcile scan reads every posting (all statuses); this decides which items can safely get their id filled in:
+  //   - only items whose saved id is KNOWN to be empty (idKnown: the backend sent craigslistRemoteListingId: null);
+  //   - exactly ONE active posting matches the item's title (titleEqualsFor('CRAIGSLIST'), the truncation-aware match the 1.0.85
+  //     title guard uses); two or more -> nothing for that item;
+  //   - that posting is not already the saved id of another item, and does not also match another id-less item;
+  //   - a (item, posting) pair the backend already refused is not re-sent for CL_BACKFILL_RETRY_MS.
+  // items: [{ id, title, remoteId, idKnown }], rows: [{ postingId, status, titleRaw, href }], memo: { itemId: { postingId, at } }.
+  // -> { report: [{ id, title, postingId, postingUrl }], skipped: { ambiguous, none, claimed, shared, memo }, capped }
+  var CL_BACKFILL_CAP = 50;
+  var CL_BACKFILL_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
+  // A public posting URL for postingId ('' when href is not one): https://<site>.craigslist.org/.../<id>.html, never accounts./post.
+  function clPublicPostingUrl(href, postingId) {
+    var h = String(href || '').trim(), id = String(postingId || '');
+    if (!/^\d{9,12}$/.test(id)) return '';
+    var m = /^https:\/\/([a-z0-9-]+)\.craigslist\.org\/(?:[^?#\s]*\/)?(\d{9,12})\.html$/i.exec(h);
+    if (!m || m[2] !== id || /^(accounts|post|www)$/i.test(m[1])) return '';
+    return h.slice(0, 300);
+  }
+  function clBackfillDecide(items, rows, memo, now, cap) {
+    var t = typeof now === 'number' ? now : Date.now(), lim = cap != null ? cap : CL_BACKFILL_CAP;
+    memo = memo || {};
+    var active = (rows || []).filter(function (r) { return r && r.status === 'active' && /^\d{6,}$/.test(String(r.postingId || '')); });
+    var claimed = {};
+    (items || []).forEach(function (it) { if (it && it.remoteId) claimed[String(it.remoteId)] = 1; });
+    var skipped = { ambiguous: 0, none: 0, claimed: 0, shared: 0, memo: 0 };
+    var cands = [], byPosting = {};
+    (items || []).forEach(function (it) {
+      if (!it || !it.id || !it.idKnown || it.remoteId || !it.title) return;
+      var hits = active.filter(function (r) { return titleEqualsFor('CRAIGSLIST', r.titleRaw, it.title); });
+      if (!hits.length) { skipped.none++; return; }
+      if (hits.length > 1) { skipped.ambiguous++; return; }
+      var pid = String(hits[0].postingId);
+      if (claimed[pid]) { skipped.claimed++; return; }
+      cands.push({ id: String(it.id), title: String(it.title), postingId: pid, postingUrl: clPublicPostingUrl(hits[0].href, pid) });
+      byPosting[pid] = (byPosting[pid] || 0) + 1;
+    });
+    var report = [], capped = false;
+    cands.forEach(function (c) {
+      if (byPosting[c.postingId] > 1) { skipped.shared++; return; }
+      var m = memo[c.id];
+      if (m && m.postingId === c.postingId && t - Number(m.at || 0) < CL_BACKFILL_RETRY_MS) { skipped.memo++; return; }
+      if (report.length < lim) report.push(c); else capped = true;
+    });
+    return { report: report, skipped: skipped, capped: capped };
   }
 
   var api = {
     isEditPausedByConfig: isEditPausedByConfig, nextEditPlatform: nextEditPlatform,
+    CL_CANARY_GAP_MS: CL_CANARY_GAP_MS, CL_ON_RUN_CAP: CL_ON_RUN_CAP, clPriceEditMode: clPriceEditMode, clEditGate: clEditGate, pickCanaryEntry: pickCanaryEntry,
+    CL_BACKFILL_CAP: CL_BACKFILL_CAP, CL_BACKFILL_RETRY_MS: CL_BACKFILL_RETRY_MS, clPublicPostingUrl: clPublicPostingUrl, clBackfillDecide: clBackfillDecide,
     LIMITS: LIMITS, PLATFORM_ORDER: PLATFORM_ORDER, LABELS: LABELS, QTY_PLATFORMS: QTY_PLATFORMS,
     MAX_ATTEMPTS: MAX_ATTEMPTS, BACKOFF_BASE_MS: BACKOFF_BASE_MS, BACKOFF_CAP_MS: BACKOFF_CAP_MS, PARK_MS: PARK_MS,
     backoffMs: backoffMs, shouldAttempt: shouldAttempt, recordFailure: recordFailure,

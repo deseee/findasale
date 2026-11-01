@@ -171,6 +171,6 @@ test('background logs the delete note and still posts /removed (REMOVE/REMOVED)'
   assert.ok(/if \(msg\.note\) fasLog\(/.test(h));
 });
 
-test('manifest is 1.0.85', () => {
-  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8')).version, '1.0.85');
+test('manifest is at least 1.0.86', () => {
+  assert.ok(require('./_version').atLeast(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8')).version, '1.0.86'));
 });

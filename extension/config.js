@@ -58,11 +58,16 @@ self.FAS_CONFIG = {
   // Patrick-confirmed (2026-08-22, not a guess): this account page lists every one of the
   // organizer's own Craigslist postings, so it doubles as the Craigslist "my listings" page.
   CRAIG_MANAGE_URL: 'https://www.craigslist.org/account',
-  // 1.0.23 (Patrick: "pause"): HARD PAUSE of every Craigslist PRICE-EDIT run (the background edit scheduler never opens a tab, takes the lock,
-  // visits the dashboard or clicks for CRAIGSLIST; the queued items are left pending, never marked synced or failed). Craigslist posting,
-  // removal, Renew All and the stale-flag reconcile are NOT affected. TO TURN IT BACK ON: set this to false and bump the extension version.
-  // Anything other than the literal false keeps the pause (fail closed).
-  FAS_CL_PRICE_EDITS_PAUSED: true
+  // Craigslist PRICE-EDIT runs, staged (owner decision 2026-11-01: lift the 1.0.23 pause safely, one item first, verified on Craigslist).
+  //   'paused' -- the 1.0.23 hard pause: the edit scheduler never opens a tab, takes the lock, visits the dashboard or clicks for CRAIGSLIST;
+  //               queued items stay pending, never marked synced or failed.
+  //   'canary' -- at most ONE Craigslist item edited per 24 h, then Craigslist edits stop. The result (item id, posting URL, old -> new
+  //               price, verification outcome) goes to chrome.storage.local fasClCanary and to ExtensionRuntimeLog (warn, source
+  //               cl_canary_edit). Check that posting publicly, then switch to 'on'.
+  //   'on'     -- normal runs, capped per run (FAS_EDIT_CORE.CL_ON_RUN_CAP and LIMITS.CRAIGSLIST), 1.0.85 pre-save title guard unchanged.
+  // Craigslist posting, removal, Renew All and the stale-flag reconcile are NOT affected by this. Any other value means 'paused' (fail closed).
+  // Change it by editing this line and bumping the extension version.
+  FAS_CL_PRICE_EDIT_MODE: 'canary'
 };
 
 // ---- Kits / bundles (Item.listingType 'KIT') -- shared, pure helpers (2026-10-16) ----

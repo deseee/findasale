@@ -39,6 +39,7 @@ jest.mock('../rateLimiter', () => ({
 import {
   safeFetch,
   __resetSafeFetchStateForTests,
+  getHostCapState,
   TOLERANT_MIN_ATTEMPTS,
   TOLERANT_MIN_DISTINCT_SCOPES,
 } from '../safeFetch';
@@ -152,5 +153,31 @@ describe('strict policy (default) is unchanged', () => {
     const r = await safeFetch('https://example-strict.com/b', T);
     expect(r.status).toBe('SKIPPED_BREAKER');
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('hourly cap is per site, not per host spelling (2026-11-01)', () => {
+  it('www.garagesalefinder.com and garagesalefinder.com share one window', async () => {
+    const cap = Number(process.env.SCRAPER_HOST_CAP_PER_HOUR ?? 300);
+    for (let i = 0; i < cap; i++) {
+      const u = i % 2 ? `https://www.garagesalefinder.com/yard-sales/m${i}/` : `https://garagesalefinder.com/s/X${i}/m`;
+      expect((await safeFetch(u, T)).status).toBe('FETCHED');
+    }
+    expect((await safeFetch('https://www.garagesalefinder.com/yard-sales/last/', T)).status).toBe('SKIPPED_CAP');
+    expect((await safeFetch('https://garagesalefinder.com/s/Y/last', T)).status).toBe('SKIPPED_CAP');
+  });
+
+  it('getHostCapState reports usage and time to reset without counting a request', async () => {
+    const t0 = Date.now();
+    expect(getHostCapState('https://garagesalefinder.com/', t0)).toMatchObject({ used: 0, resetInMs: 0 });
+    await safeFetch('https://www.garagesalefinder.com/yard-sales/a/', T);
+    await safeFetch('https://garagesalefinder.com/s/A/a', T);
+    const st = getHostCapState('https://garagesalefinder.com/');
+    expect(st.host).toBe('garagesalefinder.com');
+    expect(st.used).toBe(2);
+    expect(st.remaining).toBe(st.cap - 2);
+    expect(st.resetInMs).toBeGreaterThan(3_500_000);
+    expect(getHostCapState('https://garagesalefinder.com/').used).toBe(2);
+    expect(getHostCapState('https://garagesalefinder.com/', Date.now() + 3_600_001)).toMatchObject({ used: 0, resetInMs: 0 });
   });
 });

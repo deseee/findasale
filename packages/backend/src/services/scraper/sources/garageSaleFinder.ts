@@ -12,10 +12,10 @@
  */
 import * as cheerio from 'cheerio';
 import { RateLimiter } from '../rateLimiter';
-import { parseGarageSalesFinderListingWithReason, parseGarageSalesFinderGallery, extractEmails } from '../htmlParser';
+import { parseGarageSalesFinderListingWithReason, gsfFullSizePhotoUrl, extractEmails } from '../htmlParser';
 import { ingestScrapedListing, flushFreshnessTouches, flushScraperRevalidation, ScrapedItem } from '../index';
-import { getRandomUserAgent, jitterDelay } from '../userAgents';
-import { safeFetch } from '../safeFetch';
+import { getRandomUserAgent } from '../userAgents';
+import { safeFetch, getHostCapPerHour } from '../safeFetch';
 import { prisma } from '../../../lib/prisma';
 
 const GARAGE_SALES_BASE_URL = 'https://www.garagesalefinder.com';
@@ -50,6 +50,17 @@ const FRESHNESS_WINDOW_MS = 20 * 60 * 60 * 1000; // 20 hours
 // it would be skipped the same way).
 export const METRO_MAX_CONSECUTIVE_FETCH_FAILURES = 5;
 
+/** Per-metro result. stoppedEarly is set when the metro was not fully looked at. */
+export interface GsfMetroStats {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  skippedFresh: number;
+  /** e.g. 'skipped_cap', 'skipped_breaker', 'fetch_failure_streak', 'metro_http_429'. */
+  stoppedEarly?: string;
+}
+
 /** Why one sale detail page produced no item (diagnostics + per-metro breaker). */
 export type GsfDetailReason =
   | 'robots'
@@ -70,6 +81,54 @@ export function isMetroStopReason(reason: string | undefined): boolean {
   return reason === 'skipped_breaker' || reason === 'skipped_cap' || reason === 'skipped_no_proxy';
 }
 
+// ---------------------------------------------------------------------------
+// PACING (2026-11-01)
+// ---------------------------------------------------------------------------
+// The 11-01 06:00 run spent the whole 300/hr budget for garagesalefinder.com in under six
+// minutes (New York, Philadelphia and Boston alone), then every later metro hit SKIPPED_CAP:
+// 236 metros logged {"skipped_cap":1} and 51 more never got their metro page. Bursting the
+// budget and idling for the rest of the hour is also the least polite shape for the site.
+// Every GSF request (metro page and sale page) now waits for this process-wide pacer, which
+// spaces requests evenly so a full hour stays under 90% of the cap (default 3,600,000 ms /
+// 270 = one request every ~13.3 s, plus up to 15% jitter). The hourly cap in safeFetch is
+// left untouched as the backstop. Override with GSF_MIN_REQUEST_INTERVAL_MS.
+export const GSF_CAP_SHARE = 0.9;
+
+export function gsfMinRequestIntervalMs(): number {
+  const override = Number(process.env.GSF_MIN_REQUEST_INTERVAL_MS);
+  if (Number.isFinite(override) && override > 0) return override;
+  const perHour = Math.max(1, Math.floor(getHostCapPerHour() * GSF_CAP_SHARE));
+  return Math.ceil(3_600_000 / perHour);
+}
+
+type PacerClock = { now: () => number; sleep: (ms: number) => Promise<void>; random: () => number };
+const realClock: PacerClock = {
+  now: () => Date.now(),
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  random: () => Math.random(),
+};
+let pacerClock: PacerClock = realClock;
+let lastGsfRequestAt = 0;
+
+/** Test-only: swap the pacer clock and reset its state. Pass nothing to restore the real clock. */
+export function __setGsfPacerClockForTests(clock?: PacerClock): void {
+  pacerClock = clock ?? realClock;
+  lastGsfRequestAt = 0;
+}
+
+/**
+ * Wait until at least gsfMinRequestIntervalMs() (+0-15% jitter) has passed since the previous
+ * GSF request in this process, then claim the slot. Returns the ms waited.
+ */
+export async function gsfPace(): Promise<number> {
+  const interval = gsfMinRequestIntervalMs() * (1 + pacerClock.random() * 0.15);
+  const now = pacerClock.now();
+  const wait = lastGsfRequestAt === 0 ? 0 : Math.max(0, lastGsfRequestAt + interval - now);
+  if (wait > 0) await pacerClock.sleep(wait);
+  lastGsfRequestAt = pacerClock.now();
+  return wait;
+}
+
 /**
  * Convert metro slug to GarageSaleFinder URL.
  * Metro format: "grand-rapids-mi" → /yard-sales/grand-rapids-mi/
@@ -85,8 +144,8 @@ export async function scrapeGarageSaleFinder(
   metro: string,
   organizerId: string,
   rateLimiter: RateLimiter
-): Promise<{ created: number; updated: number; skipped: number; failed: number; skippedFresh: number }> {
-  const stats = { created: 0, updated: 0, skipped: 0, failed: 0, skippedFresh: 0 };
+): Promise<GsfMetroStats> {
+  const stats: GsfMetroStats = { created: 0, updated: 0, skipped: 0, failed: 0, skippedFresh: 0 };
   // Measurement-only (2026-08-26 ADR): tracks bytes transferred for this metro's run so
   // Railway egress footprint can be read back from logs before deciding on a GH Actions migration.
   const byteTracker = { totalBytes: 0, fetchCount: 0 };
@@ -105,6 +164,7 @@ export async function scrapeGarageSaleFinder(
       return stats;
     }
 
+    await gsfPace();
     const result = await safeFetch(metroUrl, {
       headers: { 'User-Agent': getRandomUserAgent() },
       requireProxy: true,
@@ -114,7 +174,10 @@ export async function scrapeGarageSaleFinder(
     });
 
     if (result.status !== 'FETCHED') {
+      // Not "no listings": the metro was never looked at. Report it so the job is recorded
+      // as incomplete and the rotation retries this metro first next time.
       console.warn(`[GarageSaleFinder] safeFetch ${result.status} for ${metroUrl} — skipping`);
+      stats.stoppedEarly = result.status.toLowerCase();
       return stats;
     }
     const response = result.response!;
@@ -125,6 +188,9 @@ export async function scrapeGarageSaleFinder(
         rateLimiter.recordBackoff(domain, retryAfter ? parseInt(retryAfter) : 60);
       }
       console.warn(`[GarageSaleFinder] Metro page returned ${response.status}: ${metroUrl}`);
+      if (response.status === 429 || response.status === 503 || response.status === 403) {
+        stats.stoppedEarly = `metro_http_${response.status}`;
+      }
       return stats;
     }
 
@@ -216,23 +282,27 @@ export async function scrapeGarageSaleFinder(
         continue;
       }
 
-      await jitterDelay(300, 1200);
       const idMatch = saleUrl.match(/\/s\/([A-Za-z0-9]+)\//);
       const saleId = idMatch ? idMatch[1] : '';
       const galleryInfo = galleryMap.get(saleId);
       const diag: { reason?: GsfDetailReason } = {};
       const item = await parseGarageSalesFinderSale(saleUrl, rateLimiter, galleryInfo, byteTracker, metro, diag);
       if (!item) {
-        stats.failed++;
         const reason = diag.reason || 'unknown';
         failureReasons[reason] = (failureReasons[reason] || 0) + 1;
         if (isMetroStopReason(reason)) {
+          // A request we chose not to send is not a failed listing: record the metro as
+          // incomplete instead of counting an item failure (11-01: all 237 "failures" were
+          // this, not parse errors).
+          stats.stoppedEarly = reason;
           console.warn(`[GarageSaleFinder] ${metro}: ${reason} — ending this metro early (other metros unaffected)`);
           break;
         }
+        stats.failed++;
         if (isFetchFailureReason(reason)) {
           consecutiveFetchFailures++;
           if (consecutiveFetchFailures >= METRO_MAX_CONSECUTIVE_FETCH_FAILURES) {
+            stats.stoppedEarly = 'fetch_failure_streak';
             console.warn(`[GarageSaleFinder] ${metro}: ${consecutiveFetchFailures} consecutive fetch failures — ending this metro early (other metros unaffected)`);
             break;
           }
@@ -255,7 +325,7 @@ export async function scrapeGarageSaleFinder(
     if (Object.keys(failureReasons).length > 0) {
       console.warn(`[GarageSaleFinder] ${metro} detail failures by reason: ${JSON.stringify(failureReasons)}`);
     }
-    console.log(`[GarageSaleFinder] ${metro} done — created=${stats.created} updated=${stats.updated} skipped=${stats.skipped} skippedFresh=${stats.skippedFresh} failed=${stats.failed}`);
+    console.log(`[GarageSaleFinder] ${metro} done — created=${stats.created} updated=${stats.updated} skipped=${stats.skipped} skippedFresh=${stats.skippedFresh} failed=${stats.failed}${stats.stoppedEarly ? ` stoppedEarly=${stats.stoppedEarly}` : ''}`);
 
     rateLimiter.clearBackoff(domain);
     console.log(`[GarageSaleFinder] metro=${metro} bytesTransferred=${byteTracker.totalBytes} fetches=${byteTracker.fetchCount} stats=${JSON.stringify(stats)}`);
@@ -267,8 +337,8 @@ export async function scrapeGarageSaleFinder(
 }
 
 /**
- * Parse a single GarageSaleFinder sale detail page.
- * If galleryInfo is provided, fetches the gallery page to extract full-size images.
+ * Parse a single GarageSaleFinder sale detail page (one request; photos are read from the
+ * detail page). galleryInfo's thumbnail is only a photo fallback, no gallery page is fetched.
  */
 export async function parseGarageSalesFinderSale(
   saleUrl: string,
@@ -293,6 +363,7 @@ export async function parseGarageSalesFinderSale(
 
     let result;
     try {
+      await gsfPace();
       result = await safeFetch(saleUrl, {
         headers: { 'User-Agent': getRandomUserAgent() },
         requireProxy: true,
@@ -332,40 +403,13 @@ export async function parseGarageSalesFinderSale(
       return fail(`parse_${parseReason || 'incomplete'}`);
     }
 
-    // Attempt gallery photo fetch if galleryInfo was found on the metro page
-    let galleryPhotos: string[] = [];
-    if (galleryInfo) {
-      try {
-        const galleryUrl = galleryInfo.galleryUrl.startsWith('http')
-          ? galleryInfo.galleryUrl
-          : `${GARAGE_SALES_BASE_URL}${galleryInfo.galleryUrl}`;
-
-        if (rateLimiter.isAllowed(galleryUrl)) {
-          await jitterDelay(200, 800);
-          await rateLimiter.waitBeforeRequest(domain);
-
-          const galleryResult = await safeFetch(galleryUrl, {
-            headers: { 'User-Agent': getRandomUserAgent() },
-            requireProxy: true,
-            timeoutMs: 10000,
-            breakerPolicy: 'tolerant',
-            breakerScope: metro,
-          });
-
-          if (galleryResult.status === 'FETCHED' && galleryResult.response!.ok) {
-            const galleryHtml = await galleryResult.response!.text();
-            if (byteTracker) {
-              byteTracker.totalBytes += Number(galleryResult.response!.headers.get('content-length')) || Buffer.byteLength(galleryHtml, 'utf8');
-              byteTracker.fetchCount += 1;
-            }
-            galleryPhotos = parseGarageSalesFinderGallery(galleryHtml);
-            console.log(`[GarageSaleFinder] Gallery fetched: ${galleryPhotos.length} photos from ${galleryUrl}`);
-          }
-        }
-      } catch (galleryError) {
-        // Gallery fetch failed — fall back gracefully to no photos
-        console.warn(`[GarageSaleFinder] Gallery fetch failed for ${saleUrl}:`, galleryError);
-      }
+    // Photos come from the detail page itself (2026-11-01). The old extra /gallery request
+    // returned 0 photos on all 134 tries in the 11-01 run (its <img> tags are now lazy
+    // spacer.png) while costing nearly half of the hourly budget. If the detail page has no
+    // photo, the metro page's thumbnail (upgraded to the same w700-h500 size) is used.
+    let photoUrls = parsed.photoUrls;
+    if ((!photoUrls || photoUrls.length === 0) && galleryInfo?.thumbnailUrl) {
+      photoUrls = [gsfFullSizePhotoUrl(galleryInfo.thumbnailUrl)];
     }
 
     const emails = extractEmails(html);
@@ -386,7 +430,7 @@ export async function parseGarageSalesFinderSale(
       saleType: parsed.saleType ?? 'YARD',
       organizerName: parsed.organizerName,
       organizerEmail: parsed.organizerEmail,
-      photoUrls: galleryPhotos.length > 0 ? galleryPhotos : parsed.photoUrls,
+      photoUrls,
       sourceUrl: saleUrl,
       sourceName: 'GarageSaleFinder',
       sourceItemId: `garagesalefinder.com:${sourceItemId}`,

@@ -365,7 +365,16 @@ export function stripLeadingPhoneNumberNoise(candidate: string): string {
  * silently skip matches for anyone using .exec() in a loop.
  */
 export function createEmailCandidateRegex(): RegExp {
-  return /[a-zA-Z0-9_%+\-]+(?:\.[a-zA-Z0-9_%+\-]+)*@[a-zA-Z0-9\-]+(?:\.[a-zA-Z0-9\-]+)*\.[a-zA-Z]{2,}/g;
+  // 2026-11-01 (Sentry FINDASALE-NODEJS-91 / -93 root cause): the old unbounded form
+  // `[...]+(?:\.[...]+)*@...` is quadratic on a long run of local-part characters with no
+  // "@" (the engine retries from every position in the run). locations.levi.com serves an
+  // 855 KB page whose body text holds a 96,568-char run; one match() call took 17.4 s here
+  // and ~50 s on Railway, blocking the event loop once per contact path (5 x ~50 s), so
+  // every request in flight hit the 30 s global timeout. Bounded and anchored now: a match
+  // may only start where the previous character is not a local-part character, the local
+  // part is capped at RFC 5321 sizes (64 per dot segment) and each domain label at 63.
+  // Real addresses match exactly as before; the same run now takes ~3 ms.
+  return /(?<![a-zA-Z0-9_%+\-])[a-zA-Z0-9_%+\-]{1,64}(?:\.[a-zA-Z0-9_%+\-]{1,64}){0,10}@[a-zA-Z0-9\-]{1,63}(?:\.[a-zA-Z0-9\-]{1,63}){0,8}\.[a-zA-Z]{2,}/g;
 }
 
 /**

@@ -8,7 +8,7 @@ import { RateLimiter } from './rateLimiter';
 import { scrapeEstateSalesNet } from './sources/estatesalesnet';
 import { scrapeGarageSaleFinder } from './sources/garageSaleFinder';
 import { scrapeFacebookMarketplace } from './sources/facebook-marketplace';
-import { scrapeNAADirectory } from './sources/naaAuctioneerDirectory';
+import { scrapeNAAProfiles } from './sources/naaProfileScraper';
 import { scrapeAuctionNinja } from './sources/auctionNinjaScraper';
 import { runYellowPagesCaScraper } from './sources/yellowPagesCaScraper';
 import { scrapeFleaMarketZone } from './sources/fleaMarketZoneScraper';
@@ -44,6 +44,12 @@ export interface ScrapeStats {
   itemsUpdated: number;
   itemsSkipped: number;
   itemsFailed: number;
+  /**
+   * Set when the run stopped before looking at everything (hourly cap, breaker, block
+   * signal). runScrapeRun records the job as PARTIAL_FAILURE with this reason, so a capped
+   * metro is never mistaken for a metro with no listings.
+   */
+  incompleteReason?: string;
 }
 
 export interface ScraperSourceDef {
@@ -63,7 +69,7 @@ export interface ScraperSourceDef {
  * Adapter: wrap the legacy { created, updated, skipped, failed } shape into ScrapeStats.
  */
 function wrapLegacyStats(
-  fn: (metro: string, organizerId: string, rateLimiter: RateLimiter) => Promise<{ created: number; updated: number; skipped: number; failed: number }>
+  fn: (metro: string, organizerId: string, rateLimiter: RateLimiter) => Promise<{ created: number; updated: number; skipped: number; failed: number; stoppedEarly?: string }>
 ): (metro: string, organizerId: string, rateLimiter: RateLimiter) => Promise<ScrapeStats> {
   return async (metro, organizerId, rateLimiter) => {
     const s = await fn(metro, organizerId, rateLimiter);
@@ -73,6 +79,7 @@ function wrapLegacyStats(
       itemsUpdated: s.updated,
       itemsSkipped: s.skipped,
       itemsFailed: s.failed,
+      ...(s.stoppedEarly ? { incompleteReason: s.stoppedEarly } : {}),
     };
   };
 }
@@ -115,8 +122,8 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     runMode: 'national-once',
     enabled: true, // UNPARKED 2026-06-11 — Novi AMS JSON API endpoint discovered in page source. POST /members/directory-customer-list returns 2,384 structured member records. No Playwright needed.
     qualityTier: 'high',
-    legalNote: 'Public member directory — no ToS prohibition found',
-    run: scrapeNAADirectory,
+    legalNote: 'Public member directory — no ToS prohibition found. 2026-11-01: list endpoint 404s; now reads the public profile pages listed in sitemap.xml (robots.txt allows /find-an-auctioneer/, re-checked every run).',
+    run: scrapeNAAProfiles,
   },
   {
     id: 'AuctionNinja',
@@ -213,10 +220,10 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     displayName: 'Municibid',
     type: 'directory',
     runMode: 'national-once',
-    enabled: false, // PARKED — ToS PROHIBITED: explicit ban on automated access and scraping (Section c).
+    enabled: false, // PARKED — Site terms bar automated access: explicit ban on automated access and scraping (Section c).
     prohibited: true,
     qualityTier: 'high',
-    legalNote: 'ToS PROHIBITED — Section (c) explicitly bans automated access and scraping. Unpark requires written data partnership agreement with Municibid. Verified 2026-06-10 (ToS updated 05/04/26).',
+    legalNote: 'Site terms bar automated access — Section (c) explicitly bans automated access and scraping. Unpark requires written data partnership agreement with Municibid. Verified 2026-06-10 (ToS updated 05/04/26).',
     run: scrapeMunicibid,
   },
   {
@@ -235,10 +242,10 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     displayName: 'GovPlanet.com',
     type: 'directory',
     runMode: 'national-once',
-    enabled: false, // PARKED — ToS PROHIBITED: Section 1.3(c) of IronPlanet/GovPlanet Terms (April 17, 2026) explicitly bans automated access, scraping, and data collection tools.
+    enabled: false, // PARKED — Site terms bar automated access: Section 1.3(c) of IronPlanet/GovPlanet Terms (April 17, 2026) explicitly bans automated access, scraping, and data collection tools.
     prohibited: true,
     qualityTier: 'high',
-    legalNote: 'ToS PROHIBITED — Section 1.3(c) bans "any robot, spider, scraper, data mining tool, data gathering or extraction tool, or any other automated means." Operated by IronPlanet, Inc. (Ritchie Bros. / RB Global). /sellers page is static HTML with ~45 named gov agencies. Unpark requires data partnership with Ritchie Bros. Verified 2026-06-10.',
+    legalNote: 'Site terms bar automated access — Section 1.3(c) bans "any robot, spider, scraper, data mining tool, data gathering or extraction tool, or any other automated means." Operated by IronPlanet, Inc. (Ritchie Bros. / RB Global). /sellers page is static HTML with ~45 named gov agencies. Unpark requires data partnership with Ritchie Bros. Verified 2026-06-10.',
     run: scrapeGovPlanet,
   },
   {
@@ -246,10 +253,10 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     displayName: 'GovernmentLiquidation.com',
     type: 'directory',
     runMode: 'national-once',
-    enabled: false, // PARKED — ToS PROHIBITED (Liquidity Services, same parent as GovDeals) + Cloudflare bot protection blocks all programmatic access.
+    enabled: false, // PARKED — Site terms bar automated access (Liquidity Services, same parent as GovDeals) + Cloudflare bot protection blocks all programmatic access.
     prohibited: true,
     qualityTier: 'high',
-    legalNote: 'ToS PROHIBITED — Operated by Liquidity Services, Inc. (same parent as GovDeals). Same explicit anti-scraping ToS as GovDeals. Cloudflare blocks all automated fetches. Primary US DoD surplus platform (DLA Disposition Services). Unpark requires data partnership with Liquidity Services. Verified 2026-06-10.',
+    legalNote: 'Site terms bar automated access — Operated by Liquidity Services, Inc. (same parent as GovDeals). Same explicit anti-scraping ToS as GovDeals. Cloudflare blocks all automated fetches. Primary US DoD surplus platform (DLA Disposition Services). Unpark requires data partnership with Liquidity Services. Verified 2026-06-10.',
     run: scrapeGovernmentLiquidation,
   },
   {
@@ -292,7 +299,7 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     enabled: false, // PROHIBITED — ToS §1.4.2 bans robots/spiders; §1.4.6 bans commercial data harvesting without written permission.
     prohibited: true,
     qualityTier: 'high',
-    legalNote: 'ToS PROHIBITED — §1.4.2: bans robots/spiders without express written permission. §1.4.6: bans commercial content harvesting without written permission. robots.txt also disallows /auctions/. Site has static HTML listings (technically feasible) — legal prohibition is the only blocker. Unpark requires written data partnership agreement with Lockerfox, LLC (Cornelius, NC). Verified 2026-06-10.',
+    legalNote: 'Site terms bar automated access — §1.4.2: bans robots/spiders without express written permission. §1.4.6: bans commercial content harvesting without written permission. robots.txt also disallows /auctions/. Site has static HTML listings (technically feasible) — legal prohibition is the only blocker. Unpark requires written data partnership agreement with Lockerfox, LLC (Cornelius, NC). Verified 2026-06-10.',
     run: scrapeLockerFox,
   },
   {
@@ -334,7 +341,7 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     enabled: false,
     prohibited: true,
     qualityTier: 'high',
-    legalNote: 'ToS PROHIBITED — Proxibid Unified User Agreement (PDF /docs/ProxibidUUA.pdf): §10(h) bans scraping/spidering/crawling; §11.1(v) explicit prohibited use; §12 IP protection. ~30,000 auction houses on platform. Parent: Auction Technology Group (ATG). Note: BidSpotter (also ATG) has separate CLEAR ToS. Unpark requires written data partnership with ATG. Verified 2026-06-10.',
+    legalNote: 'Site terms bar automated access — Proxibid Unified User Agreement (PDF /docs/ProxibidUUA.pdf): §10(h) bans scraping/spidering/crawling; §11.1(v) explicit prohibited use; §12 IP protection. ~30,000 auction houses on platform. Parent: Auction Technology Group (ATG). Note: BidSpotter (also ATG) has separate CLEAR ToS. Unpark requires written data partnership with ATG. Verified 2026-06-10.',
     run: scrapeProxibid,
   },
   {

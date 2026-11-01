@@ -1,4 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
+import { requestStarted, requestEnded, formatEventLoopSnapshot } from '../lib/eventLoopMonitor';
+
+// A request that finishes but took at least this long is logged with the event-loop snapshot,
+// so a slow dependency (DB, Redis, a remote API) can be told apart from a blocked event loop.
+const slowRequestLogMs = (): number => {
+  const n = parseInt(process.env.SLOW_REQUEST_LOG_MS || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : 10000;
+};
 
 /**
  * Feature #108: Global request timeout middleware.
@@ -74,12 +82,31 @@ export const requestTimeout = (timeoutMs: number = 30000) => {
         // are sent to the client"); a catch block that answers 500 throws again and the async handler ends
         // in an unhandled rejection. Mark the request timed out and make every later response write a no-op.
         suppressLateResponse(req, res);
+        // 2026-11-01: say whether the event loop was blocked (maxGap in seconds) or the handler was
+        // waiting on I/O (maxGap near 0) -- FINDASALE-NODEJS-91 / -93 were a blocked loop.
+        console.error(
+          `[requestTimeout] 503 after ${timeoutMs}ms: ${req.method} ${req.originalUrl || req.path}; ${formatEventLoopSnapshot()}`
+        );
       }
     }, timeoutMs);
 
+    const startedAt = Date.now();
+    requestStarted();
+    let ended = false;
+    const onEnd = () => {
+      if (ended) return;
+      ended = true;
+      clearTimeout(timer);
+      requestEnded();
+      const ms = Date.now() - startedAt;
+      if (ms >= slowRequestLogMs() && !(req as any).timedout) {
+        console.warn(`[slowRequest] ${ms}ms: ${req.method} ${req.originalUrl || req.path}; ${formatEventLoopSnapshot()}`);
+      }
+    };
+
     // Clear timeout if the response finishes normally
-    res.on('finish', () => clearTimeout(timer));
-    res.on('close', () => clearTimeout(timer));
+    res.on('finish', onEnd);
+    res.on('close', onEnd);
 
     next();
   };

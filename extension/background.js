@@ -1282,7 +1282,10 @@ async function fasClMaybeStartReconcile() {
     const gate = await fasClTryClaim('removal');   // single-flight: waits for an active Craigslist post / edit and tries again on the next check
     if (!gate.ok) { rec.lastAttemptAt = 0; await chrome.storage.local.set({ [FAS_CL_RECON_KEY]: rec }); return 'waiting_for_' + gate.heldBy; }
     await chrome.storage.local.set({ [FAS_CL_RECON_REQ_KEY]: { at: Date.now(), expectedEmail: expectedEmail,
-      items: items.map((it) => ({ id: it.id, title: String(it.title), remoteId: (it.remoteListingId || (it.listingRefs && it.listingRefs.CRAIGSLIST) || '') || null })) } });
+      // 2026-11-01: craigslistRemoteListingId is the saved posting id ('' / null = none saved); idKnown says the backend sent the field at all
+      // (an older backend does not), so the id backfill below only ever targets items KNOWN to have no saved id.
+      items: items.map((it) => ({ id: it.id, title: String(it.title), remoteId: (it.craigslistRemoteListingId || it.remoteListingId || (it.listingRefs && it.listingRefs.CRAIGSLIST) || '') || null,
+        idKnown: Object.prototype.hasOwnProperty.call(it, 'craigslistRemoteListingId') })) } });
     await openSilentCrossPlatformRemovalTab('CRAIGSLIST');
     fasT('info', 'reconcile_started', 'Checking ' + items.length + ' Craigslist item(s) marked as listed against your account postings', { platform: 'CRAIGSLIST', flow: 'reconcile', ctx: { count: items.length } });
     return 'started';
@@ -1294,7 +1297,7 @@ async function fasClApplyReconcile(req, msg) {
   const st = await chrome.storage.local.get([FAS_CL_RECON_KEY]);
   const rec = st[FAS_CL_RECON_KEY] || { state: {}, lastAttemptAt: 0 };
   const scan = { loggedIn: msg.loggedIn === true, accountOk: G.accountConfirmed(msg.accountText, req.expectedEmail), complete: msg.complete === true, total: msg.total == null ? null : Number(msg.total),
-    rows: Array.isArray(msg.rows) ? msg.rows.slice(0, 5000).map((r) => ({ postingId: String(r.postingId || ''), status: String(r.status || ''), titleRaw: String(r.titleRaw || '') })) : [] };
+    rows: Array.isArray(msg.rows) ? msg.rows.slice(0, 5000).map((r) => ({ postingId: String(r.postingId || ''), status: String(r.status || ''), titleRaw: String(r.titleRaw || ''), href: String(r.href || '').slice(0, 400) })) : [] };
   const d = G.reconcileDecide({ platform: 'CRAIGSLIST', scan: scan, items: req.items || [], state: rec.state || {}, now: Date.now() });
   rec.state = d.state; rec.lastAttemptAt = Date.now();
   await chrome.storage.local.set({ [FAS_CL_RECON_KEY]: rec });
@@ -1302,6 +1305,8 @@ async function fasClApplyReconcile(req, msg) {
     fasT('info', 'reconcile_skipped', 'Craigslist check skipped, nothing changed (' + d.skip + ')', { platform: 'CRAIGSLIST', flow: 'reconcile', ctx: { skip: d.skip, rows: scan.rows.length, total: scan.total, reason: msg.reason || '' } });
     return { decision: d, cleared: [] };
   }
+  // 2026-11-01: the scan is complete and verified, so also fill in missing Craigslist posting ids (fasClBackfillIds). Never blocks the reconcile.
+  try { await fasClBackfillIds(req, scan); } catch (e) { fasT('warn', 'cl_id_backfill_error', 'Craigslist posting-id backfill stopped: ' + String((e && e.message) || e).slice(0, 120), { platform: 'CRAIGSLIST', flow: 'reconcile' }); }
   const cleared = [];
   for (const it of d.toReport) {
     const r = await apiFetch('/extension/items/' + encodeURIComponent(it.id) + '/removed', { method: 'POST', body: { platform: 'CRAIGSLIST' } });
@@ -1318,6 +1323,40 @@ async function fasClApplyReconcile(req, msg) {
   await chrome.storage.local.set({ [FAS_CL_RECON_KEY]: rec });
   if (d.capped) fasT('info', 'reconcile_capped', 'More than ' + G.RECON_CAP + ' items need clearing; the rest wait for the next check', { platform: 'CRAIGSLIST', flow: 'reconcile' });
   return { decision: d, cleared: cleared };
+}
+
+// ---- Craigslist posting-id backfill (2026-11-01) -----------------------------------------------------------------------------------------
+// Runs inside a reconcile whose scan is complete (every page, all statuses, row count equal to Craigslist's "of N total", signed in as the
+// expected account). For each listed item with NO saved posting id where exactly one ACTIVE posting matches its title (FAS_EDIT_CORE.clBackfillDecide),
+// reports that posting to POST /extension/items/:id/remote-listing-id. That endpoint only writes the item's latest CRAIGSLIST POST/POSTED row,
+// only when its remoteListingId is null (conditional update), refuses an id already saved on another item, and keeps the public posting URL
+// when one is sent. A refused (item, posting) pair is remembered for 7 days so it is not re-sent on every scan.
+const FAS_CL_BACKFILL_KEY = 'fasClIdBackfill';
+async function fasClBackfillIds(req, scan) {
+  const Core = FAS_EDIT_CORE;
+  const st = await chrome.storage.local.get([FAS_CL_BACKFILL_KEY]);
+  const memo = st[FAS_CL_BACKFILL_KEY] || {};
+  const now = Date.now();
+  Object.keys(memo).forEach((k) => { if (!(memo[k] && now - Number(memo[k].at || 0) < Core.CL_BACKFILL_RETRY_MS)) delete memo[k]; });
+  const d = Core.clBackfillDecide(req.items || [], scan.rows || [], memo, now);
+  const res = { filled: 0, unchanged: 0, refused: 0, failed: 0 };
+  for (const c of d.report) {
+    const body = { platform: 'CRAIGSLIST', remoteListingId: c.postingId };
+    if (c.postingUrl) body.remoteListingUrl = c.postingUrl;
+    const r = await apiFetch('/extension/items/' + encodeURIComponent(c.id) + '/remote-listing-id', { method: 'POST', body: body });
+    if (r && r.ok) { if (r.data && r.data.unchanged) res.unchanged++; else res.filled++; delete memo[c.id]; }
+    else if (r && r.status === 409) { res.refused++; memo[c.id] = { postingId: c.postingId, at: now, reason: String((r.data && r.data.reason) || '409').slice(0, 30) }; }
+    else res.failed++;   // network / 5xx: try again on the next complete scan
+  }
+  await chrome.storage.local.set({ [FAS_CL_BACKFILL_KEY]: memo });
+  const considered = (req.items || []).filter((it) => it && it.idKnown && !it.remoteId).length;
+  if (d.report.length || considered) {
+    const text = 'Craigslist posting ids: ' + res.filled + ' filled in, ' + res.unchanged + ' already saved, ' + res.refused + ' refused, ' + res.failed + ' failed of ' + d.report.length + ' unique matches (' + considered + ' item(s) had no saved id; skipped ' +
+      d.skipped.ambiguous + ' with 2+ matching postings, ' + d.skipped.none + ' with no active match, ' + (d.skipped.claimed + d.skipped.shared) + ' whose posting belongs to another item, ' + d.skipped.memo + ' refused earlier)' + (d.capped ? '; more on the next check' : '');
+    fasT('info', 'cl_id_backfill', text, { platform: 'CRAIGSLIST', flow: 'reconcile', ctx: { res: res, skipped: d.skipped, capped: d.capped } });
+    if (d.report.length) fasLog('info', 'cl_id_backfill', text, { res: res, skipped: d.skipped, capped: d.capped, ids: d.report.slice(0, 20).map((c) => c.id + ':' + c.postingId) }, { platform: 'CRAIGSLIST' });
+  }
+  return { decision: d, result: res };
 }
 
 let fasEditPumping = false;
@@ -1586,10 +1625,48 @@ async function fasEditRunLockFree() {
   return false;
 }
 
-// 1.0.23: one info line per hour while Craigslist price edits are hard-paused (FAS_CONFIG.FAS_CL_PRICE_EDITS_PAUSED, config.js).
-function fasClPriceEditsPausedNote(queued) {
-  if (!FAS_EDIT_CORE.isEditPausedByConfig('CRAIGSLIST', CFG)) return;
-  fasTOnce('cl_price_edits_paused', 60 * 60 * 1000, 'info', 'cl_price_edits_paused', 'Craigslist price edits are paused (FAS_CL_PRICE_EDITS_PAUSED)', { platform: 'CRAIGSLIST', flow: 'edit', ctx: { queuedLeftPending: queued || 0 } });
+// 1.0.23: one info line per hour while Craigslist price edits are held back by FAS_CONFIG.FAS_CL_PRICE_EDIT_MODE (config.js): 'paused', or
+// 'canary' with today's one test edit already used. gate = FAS_EDIT_CORE.clEditGate(...) (computed here when not passed).
+function fasClPriceEditsPausedNote(queued, gate) {
+  const g = gate || FAS_EDIT_CORE.clEditGate(CFG, null, Date.now());
+  if (g.allowed || !queued) return;
+  if (g.mode === 'canary') {
+    fasTOnce('cl_canary_waiting', 60 * 60 * 1000, 'info', 'cl_canary_waiting', 'Craigslist price edits are in canary mode (FAS_CL_PRICE_EDIT_MODE canary): today\'s one test edit is used; ' + queued + ' queued item(s) wait' + (g.nextAt ? ' until ' + new Date(g.nextAt).toISOString() : ''), { platform: 'CRAIGSLIST', flow: 'edit', ctx: { queuedLeftPending: queued, nextAt: g.nextAt } });
+    return;
+  }
+  fasTOnce('cl_price_edits_paused', 60 * 60 * 1000, 'info', 'cl_price_edits_paused', 'Craigslist price edits are paused (FAS_CL_PRICE_EDIT_MODE paused)', { platform: 'CRAIGSLIST', flow: 'edit', ctx: { queuedLeftPending: queued || 0 } });
+}
+// 2026-11-01 Craigslist canary (FAS_CL_PRICE_EDIT_MODE 'canary'): the one test edit per 24 h. The record is written BEFORE the edit starts
+// (a crash mid-edit still uses up the day) and completed with the outcome afterwards.
+// { at, itemId, title, postingId, postingUrl, oldPrice, newPrice, outcome: 'started'|'done'|'fail'|'blocked', code, verified, backendConfirmed, finishedAt, v }
+const FAS_CL_CANARY_KEY = 'fasClCanary';
+async function fasClCanaryGet() {
+  try { return (await chrome.storage.local.get([FAS_CL_CANARY_KEY]))[FAS_CL_CANARY_KEY] || null; } catch (e) { return null; }
+}
+async function fasClCanaryStart(entry) {
+  const rec = { at: Date.now(), itemId: entry.id, title: String(entry.title || '').slice(0, 80), postingId: entry.remoteListingId || '', postingUrl: FAS_EDIT_CORE.clPublicPostingUrl(entry.remoteListingUrl, entry.remoteListingId) || '',
+    oldPrice: null, newPrice: entry.price, outcome: 'started', code: '', verified: false, backendConfirmed: null, finishedAt: null, v: (chrome.runtime.getManifest() || {}).version };
+  await chrome.storage.local.set({ [FAS_CL_CANARY_KEY]: rec });
+  return rec;
+}
+async function fasClCanaryFinish(rec, entry, res, confirmOk) {
+  try {
+    const sc = (res && res.scratch) || {}, det = (res && res.details) || {};
+    const postingId = String(sc.postingId || (det.readBack && det.postingId) || rec.postingId || '');
+    const out = Object.assign({}, rec, {
+      postingId: postingId,
+      postingUrl: rec.postingUrl || FAS_EDIT_CORE.clPublicPostingUrl(sc.postingUrl, postingId) || '',
+      oldPrice: sc.oldPrice != null ? sc.oldPrice : (det.liveShown != null ? det.liveShown : null),
+      outcome: (res && res.state) || 'fail', code: (res && res.code) || '', reason: String((res && res.reason) || '').slice(0, 200),
+      verified: !!(res && res.state === 'done'), readBack: det.readBack || null, backendConfirmed: confirmOk == null ? null : !!confirmOk, finishedAt: Date.now()
+    });
+    await chrome.storage.local.set({ [FAS_CL_CANARY_KEY]: out });
+    const msg = 'cl_canary_edit: ' + (out.verified ? 'VERIFIED' : 'NOT verified (' + (out.code || out.outcome) + ')') + ' Craigslist test edit of "' + out.title.slice(0, 60) + '" $' + (out.oldPrice == null ? '?' : out.oldPrice) + ' -> $' + out.newPrice +
+      ' posting ' + (out.postingId || 'unknown') + (out.postingUrl ? ' ' + out.postingUrl : '');
+    fasLog('warn', 'cl_canary_edit', msg, { itemId: out.itemId, postingId: out.postingId, postingUrl: out.postingUrl, oldPrice: out.oldPrice, newPrice: out.newPrice, outcome: out.outcome, code: out.code, verified: out.verified, readBack: out.readBack, backendConfirmed: out.backendConfirmed, startedAt: out.at, v: out.v }, { platform: 'CRAIGSLIST', itemId: out.itemId });
+    fasT('info', 'cl_canary_edit', msg, { platform: 'CRAIGSLIST', flow: 'edit', itemId: out.itemId, title: out.title });
+    return out;
+  } catch (e) { return rec; }
 }
 
 // Works through every enqueued platform, one at a time. Safe to call repeatedly: only one pump runs.
@@ -1626,8 +1703,9 @@ async function fasEditPump() {
     for (;;) {
       const st = await chrome.storage.local.get([FAS_EDIT_PENDING_KEY]);
       const pending = st[FAS_EDIT_PENDING_KEY] || {};
-      const platform = FAS_EDIT_CORE.nextEditPlatform(pending, clBusy, CFG);
-      fasClPriceEditsPausedNote(Array.isArray(pending.CRAIGSLIST) ? pending.CRAIGSLIST.length : 0);
+      const clCanary = await fasClCanaryGet();
+      const platform = FAS_EDIT_CORE.nextEditPlatform(pending, clBusy, CFG, clCanary, Date.now());
+      fasClPriceEditsPausedNote(Array.isArray(pending.CRAIGSLIST) ? pending.CRAIGSLIST.length : 0, FAS_EDIT_CORE.clEditGate(CFG, clCanary, Date.now()));
       if (!platform) break;
       if (platform === 'CRAIGSLIST') {
         // Single-flight: never run a Craigslist edit while a Craigslist post / removal / renew is active. The entries stay queued (not failed).
@@ -1662,7 +1740,12 @@ async function fasEditPump() {
 async function fasEditRunPlatform(platform, rawEntries) {
   const Core = FAS_EDIT_CORE;
   // 1.0.23 defensive second gate: even if something calls this directly, a paused Craigslist run starts nothing and confirms/fails nothing (no trivial-confirm either).
-  if (FAS_EDIT_CORE.isEditPausedByConfig(platform, CFG)) { fasClPriceEditsPausedNote(rawEntries.length); return 'paused_by_config'; }
+  // 2026-11-01: the same gate covers canary mode with today's one test edit already used.
+  let clGate = null;
+  if (platform === 'CRAIGSLIST') {
+    clGate = Core.clEditGate(CFG, await fasClCanaryGet(), Date.now());
+    if (!clGate.allowed) { fasClPriceEditsPausedNote(rawEntries.length, clGate); return clGate.mode === 'canary' ? 'canary_used_today' : 'paused_by_config'; }
+  }
   if (await fasIsPlatformPaused(platform)) { fasTOnce('skip_paused_' + platform, 30 * 60 * 1000, 'info', 'run_skipped', platform + ' edits skipped: this marketplace is paused in the extension', { platform: platform, flow: 'edit', ctx: { reason: 'paused', queued: rawEntries.length } }); return 'paused'; }
   if (platform === 'FACEBOOK' && (await getPlatformUnavailable('FACEBOOK'))) { fasTOnce('skip_fbunavail', 30 * 60 * 1000, 'warn', 'run_skipped', 'Facebook edits skipped: the Facebook account is flagged unavailable', { platform: platform, flow: 'edit', ctx: { reason: 'account_unavailable', queued: rawEntries.length } }); return 'facebook_account_unavailable'; }
   const state = await fasEditGetState();
@@ -1691,7 +1774,15 @@ async function fasEditRunPlatform(platform, rawEntries) {
   const stamps = Core.pruneHourly(state.hourly[platform], now);
   const allow = Core.allowance(platform, stamps, now);
   if (allow <= 0) { fasTOnce('skip_cap_' + platform, 30 * 60 * 1000, 'info', 'hourly_cap', platform + ' edits skipped: hourly safety cap reached (' + stamps.length + ' edits in the last hour)', { platform: platform, flow: 'edit', ctx: { editsLastHour: stamps.length, queued: work.length } }); return 'hourly_cap_reached'; }
-  const batch = work.slice(0, allow);
+  let batch = work.slice(0, clGate ? Math.min(allow, clGate.cap) : allow);
+  let clCanaryRec = null;
+  if (clGate && clGate.mode === 'canary') {
+    const pick = Core.pickCanaryEntry(work);
+    if (!pick) { fasTOnce('cl_canary_none', 60 * 60 * 1000, 'info', 'cl_canary_no_candidate', 'Craigslist canary: no queued item is a plain price change, nothing edited', { platform: platform, flow: 'edit', ctx: { queued: work.length } }); return 'canary_no_candidate'; }
+    batch = [pick];
+    clCanaryRec = await fasClCanaryStart(pick);
+    fasT('info', 'cl_canary_start', 'Craigslist canary: editing ONE item, "' + String(pick.title || '').slice(0, 60) + '" to $' + Core.formatPrice(platform, pick.price) + (pick.remoteListingId ? ' (posting ' + pick.remoteListingId + ')' : ' (no saved posting id, title match)') + '; ' + (work.length - 1) + ' more wait for mode on', { platform: platform, flow: 'edit', itemId: pick.id, title: pick.title, ctx: { postingId: pick.remoteListingId || '', postingUrl: clCanaryRec.postingUrl, queued: work.length } });
+  }
   fasT('info', 'platform_run_start', 'Starting ' + platform + ' edits: ' + batch.length + ' item(s)' + (work.length > batch.length ? ' (' + (work.length - batch.length) + ' more wait for the hourly cap)' : ''), { platform: platform, flow: 'edit', ctx: { items: batch.slice(0, 10).map((e) => ({ id: e.id, price: e.priceDrift ? e.price : null, qty: e.quantityDrift ? e.quantity : null, hasRemoteId: !!e.remoteListingId })) } });
 
   const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -1709,6 +1800,7 @@ async function fasEditRunPlatform(platform, rawEntries) {
       await chrome.storage.local.set({ [FAS_EDIT_RUN_KEY]: { platform: platform, tabId: tab.id, prevTabId: prevTabId, startedAt: Date.now() } });
       const itemT0 = Date.now();
       const res = await fasEditApplyItem(tab.id, platform, entry, state, (i + 1) + ' of ' + batch.length);
+      let itemConfirmOk = null;
       stamps.push(Date.now());
       state.hourly[platform] = stamps;
       const diagRecord = { t: Date.now(), platform: platform, itemId: entry.id, title: String(entry.title || '').slice(0, 60), outcome: res.state, code: res.code || '', step: res.step || '', selector: res.selector || '', reason: res.reason || '', trail: res.trail, snapshots: res.diags, details: res.details };
@@ -1734,6 +1826,7 @@ async function fasEditRunPlatform(platform, rawEntries) {
       if (res.state === 'done') {
         if (platform === 'POSHMARK') { try { await fasPoshEditHoldClear(entry.id); } catch (e) { /* best-effort */ } }
         const c = await fasEditConfirm(platform, entry, res.details && res.details.readBack ? Number(res.details.readBack.quantity) : undefined);
+        itemConfirmOk = !!(c && c.ok);
         applied++;
         delete state.items[key];
         const rb = res.details && res.details.readBack ? ' (read back ' + JSON.stringify(res.details.readBack).slice(0, 80) + ')' : '';
@@ -1768,6 +1861,7 @@ async function fasEditRunPlatform(platform, rawEntries) {
         await fasEditForwardDiag(platform, diagRecord);
         if (!prev || next.parked) failures.push({ platform: platform, title: entry.title, reason: (res.code || 'failed') + (res.selector ? ' at ' + String(res.selector).slice(0, 40) : ''), parked: !!next.parked });
       }
+      if (clCanaryRec && clCanaryRec.itemId === entry.id) clCanaryRec = await fasClCanaryFinish(clCanaryRec, entry, res, itemConfirmOk);
       await fasEditSaveState(state);
       if (i < batch.length - 1) await sleep(Core.jitterDelay(platform, Math.random()));
     }

@@ -13,6 +13,8 @@ import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
 import { runScrapeRun } from '../services/scraper';
 import { SOURCE_REGISTRY } from '../services/scraper/sourceRegistry';
+import { rotatedMetrosForSource, runRotatingMetroLoop } from '../services/scraper/metroRotation';
+import { getHostCapState } from '../services/scraper/safeFetch';
 
 /**
  * ~300 US metros by estate/yard sale activity — all cities 50k+ population.
@@ -451,7 +453,37 @@ export const NATIONAL_METROS = [
  * Run a source across all metros sequentially.
  * Sequential to respect rate limits — one metro at a time.
  */
+/**
+ * Metro-loop sources that rotate (least-recently-successful first) and pace across hours
+ * instead of walking NATIONAL_METROS in fixed order. Value = a URL on the source's host,
+ * used to read its hourly-cap window. See services/scraper/metroRotation.ts.
+ */
+const ROTATING_SOURCES: Record<string, string> = {
+  GarageSaleFinder: 'https://garagesalefinder.com/',
+};
+
+/**
+ * Upper bound for one rotating run. GSF requests are paced (~13 s apart, garageSaleFinder.ts
+ * PACING), so a full pass can take several hours; stopping at 20 h keeps it clear of the
+ * next 06:00 UTC trigger, and the rotation starts the next run with whatever was not reached.
+ */
+const ROTATING_MAX_RUN_MS = Number(process.env.SCRAPER_ROTATING_MAX_RUN_HOURS ?? 20) * 3_600_000;
+
 async function runSourceAcrossMetros(source: string): Promise<void> {
+  const capProbeUrl = ROTATING_SOURCES[source];
+  if (capProbeUrl) {
+    const ordered = await rotatedMetrosForSource(source, NATIONAL_METROS);
+    console.log(`[scraperCron] Starting ${source} rotating run across ${ordered.length} metros (first: ${ordered.slice(0, 3).join(', ')})`);
+    await runRotatingMetroLoop(source, ordered, {
+      runOne: (metro) => runScrapeRun(source, metro),
+      capResetInMs: () => getHostCapState(capProbeUrl).resetInMs,
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      now: () => Date.now(),
+      maxRunMs: ROTATING_MAX_RUN_MS,
+    });
+    return;
+  }
+
   console.log(`[scraperCron] Starting ${source} run across ${NATIONAL_METROS.length} metros`);
   let totalFailed = 0;
 

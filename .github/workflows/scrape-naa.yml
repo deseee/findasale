@@ -25,19 +25,27 @@ name: Scrape NAA Find an Auctioneer Directory
 # public profiles (/find-an-auctioneer/<slug>, lastmod 2025-09-19) which a profile-page
 # parser could use instead -- not built yet. The 1,944 NAA organizers already ingested
 # (last created 2026-09-01) are unaffected.
-# To re-enable: find the directory's current XHR endpoint (browser dev tools on the
-# landing page), update DIRECTORY_ENDPOINT / the request body in
-# packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts, run this
-# workflow once by hand (workflow_dispatch), then restore the schedule below.
+# SCHEDULE RE-ENABLED 2026-11-01 for the NEW PATH ONLY: the job below now runs
+# scrapeNAAProfiles (packages/backend/src/services/scraper/sources/naaProfileScraper.ts),
+# which never calls the dead list endpoint. It reads robots.txt (re-checked every run; a
+# disallow or an unreadable robots.txt stops it), then sitemap.xml, then at most 150 public
+# profile pages (/find-an-auctioneer/<slug>) one at a time, 3 s apart (3x the crawl-delay),
+# with a FindASaleBot user agent. Each weekly run takes the next slice of the sitemap, so
+# all ~400 profiles are covered in three weeks. Re-checked 2026-11-01: robots.txt still
+# allows /find-an-auctioneer/, members.auctioneers.org/legal and www.auctioneers.org/legal
+# have no scraping/automated-access clause. Only public fields are kept (name, the member's
+# own city/state, the member's website); the profile's Contact phone/address is NAA's own
+# office and is never stored, and email is behind NAA's contact form.
 on:
-  # schedule:
-  #   - cron: '0 8 1 * *'  # 1st of each month at 08:00 UTC (membership directory — monthly refresh)
+  schedule:
+    - cron: '23 8 * * 1'  # Mondays 08:23 UTC: next ~150-profile slice of the sitemap
   workflow_dispatch:
 
 jobs:
   scrape:
-    name: NAA Find an Auctioneer Directory Scraper (National)
+    name: NAA Find an Auctioneer Profile Scraper (National)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -81,18 +89,18 @@ jobs:
               sys.exit(1)
           "
 
-      - name: Run NAA Directory Scraper
+      - name: Run NAA Profile Scraper (sitemap-driven)
         working-directory: packages/backend
         env:
           DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          NAA_PROFILE_CAP_PER_RUN: '150'
+          NAA_PROFILE_INTERVAL_MS: '3000'
         run: |
           npx tsx -e '
-            import { scrapeNAADirectory } from "./src/services/scraper/sources/naaAuctioneerDirectory";
-            import { RateLimiter } from "./src/services/scraper/rateLimiter";
+            import { scrapeNAAProfiles } from "./src/services/scraper/sources/naaProfileScraper";
             (async () => { try {
-              const rateLimiter = new RateLimiter({ requestsPerSecond: 0.5 });
-              const stats = await scrapeNAADirectory("national", "", rateLimiter);
+              const stats = await scrapeNAAProfiles("national", "");
               console.log("NAA scraper completed:", JSON.stringify(stats));
               process.exit(0);
             } catch (err) {

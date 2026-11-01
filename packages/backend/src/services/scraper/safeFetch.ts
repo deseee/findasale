@@ -131,13 +131,54 @@ export function noteSoftSuccess(url: string): void {
 /** Module-level monitoring counter: host -> { count, windowStart }. */
 const hostCounters: Map<string, { count: number; windowStart: number }> = new Map();
 
-/** Resolve the lower-cased host from a URL; null when unparseable. */
+/**
+ * Resolve the lower-cased host from a URL; null when unparseable.
+ *
+ * A leading "www." is dropped (2026-11-01) so www.example.com and example.com share ONE
+ * hourly-cap counter. GarageSaleFinder's metro pages live on www.garagesalefinder.com while
+ * its sale links point at garagesalefinder.com, so before this the two spellings each got
+ * their own 300/hr budget and the site actually received ~600 requests in the first
+ * 14 minutes of the 11-01 run. The cap is meant per site, not per spelling.
+ */
 function resolveHost(url: string): string | null {
   try {
-    return new URL(url).hostname.toLowerCase();
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
   } catch {
     return null;
   }
+}
+
+/** Current state of a host's rolling-hour cap window (read-only; does not count a request). */
+export interface HostCapState {
+  host: string;
+  cap: number;
+  /** Requests counted in the current window (0 when no window is open). */
+  used: number;
+  /** Requests still allowed in the current window. */
+  remaining: number;
+  /** ms until the current window resets (0 when no window is open). */
+  resetInMs: number;
+}
+
+/** Read the hourly-cap state for the host of `url` (www. and bare host share one window). */
+export function getHostCapState(url: string, now: number = Date.now()): HostCapState {
+  const host = resolveHost(url) ?? url;
+  const entry = hostCounters.get(host);
+  if (!entry || now - entry.windowStart >= WINDOW_MS) {
+    return { host, cap: CAP, used: 0, remaining: CAP, resetInMs: 0 };
+  }
+  return {
+    host,
+    cap: CAP,
+    used: entry.count,
+    remaining: Math.max(0, CAP - entry.count),
+    resetInMs: Math.max(0, entry.windowStart + WINDOW_MS - now),
+  };
+}
+
+/** The configured per-host hourly cap (SCRAPER_HOST_CAP_PER_HOUR, default 300). */
+export function getHostCapPerHour(): number {
+  return CAP;
 }
 
 /**

@@ -535,7 +535,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   const jobs = itemIds.length
     ? await prisma.marketplaceListingJob.findMany({
         where: { itemId: { in: itemIds } },
-        select: { itemId: true, action: true, status: true, platform: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true },
+        select: { itemId: true, action: true, status: true, platform: true, createdAt: true, lastErrorMessage: true, syncedQuantity: true, remoteListingId: true },
       })
     : [];
   const postedByItem = new Set<string>();
@@ -559,7 +559,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   // even after later successful reposts. Status must reflect only the MOST RECENT job row per
   // item+platform. Find the latest row per key by createdAt first, then derive posted/removed
   // from that single latest row alone.
-  const latestByItemPlatform = new Map<string, { itemId: string; action: string; status: string; createdAt: Date }>();
+  const latestByItemPlatform = new Map<string, { itemId: string; action: string; status: string; createdAt: Date; remoteListingId: string | null }>();
   for (const j of jobs) {
     // 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): a REMOVE/SKIPPED row is a failed removal
     // ATTEMPT, not the end of the listing -- letting it win "newest row" made a still-live
@@ -569,7 +569,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     const key = `${j.itemId}:${j.platform}`;
     const existing = latestByItemPlatform.get(key);
     if (!existing || j.createdAt > existing.createdAt) {
-      latestByItemPlatform.set(key, { itemId: j.itemId, action: j.action, status: j.status, createdAt: j.createdAt });
+      latestByItemPlatform.set(key, { itemId: j.itemId, action: j.action, status: j.status, createdAt: j.createdAt, remoteListingId: (j as any).remoteListingId ?? null });
     }
   }
   // 2026-10-27 (services/singleUnitRepost.ts): a Poshmark Multi Item listing that sold some units still shows the rest on
@@ -895,6 +895,10 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // posted to first.
     marketplaceListedFacebook: postedByItemPlatform.has(`${it.id}:FACEBOOK`) && !removedByItemPlatform.has(`${it.id}:FACEBOOK`),
     marketplaceListedCraigslist: postedByItemPlatform.has(`${it.id}:CRAIGSLIST`) && !removedByItemPlatform.has(`${it.id}:CRAIGSLIST`),
+    // 2026-11-01: the posting id saved on the live CRAIGSLIST POST/POSTED row (parsed out of a stored posting URL), or null when that row
+    // has none. Always present (null, never omitted) so the extension can tell "no id saved" from an older backend; the Craigslist reconcile
+    // matches by it and backfills the missing ones through POST /items/:id/remote-listing-id (set-once, latest POSTED row only).
+    craigslistRemoteListingId: craigslistSavedPostingId(latestByItemPlatform.get(`${it.id}:CRAIGSLIST`)),
     // ADR-102 (2026-08-09): Gumtree Australia -- same per-platform pattern as the two above,
     // read by popup.js's currentListedFlag() when the 'gumtree_au' channel is selected.
     marketplaceListedGumtreeAu: postedByItemPlatform.has(`${it.id}:GUMTREE_AU`) && !removedByItemPlatform.has(`${it.id}:GUMTREE_AU`),
@@ -1980,6 +1984,11 @@ const REMOTE_ID_FORMATS: Record<string, RegExp> = {
   VINTED: /^\d{1,20}$/, MERCARI: /^m\d{1,20}$/,
   FACEBOOK: /^\d{6,}$/, POSHMARK: /^[0-9a-f]{24}$/, GRAILED: /^\d{1,20}$/, CRAIGSLIST: /^\d{9,12}$/, GUMTREE_AU: /^\d{8,12}$/,
 };
+// getExtensionItems' craigslistRemoteListingId: the id on the item's latest CRAIGSLIST row when that row is the live POST/POSTED listing, else null.
+export function craigslistSavedPostingId(latest: { action: string; status: string; remoteListingId: string | null } | undefined): string | null {
+  if (!latest || latest.action !== 'POST' || latest.status !== 'POSTED' || !latest.remoteListingId) return null;
+  return extractRemoteId('CRAIGSLIST', latest.remoteListingId) || null;
+}
 export const setItemRemoteListingId = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   const itemId = req.params.id;

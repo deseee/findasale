@@ -14,6 +14,7 @@
  */
 
 import * as Sentry from '@sentry/node';
+import { trackActivity } from '../lib/eventLoopMonitor';
 
 export interface CronGuardOptions {
   jobName: string;
@@ -35,6 +36,8 @@ export function cronGuard(
 ): () => Promise<void> {
   return async () => {
     const startTime = Date.now();
+    // Named in [eventLoop] stall logs while it runs (lib/eventLoopMonitor.ts).
+    const endActivity = trackActivity(opts.jobName);
 
     // Generate monitor slug: max 50 chars, URL-safe (alphanumeric + hyphen)
     const monitorSlug = opts.jobName.toLowerCase().replace(/[^a-z0-9-]/g, '-').substring(0, 50);
@@ -119,6 +122,8 @@ export function cronGuard(
           // Sentry not ready — continue
         }
       }
+    } finally {
+      endActivity();
     }
   };
 }
