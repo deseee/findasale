@@ -118,7 +118,7 @@ export function buildBundleNoticeLink(meta: {
   lastReason?: string | null;
 }): string {
   const params = new URLSearchParams();
-  if (meta.conversationId && /^\d{5,20}$/.test(meta.conversationId)) params.set('vc', meta.conversationId);
+  if (meta.conversationId && /^(?:\d{5,20}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(meta.conversationId)) params.set('vc', meta.conversationId);
   params.set('ic', String(Math.max(1, Math.min(200, Math.floor(meta.itemCount)))));
   if (meta.amountText) params.set('at', String(meta.amountText).replace(/[^\w$€£¥.,\s]/g, '').trim().slice(0, 20));
   params.set('ta', String(Math.max(0, Math.floor(meta.attempts ?? 0))));
@@ -149,7 +149,7 @@ export function parseBundleNoticeLink(link: string | null | undefined, body?: st
   const ta = parseInt(sp.get('ta') ?? '', 10);
   const at = sp.get('at');
   return {
-    conversationId: vc && /^\d{5,20}$/.test(vc) ? vc : null,
+    conversationId: vc && /^(?:\d{5,20}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(vc) ? vc : null,
     itemCount: Number.isFinite(ic) && ic >= 1 && ic <= 200 ? ic : itemCountFromBundleBody(body),
     amountText: at ? at.slice(0, 20) : amountFromBundleBody(body),
     attempts: Number.isFinite(ta) && ta > 0 ? ta : 0,
@@ -200,7 +200,7 @@ export async function notifyOrganizerVintedBundleSale(
   try {
     const organizer = await prisma.organizer.findUnique({ where: { id: organizerId }, select: { userId: true } });
     if (!organizer?.userId) return;
-    const conversationId = info.conversationId && /^\d{5,20}$/.test(info.conversationId) ? info.conversationId : null;
+    const conversationId = info.conversationId && /^(?:\d{5,20}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(info.conversationId) ? info.conversationId : null;
     if (conversationId) {
       const existing = await prisma.notification.findFirst({
         where: { userId: organizer.userId, type: VINTED_BUNDLE_NOTIFICATION_TYPE, link: { contains: `vc=${conversationId}` } },
@@ -346,7 +346,7 @@ export async function attachConversationToNotice(
   notice: BundleNoticeRow,
   info: { conversationId: string; itemCount: number; amountText: string | null },
 ): Promise<boolean> {
-  if (!/^\d{5,20}$/.test(info.conversationId)) return false;
+  if (!/^(?:\d{5,20}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(info.conversationId)) return false;
   const meta = parseBundleNoticeLink(notice.link, notice.body);
   if (meta.conversationId) return false;
   const dup = await prisma.notification.findFirst({

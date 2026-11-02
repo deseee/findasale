@@ -6084,7 +6084,7 @@
   async function vintBundleReadOrder(order) {
     const conv = String(order.conversationId);
     const itemCount = Number(order.itemCount) || 0;
-    if (!/^\d{5,20}$/.test(conv) || itemCount < 1) return { ok: false, why: 'bad_order' };
+    if (!/^(?:\d{5,20}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(conv) || itemCount < 1) return { ok: false, why: 'bad_order' };
     const sources = [];
     let transactionId = null;
     let sawHttp = null;
@@ -6140,7 +6140,7 @@
       let flagResp = null;
       try { flagResp = await chrome.runtime.sendMessage({ type: 'getVintedSoldCheckRequested' }); } catch (e) { flagResp = null; }
       const orders = flagResp && flagResp.ok && flagResp.data && Array.isArray(flagResp.data.vintedBundleOrders)
-        ? flagResp.data.vintedBundleOrders.filter((o) => o && typeof o.noticeId === 'string' && /^\d{5,20}$/.test(String(o.conversationId)) && Number(o.itemCount) >= 1).slice(0, 5)
+        ? flagResp.data.vintedBundleOrders.filter((o) => o && typeof o.noticeId === 'string' && /^(?:\d{5,20}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(String(o.conversationId)) && Number(o.itemCount) >= 1).slice(0, 5)
         : [];
       if (!orders.length) return;
       const tries = (await vintRemStorageGet(VINT_BUNDLE_TRIES_KEY)) || {};

@@ -4048,7 +4048,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // live listings come down right away.
         const senderUrl = String((sender && (sender.url || (sender.tab && sender.tab.url))) || '');
         const noticeId = typeof msg.noticeId === 'string' ? msg.noticeId.slice(0, 64) : '';
-        const conversationId = typeof msg.conversationId === 'string' && /^\d{5,20}$/.test(msg.conversationId) ? msg.conversationId : '';
+        const conversationId = typeof msg.conversationId === 'string' && /^(?:\d{5,20}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(msg.conversationId) ? msg.conversationId : '';
         const entries = Array.isArray(msg.items)
           ? msg.items
               .filter((e) => e && /^\d{1,20}$/.test(String(e.vintedId)) && typeof e.title === 'string')

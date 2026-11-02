@@ -69,6 +69,11 @@ describe('notice link: conversation id + bundle fields', () => {
     expect(link.startsWith(VINTED_BUNDLE_PAGE_PATH + '?')).toBe(true);
     expect(parseBundleNoticeLink(link)).toEqual({ conversationId: '900100200300', itemCount: 5, amountText: '$5.00', attempts: 2, lastReason: null });
   });
+  it('round-trips a UUID conversation id (Vinted 2026-11-01 format)', () => {
+    const uuid = '01a19482-dfe0-7493-b1f1-b96df0757f91';
+    const link = buildBundleNoticeLink({ conversationId: uuid, itemCount: 6, amountText: '$42.90' });
+    expect(parseBundleNoticeLink(link).conversationId).toBe(uuid);
+  });
   it('rejects a malformed conversation id and omits it from the link', () => {
     const link = buildBundleNoticeLink({ conversationId: 'abc;drop', itemCount: 2 });
     expect(link).not.toContain('vc=');

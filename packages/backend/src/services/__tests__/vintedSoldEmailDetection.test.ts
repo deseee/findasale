@@ -584,6 +584,14 @@ describe('Vinted order conversation id', () => {
     expect(extractVintedConversationId({ links: [trackedUrl(CONV), `https://www.vinted.com/inbox/${CONV}`] })).toBe(CONV);
   });
 
+  it('accepts the UUID conversation ids Vinted switched to (live bundle email 2026-11-01)', () => {
+    const uuid = '01a19482-dfe0-7493-b1f1-b96df0757f91';
+    expect(extractVintedConversationId({ links: [trackedUrl(uuid)] })).toBe(uuid);
+    expect(extractVintedConversationId({ rawBody: `Go to the <a href="${trackedUrl(uuid)}">message thread</a>` })).toBe(uuid);
+    expect(extractVintedConversationId({ links: [`https://www.vinted.com/inbox/${uuid}?x=1`] })).toBe(uuid);
+    expect(extractVintedConversationId({ links: [`https://www.vinted.com/inbox/${uuid}0`] })).toBeNull();
+  });
+
   it('a bundle email result carries the conversation id', async () => {
     const r = await processVintedSoldEmail(soldEmail({ rawBody: bundleBody() }), { processTitleReport: soldReport('notFound', { reason: 'no_match' }) });
     expect(r).toEqual(expect.objectContaining({ kind: 'bundle', itemCount: 5, conversationId: CONV }));

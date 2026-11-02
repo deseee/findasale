@@ -250,7 +250,8 @@ export function decodeVintedTrackedLink(url: string): string | null {
 }
 
 function collectConversationIds(text: string, out: Set<string>): void {
-  const direct = /vinted\.[a-z.]+\/inbox\/(\d{5,20})/gi;
+  // 2026-11-01: Vinted conversation ids are now UUIDs (live: /inbox/01a19482-dfe0-7493-b1f1-b96df0757f91); numeric ids still accepted.
+  const direct = /vinted\.[a-z.]+\/inbox\/(\d{5,20}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?![0-9a-f-])/gi;
   let dm: RegExpExecArray | null;
   while ((dm = direct.exec(text)) !== null) out.add(dm[1]);
   const tracked = /https?:\/\/links\.vinted\.[a-z.]+\/(?:e\/)?t\/[A-Za-z0-9_-]{16,}/gi;
@@ -258,7 +259,7 @@ function collectConversationIds(text: string, out: Set<string>): void {
   while ((tm = tracked.exec(text)) !== null) {
     const decoded = decodeVintedTrackedLink(tm[0]);
     if (!decoded) continue;
-    const inner = /vinted\.[a-z.]+\/inbox\/(\d{5,20})/i.exec(decoded);
+    const inner = /vinted\.[a-z.]+\/inbox\/(\d{5,20}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?![0-9a-f-])/i.exec(decoded);
     if (inner) out.add(inner[1]);
   }
 }
