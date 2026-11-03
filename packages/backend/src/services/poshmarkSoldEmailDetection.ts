@@ -47,8 +47,9 @@
  *      they disagree. Order ID and label PDF / label-outage text are logged as corroboration only.
  *   3. Bundles ("3 items in bundle", "Bundle ...") -> 'unmatched' with reason 'bundle_sale' and
  *      nothing is committed: one email covers several items and names none of them.
- *   4. processPlatformSoldReport('POSHMARK', 'POSHMARK', ...): unique normalized title (8+
- *      chars), never fuzzy. The item's POSHMARK listing record is closed, then the sale is
+ *   4. processPlatformSoldReport('POSHMARK', 'POSHMARK', ...): the post id from the listing photo URL
+ *      (/posts/YYYY/MM/DD/<id>/, exactly one distinct id) when a Poshmark job row has it, else the
+ *      unique normalized title (8+ chars), never fuzzy. The item's POSHMARK listing record is closed, then the sale is
  *      committed. 'error' throws so the poller leaves the message unread for retry.
  *
  * FORWARDING: Gmail filter/auto-forward only. A hand-forwarded "Fwd:" copy has the organizer as
@@ -99,7 +100,8 @@ export type PoshmarkSoldEmailResult =
 
 export interface PoshmarkSoldEmailDeps {
   resolveOrganizerIdByToken?: (token: string) => Promise<string | null>;
-  processReport?: (organizerId: string, title: string, orderId?: string) => Promise<PlatformSoldResult>;
+  /** listingId (2026-11-03): the Poshmark post id from the listing photo URL, when the email carries exactly one. */
+  processReport?: (organizerId: string, title: string, orderId?: string, listingId?: string) => Promise<PlatformSoldResult>;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -156,6 +158,25 @@ export function parsePoshmarkSoldEmailBody(body: string | null | undefined): Pos
   return { title, orderId: o ? o[1].toLowerCase() : null, labelOutageNotice: LABEL_OUTAGE_RE.test(text) };
 }
 
+// Listing photo of the sold post (2026-11-03, Banker's lamp: listing renamed by hand on Poshmark, so the title did not match):
+//   https://<x>.cloudfront.net/posts/2026/08/31/<24 hex post id>/m_<photo id>.jpeg
+// The post id is the remoteListingId the extension records. Only this /posts/YYYY/MM/DD/<id>/ path counts (the Order Number
+// and the uid= ids in links are other 24-hex ids), and only on a CloudFront or Poshmark host.
+const LISTING_PHOTO_RE = /https?:\/\/([A-Za-z0-9.-]+)\/posts\/\d{4}\/\d{2}\/\d{2}\/([0-9a-f]{24})\//g;
+function isPoshmarkPhotoHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return h.endsWith('.cloudfront.net') || /(^|\.)poshmark[a-z0-9-]*\.[a-z.]+$/.test(h);
+}
+
+/** Poshmark post id from the listing photo URL in the RAW body (before tags are stripped); null if none or more than one. */
+export function parsePoshmarkListingIdFromBody(rawHtml: string | null | undefined): string | null {
+  const ids = new Set<string>();
+  for (const m of String(rawHtml ?? '').matchAll(LISTING_PHOTO_RE)) {
+    if (isPoshmarkPhotoHost(m[1])) ids.add(m[2]);
+  }
+  return ids.size === 1 ? [...ids][0] : null; // a bundle or several posts: never guess
+}
+
 export function hasPoshmarkLabelPdf(attachmentNames: string[] | undefined): boolean {
   return (attachmentNames ?? []).some((n) => String(n ?? '').trim().toLowerCase().startsWith(LABEL_PDF_PREFIX));
 }
@@ -193,8 +214,12 @@ export async function processPoshmarkSoldEmail(
   const resolveOrganizerIdByToken = deps.resolveOrganizerIdByToken ?? resolveOrganizerIdByForwardingToken;
   const processReport =
     deps.processReport ??
-    ((orgId: string, title: string, orderId?: string) =>
-      processPlatformSoldReport('POSHMARK', SOLD_VIA_POSHMARK, orgId, { remoteListingId: '', title, ...(orderId ? { orderId } : {}) }));
+    ((orgId: string, title: string, orderId?: string, listingId?: string) =>
+      processPlatformSoldReport('POSHMARK', SOLD_VIA_POSHMARK, orgId, {
+        remoteListingId: listingId ?? '',
+        title,
+        ...(orderId ? { orderId } : {}),
+      }));
 
   if (!isExactSender(email.from)) {
     return { kind: 'ignored', reason: `sender "${email.from}" is not ${POSHMARK_SOLD_EMAIL_SENDER}` };
@@ -245,9 +270,11 @@ export async function processPoshmarkSoldEmail(
   const organizerId = [...organizerIds][0];
 
   const body = parsePoshmarkSoldEmailBody(email.rawBody);
+  const listingId = parsePoshmarkListingIdFromBody(email.rawBody);
   const labelPdf = hasPoshmarkLabelPdf(email.attachmentNames);
   const corroboration = {
     orderId: body.orderId,
+    listingId,
     labelPdf,
     labelOutageNotice: body.labelOutageNotice,
     bodyTitleFound: body.title !== null,
@@ -283,13 +310,20 @@ export async function processPoshmarkSoldEmail(
       organizerId,
       title,
       orderId: body.orderId,
+      listingId,
     });
     return { kind: 'unmatched', organizerId, title, reason: 'bundle_sale' };
   }
 
   // 2026-10-29: the Poshmark order id is the sale's identity: it keeps a repeat of the same order from taking a second unit and lets
   // the 2nd and later unit sales of a Multi Item listing count (facebookNativeSaleService commitPlatformUnitSale).
-  const r = await (body.orderId ? processReport(organizerId, title, body.orderId) : processReport(organizerId, title));
+  // 2026-11-03: the post id from the listing photo is matched before the title (a listing renamed on Poshmark still resolves);
+  // an id on no Poshmark row of this organizer falls back to the title exactly as before (platformSoldDetectionService).
+  const r = await (listingId
+    ? processReport(organizerId, title, body.orderId ?? undefined, listingId)
+    : body.orderId
+      ? processReport(organizerId, title, body.orderId)
+      : processReport(organizerId, title));
   switch (r.result) {
     case 'sold':
     case 'alreadySold':

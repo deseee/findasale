@@ -168,7 +168,7 @@ export async function processPlatformSoldReport(
   const commitSale = deps.commitSale ?? defaultCommitSale;
   const getItemStatus = deps.getItemStatus ?? defaultGetItemStatus;
 
-  const remoteListingId = String(report.remoteListingId ?? '').trim().slice(0, 100);
+  let remoteListingId = String(report.remoteListingId ?? '').trim().slice(0, 100);
   const title = String(report.title ?? '').slice(0, 500);
   const orderId = String(report.orderId ?? '').trim().slice(0, 100);
   const base = { platform, remoteListingId, title };
@@ -177,6 +177,9 @@ export async function processPlatformSoldReport(
   const ctx = buildVintedSoldMatchContext(items, jobs);
   // 2026-10-29: Poshmark listings may carry "Cart" where the item says "Cartridge" (see poshmarkTitle.ts).
   if (platform === 'POSHMARK') addPoshmarkTitleKeys(ctx, items);
+  // 2026-11-03: the Poshmark post id comes from the sold email's listing photo. When no Poshmark row of this organizer
+  // carries it (listing linked without its id), match and commit title-only, exactly as before the id was read.
+  if (platform === 'POSHMARK' && remoteListingId && !ctx.itemIdsByRemoteId.has(remoteListingId)) remoteListingId = '';
   const m = matchVintedSoldEntry({ vintedId: remoteListingId, title }, ctx);
   if (m.kind === 'ambiguous') return { ...base, result: 'ambiguous', via: m.via, candidateCount: m.candidateCount };
   if (m.kind === 'notFound') return { ...base, result: 'notFound', reason: m.reason };

@@ -22,13 +22,14 @@ import {
   isPoshmarkBundleTitle,
   hasPoshmarkLabelPdf,
   normalizeQuotes,
+  parsePoshmarkListingIdFromBody,
   __resetPoshmarkFirstLiveEmailLog,
   POSHMARK_SOLD_EMAIL_SENDER,
   SOLD_VIA_POSHMARK,
   type InboundPoshmarkSoldEmail,
 } from '../poshmarkSoldEmailDetection';
 import { buildFacebookSoldForwardingAddress } from '../organizerEmailForwardingService';
-import type { PlatformSoldResult } from '../platformSoldDetectionService';
+import { processPlatformSoldReport, type PlatformSoldResult, type PlatformSoldDeps } from '../platformSoldDetectionService';
 
 const KNOWN_TOKEN = 'KnownToken_abc123';
 const TITLE = 'Lululemon Work It Out Short';
@@ -311,5 +312,105 @@ describe('parseImapMessageToInboundEmail carries the display name and attachment
     expect(parsed.attachmentNames).toEqual(['pre-paid mailing label.pdf']);
     const r = await processPoshmarkSoldEmail(parsed, { processReport: async () => soldReport() });
     expect(r).toMatchObject({ kind: 'matched', poshmarkOrderId: ORDER_ID });
+  });
+});
+
+// 2026-11-03 (Banker's lamp): the Poshmark listing was created by hand with another title and linked, so the title did not
+// match; the post id in the listing photo URL is the remoteListingId on the item's POSHMARK job row. Made-up ids below.
+describe('Poshmark post id from the listing photo', () => {
+  const POST_ID = '6a1b2c3d4e5f60718293a4b5';
+  const PHOTO_ID = '6a1b2c3d4e5f60718293ffff';
+  const LIVE_ORDER = '6a9f8e7d6c5b4a3928170605';
+  const UID = '6a0011223344556677889900';
+  const LAMP_POSH = "Banker's lamp with green glass shade and brass base";
+  const LAMP_ITEM = "Banker's Lamp, Brass Brass with Green Glass Shade, Vintage";
+  const photo = (id = POST_ID, host = 'di2ponv0v5otw.cloudfront.net') =>
+    `<img alt="Banker&#39;s lamp with green glass shade and brass base" src="https://${host}/posts/2026/08/31/${id}/m_${PHOTO_ID}.jpeg" width="103" />`;
+  const liveHtml = (img = photo()) =>
+    `<h1>You just sold ${LAMP_POSH} on Poshmark.</h1>` +
+    `<a href="https://poshmark.com/order/sales/${LIVE_ORDER}?uid=${UID}&amp;utm_source=em">View Order</a>` +
+    `<table><tr><td>${img}</td><td>${LAMP_POSH} Size: OS $25.00</td></tr></table>` +
+    `<div>Order Number</div><div>${LIVE_ORDER}</div><div>Buyer</div><div>@testbuyer</div>` +
+    `<a href="https://poshmark.com/closet/testcloset?uid=${UID}">Closet</a>`;
+  const lampEmail = (rawBody = liveHtml()) =>
+    email({ subject: `${LAMP_POSH} just sold to @testbuyer on Poshmark!`, rawBody, attachmentNames: [] });
+
+  it('reads the post id from the real img shape and ignores the order number and uid ids', () => {
+    expect(parsePoshmarkListingIdFromBody(liveHtml())).toBe(POST_ID);
+    expect(parsePoshmarkListingIdFromBody(liveHtml(photo(POST_ID, 'cdn.poshmark.com')))).toBe(POST_ID);
+    // the same post twice (several photo sizes) is still one id
+    expect(parsePoshmarkListingIdFromBody(liveHtml(photo() + photo()))).toBe(POST_ID);
+  });
+
+  it('returns null with no photo, two different posts, a non-Poshmark host or a non-/posts/ path', () => {
+    expect(parsePoshmarkListingIdFromBody(liveHtml(''))).toBeNull();
+    expect(parsePoshmarkListingIdFromBody(saleHtml())).toBeNull();
+    expect(parsePoshmarkListingIdFromBody(undefined)).toBeNull();
+    expect(parsePoshmarkListingIdFromBody(liveHtml(photo() + photo('6a1b2c3d4e5f60718293a4b6')))).toBeNull();
+    expect(parsePoshmarkListingIdFromBody(liveHtml(photo(POST_ID, 'evil.example.com')))).toBeNull();
+    expect(parsePoshmarkListingIdFromBody(`<img src="https://x.cloudfront.net/users/2026/08/31/${POST_ID}/a.jpg">`)).toBeNull();
+    expect(parsePoshmarkListingIdFromBody(`<img src="https://x.cloudfront.net/posts/2026/08/31/${POST_ID.toUpperCase()}/a.jpg">`)).toBeNull();
+  });
+
+  it('passes the post id to processReport (and the order number)', async () => {
+    const processReport = jest.fn(async () => soldReport({ title: LAMP_POSH, itemId: 'item_lamp', via: 'remoteId' }));
+    const r = await processPoshmarkSoldEmail(lampEmail(), { processReport });
+    expect(processReport).toHaveBeenCalledWith('organizer_1', LAMP_POSH, LIVE_ORDER, POST_ID);
+    expect(r).toMatchObject({ kind: 'matched', itemId: 'item_lamp' });
+  });
+
+  it('a bundle with a photo is still bundle_sale and commits nothing', async () => {
+    const processReport = jest.fn(async () => soldReport());
+    const r = await processPoshmarkSoldEmail(
+      email({ subject: '3 items in bundle just sold to @testbuyer on Poshmark!', rawBody: `<h1>You just sold 3 items in bundle on Poshmark.</h1>${photo()}` }),
+      { processReport },
+    );
+    expect(r).toMatchObject({ kind: 'unmatched', reason: 'bundle_sale' });
+    expect(processReport).not.toHaveBeenCalled();
+  });
+
+  describe('through the real processPlatformSoldReport matcher', () => {
+    const ITEMS = [
+      { id: 'item_lamp', title: LAMP_ITEM, status: 'AVAILABLE' },
+      { id: 'item_other', title: 'Mouse Trap Board Game, Milton Bradley, Vintage 1990s', status: 'AVAILABLE' },
+    ];
+    function platformDeps(jobs: Array<{ itemId: string; remoteListingId: string | null }>) {
+      return {
+        loadCandidateItems: jest.fn(async () => ITEMS),
+        loadPlatformJobs: jest.fn(async () => jobs),
+        closeListingRecord: jest.fn(async () => true),
+        commitSale: jest.fn(async () => ({ alreadyCommitted: false })),
+        getItemStatus: jest.fn(async () => 'SOLD'),
+      } satisfies PlatformSoldDeps;
+    }
+    // Same call the default processReport makes, with the database loaders injected.
+    const viaReal = (d: PlatformSoldDeps) => (orgId: string, title: string, orderId?: string, listingId?: string) =>
+      processPlatformSoldReport('POSHMARK', SOLD_VIA_POSHMARK, orgId, { remoteListingId: listingId ?? '', title, ...(orderId ? { orderId } : {}) }, d);
+
+    it('a renamed listing resolves to the item by its recorded post id', async () => {
+      const d = platformDeps([{ itemId: 'item_lamp', remoteListingId: POST_ID }]);
+      const r = await processPoshmarkSoldEmail(lampEmail(), { processReport: viaReal(d) });
+      expect(r).toMatchObject({ kind: 'matched', itemId: 'item_lamp', result: 'sold' });
+      expect(d.closeListingRecord).toHaveBeenCalledWith('item_lamp', 'POSHMARK');
+      expect(d.commitSale).toHaveBeenCalledWith('item_lamp', SOLD_VIA_POSHMARK, 'POSHMARK', POST_ID, LIVE_ORDER);
+    });
+
+    it('without the photo the renamed listing stays unmatched (the bug)', async () => {
+      const d = platformDeps([{ itemId: 'item_lamp', remoteListingId: POST_ID }]);
+      const r = await processPoshmarkSoldEmail(lampEmail(liveHtml('')), { processReport: viaReal(d) });
+      expect(r).toMatchObject({ kind: 'unmatched' });
+      expect(d.commitSale).not.toHaveBeenCalled();
+    });
+
+    it('an id on no Poshmark row falls back to the title exactly as before', async () => {
+      // the item's own row carries a DIFFERENT id: still matched by title, committed title-only (no id), as with no photo
+      const d = platformDeps([{ itemId: 'item_other', remoteListingId: '6affffffffffffffffffffff' }]);
+      const r = await processPoshmarkSoldEmail(
+        email({ subject: `${ITEMS[1].title} just sold to @testbuyer on Poshmark!`, rawBody: `<h1>You just sold ${ITEMS[1].title} on Poshmark.</h1>${photo()}` }),
+        { processReport: viaReal(d) },
+      );
+      expect(r).toMatchObject({ kind: 'matched', itemId: 'item_other', result: 'sold' });
+      expect(d.commitSale).toHaveBeenCalledWith('item_other', SOLD_VIA_POSHMARK, 'POSHMARK', '');
+    });
   });
 });
