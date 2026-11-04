@@ -289,6 +289,19 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * Security fix (2026-11-04, #84): the Organizer id that owns this workspace, or null when the
+ * workspace does not exist. Prep tasks are only ever read or written for that organizer's sales,
+ * the same scope getBriefing uses (`organizerId: workspace.ownerId`).
+ */
+async function workspaceOwnerOrganizerId(workspaceId: string): Promise<string | null> {
+  const workspace = await prisma.organizerWorkspace.findUnique({
+    where: { id: workspaceId },
+    select: { ownerId: true },
+  });
+  return workspace?.ownerId ?? null;
+}
+
+/**
  * POST /api/workspace/:workspaceId/briefing/prep
  *
  * Creates a new PrepTask. Emits briefing:taskCreated.
@@ -311,6 +324,15 @@ export const createPrepTask = async (req: AuthRequest, res: Response) => {
     if (trimmedTitle.length > 200) {
       return res.status(400).json({ message: 'Title cannot exceed 200 characters' });
     }
+
+    // Security fix (2026-11-04, #84 sibling): the sale must belong to this workspace's owner.
+    const ownerOrganizerId = await workspaceOwnerOrganizerId(workspaceId);
+    if (!ownerOrganizerId) return res.status(404).json({ message: 'Workspace not found' });
+    const ownedSale = await prisma.sale.findFirst({
+      where: { id: saleId, organizerId: ownerOrganizerId },
+      select: { id: true },
+    });
+    if (!ownedSale) return res.status(404).json({ message: 'Sale not found' });
 
     // Get max sortOrder for this sale to append at end
     const maxOrder = await prisma.prepTask.findFirst({
@@ -367,9 +389,13 @@ export const updatePrepTask = async (req: AuthRequest, res: Response) => {
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     if (!workspaceId || !taskId) return res.status(400).json({ message: 'Workspace ID and Task ID required' });
 
+    // Security fix (2026-11-04, #84): only a task on one of this workspace owner's sales.
+    const ownerOrganizerId = await workspaceOwnerOrganizerId(workspaceId);
+    if (!ownerOrganizerId) return res.status(404).json({ message: 'Workspace not found' });
+
     // Fetch existing task to get saleId and checklistItemId
-    const existing = await prisma.prepTask.findUnique({
-      where: { id: taskId },
+    const existing = await prisma.prepTask.findFirst({
+      where: { id: taskId, sale: { organizerId: ownerOrganizerId } },
       select: { saleId: true, checklistItemId: true, done: true },
     });
     if (!existing) return res.status(404).json({ message: 'Prep task not found' });

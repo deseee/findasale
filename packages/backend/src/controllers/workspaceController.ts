@@ -844,6 +844,13 @@ export const acceptMagicLinkInvite = async (req: AuthRequest, res: Response) => 
     // Get the user to verify email matches
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(404).json({ message: 'User not found' });
+    // Security fix (2026-11-04, #173): the comment above said this, but nothing checked it. A forwarded
+    // or leaked join link must not let a different account join with the invited role (which can be ADMIN).
+    const invitedEmail = (invite.inviteEmail ?? '').trim().toLowerCase();
+    const userEmail = (user.email ?? '').trim().toLowerCase();
+    if (!invitedEmail || invitedEmail !== userEmail) {
+      return res.status(403).json({ message: 'This invite was sent to a different email address. Sign in with that email to accept it.' });
+    }
 
     // Find organizer if user has one
     const organizer = await prisma.organizer.findUnique({ where: { userId: user.id } });

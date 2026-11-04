@@ -5,6 +5,7 @@ import { Readable } from 'stream';
 import { prisma } from '../index';
 import { actualDiscountPct, loadStickerContext, resolveStickerPct } from '../utils/markdownSticker';
 import { v2 as cloudinary } from 'cloudinary';
+import { isOwnCloudinaryImageUrl, cloudinaryPublicIdIfDeletable } from '../utils/cloudinaryOwnership'; // security fix 2026-11-04 (#110)
 import { Decimal } from '@prisma/client/runtime/library';
 import { ItemRarity } from '@prisma/client';
 import { canPublish, userCanPublish, emailNotVerifiedBody, EMAIL_NOT_VERIFIED_CODE, EMAIL_NOT_VERIFIED_PUBLISH_MESSAGE } from '../lib/publishGate'; // 2026-10-23: verify to publish
@@ -4002,11 +4003,12 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
 
       for (const photoUrl of item.photoUrls) {
         try {
-          // Extract public_id from Cloudinary URL
-          // Format: https://res.cloudinary.com/{cloud}/image/upload/v{version}/{public_id}.{ext}
-          const match = photoUrl.match(/\/upload\/v\d+\/(.+?)\./);
-          if (match && match[1]) {
-            cloudinaryPublicIds.push(match[1]);
+          // Security fix (2026-11-04, #110): only destroy a platform upload on our own cloud that no
+          // other item, item photo or sale still references. Uploads share one folder with random
+          // ids, so a URL copied from another organizer's listing must never be destroyed here.
+          const publicId = await cloudinaryPublicIdIfDeletable(prisma, id, photoUrl);
+          if (publicId) {
+            cloudinaryPublicIds.push(publicId);
           }
         } catch (err) {
           console.error('Error extracting Cloudinary public_id:', err);
@@ -4576,6 +4578,10 @@ export const addItemPhoto = async (req: AuthRequest, res: Response) => {
     const { url } = req.body;
     if (!url || typeof url !== 'string') {
       return res.status(400).json({ message: 'url is required' });
+    }
+    // Security fix (2026-11-04, #110): only photos uploaded to FindA.Sale's own Cloudinary.
+    if (!isOwnCloudinaryImageUrl(url)) {
+      return res.status(400).json({ message: 'url must be an image uploaded to FindA.Sale.' });
     }
     const found = await getItemForOrganizer(id, req.user.id);
     if (!found) return res.status(404).json({ message: 'Item not found or access denied' });

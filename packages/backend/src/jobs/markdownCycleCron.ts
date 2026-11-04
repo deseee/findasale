@@ -10,6 +10,13 @@ import {
   formatPropagationFailureReason,
   propagateMarkdownPriceToMarketplaces,
 } from '../services/markdownPricePropagationService';
+import {
+  DEFAULT_MARKDOWN_PRECEDENCE,
+  loadMarkdownPrecedences,
+  cycleItemSelection,
+  cycleWriteLock,
+  isCycleClaim,
+} from '../services/markdownPrecedence';
 
 // Manual reschedule (2026-09-28): Patrick rejected the freshly-added 30%-at-90-days step for
 // these specific items -- they're re-anchored to count their markdown age from TODAY instead of
@@ -62,6 +69,11 @@ const MANUAL_RESCHEDULE_2026_09_28 = new Set<string>([
  *    markdownCron.ts (or an organizer edit) got to the item first.
  * 5. Log counts.
  *
+ * 2026-11-04: the organizer may choose which mechanism wins (services/markdownPrecedence.ts). FIRST_WINS (default)
+ * and SALE_TIERS_WIN keep the markdownTierApplied = 0 guard exactly as before. CYCLES_WIN lets a cycle claim an item
+ * the Day-2/Day-3 cron already tiered: the step pointer logic is unchanged (no step applied twice), the price is
+ * still computed off priceBeforeMarkdown, a claim never raises the price, and it resets markdownTierApplied to 0.
+ *
  * Runs nightly at 3:00 AM UTC (after shopAutoRenewJob at 1:00 AM UTC, before reverseAuctionJob at 6:00 AM UTC)
  */
 export function scheduleMarkdownCycleCron(): void {
@@ -94,6 +106,13 @@ export function scheduleMarkdownCycleCron(): void {
 
       console.log(`[markdown-cycle-cron] Found ${cycles.length} active markdown cycles to process`);
 
+      // 2026-11-04: which mechanism wins, per organizer (missing = FIRST_WINS, the 2026-10-30 behavior).
+      const precedenceByOrganizer = await loadMarkdownPrecedences(
+        prisma,
+        cycles.map((c) => c.organizerId),
+        '[markdown-cycle-cron]'
+      );
+
       let totalMarkdownsApplied = 0;
 
       for (const cycle of cycles) {
@@ -104,6 +123,8 @@ export function scheduleMarkdownCycleCron(): void {
             continue;
           }
 
+          const precedence = precedenceByOrganizer.get(cycle.organizerId) ?? DEFAULT_MARKDOWN_PRECEDENCE;
+
           // Determine item query filter based on whether cycle is sale-scoped or organizer-wide
           const itemFilter: any = {
             status: 'AVAILABLE',
@@ -113,7 +134,8 @@ export function scheduleMarkdownCycleCron(): void {
             // 2026-10-30: one mechanism per item -- never an item the free Day-2/Day-3 cron (markdownCron.ts) has
             // already tiered. That cron in turn skips items a cycle step has been applied to, and both writes
             // below repeat the condition, so the two crons can never both cut the same item.
-            markdownTierApplied: 0,
+            // 2026-11-04: from the organizer's markdown precedence; { markdownTierApplied: 0 } unless CYCLES_WIN.
+            ...cycleItemSelection(precedence),
           };
 
           if (cycle.saleId) {
@@ -155,6 +177,7 @@ export function scheduleMarkdownCycleCron(): void {
               createdAt: true,
               priceBeforeMarkdown: true,
               markdownStepIndexApplied: true,
+              markdownTierApplied: true,
               ebayOfferId: true,
               ebayListingId: true,
               discogsListingId: true,
@@ -203,15 +226,20 @@ export function scheduleMarkdownCycleCron(): void {
 
             const currentPrice = item.price!;
             const isNoopPriceMatch = Math.abs(currentPrice - newPrice) < 0.005;
+            // 2026-11-04: CYCLES_WIN claiming an item the Day-2/Day-3 cron tiered. The claim resets the tier
+            // pointer (one owner per item) and never raises the price.
+            const claim = isCycleClaim(precedence, item);
+            const tierLock = cycleWriteLock(precedence, item);
+            const claimData = claim ? { markdownTierApplied: 0 } : {};
 
-            if (isNoopPriceMatch) {
+            if (isNoopPriceMatch || (claim && newPrice > currentPrice)) {
               // Self-healing path for the migration to this N-step model: an item already
               // marked down under the OLD 2-step logic (or a previous run of this same loop)
               // is already sitting at this step's target price. Just stamp the pointer --
               // no price write, no history row, no alert, no marketplace push.
               await prisma.item.updateMany({
-                where: { id: item.id, markdownTierApplied: 0, markdownStepIndexApplied: item.markdownStepIndexApplied },
-                data: { markdownStepIndexApplied: targetStep.stepOrder },
+                where: { id: item.id, ...tierLock, markdownStepIndexApplied: item.markdownStepIndexApplied },
+                data: { markdownStepIndexApplied: targetStep.stepOrder, ...claimData },
               });
               continue;
             }
@@ -223,11 +251,12 @@ export function scheduleMarkdownCycleCron(): void {
                 id: item.id,
                 status: 'AVAILABLE',
                 excludeFromMarkdown: false,
-                markdownTierApplied: 0,
+                ...tierLock,
                 markdownStepIndexApplied: item.markdownStepIndexApplied,
                 price: currentPrice,
               },
               data: {
+                ...claimData,
                 priceBeforeMarkdown: originalPrice,
                 price: newPrice,
                 markdownApplied: true,

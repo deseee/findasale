@@ -73,6 +73,7 @@ import { reanalyzeItemForOrganizer } from '../controllers/reanalyzeController'; 
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
 import { normalizeBulkCategoryValue } from '../utils/bulkCategory';
+import { isOwnCloudinaryImageUrl } from '../utils/cloudinaryOwnership'; // security fix 2026-11-04 (#110)
 import { inStockOf } from '../services/inventoryStockMath'; // 2026-10-15: bulk Mark available on a SOLD item that still has units in stock
 import { recordItemPriceHistory, MANUAL_PRICE_MARKDOWN_CLEAR } from '../utils/itemPriceHistory'; // 2026-10-29: bulk price writes log history and replace markdowns
 import { importedOnlyEditNeedsDirtyMark, importedOnlyIdsNeedingDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: a bulk category/tags/photos edit must survive the next import
@@ -1183,6 +1184,10 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
 
     if (!['add', 'remove'].includes(operation)) {
       return res.status(400).json({ message: 'operation must be "add" or "remove".' });
+    }
+    // Security fix (2026-11-04, #110): only photos uploaded to FindA.Sale's own Cloudinary may be added.
+    if (operation === 'add' && photoUrls.some((u) => !isOwnCloudinaryImageUrl(u))) {
+      return res.status(400).json({ message: 'photoUrls must be images uploaded to FindA.Sale.' });
     }
 
     const { prisma } = await import('../index');

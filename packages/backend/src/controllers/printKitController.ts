@@ -9,6 +9,8 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { CHEATSHEET_PRICES } from '../constants/cheatsheet';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
+import { lockDownLabelPage } from './labelController'; // security fix 2026-11-04 (#38): no page JS, only data: requests
+import { escapeHtml } from '../utils/htmlEscape'; // security fix 2026-11-04 (#38)
 
 // Avery 5160 label dimensions: 1" × 2.625"
 const STICKER_W = 189; // 2.625 inches @ 72 dpi
@@ -200,6 +202,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
 
     try {
       const pageSticker = await browserSticker.newPage();
+      await lockDownLabelPage(pageSticker); // security fix 2026-11-04 (#38): same lockdown as the label renderer
       await pageSticker.setContent(stickerHtml, { waitUntil: 'load' });
       const pdfStickers = await pageSticker.pdf({
         format: 'Letter',
@@ -1136,7 +1139,7 @@ async function renderPriceSheet(saleId: string, saleTitle: string, frontendUrl: 
             <img src="${qrDataUrl}" alt="QR">
           </div>
           <div class="label-text">
-            <div class="label-sale">${saleTitle}</div>
+            <div class="label-sale">${escapeHtml(saleTitle)}</div>
             <div class="label-price">$${price.toFixed(2)}</div>
             <div class="label-brand">finda.sale</div>
           </div>
@@ -1156,6 +1159,7 @@ async function renderPriceSheet(saleId: string, saleTitle: string, frontendUrl: 
 
   try {
     const page = await browser.newPage();
+    await lockDownLabelPage(page); // security fix 2026-11-04 (#38): the sale title is organizer-typed
     await page.setContent(priceHtml, { waitUntil: 'load' });
     const pdfBuffer = await page.pdf({
       format: 'Letter',

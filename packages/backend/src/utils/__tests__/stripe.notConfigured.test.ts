@@ -14,6 +14,7 @@ jest.mock('stripe', () => ({
 
 const ORIGINAL_KEY = process.env.STRIPE_SECRET_KEY;
 const ORIGINAL_TEST_KEY = process.env.STRIPE_TEST_SECRET_KEY;
+const ORIGINAL_CLOSED = process.env.STRIPE_PLATFORM_CLOSED;
 
 function load() {
   let mod: typeof import('../stripe');
@@ -27,8 +28,10 @@ beforeEach(() => {
   jest.clearAllMocks();
   delete process.env.STRIPE_SECRET_KEY;
   delete process.env.STRIPE_TEST_SECRET_KEY;
+  delete process.env.STRIPE_PLATFORM_CLOSED;
 });
 afterAll(() => {
+  if (ORIGINAL_CLOSED === undefined) delete process.env.STRIPE_PLATFORM_CLOSED; else process.env.STRIPE_PLATFORM_CLOSED = ORIGINAL_CLOSED;
   if (ORIGINAL_KEY === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = ORIGINAL_KEY;
   if (ORIGINAL_TEST_KEY === undefined) delete process.env.STRIPE_TEST_SECRET_KEY; else process.env.STRIPE_TEST_SECRET_KEY = ORIGINAL_TEST_KEY;
 });
@@ -80,7 +83,30 @@ describe('getStripe without a key', () => {
 });
 
 describe('stripeUnavailableGuard', () => {
-  it('answers 503 STRIPE_NOT_CONFIGURED without a key and does not call next', () => {
+  it('answers 410 STRIPE_RETIRED while the platform is closed (the default), even with a key set', () => {
+    process.env.STRIPE_SECRET_KEY = 'test-key-not-real';
+    const { stripeUnavailableGuard } = load();
+    const res = makeRes();
+    const next = jest.fn();
+    stripeUnavailableGuard({} as any, res, next);
+    expect(res.statusCode).toBe(410);
+    expect(res.body.code).toBe('STRIPE_RETIRED');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('answers 410 STRIPE_RETIRED for any STRIPE_PLATFORM_CLOSED value other than "false"', () => {
+    process.env.STRIPE_SECRET_KEY = 'test-key-not-real';
+    process.env.STRIPE_PLATFORM_CLOSED = 'true';
+    const { stripeUnavailableGuard } = load();
+    const res = makeRes();
+    const next = jest.fn();
+    stripeUnavailableGuard({} as any, res, next);
+    expect(res.statusCode).toBe(410);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 STRIPE_NOT_CONFIGURED without a key when Stripe is reopened, and does not call next', () => {
+    process.env.STRIPE_PLATFORM_CLOSED = 'false';
     const { stripeUnavailableGuard } = load();
     const res = makeRes();
     const next = jest.fn();
@@ -90,7 +116,8 @@ describe('stripeUnavailableGuard', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('passes through when a key is set', () => {
+  it('passes through when Stripe is reopened and a key is set', () => {
+    process.env.STRIPE_PLATFORM_CLOSED = 'false';
     process.env.STRIPE_SECRET_KEY = 'test-key-not-real';
     const { stripeUnavailableGuard, isStripeConfigured } = load();
     const res = makeRes();

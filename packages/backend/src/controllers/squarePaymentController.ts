@@ -323,6 +323,11 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       if (!coupon || coupon.userId !== req.user!.id || coupon.status !== 'ACTIVE' || coupon.expiresAt < new Date()) {
         return res.status(400).json({ message: 'Invalid or expired coupon code' });
       }
+      // Security fix (2026-11-04, #32): enforce the coupon's minimum purchase, same rule and wording
+      // as POST /api/coupons/validate (purchase amount before the discount; shipping not counted).
+      if (coupon.minPurchaseAmount && Math.round(price * 100) < Math.round(coupon.minPurchaseAmount * 100)) {
+        return res.status(400).json({ message: `Minimum purchase of $${coupon.minPurchaseAmount.toFixed(2)} required` });
+      }
       if (coupon.discountType === 'FIXED') {
         discountAmount = Math.min(Math.round(coupon.discountValue * 100), priceCents - 50);
       } else {
@@ -366,13 +371,51 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       couponId,
     ]);
 
+    // Security fix (2026-11-04, #32): the Square path validated the coupon but never used it up, so
+    // one code discounted every later Square checkout until it expired. Claim it atomically BEFORE
+    // the charge (ACTIVE -> USED, one winner), give it back if the charge throws or is declined, and
+    // stamp redeemedPurchaseId once the Purchase exists (same end state as markCouponUsed).
+    // An idempotent retry of a checkout that already succeeded with this coupon may proceed: Square
+    // returns the same payment and the existing Purchase is found below, nothing is charged twice.
+    let couponClaimedHere = false;
+    if (couponId) {
+      const claim = await prisma.coupon.updateMany({
+        where: { id: couponId, userId: req.user!.id, status: 'ACTIVE' },
+        data: { status: 'USED', usedAt: new Date() },
+      });
+      if (claim.count === 1) {
+        couponClaimedHere = true;
+      } else {
+        const current = await prisma.coupon.findUnique({ where: { id: couponId }, select: { status: true, redeemedPurchaseId: true } });
+        const priorPurchase = current?.status === 'USED' && current.redeemedPurchaseId
+          ? await prisma.purchase.findUnique({ where: { id: current.redeemedPurchaseId }, select: { itemId: true, userId: true } })
+          : null;
+        if (!priorPurchase || priorPurchase.itemId !== item.id || priorPurchase.userId !== req.user!.id) {
+          return res.status(400).json({ message: 'Invalid or expired coupon code' });
+        }
+      }
+    }
+    const releaseCouponClaim = async () => {
+      if (!couponId || !couponClaimedHere) return;
+      await prisma.coupon
+        .updateMany({ where: { id: couponId, status: 'USED', redeemedPurchaseId: null }, data: { status: 'ACTIVE', usedAt: null } })
+        .catch((err: unknown) => console.error(`[squarePayment] failed to release coupon claim ${couponId}:`, err));
+    };
+
     // Cash-fee-debt recoupment (2026-09-12): pad this card sale's appFeeMoney with whatever
     // room exists to collect outstanding Organizer.cashFeeBalance -- see cashFeeService.ts.
-    const { appFeeCents, debtAppliedCents } = await applyCashDebtToAppFee({
-      organizerId: item.sale!.organizerId,
-      baseAppFeeCents: platformFeeAmount,
-      saleAmountCents: finalPriceCents,
-    });
+    let appFeeCents: number;
+    let debtAppliedCents: number;
+    try {
+      ({ appFeeCents, debtAppliedCents } = await applyCashDebtToAppFee({
+        organizerId: item.sale!.organizerId,
+        baseAppFeeCents: platformFeeAmount,
+        saleAmountCents: finalPriceCents,
+      }));
+    } catch (debtErr) {
+      await releaseCouponClaim();
+      throw debtErr;
+    }
 
     // applyCashDebtToAppFee CLAIMED debtAppliedCents above (2026-09-30): give it back if the charge never happens.
     let chargeResult: Awaited<ReturnType<typeof createSquareCharge>>;
@@ -391,11 +434,13 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       });
     } catch (chargeErr) {
       await releaseCashDebtClaim({ organizerId: item.sale!.organizerId, debtAppliedCents });
+      await releaseCouponClaim();
       throw chargeErr;
     }
 
     if (!chargeResult.ok) {
       await releaseCashDebtClaim({ organizerId: item.sale!.organizerId, debtAppliedCents });
+      await releaseCouponClaim();
       if (!req.user) {
         await recordGuestCheckoutFailure({ hashedIp: guestIpHash, hashedDeviceFingerprint: guestFpHash });
       }
@@ -467,6 +512,13 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
 
       // The debt was claimed before the charge (2026-09-30); this is now only the confirmation.
       await settleCashDebtCollection({ organizerId: item.sale!.organizerId, debtAppliedCents });
+
+      // #32: the coupon was claimed (USED) before the charge; link it to the Purchase it paid for.
+      if (couponId) {
+        await prisma.coupon
+          .update({ where: { id: couponId }, data: { status: 'USED', redeemedPurchaseId: purchase.id } })
+          .catch((err: unknown) => console.error(`[squarePayment] failed to link coupon ${couponId} to purchase ${purchase!.id}:`, err));
+      }
 
       // Creator program (2026-09-29): commission ledger row + conversion counter. Idempotent per
       // Purchase, never throws, only on the branch that just created the row.

@@ -33,6 +33,7 @@ import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Find
 import { resolveOrganizerOrTeamMember, type ResolvedPosActor } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from '../services/cashFeeService'; // Shared cash-commission accrual (2026-08-17) — same mechanism reservationController's RECORD mode uses
 import { resolvePosDiscount } from '../services/posDiscountService';
+import { checkStaffLinePrices } from '../services/posStaffLinePriceService'; // security fix 2026-11-04 (#13)
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots, default off
 import { describeBulkSaleLine } from '../services/bulkLot/bulkLotPricing';
 import {
@@ -306,6 +307,25 @@ export async function processCashSaleCore(params: {
   });
   if (!discountResolution.ok) {
     throw new CashSaleError(discountResolution.message, discountResolution.status, false, 'VALIDATION');
+  }
+
+  // Security fix (2026-11-04, #13): a TEAM_MEMBER may not ring a catalog item up below its DB price
+  // beyond the discount their role is allowed (same permission and cap as resolvePosDiscount above).
+  // The organizer keeps the price override the cash register has always given them.
+  const staffLineCheck = await checkStaffLinePrices({
+    actor: organizer,
+    lines: items
+      .filter((i) => i.itemId && !bulkPlans.has(i.itemId) && dbItems[i.itemId]?.price != null)
+      .map((i) => ({
+        title: dbItems[i.itemId!].title ?? 'Item',
+        dbPriceCents: Math.round(dbItems[i.itemId!].price * 100),
+        lineCents: Math.round(i.amount * 100),
+      })),
+    cartDiscountCents: discountResolution.discountAmountCents,
+    catalogSubtotalCents,
+  });
+  if (!staffLineCheck.ok) {
+    throw new CashSaleError(staffLineCheck.message, staffLineCheck.status, false, 'VALIDATION');
   }
 
   // Apply the authorized discount proportionally across catalog items only (misc items, i.e.

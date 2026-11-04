@@ -646,29 +646,34 @@ describe('POST /bulk: delete never hard-deletes a kit (2026-10-13)', () => {
   });
 });
 
+// Security fix 2026-11-04 (#110): bulk photo add only accepts FindA.Sale Cloudinary uploads.
+const cld = (n: string) => `https://res.cloudinary.com/demo/image/upload/v1/findasale/${n}.jpg`;
+const P_P1 = cld('p1');
+const P_P2 = cld('p2');
+const P_P = cld('p');
 describe('POST /bulk/photos', () => {
   it('stamps lastEditedAt when photos are added', async () => {
-    mockPrisma.item.findMany.mockResolvedValue([{ ...saleItem('a'), photoUrls: ['p1'] }]);
+    mockPrisma.item.findMany.mockResolvedValue([{ ...saleItem('a'), photoUrls: [P_P1] }]);
     const res = makeRes();
-    await bulkPhotos(makeReq({ itemIds: ['a'], operation: 'add', photoUrls: ['p2'] }), res);
+    await bulkPhotos(makeReq({ itemIds: ['a'], operation: 'add', photoUrls: [P_P2] }), res);
     expect(res.statusCode).toBe(200);
     const updates = updateCalls();
     expect(updates).toHaveLength(1);
-    expect(updates[0].data).toEqual({ photoUrls: ['p1', 'p2'], lastEditedAt: expect.any(Date) });
+    expect(updates[0].data).toEqual({ photoUrls: [P_P1, P_P2], lastEditedAt: expect.any(Date) });
   });
 
   it('stamps lastEditedAt when photos are removed', async () => {
-    mockPrisma.item.findMany.mockResolvedValue([{ ...saleItem('a'), photoUrls: ['p1', 'p2'] }]);
+    mockPrisma.item.findMany.mockResolvedValue([{ ...saleItem('a'), photoUrls: [P_P1, P_P2] }]);
     const res = makeRes();
-    await bulkPhotos(makeReq({ itemIds: ['a'], operation: 'remove', photoUrls: ['p1'] }), res);
+    await bulkPhotos(makeReq({ itemIds: ['a'], operation: 'remove', photoUrls: [P_P1] }), res);
     expect(res.statusCode).toBe(200);
-    expect(updateCalls()[0].data).toEqual({ photoUrls: ['p2'], lastEditedAt: expect.any(Date) });
+    expect(updateCalls()[0].data).toEqual({ photoUrls: [P_P2], lastEditedAt: expect.any(Date) });
   });
 
   it('rejects another organizer\'s item with 404 and writes nothing', async () => {
     mockPrisma.item.findMany.mockResolvedValue([{ ...foreignSaleItem('x'), photoUrls: [] }]);
     const res = makeRes();
-    await bulkPhotos(makeReq({ itemIds: ['x'], operation: 'add', photoUrls: ['p'] }), res);
+    await bulkPhotos(makeReq({ itemIds: ['x'], operation: 'add', photoUrls: [P_P] }), res);
     expect(res.statusCode).toBe(404);
     noWrites();
   });
@@ -677,7 +682,7 @@ describe('POST /bulk/photos', () => {
     mockPrisma.item.findMany.mockResolvedValue([{ ...inventoryItem('inv', 'org-1'), photoUrls: [] }]);
     mockPrisma.organizer.findFirst.mockResolvedValue(organizerRow('org-1', CALLER));
     const ok = makeRes();
-    await bulkPhotos(makeReq({ itemIds: ['inv'], operation: 'add', photoUrls: ['p'] }), ok);
+    await bulkPhotos(makeReq({ itemIds: ['inv'], operation: 'add', photoUrls: [P_P] }), ok);
     expect(ok.statusCode).toBe(200);
     expect(updateCalls()).toHaveLength(1);
 
@@ -686,8 +691,16 @@ describe('POST /bulk/photos', () => {
     mockPrisma.item.findMany.mockResolvedValue([{ ...inventoryItem('inv2', 'org-9'), photoUrls: [] }]);
     mockPrisma.organizer.findFirst.mockResolvedValue(null);
     const denied = makeRes();
-    await bulkPhotos(makeReq({ itemIds: ['inv2'], operation: 'add', photoUrls: ['p'] }), denied);
+    await bulkPhotos(makeReq({ itemIds: ['inv2'], operation: 'add', photoUrls: [P_P] }), denied);
     expect(denied.statusCode).toBe(404);
+    noWrites();
+  });
+
+  it('#110: adding a photo URL that is not a FindA.Sale upload is refused with 400 and writes nothing', async () => {
+    mockPrisma.item.findMany.mockResolvedValue([{ ...saleItem('a'), photoUrls: [] }]);
+    const res = makeRes();
+    await bulkPhotos(makeReq({ itemIds: ['a'], operation: 'add', photoUrls: [P_P, 'https://evil.example.com/x.jpg'] }), res);
+    expect(res.statusCode).toBe(400);
     noWrites();
   });
 });

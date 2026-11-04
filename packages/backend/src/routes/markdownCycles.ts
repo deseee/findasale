@@ -7,6 +7,7 @@ import {
   updateMarkdownCycle,
   deleteMarkdownCycle,
 } from '../controllers/markdownCycleController';
+import { getMarkdownPrecedence, updateMarkdownPrecedence } from '../controllers/markdownPrecedenceController';
 
 const router = Router();
 
@@ -27,6 +28,17 @@ const requireProUnlessTurningOff = (req: AuthRequest, res: Response, next: NextF
   if (onlyTurningOff) return next();
   return requireProTier(req, res, next);
 };
+
+// Markdown precedence (2026-11-04): which automatic markdown wins when the sale's Day-2/Day-3 markdowns and a cycle
+// both apply. Registered before /:id so "precedence" is never read as a cycle id. GET: any tier. PUT: PRO/TEAMS,
+// except switching back to the default FIRST_WINS, which any tier may do (it only matters while cycles run).
+const requireProUnlessDefaultPrecedence = (req: AuthRequest, res: Response, next: NextFunction) => {
+  const body = (req.body ?? {}) as { precedence?: unknown };
+  if (body.precedence === 'FIRST_WINS' && Object.keys(body).every((k) => k === 'precedence')) return next();
+  return requireProTier(req, res, next);
+};
+router.get('/precedence', getMarkdownPrecedence);
+router.put('/precedence', requireProUnlessDefaultPrecedence, updateMarkdownPrecedence);
 
 // GET /api/markdown-cycles
 router.get('/', listMarkdownCycles);

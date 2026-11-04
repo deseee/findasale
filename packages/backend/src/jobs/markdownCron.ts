@@ -4,6 +4,13 @@ import { cronGuard } from '../utils/cronGuard';
 import { notifyPriceDropAlerts } from '../services/priceDropService';
 import { applyCharmPricing } from '../utils/charmPricing';
 import { recordItemPriceHistory } from '../utils/itemPriceHistory';
+import {
+  DEFAULT_MARKDOWN_PRECEDENCE,
+  loadMarkdownPrecedences,
+  saleTierSelection,
+  saleTierTakeover,
+  type RunningCycleScope,
+} from '../services/markdownPrecedence';
 
 /**
  * Auto-apply markdown to items based on sale age.
@@ -37,6 +44,10 @@ import { recordItemPriceHistory } from '../utils/itemPriceHistory';
  *    so the two crons cannot both cut one item even when they run at the same moment. Turning
  *    "Keep out of automatic markdowns" on resets both pointers (EXCLUDE_MARKDOWN_RESET).
  *  - Every price write records an ItemPriceHistory row via recordItemPriceHistory (never throws).
+ *  - 2026-11-04: the organizer may choose which mechanism wins (services/markdownPrecedence.ts). The default,
+ *    FIRST_WINS, is exactly the rule above. SALE_TIERS_WIN drops the cycle guard so a tier can take over a
+ *    cycle-cut item (still priced off priceBeforeMarkdown, never stacked on the cycle's cut) and clears the step
+ *    pointer. CYCLES_WIN additionally skips every item inside a running cycle's scope.
  *  - A computed price that is not below the current one is never written (no price increase): the tier is
  *    stamped and nothing else happens.
  *
@@ -56,6 +67,7 @@ export function scheduleMarkdownCron(): void {
         },
         select: {
           id: true,
+          organizerId: true,
           startDate: true,
           markdownFloor: true,
         },
@@ -67,6 +79,31 @@ export function scheduleMarkdownCron(): void {
       }
 
       console.log(`[markdown-cron] Found ${salesToProcess.length} sales to process for markdown`);
+
+      // 2026-11-04: which mechanism wins, per organizer. Empty map (no choices, missing table, read error) means
+      // FIRST_WINS everywhere, i.e. exactly the 2026-10-30 behavior.
+      const precedenceByOrganizer = await loadMarkdownPrecedences(
+        prisma,
+        salesToProcess.map((s) => s.organizerId),
+        '[markdown-cron]'
+      );
+      const cyclesWinOrganizerIds = Array.from(precedenceByOrganizer.entries())
+        .filter(([, mode]) => mode === 'CYCLES_WIN')
+        .map(([id]) => id);
+      let runningCycles: RunningCycleScope[] = [];
+      if (cyclesWinOrganizerIds.length > 0) {
+        try {
+          // A cycle is "running" exactly when markdownCycleCron.ts would process it: active, with steps (the
+          // organizer's PRO/TEAMS tier is already part of the effective precedence).
+          runningCycles = await prisma.markdownCycle.findMany({
+            where: { isActive: true, organizerId: { in: cyclesWinOrganizerIds }, steps: { some: {} } },
+            select: { organizerId: true, saleId: true },
+          });
+        } catch (err) {
+          console.warn('[markdown-cron] could not read markdown cycles, using first-one-wins for this run:', err);
+          for (const id of cyclesWinOrganizerIds) precedenceByOrganizer.delete(id);
+        }
+      }
 
       let totalMarkdowns = 0;
 
@@ -96,6 +133,12 @@ export function scheduleMarkdownCron(): void {
           continue;
         }
 
+        const precedence = (sale.organizerId && precedenceByOrganizer.get(sale.organizerId)) || DEFAULT_MARKDOWN_PRECEDENCE;
+        const selection = saleTierSelection(precedence, sale, runningCycles);
+        if (selection.skipSale) {
+          continue; // CYCLES_WIN and a running cycle covers this whole sale
+        }
+
         // Find items in this sale not yet at this tier (or a later one already skipped forward
         // past it -- targetTier only ever increases with dayOffset within a single sale, so
         // `lt: targetTier` is equivalent to "not yet at this tier"). Skip AUCTION listing type.
@@ -116,12 +159,15 @@ export function scheduleMarkdownCron(): void {
             price: { gt: 0 }, // Only items with a price
             excludeFromMarkdown: false, // ADR item-exclude-from-markdown (2026-09-28): organizer opt-out
             // 2026-10-30: never an item a PRO MarkdownCycle step already marked down (one mechanism per item).
-            OR: [{ markdownStepIndexApplied: null }, { markdownStepIndexApplied: 0 }],
+            // 2026-11-04: that guard comes from the organizer's markdown precedence. FIRST_WINS (default) is
+            // { OR: [{ markdownStepIndexApplied: null }, { markdownStepIndexApplied: 0 }] }, unchanged.
+            ...selection.where,
           },
           select: {
             id: true,
             price: true,
             priceBeforeMarkdown: true,
+            markdownStepIndexApplied: true,
           },
         });
 
@@ -144,19 +190,23 @@ export function scheduleMarkdownCron(): void {
           // 2026-10-30: the conditional write is the cross-cron lock -- it lands only while the item is still
           // untouched by a MarkdownCycle step, below this tier, still eligible, and at the price read above
           // (an organizer edit or the cycle cron in between makes it a no-op instead of a second cut).
+          // 2026-11-04: SALE_TIERS_WIN pins the step pointer read above and, on a takeover, clears it (empty for
+          // the other modes, so the default write is unchanged).
+          const takeover = saleTierTakeover(precedence, item);
           const lockWhere = {
             id: item.id,
             status: 'AVAILABLE' as const,
             deletedAt: null,
             excludeFromMarkdown: false,
             markdownTierApplied: { lt: targetTier },
-            OR: [{ markdownStepIndexApplied: null }, { markdownStepIndexApplied: 0 }],
+            ...selection.where,
+            ...takeover.where,
           };
 
           if (newPrice >= currentPrice - 0.005) {
             // Already at (or below) this tier's price, e.g. the floor: stamp the tier, no price write, no
             // history row, no alert. Never raises a price.
-            await prisma.item.updateMany({ where: lockWhere, data: { markdownTierApplied: targetTier } });
+            await prisma.item.updateMany({ where: lockWhere, data: { markdownTierApplied: targetTier, ...takeover.data } });
             continue;
           }
 
@@ -179,6 +229,7 @@ export function scheduleMarkdownCron(): void {
               // relying on the column default) so this stays correct on EVERY tier transition,
               // including Day-2 -> Day-3+, now that this cron can revisit an item a second time.
               markdownPhysicallyAppliedAt: null,
+              ...takeover.data,
             },
           });
           if (written.count === 0) continue; // lost the race (cycle cron, organizer edit, status change)

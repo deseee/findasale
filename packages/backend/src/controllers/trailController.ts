@@ -3,7 +3,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { searchNearbyPlaces, haversineDistance, completionBonus } from '../lib/placesService';
-import { spendXp, getSpendableXp, awardXp } from '../services/xpService';
+import { spendXp, getSpendableXp, awardXp, applyHuntPassMultiplier } from '../services/xpService';
+import { qrScanConfig } from '../services/qrScanGuardService'; // #188: same impossible-speed thresholds as QR scans
 import { referralTrancheService } from '../services/referralTrancheService'; // Feature: Referral tranche system
 import { GATE_ORGANIZER_SELECT, gateSalesForViewer } from '../lib/publicSaleGate';
 import { redactSaleLocation } from '../lib/saleLocationPrivacy';
@@ -28,6 +29,74 @@ function gateTrailStops(stops: any[], anchorSale: any, viewer: any): any[] {
     const { startDate: _s, organizer: _o, ...out } = gated as any;
     return out;
   });
+}
+
+/*
+ * Trail XP rules (security fixes #188/#189, game designer decision 2026-11-04):
+ *   1. Stop XP is a server constant (TRAIL_STOP_XP). Client baseXp is ignored on addStop, and check-in awards
+ *      the constant whatever a legacy stop row stores.
+ *   2. minStopsRequired and maxStops are clamped to TRAIL_MIN_STOPS..TRAIL_MAX_STOPS (maxStops >= minStopsRequired).
+ *   3. The trail's organizer and that organizer's workspace team may check in but earn 0 XP and no completion bonus.
+ *   4. Check-in requires the stop to belong to the URL's trail, the trail to be active, and public unless the caller
+ *      owns it, and passes the QR-scan impossible-speed guard between the user's consecutive trail check-ins.
+ *   5. At most TRAIL_DAILY_XP_CAP XP per user per UTC day from trails (TRAIL_STOP_CHECKIN + TRAIL_COMPLETION).
+ */
+export const TRAIL_STOP_XP = 3;
+export const TRAIL_MIN_STOPS = 3;
+export const TRAIL_MAX_STOPS = 7;
+export const TRAIL_DAILY_XP_CAP = 150;
+const TRAIL_XP_TYPES = ['TRAIL_STOP_CHECKIN', 'TRAIL_COMPLETION'];
+
+const clampStops = (raw: unknown, dflt: number): number => {
+  const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(n)) return dflt;
+  return Math.min(Math.max(Math.round(n), TRAIL_MIN_STOPS), TRAIL_MAX_STOPS);
+};
+
+/** XP this user has already earned from trails since 00:00 UTC today. */
+async function trailXpEarnedTodayUtc(userId: string): Promise<number> {
+  const startOfDay = new Date();
+  startOfDay.setUTCHours(0, 0, 0, 0);
+  const agg = await prisma.pointsTransaction.aggregate({
+    where: { userId, type: { in: TRAIL_XP_TYPES }, createdAt: { gte: startOfDay } },
+    _sum: { points: true },
+  });
+  return agg._sum.points ?? 0;
+}
+
+/**
+ * The trail XP this award may pay right now. The Hunt Pass multiplier is applied first, then the result is
+ * clamped to what is left of today's cap, so the cap holds for Hunt Pass holders too. `alreadyPlanned` is XP
+ * planned earlier in the same request but not yet written.
+ */
+async function planTrailXp(userId: string, baseXp: number, alreadyPlanned = 0): Promise<number> {
+  if (baseXp <= 0) return 0;
+  const remaining = TRAIL_DAILY_XP_CAP - (await trailXpEarnedTodayUtc(userId)) - alreadyPlanned;
+  if (remaining <= 0) return 0;
+  const multiplied = await applyHuntPassMultiplier(userId, baseXp);
+  return Math.max(0, Math.min(multiplied, remaining));
+}
+
+/** Write a planned trail award (already multiplied and capped by planTrailXp). */
+async function payTrailXp(userId: string, type: string, amount: number, description: string): Promise<void> {
+  if (amount <= 0) return;
+  await awardXp(userId, type, amount, { description, preMultipliedHuntPassXp: true });
+}
+
+/** True when the caller is the trail's organizer (or legacy creator) or on that organizer's workspace team. */
+async function isTrailOwnerOrTeam(trail: { organizerId: string | null; userId?: string | null }, callerUserId: string): Promise<{ owner: boolean; team: boolean }> {
+  if (trail.userId && trail.userId === callerUserId) return { owner: true, team: false };
+  const callerOrganizer = await prisma.organizer.findUnique({ where: { userId: callerUserId }, select: { id: true } });
+  if (trail.organizerId && callerOrganizer?.id === trail.organizerId) return { owner: true, team: false };
+  if (!trail.organizerId) return { owner: false, team: false };
+  const membership = await prisma.workspaceMember.findFirst({
+    where: {
+      workspace: { ownerId: trail.organizerId },
+      OR: [{ userId: callerUserId }, ...(callerOrganizer ? [{ organizerId: callerOrganizer.id }] : [])],
+    },
+    select: { id: true },
+  });
+  return { owner: false, team: !!membership };
 }
 
 /**
@@ -95,8 +164,9 @@ export const createTrail = async (req: AuthRequest, res: Response) => {
         name: name.trim(),
         description: description?.trim(),
         type: type || 'DISCOVERY',
-        minStopsRequired: minStopsRequired || 3,
-        maxStops: maxStops || 7,
+        // #189: clamped to 3..7, and maxStops never below minStopsRequired.
+        minStopsRequired: clampStops(minStopsRequired, TRAIL_MIN_STOPS),
+        maxStops: Math.max(clampStops(maxStops, TRAIL_MAX_STOPS), clampStops(minStopsRequired, TRAIL_MIN_STOPS)),
         windowDays: windowDays || 7,
         isActive: true,
         isPublic: false,
@@ -252,7 +322,8 @@ export const getMyTrails = async (req: AuthRequest, res: Response) => {
 export const addStop = async (req: AuthRequest, res: Response) => {
   try {
     const { trailId } = req.params;
-    const { stopType, stopName, address, latitude, longitude, googlePlaceId, baseXp, organizer_note } = req.body;
+    // #189: client baseXp is ignored; every stop is worth TRAIL_STOP_XP.
+    const { stopType, stopName, address, latitude, longitude, googlePlaceId, organizer_note } = req.body;
 
     const trail = await prisma.treasureTrail.findUnique({
       where: { id: trailId },
@@ -281,7 +352,7 @@ export const addStop = async (req: AuthRequest, res: Response) => {
         latitude: parseFloat(latitude),
         longitude: parseFloat(longitude),
         googlePlaceId,
-        baseXp: baseXp || 3,
+        baseXp: TRAIL_STOP_XP,
         order: nextOrder,
         organizer_note,
       },
@@ -347,7 +418,19 @@ export const checkInAtStop = async (req: AuthRequest, res: Response) => {
       where: { id: stopId },
       select: { latitude: true, longitude: true, baseXp: true, trailId: true },
     });
-    if (!stop) return res.status(404).json({ message: 'Stop not found.' });
+    // #188: a stop only counts on its own trail (one stop could otherwise pay out once per trail id).
+    if (!stop || stop.trailId !== trailId) return res.status(404).json({ message: 'Stop not found.' });
+
+    const trail = await prisma.treasureTrail.findUnique({
+      where: { id: trailId },
+      select: { minStopsRequired: true, windowDays: true, organizerId: true, userId: true, isActive: true, isPublic: true },
+    });
+    if (!trail) return res.status(404).json({ message: 'Trail not found.' });
+    const { owner: callerIsOwner, team: callerIsTeam } = await isTrailOwnerOrTeam(trail, userId);
+    if (!trail.isPublic && !callerIsOwner) return res.status(404).json({ message: 'Trail not found.' });
+    if (!trail.isActive) return res.status(400).json({ message: 'This trail is not active.' });
+    // #189 rule 3: the organizer and their team may walk their own trail but never earn XP from it.
+    const earnsXp = !callerIsOwner && !callerIsTeam;
 
     // Check if already checked in at this stop (before the distance check, so repeated probes after a
     // check-in learn nothing about where the stop is).
@@ -366,36 +449,52 @@ export const checkInAtStop = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: `Too far away. Get within ${MAX_DISTANCE}m of this stop to check in.` });
     }
 
-    // Create check-in and award XP
-    const checkIn = await prisma.trailCheckIn.create({
+    // #188: the QR-scan impossible-speed guard, between this user's consecutive trail check-ins.
+    const previousCheckIn = await prisma.trailCheckIn.findFirst({
+      where: { userId },
+      orderBy: { checkedInAt: 'desc' },
+      select: { latitude: true, longitude: true, checkedInAt: true },
+    });
+    if (previousCheckIn) {
+      const speedCfg = qrScanConfig();
+      const jumpM = haversineDistance(previousCheckIn.latitude, previousCheckIn.longitude, latitude, longitude);
+      if (jumpM > speedCfg.minSpeedCheckDistanceM) {
+        const dtSec = Math.max((Date.now() - new Date(previousCheckIn.checkedInAt).getTime()) / 1000, 1);
+        if (jumpM / dtSec > speedCfg.maxSpeedMps) {
+          console.warn(`[trailCheckIn] rejected reason=impossible_speed userId=${userId} trailId=${trailId} jumpM=${Math.round(jumpM)} dtSec=${Math.round(dtSec)}`);
+          return res.status(403).json({
+            message: 'Your location changed too quickly to verify this check-in. Please try again in a moment.',
+            code: 'IMPLAUSIBLE_MOVEMENT',
+          });
+        }
+      }
+    }
+
+    // #188/#189: always TRAIL_STOP_XP (never the stored stop.baseXp), 0 for the trail's own organizer/team,
+    // and within the daily trail cap. Planned first so the check-in row records what is earned, and paid
+    // only after the row is created (the unique (trail, stop, user) row stops a concurrent double award).
+    const stopXpAwarded = earnsXp ? await planTrailXp(userId, TRAIL_STOP_XP) : 0;
+
+    // Create check-in
+    await prisma.trailCheckIn.create({
       data: {
         trailId,
         stopId,
         userId,
         latitude,
         longitude,
-        baseXpAwarded: stop.baseXp,
+        baseXpAwarded: stopXpAwarded,
       },
     });
 
-    // 2026-08-08 fix (roadmap #268): was raw prisma.pointsTransaction.create +
-    // prisma.user.update, bypassing the shared awardXp() helper -- meant this XP
-    // (real-value: redeemable for $1-off coupons via spendXp()) skipped the fraud-suspect
-    // gate every other XP path enforces, plus lifetimeXpEarned/xpExpiresAt refresh and
-    // rank-up sync. awardXp() now the sole write path for this award.
-    await awardXp(userId, 'TRAIL_STOP_CHECKIN', stop.baseXp, {
-      description: `Trail stop check-in`,
-    });
+    // 2026-08-08 fix (roadmap #268): awards go through the shared awardXp() helper (fraud-suspect gate,
+    // lifetime XP, rank sync).
+    await payTrailXp(userId, 'TRAIL_STOP_CHECKIN', stopXpAwarded, 'Trail stop check-in');
 
     // Check if all stops now complete
     const allCheckIns = await prisma.trailCheckIn.findMany({
       where: { trailId, userId },
       distinct: ['stopId'],
-    });
-
-    const trail = await prisma.treasureTrail.findUnique({
-      where: { id: trailId },
-      select: { minStopsRequired: true, windowDays: true, organizerId: true },
     });
 
     let completionTriggered = false;
@@ -409,7 +508,8 @@ export const checkInAtStop = async (req: AuthRequest, res: Response) => {
 
       if (!existing) {
         completionTriggered = true;
-        completionBonusXp = completionBonus(allCheckIns.length);
+        // #189: completionBonus() unchanged; 0 for the organizer/team, and within the daily trail cap.
+        completionBonusXp = earnsXp ? await planTrailXp(userId, completionBonus(allCheckIns.length)) : 0;
 
         const firstCheckIn = await prisma.trailCheckIn.findFirst({
           where: { trailId, userId },
@@ -438,44 +538,45 @@ export const checkInAtStop = async (req: AuthRequest, res: Response) => {
           },
         });
 
-        // Feature: Record referral tranche trail completion (non-blocking)
-        try {
-          await referralTrancheService.recordTrailCompletion(userId);
-        } catch (err) {
-          console.error('[referralTranche] recordTrailCompletion failed:', err);
-          // Never fail the trail completion due to tranche logic
-        }
+        // The organizer's own or their team's walk-through is not a shopper completion: no bonus, no referral
+        // tranche, no organizer reward, no completion count (#189 rule 3).
+        if (earnsXp) {
+          // Award completion bonus XP to shopper (planned and capped above, after the unique completion row).
+          // 2026-08-08 fix (roadmap #268): routed through the shared awardXp() helper.
+          await payTrailXp(userId, 'TRAIL_COMPLETION', completionBonusXp, `Trail completion bonus (${allCheckIns.length} stops)`);
 
-        // Award completion bonus XP to shopper.
-        // 2026-08-08 fix (roadmap #268): same fraud-gate-bypass fix as the per-stop award
-        // above -- routed through the shared awardXp() helper.
-        await awardXp(userId, 'TRAIL_COMPLETION', completionBonusXp, {
-          description: `Trail completion bonus (${allCheckIns.length} stops)`,
-        });
+          // Feature: Record referral tranche trail completion (non-blocking)
+          try {
+            await referralTrancheService.recordTrailCompletion(userId);
+          } catch (err) {
+            console.error('[referralTranche] recordTrailCompletion failed:', err);
+            // Never fail the trail completion due to tranche logic
+          }
 
-        // Award organizer 15 XP per unique completion.
-        // 2026-08-08 fix (roadmap #268): same fraud-gate-bypass fix -- routed through the
-        // shared awardXp() helper.
-        if (trail?.organizerId) {
-          const organizerId = trail.organizerId;
-          await awardXp(organizerId, 'TRAIL_COMPLETION', 15, {
-            description: `Trail completion reward (shopper completed)`,
+          // Award organizer 15 XP per unique completion.
+          // 2026-08-08 fix (roadmap #268): same fraud-gate-bypass fix -- routed through the
+          // shared awardXp() helper.
+          if (trail?.organizerId) {
+            const organizerId = trail.organizerId;
+            await awardXp(organizerId, 'TRAIL_COMPLETION', 15, {
+              description: `Trail completion reward (shopper completed)`,
+            });
+          }
+
+          // Update trail completion count
+          await prisma.treasureTrail.update({
+            where: { id: trailId },
+            data: { completionCount: { increment: 1 } },
           });
         }
-
-        // Update trail completion count
-        await prisma.treasureTrail.update({
-          where: { id: trailId },
-          data: { completionCount: { increment: 1 } },
-        });
       }
     }
 
     return res.json({
-      xpAwarded: stop.baseXp,
+      xpAwarded: stopXpAwarded,
       completionTriggered,
       completionBonusXp,
-      totalXpAtStop: stop.baseXp,
+      totalXpAtStop: stopXpAwarded,
     });
   } catch (error) {
     console.error('checkInAtStop error:', error);
@@ -532,17 +633,20 @@ export const postStopPhoto = async (req: AuthRequest, res: Response) => {
     // prisma.user.update, bypassing the shared awardXp() helper -- meant this XP skipped
     // the fraud-suspect gate every other XP path enforces, plus lifetimeXpEarned/xpExpiresAt
     // refresh and rank-up sync. awardXp() now the sole write path for this award.
-    await awardXp(userId, 'TRAIL_STOP_CHECKIN', 2, {
-      description: `Trail stop photo bonus`,
-    });
+    // #189: the photo bonus is trail XP too (TRAIL_STOP_CHECKIN), so it is 0 for the trail's own
+    // organizer/team and counts toward the daily trail cap.
+    const photoTrail = await prisma.treasureTrail.findUnique({ where: { id: trailId }, select: { organizerId: true, userId: true } });
+    const photoRole = photoTrail ? await isTrailOwnerOrTeam(photoTrail, userId) : { owner: false, team: false };
+    const photoXp = photoRole.owner || photoRole.team ? 0 : await planTrailXp(userId, 2);
+    await payTrailXp(userId, 'TRAIL_STOP_CHECKIN', photoXp, 'Trail stop photo bonus');
 
     // Link photo to check-in (for reference)
     await prisma.trailCheckIn.update({
       where: { id: checkIn.id },
-      data: { photoXpAwarded: 2 },
+      data: { photoXpAwarded: photoXp },
     });
 
-    return res.status(201).json({ success: true, xpAwarded: 2 });
+    return res.status(201).json({ success: true, xpAwarded: photoXp });
   } catch (error) {
     console.error('postStopPhoto error:', error);
     return res.status(500).json({ message: 'Server error.' });

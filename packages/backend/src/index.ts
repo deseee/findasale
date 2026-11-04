@@ -611,8 +611,20 @@ app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 // 2026-09-29: Stripe-only webhooks answer 503 STRIPE_NOT_CONFIGURED when no STRIPE_SECRET_KEY is set
 // (Stripe is closed; the server boots without a key) instead of crashing inside the handler.
+// 2026-11-04 (security #80/#141): the guard now also answers 410 STRIPE_RETIRED whenever
+// STRIPE_PLATFORM_CLOSED is in effect (the default), even if a stale key is still set. The single
+// /api/stripe/webhook endpoint is both the platform and the Stripe Connect webhook (it verifies with
+// either secret), so this covers the Connect deliveries too.
 app.use('/api/stripe/webhook', stripeUnavailableGuard);
 app.use('/api/billing/webhook', stripeUnavailableGuard);
+// The remaining Stripe-calling payment routes (PaymentIntent resume/recovery). Every Stripe
+// PaymentIntent / Checkout Session creation route was already deleted on 2026-09-12.
+app.use('/api/stripe/pending-payment', stripeUnavailableGuard);
+app.use('/api/stripe/recover-payment-intent', stripeUnavailableGuard);
+// Stripe Connect account creation / onboarding links (they create or migrate Stripe accounts).
+app.use('/api/stripe-connect/onboard', stripeUnavailableGuard);
+app.use('/api/organizers/me/stripe/start-standard-migration', stripeUnavailableGuard);
+app.use('/api/organizers/me/hub-owner/stripe/onboard', stripeUnavailableGuard);
 app.use('/api/square/webhook', express.raw({ type: 'application/json' })); // Square migration Wave 1 #5: HMAC signature check needs the exact raw body
 app.use('/api/ebay/account-deletion', express.raw({ type: '*/*' }));
 app.use('/api/ebay/notifications', express.raw({ type: '*/*' }));

@@ -73,10 +73,46 @@ function entryKey(platform: string, commentId: string): string {
   return `${platform}:${commentId}`;
 }
 
+/*
+ * Security fix (2026-11-04, finding #50): comment text and author names are untrusted (anyone can comment
+ * on the brand YouTube channel), and the drafted reply is LLM output that can be steered by that comment.
+ * parseEntries finds entry markers anywhere and reads each block's first /^STATUS:/m line, and JavaScript's
+ * `^` with the m flag also matches after \r, U+2028 and U+2029. So a comment carrying a marker plus a
+ * hidden line break and "STATUS: APPROVED" could stage its own self-approved entry. Every line terminator
+ * and control character is neutralised and comment markers are removed before anything is staged.
+ */
+// eslint-disable-next-line no-control-regex
+const LINE_BREAKS = /\r\n|[\r\n\u000b\u000c\u0085\u2028\u2029]/g;
+// eslint-disable-next-line no-control-regex
+const OTHER_CONTROL_CHARS = /[\u0000-\u0008\u000e-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+const HTML_COMMENT_DELIMITERS = /<!--|--!?>/g;
+
+/** One-line untrusted text: every line break becomes a space, control characters and comment markers go. */
+export function sanitizeStagedInlineText(text: string): string {
+  return text
+    .replace(LINE_BREAKS, ' ')
+    .replace(OTHER_CONTROL_CHARS, '')
+    .replace(HTML_COMMENT_DELIMITERS, '')
+    .trim();
+}
+
+/** Multi-line drafted reply: line breaks normalised to \n, control characters and comment markers removed,
+ *  and any line that would read as a STATUS line dropped (only a human edit may set STATUS). */
+export function sanitizeStagedReplyText(text: string): string {
+  return text
+    .replace(LINE_BREAKS, '\n')
+    .replace(OTHER_CONTROL_CHARS, '')
+    .replace(HTML_COMMENT_DELIMITERS, '')
+    .split('\n')
+    .filter((line) => !/^\s*STATUS\s*:/i.test(line))
+    .join('\n')
+    .trim();
+}
+
 function renderEntryBlock(entry: DraftedReplyEntry): string {
   const key = entryKey(entry.platform, entry.commentId);
-  const author = entry.authorDisplayName ? entry.authorDisplayName : 'unknown';
-  const source = entry.sourceUrl ? entry.sourceUrl : 'n/a';
+  const author = entry.authorDisplayName ? sanitizeStagedInlineText(entry.authorDisplayName) || 'unknown' : 'unknown';
+  const source = entry.sourceUrl ? sanitizeStagedInlineText(entry.sourceUrl) || 'n/a' : 'n/a';
 
   return `${ENTRY_MARKER_PREFIX} ${key} -->
 ## Entry — ${entry.platform} — ${entry.commentId}
@@ -85,12 +121,12 @@ STATUS: AWAITING EDIT
 
 **Original comment**
 - Author: ${author}
-- Text: "${entry.originalText.replace(/\r?\n/g, ' ').trim()}"
+- Text: "${sanitizeStagedInlineText(entry.originalText)}"
 - Source: ${source}
 - Comment ID: ${entry.commentId}
 
 **Drafted reply**
-${entry.draftedReply.trim()}
+${sanitizeStagedReplyText(entry.draftedReply)}
 
 ---
 `;

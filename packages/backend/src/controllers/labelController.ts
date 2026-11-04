@@ -30,7 +30,7 @@ const esc = (value: unknown): string =>
  * <img src="http://..."> or <link>) is aborted, so even a missed escape cannot exfiltrate or fetch.
  * Must be called before page.setContent.
  */
-async function lockDownLabelPage(page: Page): Promise<void> {
+export async function lockDownLabelPage(page: Page): Promise<void> { // exported 2026-11-04 (security #38): printKitController reuses it
   await page.setJavaScriptEnabled(false);
   await page.setRequestInterception(true);
   page.on('request', (request) => {

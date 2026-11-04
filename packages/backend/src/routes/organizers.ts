@@ -2428,6 +2428,12 @@ function domainOf(value: string | null | undefined): string | null {
   }
 }
 
+// Security fix (2026-11-04, #9): the singleton system organizer that every unattributed scraped sale
+// hangs off (services/scraper/index.ts getOrCreateSystemOrganizer, user email below, business name
+// "FindA.Sale Directory"). It is isClaimed:false like a ghost listing, but claiming it would hand the
+// claimant every one of those sales and break scraper ingestion, so it is never claimable.
+const SYSTEM_SCRAPER_EMAIL = 'system-scraper@finda.sale';
+
 // Feature #443: POST /organizers/:id/claim-oauth — 1-click claim for ghost listings
 // SECURITY FIX (findasale-hacker pass, 2026-07-20): the sibling manual-review claim
 // endpoint (POST /:id/claim, line ~1939) already carries publicDirectoryRateLimiter;
@@ -2446,11 +2452,16 @@ router.post('/:id/claim-oauth', authenticate, publicDirectoryRateLimiter, async 
     }
 
     // Verify organizer exists and is unclaimed
-    const organizer = await prisma.organizer.findUnique({ where: { id } });
+    const organizer = await prisma.organizer.findUnique({ where: { id }, include: { user: { select: { email: true } } } });
     if (!organizer) {
       return res.status(404).json({ error: 'NOT_FOUND' });
     }
-    if (organizer.isClaimed) {
+    // #9: the system catch-all organizer is never claimable.
+    if ((organizer as any).user?.email?.toLowerCase() === SYSTEM_SCRAPER_EMAIL) {
+      return res.status(403).json({ error: 'NOT_CLAIMABLE' });
+    }
+    // #9: already claimed by anyone (flag or claim status) means no second claim.
+    if (organizer.isClaimed || organizer.claimStatus === 'CLAIMED') {
       return res.status(409).json({ error: 'ALREADY_CLAIMED' });
     }
 
@@ -2487,7 +2498,7 @@ router.post('/:id/claim-oauth', authenticate, publicDirectoryRateLimiter, async 
     // Atomic claim transaction with optimistic lock (where: { id, isClaimed: false })
     await prisma.$transaction([
       prisma.organizer.update({
-        where: { id, isClaimed: false }, // optimistic lock — prevents double-claim
+        where: { id, isClaimed: false, claimStatus: { not: 'CLAIMED' } }, // optimistic lock — prevents double-claim
         data: {
           isClaimed: true,
           isUnmanagedListing: false,

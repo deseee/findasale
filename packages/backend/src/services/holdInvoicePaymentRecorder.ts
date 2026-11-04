@@ -147,6 +147,20 @@ export interface MarkHoldInvoicePaidOpts {
   chargeId?: string;
   /** Estimated Stripe processing fee, in cents. Defaults to 0 if not supplied. */
   stripeFeeAmountCents?: number;
+  /**
+   * Security fix (2026-11-04, findings #80/#141): the Stripe webhook passes the charge it is
+   * recording. When present, the invoice is only recorded if verifyStripeChargeForHoldInvoice
+   * accepts it (paid on the invoice organizer's connected account, amount covers the card leg).
+   * Omitted by callers that do not record a webhook-delivered charge (reconcile, pos-cash, Square).
+   */
+  stripeCharge?: StripeChargeCheck;
+}
+
+export interface StripeChargeCheck {
+  /** `event.account` of the webhook delivery: set for a connected-account event, absent for a platform one. */
+  connectAccountId?: string | null;
+  /** The charge amount, in cents. */
+  amountCents: number;
 }
 
 export interface MarkHoldInvoicePaidResult {
@@ -162,6 +176,8 @@ export interface MarkHoldInvoicePaidResult {
    * reconcile branch) keep compiling unchanged.
    */
   deadInvoice?: boolean;
+  /** Security fix (2026-11-04): true when opts.stripeCharge failed verification; nothing was recorded. */
+  rejectedPayment?: boolean;
   /**
    * 2026-09-30 (payment review finding 2): set when this call recorded the invoice but at least one paid
    * item could not be fulfilled (oversold). The card share of those items is refunded automatically
@@ -322,6 +338,73 @@ function invoiceCardLegCents(holdInvoice: any): number {
   const cash = holdInvoice.cashAmountCents && holdInvoice.cashAmountCents > 0 ? holdInvoice.cashAmountCents : 0;
   const remainder = (holdInvoice.totalAmount ?? 0) - cash;
   return remainder > 0 ? remainder : holdInvoice.totalAmount ?? 0;
+}
+
+/**
+ * Security fix (2026-11-04, findings #80/#141). The Stripe webhook accepts events signed with the
+ * Connect secret, and an organizer on a Standard connected account can create a PaymentIntent with
+ * ANY metadata on their own account. So `metadata.invoiceId` on a connected-account event proves
+ * nothing by itself. A charge may only touch a HoldInvoice when:
+ *   - it was made on THAT invoice's connected account (the pinned HoldInvoice.stripeAccountId, else
+ *     the sale organizer's stripeConnectId); a platform-signed event is accepted unless the invoice
+ *     is a Direct charge, which can only ever be paid on the connected account, and
+ *   - its amount covers the invoice's card leg (total less any cash leg), same rule as the Square webhook.
+ * Never throws; a rejection is logged and the caller ignores the event.
+ */
+export async function verifyStripeChargeForHoldInvoice(
+  holdInvoice: {
+    id: string;
+    totalAmount: number;
+    cashAmountCents?: number | null;
+    cardAmountCents?: number | null;
+    stripeAccountId?: string | null;
+    chargeType?: string | null;
+    sale?: { organizerId?: string | null; organizer?: { stripeConnectId?: string | null } | null } | null;
+  },
+  check: StripeChargeCheck,
+  context: string
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const reject = (reason: string): { ok: false; reason: string } => {
+    console.error(`[hold-invoice/${context}] REJECTED Stripe charge for invoice ${holdInvoice.id}: ${reason}. Event ignored.`);
+    try {
+      Sentry.captureMessage('[hold-invoice] Stripe charge failed invoice verification', {
+        level: 'error',
+        tags: { area: 'hold-invoice-stripe-charge-verification', context },
+        extra: { invoiceId: holdInvoice.id, reason, connectAccountId: check.connectAccountId ?? null, amountCents: check.amountCents },
+      });
+    } catch {
+      // Sentry may not be initialized.
+    }
+    return { ok: false, reason };
+  };
+
+  const expectedCents = invoiceCardLegCents(holdInvoice);
+  const paid = Number(check.amountCents);
+  if (!Number.isFinite(paid) || paid < expectedCents) {
+    return reject(`charged ${check.amountCents} cents is less than the expected ${expectedCents} cents`);
+  }
+
+  if (check.connectAccountId) {
+    let expectedAccount: string | null = holdInvoice.stripeAccountId ?? holdInvoice.sale?.organizer?.stripeConnectId ?? null;
+    if (!expectedAccount && holdInvoice.sale?.organizerId) {
+      try {
+        const organizer = await prisma.organizer.findUnique({
+          where: { id: holdInvoice.sale.organizerId },
+          select: { stripeConnectId: true },
+        });
+        expectedAccount = organizer?.stripeConnectId ?? null;
+      } catch (err) {
+        console.error(`[hold-invoice/${context}] organizer lookup failed while verifying invoice ${holdInvoice.id}:`, err);
+        expectedAccount = null;
+      }
+    }
+    if (!expectedAccount || expectedAccount !== check.connectAccountId) {
+      return reject(`connected account ${check.connectAccountId} is not the invoice organizer's account`);
+    }
+  } else if (holdInvoice.chargeType === 'DIRECT') {
+    return reject('platform-account charge for a Direct-charge invoice');
+  }
+  return { ok: true };
 }
 
 /**
@@ -490,6 +573,12 @@ export async function markHoldInvoicePaid(
   if (!holdInvoice) {
     console.error(`[hold-invoice/${source}] Invoice not found: ${invoiceId}`);
     return { recorded: false, alreadyPaid: false };
+  }
+
+  // Security fix (2026-11-04, #80): a webhook-delivered Stripe charge must belong to this invoice.
+  if (opts.stripeCharge) {
+    const verdict = await verifyStripeChargeForHoldInvoice(holdInvoice, opts.stripeCharge, source);
+    if (!verdict.ok) return { recorded: false, alreadyPaid: false, rejectedPayment: true };
   }
 
   const fullySoldOutIds: string[] = [];

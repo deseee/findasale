@@ -57,7 +57,7 @@ import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSigna
 import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // 2026-08-27 carding incident: shared Connect/sale-status/velocity gate
 import { checkGuestCheckoutVelocity, recordGuestCheckoutFailure, hashForVelocity } from '../services/guestCheckoutVelocityGuard'; // 2026-09-06 carding incident: cross-sale guest-checkout velocity/failure guard
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
-import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): shared HoldInvoice-PAID recorder, webhook + reconcile
+import { markHoldInvoicePaid, verifyStripeChargeForHoldInvoice } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): shared HoldInvoice-PAID recorder, webhook + reconcile
 import { settleHubOwnerReversalForLeg } from './vendorBoothCartController'; // P1 (2026-07-28): durable hub-owner Transfer reversal settlement
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { recordAndCheckBankFingerprints } from '../services/connectAccountGuard'; // S1198 (2026-09-06): Connect bank-account fingerprint collusion detection
@@ -517,6 +517,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
   // ADR pos-webhook-idempotency-reconciliation (2026-07-23): wrap the ENTIRE switch so any
   // handler throw marks the idempotency row FAILED (not permanently COMPLETED) and returns
   // 500 -> Stripe retries with backoff, instead of the sale stranding forever.
+  // Security fix (2026-11-04, findings #80/#141): set when the event came from a connected
+  // account (signed with STRIPE_CONNECT_WEBHOOK_SECRET). An organizer on a Standard connected
+  // account controls that account's API keys and can put ANY metadata on a PaymentIntent there,
+  // so platform-only branches (Boost, Hunt Pass, Bounty, a-la-carte fee) must never act on it,
+  // and hold-invoice branches must verify the account and amount against the invoice.
+  const connectAccount: string | undefined = (event as any).account || undefined;
+
   try {
   switch (event.type) {
     case 'payment_intent.succeeded': {
@@ -767,6 +774,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
       // Phase 2b: Boost Purchase — flip PENDING → ACTIVE on confirmed payment
       if (paymentIntent.metadata?.boostPurchaseId) {
         const boostPurchaseId = paymentIntent.metadata.boostPurchaseId;
+        if (connectAccount) {
+          console.warn(`[boost-webhook] Ignoring boostPurchaseId ${boostPurchaseId} on connected-account event ${event.id} (account ${connectAccount}) -- boosts are platform charges only.`);
+          break;
+        }
         try {
           const boost = await prisma.boostPurchase.findUnique({
             where: { id: boostPurchaseId },
@@ -802,6 +813,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
       // Hunt Pass activation: server-side confirmation via webhook
       if (paymentIntent.metadata?.type === 'hunt_pass') {
         const userId = paymentIntent.metadata?.userId;
+        if (connectAccount) {
+          console.warn(`[hunt-pass] Ignoring hunt_pass metadata on connected-account event ${event.id} (account ${connectAccount}) -- Hunt Pass is a platform charge only.`);
+          break;
+        }
         if (userId) {
           try {
             const expiry = new Date();
@@ -837,6 +852,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
       // run unrelated item-status/XP logic against it.
       if (paymentIntent.metadata?.type === 'BOUNTY_SUBMISSION') {
         const submissionId = paymentIntent.metadata?.submissionId;
+        if (connectAccount) {
+          console.warn(`[bounty-webhook] Ignoring BOUNTY_SUBMISSION metadata on connected-account event ${event.id} (account ${connectAccount}) -- bounty fulfillment is a platform charge only.`);
+          break;
+        }
         if (!submissionId) {
           console.error('[bounty-webhook] BOUNTY_SUBMISSION PaymentIntent missing submissionId metadata:', paymentIntent.id);
           break;
@@ -1832,7 +1851,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
       }
 
       // À-la-carte sale fee: apply alaCarteFeePaid via PI metadata
-      if (paymentIntent.metadata?.type === 'ALA_CARTE' && paymentIntent.metadata?.saleId) {
+      if (paymentIntent.metadata?.type === 'ALA_CARTE' && paymentIntent.metadata?.saleId && connectAccount) {
+        console.warn(`[ala-carte] Ignoring ALA_CARTE metadata on connected-account event ${event.id} (account ${connectAccount}) -- the a-la-carte fee is a platform charge only.`);
+      } else if (paymentIntent.metadata?.type === 'ALA_CARTE' && paymentIntent.metadata?.saleId) {
         try {
           await prisma.sale.update({
             where: { id: paymentIntent.metadata.saleId },
@@ -2501,7 +2522,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
       }
 
       // #132: À La Carte Single-Sale Fee ($9.99)
-      if (session.metadata?.type === 'ALA_CARTE' && session.metadata?.saleId) {
+      if (session.metadata?.type === 'ALA_CARTE' && session.metadata?.saleId && connectAccount) {
+        console.warn(`[ala-carte] Ignoring ALA_CARTE checkout session ${session.id} on connected-account event ${event.id} (account ${connectAccount}) -- the a-la-carte fee is a platform charge only.`);
+      } else if (session.metadata?.type === 'ALA_CARTE' && session.metadata?.saleId) {
         await prisma.sale.update({
           where: { id: session.metadata.saleId },
           data: {
@@ -2949,6 +2972,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
               source: 'webhook',
               chargeId: charge.id,
               stripeFeeAmountCents: Math.round(stripeFeeAmount * 100),
+              // Security fix (2026-11-04, #80): only record if this charge belongs to the invoice.
+              stripeCharge: { connectAccountId: connectAccount ?? null, amountCents: charge.amount },
             }
           );
         } else {
@@ -2992,6 +3017,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     source: 'webhook-fallback',
                     chargeId: charge.id,
                     stripeFeeAmountCents: Math.round(stripeFeeAmount * 100),
+                    stripeCharge: { connectAccountId: connectAccount ?? null, amountCents: charge.amount },
                   }
                 );
                 try {
@@ -3148,6 +3174,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
             console.error(`[hold-invoice] Invoice not found for failed charge: ${invoiceId}`);
             break;
           }
+
+          // Security fix (2026-11-04, #141): a failed charge from another account (or for less
+          // than the invoice) must never expire this invoice or release its hold.
+          const failedChargeCheck = await verifyStripeChargeForHoldInvoice(
+            holdInvoice,
+            { connectAccountId: connectAccount ?? null, amountCents: charge.amount },
+            'charge.failed'
+          );
+          if (!failedChargeCheck.ok) break;
 
           // Fetch all bundled items and reservations
           const bundledItems = await prisma.item.findMany({

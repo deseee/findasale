@@ -7348,6 +7348,20 @@ model OrganizerAutoQueueLimit {
   updatedAt    DateTime @updatedAt
 }
 
+// Markdown precedence (2026-11-04, Patrick: "Shouldn't the organizer have some way to say which rule wins?").
+// Optional, per organizer: which automatic markdown wins when the sale's Day-2/Day-3 markdowns (markdownCron.ts) and
+// a MarkdownCycle (markdownCycleCron.ts) could both apply to one item. precedence is FIRST_WINS (default, the
+// 2026-10-30 "first one to cut the item owns it" rule), SALE_TIERS_WIN or CYCLES_WIN; validated in code
+// (services/markdownPrecedence.ts), stored as text so a new value never needs a Postgres enum migration.
+// Deliberately a separate table with no relation field on Organizer (same pattern as OrganizerAutoQueueLimit): every
+// Organizer read is unaffected if this table is missing, and the code treats a missing table or row as FIRST_WINS.
+model OrganizerMarkdownPrecedence {
+  organizerId String   @id
+  precedence  String   @default("FIRST_WINS")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model ExtensionRuntimeLog {
   id          String    @id @default(cuid())
   organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)

@@ -11,6 +11,10 @@
  *
  * ADR-markdown-cycle-n-steps (2026-09-28): a cycle now holds 1-6 ordered steps
  * (day threshold + % off, both increasing) instead of a fixed first/second pair.
+ *
+ * 2026-11-04 (markdown precedence): PRO/TEAMS organizers choose which automatic markdown wins when a sale's
+ * Day 2 / Day 3 markdowns and a cycle both apply to an item (GET/PUT /markdown-cycles/precedence). First one wins
+ * stays the default. Hidden for organizers who cannot manage cycles, since only running cycles make it matter.
  */
 
 import React, { useState } from 'react';
@@ -56,6 +60,34 @@ interface StepFormRow {
 
 const emptyStepRow = (): StepFormRow => ({ dayThreshold: '', pctOff: '' });
 
+type MarkdownPrecedence = 'FIRST_WINS' | 'SALE_TIERS_WIN' | 'CYCLES_WIN';
+
+interface MarkdownPrecedenceResponse {
+  precedence: MarkdownPrecedence;
+  effectivePrecedence: MarkdownPrecedence;
+  available: boolean;
+}
+
+const PRECEDENCE_OPTIONS: { value: MarkdownPrecedence; label: string; description: string }[] = [
+  {
+    value: 'FIRST_WINS',
+    label: 'First one wins (default)',
+    description: 'Whichever markdown lowers an item first keeps that item, and the other one leaves it alone.',
+  },
+  {
+    value: 'SALE_TIERS_WIN',
+    label: 'Sale Day 2 and Day 3 markdowns win',
+    description:
+      'On sales with Auto-Markdown turned on, the Day 2 and Day 3 discounts take over items a cycle already lowered, priced from the original price, and the cycle stops changing those items.',
+  },
+  {
+    value: 'CYCLES_WIN',
+    label: 'Markdown cycles win',
+    description:
+      'Items covered by an active cycle skip the Day 2 and Day 3 discounts, and the cycle keeps lowering them on its own schedule.',
+  },
+];
+
 const MarkdownCyclesPage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
@@ -78,6 +110,28 @@ const MarkdownCyclesPage = () => {
     queryFn: async () => {
       const response = await api.get('/markdown-cycles');
       return response.data;
+    },
+  });
+
+  // Which markdown wins when a sale's Day 2 / Day 3 markdowns and a cycle both apply (2026-11-04).
+  const { data: precedenceData, isError: precedenceError } = useQuery<MarkdownPrecedenceResponse>({
+    queryKey: ['markdown-precedence'],
+    queryFn: async () => {
+      const response = await api.get('/markdown-cycles/precedence');
+      return response.data;
+    },
+    enabled: canManage,
+  });
+
+  const precedenceMutation = useMutation({
+    mutationFn: async (precedence: MarkdownPrecedence) => api.put('/markdown-cycles/precedence', { precedence }),
+    onSuccess: (response) => {
+      showToast('Markdown setting saved', 'success');
+      queryClient.setQueryData(['markdown-precedence'], response.data);
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to save markdown setting';
+      showToast(message, 'error');
     },
   });
 
@@ -325,6 +379,60 @@ const MarkdownCyclesPage = () => {
               </Link>
             )}
           </div>
+
+          {/* Which markdown wins (2026-11-04). PRO/TEAMS only: only running cycles make this choice matter. */}
+          {canManage && (
+            <fieldset className="bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 rounded-lg p-6 mb-8">
+              <legend className="px-1 font-bold text-warm-900 dark:text-warm-100">
+                When a sale markdown and a cycle both apply
+              </legend>
+              <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+                Choose which automatic markdown sets the price when an item is in a sale with Auto-Markdown turned on
+                and is also covered by one of your cycles.
+              </p>
+              {precedenceError ? (
+                <p className="text-sm text-red-700 dark:text-red-400">
+                  Could not load this setting. Please refresh to try again.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {PRECEDENCE_OPTIONS.map((option) => {
+                    const current = precedenceData?.precedence ?? 'FIRST_WINS';
+                    const disabled = !precedenceData || !precedenceData.available || precedenceMutation.isPending;
+                    return (
+                      <label
+                        key={option.value}
+                        htmlFor={`markdown-precedence-${option.value}`}
+                        className={`flex items-start gap-3 ${disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+                      >
+                        <input
+                          type="radio"
+                          id={`markdown-precedence-${option.value}`}
+                          name="markdownPrecedence"
+                          value={option.value}
+                          checked={current === option.value}
+                          disabled={disabled}
+                          onChange={() => {
+                            if (option.value !== current) precedenceMutation.mutate(option.value);
+                          }}
+                          className="mt-1 w-4 h-4 text-amber-600 focus:ring-amber-500 border-warm-300 dark:border-gray-500"
+                        />
+                        <span className="flex flex-col">
+                          <span className="text-sm font-medium text-warm-900 dark:text-warm-100">{option.label}</span>
+                          <span className="text-xs text-warm-600 dark:text-warm-400 mt-0.5">{option.description}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                  {precedenceData && !precedenceData.available && (
+                    <p className="text-xs text-warm-500 dark:text-warm-400">
+                      This setting is not available yet, so first one wins applies for now.
+                    </p>
+                  )}
+                </div>
+              )}
+            </fieldset>
+          )}
 
           {/* Cycles List */}
           {isLoading ? (

@@ -170,6 +170,9 @@ beforeEach(() => {
 afterEach(() => spies.forEach((s) => s.mockRestore()));
 
 // ---------------------------------------------------------------------------------------------
+// Security fix 2026-11-04 (#110): addItemPhoto only accepts images on FindA.Sale's own Cloudinary.
+const PLATFORM_PHOTO_URL = 'https://res.cloudinary.com/demo/image/upload/v1/findasale/a.jpg';
+
 describe('getCompSummary: owner matrix (B1)', () => {
   for (const c of MATRIX) {
     it(`${c.label}: ${c.owns ? '200' : '403'}`, async () => {
@@ -313,12 +316,12 @@ describe('addItemPhoto (via getItemForOrganizer): owner matrix (B1)', () => {
   for (const c of MATRIX) {
     it(`${c.label}: ${c.owns ? '200' : '404'}`, async () => {
       mockPrisma.item.findUnique.mockResolvedValue(c.item());
-      mockPrisma.item.update.mockResolvedValue({ photoUrls: ['https://res.cloudinary.com/demo/a.jpg'] });
+      mockPrisma.item.update.mockResolvedValue({ photoUrls: [PLATFORM_PHOTO_URL] });
       const res = makeRes();
-      await addItemPhoto({ user: asUser(c.userId), params: { id: 'i1' }, body: { url: 'https://res.cloudinary.com/demo/a.jpg' } }, res);
+      await addItemPhoto({ user: asUser(c.userId), params: { id: 'i1' }, body: { url: PLATFORM_PHOTO_URL } }, res);
       expect(res.statusCode).toBe(c.owns ? 200 : 404);
       if (c.owns) {
-        expect(res.body).toEqual({ photoUrls: ['https://res.cloudinary.com/demo/a.jpg'] });
+        expect(res.body).toEqual({ photoUrls: [PLATFORM_PHOTO_URL] });
         expect(mockPrisma.item.update.mock.calls[0][0].data.lastEditedAt).toBeInstanceOf(Date);
       } else {
         expect(mockPrisma.item.update).not.toHaveBeenCalled();
@@ -326,10 +329,20 @@ describe('addItemPhoto (via getItemForOrganizer): owner matrix (B1)', () => {
     });
   }
 
+  it('#110: a URL that is not a FindA.Sale Cloudinary upload is refused with 400 and nothing is written', async () => {
+    for (const url of ['https://evil.example.com/a.jpg', 'http://res.cloudinary.com/demo/image/upload/v1/findasale/a.jpg', 'javascript:alert(1)', 'u']) {
+      mockPrisma.item.findUnique.mockResolvedValue(inventoryItem());
+      const res = makeRes();
+      await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url } }, res);
+      expect(res.statusCode).toBe(400);
+    }
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+  });
+
   it('the photo limit uses the resolved owner tier for an inventory item (no sale lookup)', async () => {
     mockPrisma.item.findUnique.mockResolvedValue(inventoryItem());
     mockPrisma.item.update.mockResolvedValue({ photoUrls: ['u'] });
-    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: 'u' } }, makeRes());
+    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: PLATFORM_PHOTO_URL } }, makeRes());
     expect(mockPhotoLimit).toHaveBeenCalledWith('i1', 'SIMPLE');
     expect(mockPrisma.sale.findUnique).not.toHaveBeenCalled();
   });
@@ -339,21 +352,21 @@ describe('addItemPhoto (via getItemForOrganizer): owner matrix (B1)', () => {
       saleItem({ sale: { id: 's1', status: 'PUBLISHED', purchaseModel: 'ALA_CARTE', alaCarteFeePaid: true, organizerId: 'org_sale', organizer: saleOrganizer({ subscriptionTier: 'SIMPLE' }) } }),
     );
     mockPrisma.item.update.mockResolvedValue({ photoUrls: ['u'] });
-    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: 'u' } }, makeRes());
+    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: PLATFORM_PHOTO_URL } }, makeRes());
     expect(mockPhotoLimit).toHaveBeenLastCalledWith('i1', 'PRO');
 
     mockPrisma.item.findUnique.mockResolvedValue(saleItem({ sale: { id: 's1', status: 'PUBLISHED', purchaseModel: 'SUBSCRIPTION', organizer: saleOrganizer({ subscriptionTier: 'SIMPLE' }) } }));
-    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: 'u' } }, makeRes());
+    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: PLATFORM_PHOTO_URL } }, makeRes());
     expect(mockPhotoLimit).toHaveBeenLastCalledWith('i1', 'SIMPLE');
 
     // purchaseModel without a paid fee grants nothing (both columns are written together by the payment webhook).
     mockPrisma.item.findUnique.mockResolvedValue(saleItem({ sale: { id: 's1', status: 'PUBLISHED', purchaseModel: 'ALA_CARTE', alaCarteFeePaid: false, organizerId: 'org_sale', organizer: saleOrganizer({ subscriptionTier: 'SIMPLE' }) } }));
-    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: 'u' } }, makeRes());
+    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: PLATFORM_PHOTO_URL } }, makeRes());
     expect(mockPhotoLimit).toHaveBeenLastCalledWith('i1', 'SIMPLE');
 
     // The upgrade never lowers a paying tier (TEAMS keeps its unlimited photos on an upgraded sale).
     mockPrisma.item.findUnique.mockResolvedValue(saleItem({ sale: { id: 's1', status: 'PUBLISHED', purchaseModel: 'ALA_CARTE', alaCarteFeePaid: true, organizerId: 'org_sale', organizer: saleOrganizer({ subscriptionTier: 'TEAMS' }) } }));
-    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: 'u' } }, makeRes());
+    await addItemPhoto({ user: asUser(OWNER_USER), params: { id: 'i1' }, body: { url: PLATFORM_PHOTO_URL } }, makeRes());
     expect(mockPhotoLimit).toHaveBeenLastCalledWith('i1', 'TEAMS');
   });
 });

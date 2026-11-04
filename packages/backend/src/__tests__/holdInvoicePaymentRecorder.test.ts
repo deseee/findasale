@@ -23,6 +23,7 @@ jest.mock('../lib/prisma', () => ({
   prisma: {
     $transaction: jest.fn(),
     holdInvoice: { findUnique: jest.fn() },
+    organizer: { findUnique: jest.fn() },
     item: { findMany: jest.fn() },
     itemReservation: { findMany: jest.fn() },
   },
@@ -263,5 +264,63 @@ describe('markHoldInvoicePaid, idempotency and oversold', () => {
     expect(purchases).toHaveLength(2);
     expect(cents(purchases, 'amount')).toEqual([1111, 899]); // same shares as the full allocation
     expect(sum(cents(purchases, 'amount'))).toBe(2520 - 510); // the oversold share stays a manual-refund case
+  });
+});
+
+describe('markHoldInvoicePaid, Stripe charge verification (security fix 2026-11-04, #80)', () => {
+  async function runWith(inv: any, stripeCharge: any) {
+    const { tx, purchases } = makeTx();
+    db.holdInvoice.findUnique.mockResolvedValue(inv);
+    db.item.findMany.mockResolvedValue(ITEMS);
+    db.itemReservation.findMany.mockResolvedValue([]);
+    db.$transaction.mockImplementation(async (cb: any) => cb(tx));
+    const res = await markHoldInvoicePaid('inv_1', { processor: 'STRIPE', externalPaymentId: 'pi_1' }, { source: 'webhook', stripeCharge });
+    await flush();
+    return { res, purchases };
+  }
+
+  it("rejects a charge made on another organizer's connected account and records nothing", async () => {
+    const { res, purchases } = await runWith(invoice({ chargeType: 'DIRECT', stripeAccountId: 'acct_victim' }), { connectAccountId: 'acct_attacker', amountCents: 2520 });
+    expect(res).toEqual({ recorded: false, alreadyPaid: false, rejectedPayment: true });
+    expect(db.$transaction).not.toHaveBeenCalled();
+    expect(purchases).toHaveLength(0);
+  });
+
+  it('rejects a charge on the right account that does not cover the invoice total', async () => {
+    const { res } = await runWith(invoice({ chargeType: 'DIRECT', stripeAccountId: 'acct_victim' }), { connectAccountId: 'acct_victim', amountCents: 50 });
+    expect(res.rejectedPayment).toBe(true);
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('accepts a cash-split invoice whose card charge covers only the card leg', async () => {
+    const { res } = await runWith(invoice({ chargeType: 'DIRECT', stripeAccountId: 'acct_victim', cashAmountCents: 1000 }), { connectAccountId: 'acct_victim', amountCents: 1520 });
+    expect(res.recorded).toBe(true);
+  });
+
+  it("records a full-amount charge on the invoice's pinned connected account (legit path)", async () => {
+    const { res, purchases } = await runWith(invoice({ chargeType: 'DIRECT', stripeAccountId: 'acct_victim' }), { connectAccountId: 'acct_victim', amountCents: 2520 });
+    expect(res.recorded).toBe(true);
+    expect(purchases).toHaveLength(3);
+  });
+
+  it("falls back to the sale organizer's stripeConnectId when the invoice has no pinned account", async () => {
+    db.organizer.findUnique.mockResolvedValue({ stripeConnectId: 'acct_org' });
+    const ok = await runWith(invoice(), { connectAccountId: 'acct_org', amountCents: 2520 });
+    expect(ok.res.recorded).toBe(true);
+    expect(db.organizer.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'org_1' } }));
+    jest.clearAllMocks();
+    db.organizer.findUnique.mockResolvedValue({ stripeConnectId: 'acct_org' });
+    const bad = await runWith(invoice(), { connectAccountId: 'acct_other', amountCents: 2520 });
+    expect(bad.res.rejectedPayment).toBe(true);
+  });
+
+  it('records a platform-account charge for a destination-charge invoice (legit path)', async () => {
+    const { res } = await runWith(invoice(), { connectAccountId: null, amountCents: 2520 });
+    expect(res.recorded).toBe(true);
+  });
+
+  it('rejects a platform-account charge for a Direct-charge invoice', async () => {
+    const { res } = await runWith(invoice({ chargeType: 'DIRECT', stripeAccountId: 'acct_victim' }), { connectAccountId: null, amountCents: 2520 });
+    expect(res.rejectedPayment).toBe(true);
   });
 });

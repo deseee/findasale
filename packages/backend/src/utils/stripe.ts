@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import type { Request, Response, NextFunction } from 'express';
+import { isStripePlatformClosed } from './stripeBootConfig';
 
 /**
  * Thrown by getStripe() when STRIPE_SECRET_KEY is missing (2026-09-29). Stripe is closed and the
@@ -25,10 +26,23 @@ export const isStripeNotConfiguredError = (err: unknown): err is StripeNotConfig
 export const isStripeConfigured = (): boolean => !!process.env.STRIPE_SECRET_KEY;
 
 /**
- * Express guard for Stripe-only endpoints (the Stripe webhooks): answers 503 STRIPE_NOT_CONFIGURED
- * when no key is set, otherwise passes through untouched.
+ * Express guard for Stripe-only endpoints (the Stripe webhooks and the remaining Stripe-calling
+ * routes). Answers 410 STRIPE_RETIRED and does nothing while the Stripe platform is closed
+ * (STRIPE_PLATFORM_CLOSED is anything but 'false', the default), 503 STRIPE_NOT_CONFIGURED when
+ * Stripe is reopened but no key is set, and otherwise passes through untouched.
+ *
+ * Security fix (2026-11-04, findings #80/#141): this used to check only for a missing key. A key
+ * left in the environment after Stripe was retired kept the webhook live, and with it the
+ * connected-account metadata trust bugs. Retired means retired, key or no key.
  */
 export const stripeUnavailableGuard = (_req: Request, res: Response, next: NextFunction): void => {
+  if (isStripePlatformClosed(process.env)) {
+    res.status(410).json({
+      code: 'STRIPE_RETIRED',
+      message: 'Stripe is retired on FindA.Sale. Payments run on Square.',
+    });
+    return;
+  }
   if (isStripeConfigured()) {
     next();
     return;

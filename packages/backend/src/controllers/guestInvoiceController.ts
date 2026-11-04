@@ -106,10 +106,29 @@ export const lookupRecipientForInvoice = async (req: AuthRequest, res: Response)
       return res.status(400).json({ message: 'A valid email is required' });
     }
 
-    const user = await prisma.user.findUnique({
+    const foundUser = await prisma.user.findUnique({
       where: { email },
       select: { id: true, phone: true },
     });
+
+    // Security fix (2026-11-04, #181, owner decision): only the calling organizer's own buyers. An
+    // account that has never paid for anything on one of this organizer's sales gets exactly the
+    // not-found shape, so the lookup cannot be used to read any account's phone and home address, or
+    // even to learn whether the email has an account. Only rows tied to the buyer's own account id count
+    // (a paid Purchase, or a paid HoldInvoice the shopper held): a guest checkout, a typed POS receipt
+    // email or an organizer-sent invoice can be pointed at any email, so they prove nothing.
+    let user = foundUser;
+    if (foundUser) {
+      const [purchaseCount, invoiceCount] = await Promise.all([
+        prisma.purchase.count({
+          where: { userId: foundUser.id, status: { in: ['PAID', 'REFUNDED'] }, sale: { organizerId: organizer.id } },
+        }),
+        prisma.holdInvoice.count({
+          where: { shopperUserId: foundUser.id, status: { in: ['PAID', 'REFUNDED'] }, sale: { organizerId: organizer.id } },
+        }),
+      ]);
+      if (purchaseCount === 0 && invoiceCount === 0) user = null;
+    }
 
     // ADR-126 address auto-fill: a real saved default address always wins over the
     // guest-promotion fallback. Both are optional -- most matched accounts today still

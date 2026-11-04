@@ -681,6 +681,16 @@ router.get('/:id/bundles', async (req, res) => {
   }
 });
 
+// Security fix (2026-11-04, #142/#143/#144): true when every id is an item of this sale, so a bundle
+// can never link (and rewrite Item.bundleId on) another organizer's items.
+async function allItemsInSale(itemIds: unknown[], saleId: string): Promise<boolean> {
+  if (!itemIds.every((id) => typeof id === 'string')) return false;
+  const unique = Array.from(new Set(itemIds as string[]));
+  if (unique.length === 0) return true;
+  const found = await prisma.item.count({ where: { id: { in: unique }, saleId } });
+  return found === unique.length;
+}
+
 // #403: Bundle CRUD — organizer-only create/update/delete
 router.post('/:saleId/bundles', authenticate, requireOrganizer, async (req: AuthRequest, res) => {
   try {
@@ -693,6 +703,7 @@ router.post('/:saleId/bundles', authenticate, requireOrganizer, async (req: Auth
     if (!organizerProfile) return res.status(403).json({ message: 'Organizer profile not found' });
     const sale = await prisma.sale.findFirst({ where: { id: saleId, organizerId: organizerProfile.id } });
     if (!sale) return res.status(404).json({ message: 'Sale not found or access denied' });
+    if (!(await allItemsInSale(itemIds, sale.id))) return res.status(400).json({ message: 'Every item must belong to this sale' });
     const bundle = await prisma.itemBundle.create({
       data: {
         saleId,
@@ -719,6 +730,12 @@ router.put('/:saleId/bundles/:bundleId', authenticate, requireOrganizer, async (
     if (!organizerProfile) return res.status(403).json({ message: 'Organizer profile not found' });
     const sale = await prisma.sale.findFirst({ where: { id: saleId, organizerId: organizerProfile.id } });
     if (!sale) return res.status(404).json({ message: 'Sale not found or access denied' });
+    // Security fix (2026-11-04, #142): the bundle must belong to this (owned) sale.
+    const ownedBundle = await prisma.itemBundle.findFirst({ where: { id: bundleId, saleId: sale.id }, select: { id: true } });
+    if (!ownedBundle) return res.status(404).json({ message: 'Bundle not found' });
+    if (Array.isArray(itemIds) && !(await allItemsInSale(itemIds, sale.id))) {
+      return res.status(400).json({ message: 'Every item must belong to this sale' });
+    }
     const updateData: any = {};
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
@@ -745,7 +762,9 @@ router.delete('/:saleId/bundles/:bundleId', authenticate, requireOrganizer, asyn
     if (!organizerProfile) return res.status(403).json({ message: 'Organizer profile not found' });
     const sale = await prisma.sale.findFirst({ where: { id: saleId, organizerId: organizerProfile.id } });
     if (!sale) return res.status(404).json({ message: 'Sale not found or access denied' });
-    await prisma.itemBundle.update({ where: { id: bundleId }, data: { isActive: false } });
+    // Security fix (2026-11-04, #143): only a bundle of this (owned) sale.
+    const deactivated = await prisma.itemBundle.updateMany({ where: { id: bundleId, saleId: sale.id }, data: { isActive: false } });
+    if (deactivated.count === 0) return res.status(404).json({ message: 'Bundle not found' });
     return res.json({ message: 'Bundle deactivated' });
   } catch (err) {
     console.error('bundle delete error:', err);

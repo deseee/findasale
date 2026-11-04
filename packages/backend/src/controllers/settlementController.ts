@@ -302,12 +302,14 @@ export const removeExpense = async (req: AuthRequest, res: Response) => {
     if (!settlement) return res.status(404).json({ message: 'No settlement found.' });
 
     // P1 Race Fix: Wrap expense deletion and recalculation in single transaction
-    await prisma.$transaction(async (tx) => {
-      // Soft delete
-      await tx.saleExpense.update({
-        where: { id: expenseId },
+    const removed = await prisma.$transaction(async (tx) => {
+      // Soft delete. Security fix (2026-11-04, #195): scoped to THIS sale's settlement, so an
+      // expense id from another organizer's settlement matches nothing (404) instead of being deleted.
+      const deleted = await tx.saleExpense.updateMany({
+        where: { id: expenseId, settlementId: settlement.id },
         data: { deletedAt: new Date() },
       });
+      if (deleted.count === 0) return false;
 
       // Recalculate totals within transaction
       const allExpenses = await tx.saleExpense.findMany({
@@ -324,7 +326,9 @@ export const removeExpense = async (req: AuthRequest, res: Response) => {
           netProceeds: new Decimal(revenue - fees - totalExpenses),
         },
       });
+      return true;
     });
+    if (!removed) return res.status(404).json({ message: 'Expense not found.' });
 
     return res.json({ message: 'Expense removed.' });
   } catch (error) {
