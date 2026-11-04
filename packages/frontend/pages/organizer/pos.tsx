@@ -2086,6 +2086,13 @@ export default function POSPage() {
       return;
     }
 
+    // 2026-11-04: one client transaction id per sale, generated once and reused by a retry of the
+    // same cart, the live request and the offline queue. A request that timed out after the server
+    // committed is then answered as a replay instead of recording the sale twice. The id resets
+    // whenever the cart changes (addToCart / removeFromCart / clearCart).
+    if (!clientTransactionIdRef.current) clientTransactionIdRef.current = generateClientTransactionId();
+    const cashTransactionId = clientTransactionIdRef.current;
+
     // #561 offline POS transaction queuing: queue the cash sale instead of hard-failing
     // when there's no connectivity. Card (Stripe Terminal) swipes stay online-only:
     // this only applies to the cash flow, which needs no live processor.
@@ -2094,6 +2101,8 @@ export default function POSPage() {
       await recordOfflineCashCheckout(selectedSaleId, {
         items,
         cashReceived,
+        // 2026-11-04: who rang this up, so the sync applies the same team-member price rules.
+        ...(user?.id ? { cashierUserId: user.id } : {}),
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
         // POS Cashier Discount Permission fix (2026-08-28): see the matching note on the
         // live-path POST above -- keeps the offline-queued payload consistent with it so a
@@ -2107,7 +2116,7 @@ export default function POSPage() {
         // POST below so a test transaction started offline isn't silently promoted to a
         // real one once synced.
         ...(isTestTransaction ? { isTestTransaction: true } : {}),
-      });
+      }, cashTransactionId);
       setPaymentStatus('success');
       setSuccessMessage(
         `📥 Offline. Cash sale for $${cartTotal.toFixed(2)} queued. It will sync automatically once you're back online.`
@@ -2133,6 +2142,7 @@ export default function POSPage() {
         items, // raw, undiscounted per-item amounts -- backend applies the discount itself
         cashReceived,
         saleId: selectedSaleId,
+        clientTransactionId: cashTransactionId, // backend de-duplicates on this (returns the existing sale)
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
         // POS Cashier Discount Permission fix (2026-08-28, findasale-hacker P0): previously
         // omitted here -- the cash-payment endpoint silently never applied any discount to
@@ -2197,10 +2207,12 @@ export default function POSPage() {
         ...(c.consignorTag?.consignorId && c.consignorTag.sig ? { consignorTag: { consignorId: c.consignorTag.consignorId, nonce: c.consignorTag.nonce, sig: c.consignorTag.sig } } : {}),
       }));
 
+      if (!clientTransactionIdRef.current) clientTransactionIdRef.current = generateClientTransactionId();
       const response = await api.post<CashPaymentResponse>('/stripe/terminal/cash-payment', {
         items, // raw, undiscounted per-item amounts -- backend applies the discount itself
         cashReceived: cartTotal, // organizer collects the full amount
         saleId: selectedSaleId,
+        clientTransactionId: clientTransactionIdRef.current, // same per-sale de-duplication as the Cash button
         paymentMethod: method, // flag for backend reporting
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
         // POS Cashier Discount Permission fix (2026-08-28): Venmo/Zelle route through this

@@ -369,7 +369,10 @@ export async function processCashSaleCore(params: {
   // A cart with a consignor tag line also takes the transactional branch (2026-10-06): the SOLD Item is minted in the same
   // transaction as the Purchase rows. A TEST transaction validates the tag line but never mints: it records a plain misc row.
   const mintTags = tagLineItems.length > 0 && !isTestTransaction;
-  const useBulkTransaction = (bulkPlans.size > 0 || mintTags) && !isTestTransaction;
+  // 2026-11-04: a sale with a clientTransactionId also takes the transactional branch, so two
+  // requests for the same sale (a retry racing a slow first request, or an offline replay racing
+  // the live request) serialize on the per-sale advisory lock and the second answers as a replay.
+  const useBulkTransaction = (bulkPlans.size > 0 || mintTags || !!clientTransactionId) && !isTestTransaction;
   // chargedItems row -> the itemId minted for it (tag lines only; never touches item.itemId, so no stock/withdraw hook runs).
   const mintedTagItemIds = new Map<object, string>();
 

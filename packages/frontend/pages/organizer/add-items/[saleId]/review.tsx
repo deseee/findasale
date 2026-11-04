@@ -497,6 +497,8 @@ const ReviewPage = () => {
   const [priceErrors, setPriceErrors] = useState<Set<string>>(new Set());
   const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
   const [showApproveAllModal, setShowApproveAllModal] = useState(false);
+  const [approveAllRunning, setApproveAllRunning] = useState(false);
+  const approveAllRunningRef = useRef(false);
   const [showDiscardAllModal, setShowDiscardAllModal] = useState(false);
   // Re-analyze: per-card loading + inline error state for the "Re-run Smart tagging" control
   const [reanalyzingIds, setReanalyzingIds] = useState<Set<string>>(new Set());
@@ -1551,6 +1553,20 @@ const ReviewPage = () => {
   /** Approve all items that have prices set. Flag items without prices. */
   const handleApproveAll = async () => {
     setShowApproveAllModal(false);
+    // 2026-11-04: one Approve-all run at a time. A second tap while the sequential loop runs used to start a
+    // second loop over the same pending list (approvedIds not updated yet), publishing and pushing twice.
+    if (approveAllRunningRef.current) return;
+    approveAllRunningRef.current = true;
+    setApproveAllRunning(true);
+    try {
+      await runApproveAll();
+    } finally {
+      approveAllRunningRef.current = false;
+      setApproveAllRunning(false);
+    }
+  };
+
+  const runApproveAll = async () => {
     const pending = items.filter(i => i.draftStatus !== 'PUBLISHED' && !approvedIds.has(i.id));
     const unpriced: string[] = [];
     const toApprove: Item[] = [];
@@ -1947,9 +1963,10 @@ const ReviewPage = () => {
                   </Link>
                   <button
                     onClick={() => setShowApproveAllModal(true)}
-                    className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#C2410C] text-white text-xs font-semibold hover:bg-[#9A3412] transition-colors"
+                    disabled={approveAllRunning}
+                    className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#C2410C] text-white text-xs font-semibold hover:bg-[#9A3412] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Approve all
+                    {approveAllRunning ? 'Approving...' : 'Approve all'}
                   </button>
                 </div>
               </div>

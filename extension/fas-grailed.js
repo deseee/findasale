@@ -1677,7 +1677,13 @@
       button('fas-gr-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     const next = document.getElementById('fas-gr-next');
+    // 1.0.90: one press only. A double click used to send two reopenGrailedTab requests, which opened two new tabs that both
+    // auto-published the next item. The worker also ignores a repeat request from this (old) tab.
+    let grNextHandled = false;
     if (next) next.onclick = async () => {
+      if (grNextHandled) return;
+      grNextHandled = true;
+      next.disabled = true;
       T.step('Recording this listing as posted in FindA.Sale', 'You confirmed you posted it, so FindA.Sale marks the item as listed on Grailed.');
       try {
         const mlRes = await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, ...(await fasListingRef('GRAILED', 0)), platform: 'GRAILED' });
@@ -1716,13 +1722,32 @@
   // Confirms a real publish by polling for the listing form to disappear -- no live-confirmed
   // success marker exists yet (CODE-ONLY/UNTESTED, file header), same conservative signal
   // fas-craigslist.js/fas-poshmark.js/fas-mercari.js use for their own publish confirmation.
+  // 1.0.90: the form disappearing is not proof (an error page, a login wall or a navigation away also remove it). A publish is
+  // confirmed only by a positive signal: the tab is on the new listing's own page (/listings/<id>) on two polls in a row, or the
+  // listing reference can be captured from the page.
+  function grOnListingPage() { return /^\/listings\/\d+/.test(location.pathname || ''); }
   async function waitForGrailedPublishConfirmation(maxWaitMs) {
     const start = Date.now();
+    let seen = 0;
     while (Date.now() - start < maxWaitMs) {
-      if (!looksLikeListingForm()) return true;
+      if (grOnListingPage()) { seen++; if (seen >= 2) return true; } else seen = 0;
+      if (!looksLikeListingForm()) {
+        const ref = await fasListingRef('GRAILED', 0);
+        if (ref && (ref.remoteListingId || ref.remoteListingUrl)) return true;
+      }
       await sleep(400);
     }
     return false;
+  }
+  // 1.0.90: signs that a Publish click started a submission (the button is gone, disabled or busy, or a spinner is showing).
+  function grPublishSubmitting(btn) {
+    try {
+      const b = btn && btn.isConnected ? btn : findGrailedPublishButton();
+      if (!b) return true;
+      if (b.disabled || b.getAttribute('aria-disabled') === 'true' || b.getAttribute('aria-busy') === 'true') return true;
+      if (b.querySelector('[role="progressbar"], svg[class*="spin" i], [class*="spinner" i], [class*="loading" i]')) return true;
+      return !!document.querySelector('[role="progressbar"]');
+    } catch (e) { return true; }
   }
 
   async function doGrailedAutoPublish(item, index, total, photosOk, intlShipping, countryOriginStatus) {
@@ -1738,7 +1763,7 @@
       showReviewOverlay(item, index, total, photosOk, intlShipping, false, countryOriginStatus);
       return;
     }
-    T.step('Clicking Grailed\'s Publish button', 'Everything required was filled, so the listing is published for you (up to 3 click attempts, each checked for a real effect).');
+    T.step('Clicking Grailed\'s Publish button', 'Everything required was filled, so the listing is published for you (one click, then a wait for Grailed to start saving it).');
     overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
     await humanPause(500, 900);
     // BUG FIX 2026-08-25 round 15 (Patrick: "figure out exactly how to click that button... stop
@@ -1751,21 +1776,34 @@
     // the next attempt. trustedClick() itself (see its own comment above) now also scrolls the
     // button into view and logs its real failure reason, so if every attempt still fails, the
     // console will show exactly why instead of a silent dead end.
+    // 1.0.90 (duplicate-listing fix): click ONCE, then wait up to ~8 s for the submission to show. Re-clicking 900 ms later
+    // whenever the form was still mounted created two or three live listings on a slow create request. A retry happens only when
+    // nothing at all happened: the button is still there, enabled and not busy, no spinner, the form is still up, no phone prompt.
     let publishRegistered = false;
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       if (!(await trustedClick(publishBtn))) syntheticClick(publishBtn);
-      await sleep(900);
-      if (looksLikePhoneVerification() || !looksLikeListingForm()) { publishRegistered = true; break; }
-      console.warn('[FAS Grailed] Publish click attempt ' + attempt + '/3 produced no observable change (no phone-verification modal, form still present) -- retrying.');
-      // Re-find the button fresh each retry -- if Grailed re-rendered anything after the failed
-      // attempt, a stale `publishBtn` reference could be pointing at a detached element.
+      let submitting = false;
+      const pollEnd = Date.now() + 8000;
+      while (Date.now() < pollEnd) {
+        await sleep(300);
+        if (looksLikePhoneVerification() || grOnListingPage() || !looksLikeListingForm()) { publishRegistered = true; break; }
+        if (grPublishSubmitting(publishBtn)) submitting = true;
+      }
+      if (publishRegistered) break;
+      if (submitting) {
+        // The click started a submission that has not finished: never click again; the confirmation wait below decides.
+        publishRegistered = true;
+        break;
+      }
+      console.warn('[FAS Grailed] Publish click attempt ' + attempt + '/2 showed no submission at all (button enabled, no spinner, form still present) -- clicking once more.');
+      // Re-find the button fresh -- if Grailed re-rendered anything, a stale `publishBtn` reference could be detached.
       const freshBtn = findGrailedPublishButton();
       if (freshBtn) publishBtn = freshBtn;
     }
     if (!publishRegistered) {
-      T.problem({ code: 'grailed_publish_no_effect', title: 'Publish did not seem to work', what: 'Publish was clicked 3 times but the page never changed (no phone prompt, form still showing).', why: 'Grailed may be blocking submission on a missing required field, or the button label/behaviour changed.', next: 'Check this listing on Grailed before assuming it posted. It was NOT marked as listed in FindA.Sale.' });
+      T.problem({ code: 'grailed_publish_no_effect', title: 'Publish did not seem to work', what: 'Publish was clicked but the page never changed (no phone prompt, form still showing).', why: 'Grailed may be blocking submission on a missing required field, or the button label/behaviour changed.', next: 'Check this listing on Grailed before assuming it posted. It was NOT marked as listed in FindA.Sale.' });
       T.end('Stopped: Publish had no visible effect');
-      overlayWarn('Clicked <b>Publish</b> 3 times but never saw a change on the page (UNVERIFIED -- no phone-verification prompt, no form change) -- please check this listing on Grailed yourself before assuming it posted, and check the browser console for the exact reason each click attempt failed.' + button('fas-gr-close', 'Close', false));
+      overlayWarn('Clicked <b>Publish</b> but never saw a change on the page (UNVERIFIED -- no phone-verification prompt, no form change) -- please check this listing on Grailed yourself before assuming it posted, and check the browser console for the exact reason each click attempt failed.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
       return;
     }
@@ -1776,8 +1814,8 @@
       closeBtnHandler();
       return;
     }
-    T.step('Confirming Grailed accepted the listing', 'Waiting up to 6 seconds for Grailed to show the published listing.');
-    const published = await waitForGrailedPublishConfirmation(6000);
+    T.step('Confirming Grailed accepted the listing', 'Waiting up to 20 seconds for Grailed to show the published listing.');
+    const published = await waitForGrailedPublishConfirmation(20000);
     if (!published) {
       if (looksLikePhoneVerification()) {
         T.problem({ code: 'grailed_phone_verification', title: 'Grailed needs your phone verified', what: 'Grailed is asking you to verify your phone number before it accepts listings.', why: 'This is a one-time Grailed account requirement; FindA.Sale cannot and should not do it for you.', next: 'Verify your phone on Grailed, then click Publish yourself. It was NOT marked as listed in FindA.Sale.' });
@@ -1880,18 +1918,35 @@
     if (!leaf) return null;
     let node = leaf;
     for (let i = 0; i < 5 && node; i++) {
-      const cb = node.querySelector && node.querySelector('input[type="checkbox"]');
-      if (cb) return cb;
+      // 1.0.90: only an ancestor holding exactly ONE checkbox belongs to this region (a wider ancestor holds the US toggle too).
+      const cbs = node.querySelectorAll ? node.querySelectorAll('input[type="checkbox"]') : [];
+      if (cbs.length === 1) return grIsDomesticToggle(cbs[0]) ? null : cbs[0];
+      if (cbs.length > 1) return null;
       node = node.parentElement;
     }
     return null;
+  }
+  // 1.0.90: Grailed names each region's checkbox shipping.<region>.enabled (live: shipping.asia.enabled). Those are used directly,
+  // never the domestic (US) one; the label search above is only the fallback when no such names exist.
+  function grIsDomesticToggle(cb) {
+    return /^shipping\.(us|usa|united_?states|domestic|continental_?us)\.enabled$/i.test(String((cb && cb.name) || ''));
+  }
+  function grRegionToggleNames() {
+    return qa('input[type="checkbox"][name^="shipping."][name$=".enabled"]').filter((cb) => !grIsDomesticToggle(cb)).map((cb) => cb.name);
+  }
+  function grToggleByName(name) {
+    return qa('input[type="checkbox"]').find((cb) => cb.name === name) || null;
   }
   async function disableInternationalShipping() {
     let anyFound = false;
     let anyDisabled = false;
     let anyConfirmedOff = true;
-    for (const label of INTERNATIONAL_REGION_LABELS) {
-      const toggle = findRegionToggle(label);
+    const byName = grRegionToggleNames();
+    const targets = byName.length ? byName.map((n) => ({ key: n, find: () => grToggleByName(n) })) : INTERNATIONAL_REGION_LABELS.map((l) => ({ key: l, find: () => findRegionToggle(l) }));
+    for (const target of targets) {
+      const label = target.key;
+      const findToggle = target.find;
+      const toggle = findToggle();
       if (!toggle) continue;
       anyFound = true;
       const readOn = () => toggle.checked;
@@ -1900,11 +1955,11 @@
       anyDisabled = true;
       await sleep(200);
       // Confirm the click actually flipped state -- re-query fresh, retry once before giving up.
-      const toggleFresh = findRegionToggle(label) || toggle;
+      const toggleFresh = findToggle() || toggle;
       if (toggleFresh.checked) {
         toggleFresh.click();
         await sleep(200);
-        const toggleFresh2 = findRegionToggle(label) || toggleFresh;
+        const toggleFresh2 = findToggle() || toggleFresh;
         if (toggleFresh2.checked) anyConfirmedOff = false;
       }
     }
@@ -2234,10 +2289,12 @@
     // FEATURE 2026-08-22 (S-EXT-DUPLICATE-LISTING-GUARD) -- see fas-poshmark.js's start() for the
     // full incident writeup (a resumed Poshmark queue entry produced a real duplicate live
     // listing this session). Applied here for consistency across all auto-publish-capable
-    // platforms. Best-effort: falls through to the normal flow if the check itself fails.
+    // platforms. If the check itself fails, the item is filled for review only (1.0.90, see the catch below).
+    let dupCheckFailed = false;
     try {
       const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'GRAILED' });
       T.info('dup_check', 'checkItemListedStatus result', { ok: !!(statusRes && statusRes.ok), listed: !!(statusRes && statusRes.listed) });
+      if (!statusRes || !statusRes.ok) dupCheckFailed = true; // 1.0.90: an unanswered check is not a pass
       if (statusRes && statusRes.ok && statusRes.listed) {
         T.problem({ code: 'grailed_already_listed', title: 'Skipped: already on Grailed', what: 'FindA.Sale already shows this item as listed on Grailed.', why: 'Filling it again would create a duplicate listing.', next: 'Nothing was filled. Moving on to the next queued item, if any.' });
         T.end('Skipped (already listed): ' + queued.item.title);
@@ -2262,10 +2319,15 @@
         closeBtnHandler();
         return;
       }
-    } catch (e) { T.warn('dup_check_failed', 'Duplicate check failed, continuing: ' + ((e && e.message) || e)); }
+    } catch (e) {
+      // 1.0.90: fail closed. When FindA.Sale could not confirm the item is not already on Grailed, the form is still filled but
+      // never published automatically: the organizer reviews it and clicks Publish.
+      dupCheckFailed = true;
+      T.warn('dup_check_failed', 'Duplicate check failed; filling for your review only (no auto-publish): ' + ((e && e.message) || e));
+    }
     T.ok('Item cleared for Grailed');
     try {
-      await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
+      await run(queued.item, queued.index, queued.total, queued.autoPublish !== false && !dupCheckFailed);
     } catch (e) {
       T.problem({ code: 'grailed_unexpected_error', title: 'Something went wrong filling this listing', what: (e && e.message) || 'Unknown error', why: 'An unexpected error stopped the fill.', next: 'Nothing was published. Complete this listing yourself, or reopen the extension to try again. Details were sent automatically; nothing is needed from you.' });
       T.end('Stopped: unexpected error');
@@ -2324,9 +2386,13 @@
       if (!byId.has(id)) byId.set(id, { id, href: a.href, texts: [] });
       byId.get(id).texts.push(text);
     });
+    // 1.0.90: the card text is a run-on ("...Adidas m<TITLE>$225Edit Listing"), so the title must END right before the price (or
+    // the card text). "Black T-Shirt" no longer matches a "Vintage Black T-Shirt XL$40" card. The listing page then checks
+    // Grailed's own title for exact equality (grTitleMatchesItem) before anything is deleted.
+    const wantRe = new RegExp(want.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s?(?:\\$|$)');
     const matches = [];
     byId.forEach((entry) => {
-      if (entry.texts.some((t) => t.indexOf(want) !== -1)) matches.push(entry);
+      if (entry.texts.some((t) => wantRe.test(t))) matches.push(entry);
     });
     return matches.length === 1 ? matches[0] : null;
   }
@@ -2377,9 +2443,10 @@
     return (headingTexts || []).some((t) => { const n = grRemNorm(t); return n === want || (want.length >= 8 && n.indexOf(want) !== -1); });
   }
   // Pure: a title-matched id is only trusted when Grailed's own title carries the full FindA.Sale title.
+  // 1.0.90: exact (normalized) equality. Containment let "Black T-Shirt" stand for "Vintage Black T-Shirt XL".
   function grTitleMatchesItem(apiTitle, itemTitle) {
     const want = grRemNorm(itemTitle);
-    return want.length > 0 && grRemNorm(apiTitle).indexOf(want) !== -1;
+    return want.length > 0 && grRemNorm(apiTitle) === want;
   }
   function grIsVisible(el) { return !!el && el.offsetParent !== null; }
   function grInDialog(el) {
@@ -2562,8 +2629,11 @@
     const me = meId != null && /^\d+$/.test(String(meId)) ? String(meId) : '';
     const body = json && typeof json === 'object' ? json : null;
     const err = body && body.error && typeof body.error === 'object' ? body.error : null;
-    const notFound = httpStatus === 404 || httpStatus === 410 || (err && /^not_found$/i.test(String(err.error_id || '')));
+    // 1.0.90: only Grailed's own "not_found" answer means gone. A bare 404 (an API path change, a proxy page) is unknown, so the
+    // title search on /sell/for-sale decides instead of recording the item removed.
+    const notFound = !!(err && /^not_found$/i.test(String(err.error_id || ''))) && (httpStatus === 404 || httpStatus === 410 || !(httpStatus >= 200 && httpStatus < 300));
     if (notFound) return me ? { kind: 'removed', detail: 'http_' + httpStatus } : { kind: 'unknown', detail: 'not_found_signed_in_unverified' };
+    if (httpStatus === 404 || httpStatus === 410) return { kind: 'unknown', detail: 'bare_http_' + httpStatus };
     if (err) return { kind: 'unknown', detail: 'error:' + String(err.error_id || err.code || '') };
     if (!(httpStatus >= 200 && httpStatus < 300)) return { kind: 'unknown', detail: 'http_' + httpStatus };
     const d = body && body.data && typeof body.data === 'object' ? body.data : null;

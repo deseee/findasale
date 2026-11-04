@@ -1129,13 +1129,16 @@
   // Craigslist cuts posting titles to ~70 chars, so a long FindA.Sale title shows on the dashboard as its first 60-72 characters (plus "- $price").
   // titleEquals only forgives one dangling word on titles of 75+ chars; here we also accept the dashboard text as a pure PREFIX of the wanted title when
   // it is long enough (60+ chars) that it cannot be a different listing. Callers still demand exactly one matching row.
-  function clTitleMatches(raw, wanted) {
+  // 1.0.90: the cut rule now needs the dashboard text to be exactly Craigslist's 70-character cut of the wanted title (see
+  // FAS_CL_GUARD.isCutOf); a 60-72 character prefix that is not the platform's cut ("...Lot 1" for "...Lot 12") never matches.
+  function clTitleMatches(raw, wanted, exactOnly) {
     if (C.titleEquals(raw, wanted)) return true;
-    var c = C.cleanCandidateTitle(raw), w = C.foldTitle(wanted).replace(/\s*\.{3,}\s*$/, '');
-    return !!(c && w && c.length >= 60 && c.length <= 72 && w.length > c.length && w.indexOf(c) === 0);
+    if (exactOnly) return false;
+    var c = C.cleanCandidateTitle(raw), w = C.foldTitle(wanted).replace(/\s*\.{3,}\s*$/, '').trim();
+    return !!(c && w && w.length > 70 && c === w.slice(0, 70).trim());
   }
-  function clPickByTitle(cands, wanted) {
-    var hits = cands.filter(function (r) { return clTitleMatches(r.titleRaw, wanted); });
+  function clPickByTitle(cands, wanted, exactOnly) {
+    var hits = cands.filter(function (r) { return clTitleMatches(r.titleRaw, wanted, exactOnly); });
     if (hits.length === 1) return { match: { key: hits[0].postingId, row: hits[0] }, reason: 'ok', count: 1 };
     return { match: null, reason: hits.length === 0 ? 'none' : 'ambiguous', count: hits.length };
   }
@@ -1309,9 +1312,11 @@
       var cands = rows.filter(function (r) { return r.active; });
       if (it.remoteListingId) chosen = cands.filter(function (r) { return r.postingId === it.remoteListingId; })[0] || null;
       if (!chosen) {
-        var pick = clPickByTitle(cands, it.title);
+        // 1.0.90: when FindA.Sale saved this posting's id and it is not on the dashboard, only an exact title may stand in for it.
+        var clExactOnly = !!it.remoteListingId;
+        var pick = clPickByTitle(cands, it.title, clExactOnly);
         if (pick.reason === 'ambiguous') {
-          var clC = cands.filter(function (r) { return clTitleMatches(r.titleRaw, it.title); }).slice(0, 10).map(function (r) { return { id: r.postingId, price: clRowPrice(r.titleRaw) }; });
+          var clC = cands.filter(function (r) { return clTitleMatches(r.titleRaw, it.title, clExactOnly); }).slice(0, 10).map(function (r) { return { id: r.postingId, price: clRowPrice(r.titleRaw) }; });
           return fail('ambiguous_title', pick.count + ' active postings share this title', 'locate', 'td.title a', {}, { details: { candidates: clC } });
         }
         if (pick.match) chosen = pick.match.row;

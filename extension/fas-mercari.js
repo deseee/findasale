@@ -1137,6 +1137,10 @@
       const match = chips.find((c) => (c.getAttribute('data-testid') || '').toLowerCase() === ('suggestedbrand-' + want).replace(/\s+/g, '-'))
         || chips.find((c) => norm(c.textContent) === want);
       if (match) { await clickMercariBrandChip(match); return true; }
+      // 1.0.90: a real brand was asked for and no chip is that brand. Never fall back to "No brand / Not sure" silently: leave the
+      // field for the organizer (fillBrand returns false, so the overlay shows Brand as not filled).
+      console.warn('[FAS Mercari] Brand "' + value + '" is not among the suggested brand chips -- left for you to choose (not set to "No brand").');
+      return false;
     }
     const noBrandChip = chips.find((c) => c.getAttribute('data-testid') === 'NoBrandLink') || chips.find((c) => /no brand|not sure/i.test(norm(c.textContent)));
     if (noBrandChip) { await clickMercariBrandChip(noBrandChip); return true; }
@@ -3017,10 +3021,10 @@
   function mercariRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
-    if (!MERCARI_PRECIOUS_METAL_EXCLUDE.some((kw) => haystack.indexOf(kw) !== -1) && MERCARI_PRECIOUS_METAL_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
+    if (!MERCARI_PRECIOUS_METAL_EXCLUDE.some((kw) => fasKeywordMatch(haystack, kw)) && MERCARI_PRECIOUS_METAL_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Mercari does not allow selling precious metals such as gold, silver or platinum bullion, coins or scrap (Prohibited Items policy).';
     }
-    if (MERCARI_PROHIBITED_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) return null;
+    if (MERCARI_PROHIBITED_EXCLUDE_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) return null;
     if (MERCARI_PROHIBITED_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return "This category isn't allowed on Mercari (Prohibited Items policy).";
     }
@@ -3677,8 +3681,9 @@
   let mercCapBusy = false;
   async function mercCapMaybeCapture() {
     if (mercCapBusy) return;
-    const onListingsPage = /^\/mypage\/listings\/active\/?$/.test(location.pathname) ||
-      !!document.querySelector('a[data-testid="ItemLink"]');
+    // 1.0.90: only the organizer's own active-listings page. Any page with item links (search, another seller's closet) could
+    // show an exact-title listing that belongs to someone else.
+    const onListingsPage = /^\/mypage\/listings\/active\/?$/.test(location.pathname);
     if (!onListingsPage) return;
     const fills = mercCapReadFills();
     if (!fills.length) return;

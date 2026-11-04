@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
+import { safeReturnTo } from '../../lib/safeUrl';
 
 const OAuthCallbackPage = () => {
   const router = useRouter();
@@ -37,8 +38,8 @@ const OAuthCallbackPage = () => {
 
           // If user has no ageVerifiedAt, redirect to age-verify page
           if (!user.ageVerifiedAt) {
-            const returnTo = router.query.returnTo || '/organizer/dashboard';
-            router.push(`/age-verify?returnTo=${encodeURIComponent(returnTo as string)}`);
+            const returnTo = safeReturnTo(router.query.returnTo, '/organizer/dashboard');
+            router.push(`/age-verify?returnTo=${encodeURIComponent(returnTo)}`);
             return;
           }
         }
@@ -87,8 +88,9 @@ const OAuthCallbackPage = () => {
       // coordinated ones.
 
       // Redirect to dashboard or home
-      const redirectTo = router.query.returnTo || '/organizer/dashboard';
-      router.push(redirectTo as string);
+      // Only same-origin relative paths: an external returnTo would be an open redirect after login.
+      const redirectTo = safeReturnTo(router.query.returnTo, '/organizer/dashboard');
+      router.push(redirectTo);
     };
 
     redeemInvite();

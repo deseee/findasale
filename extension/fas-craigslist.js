@@ -205,7 +205,7 @@
   function craigslistRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
-    if (CL_PROHIBITED_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) return null;
+    if (CL_PROHIBITED_EXCLUDE_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) return null;
     if (CL_PROHIBITED_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Craigslist does not allow this category of item (weapons, alcohol/tobacco, drugs, counterfeit/replica goods, and several other restricted categories are prohibited).';
     }
@@ -402,7 +402,9 @@
           return;
         }
         const stillDraft = /s=preview/.test(location.search) || /unpublished draft/i.test(bodyText());
-        if (!stillDraft) { resolve(true); return; }
+        // 1.0.90: "no longer a draft" is not proof of a publish (a phone/email wall or an error page is not a draft either). Only
+        // Craigslist's own posting confirmation counts; a real publish navigates away and background.js's net records it.
+        if (!stillDraft && isCraigslistPostedConfirmation()) { resolve(true); return; }
         if (Date.now() - startedAt >= timeoutMs) { resolve(false); return; }
         setTimeout(check, 400);
       };
@@ -842,19 +844,17 @@
   function isCraigslistPostedConfirmation() {
     const urlMatch = location.hostname === 'post.craigslist.org' && /^\/k\//.test(location.pathname);
     if (!urlMatch) return false;
+    // 1.0.90: a phone or email verification wall can show posting-management phrases too; it is never a confirmation.
+    if (isCraigslistPhoneVerificationStep()) return false;
     const text = bodyText().toLowerCase();
     const title = (document.title || '').toLowerCase();
+    // 1.0.90: strong signals only. Generic phrases ("view posting", "post another", "edit your post", "manage your post",
+    // "delete this posting", "email a link to this posting") also appear on other posting-flow pages and no longer count.
     const textSignals = [
       'thanks for posting',
       'thank you for posting',
       'view your post at',
       'view your ad at',
-      'view posting',
-      'post another',
-      'edit your post',
-      'manage your post',
-      'delete this posting',
-      'email a link to this posting',
       'your posting is now live',
       'is now posted',
       'has been posted',

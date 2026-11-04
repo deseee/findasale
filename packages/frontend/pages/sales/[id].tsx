@@ -2733,7 +2733,9 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${apiUrl}/sales/${id}`, {
+    // 2026-11-04: encode the decoded route param so "..%2Fadmin" cannot walk to another API path with the
+    // privileged x-ssr-secret header attached.
+    const res = await fetch(`${apiUrl}/sales/${encodeURIComponent(id)}`, {
       signal: controller.signal,
       // Server-only secret: exempts this ISR fetch from the backend's per-IP rate limit
       // (Vercel egress IPs are shared across all crawler traffic). Never NEXT_PUBLIC_.

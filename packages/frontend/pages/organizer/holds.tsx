@@ -417,6 +417,10 @@ const OrganizerHoldsPage = () => {
     setShowPayModal(true);
   };
 
+  // True when a selected hold already has an invoice or a live checkout link out. Mark Sold is
+  // not offered then: the shopper settles it by paying, or the organizer cancels the request.
+  const selectionHasPaymentOut = holds.some((h) => selectedIds.has(h.id) && (hasInvoice(h) || hasPaymentLink(h)));
+
   const handleBatch = (action: 'release' | 'extend' | 'markSold') => {
     if (selectedIds.size === 0) return;
     if (action === 'markSold') {
@@ -430,7 +434,9 @@ const OrganizerHoldsPage = () => {
       // A hold with a payment request already out is settled by the shopper paying it,
       // not by marking it sold again. The server rejects this with a 409 — say so before
       // the round trip so the organizer gets an answer, not an error.
-      if (holds.filter((h) => ids.includes(h.id)).some(hasInvoice)) {
+      // A live checkout link (CHECKOUT_LINK) counts too: recording a cash sale while the shopper
+      // can still pay the link would settle the item twice.
+      if (holds.filter((h) => ids.includes(h.id)).some((h) => hasInvoice(h) || hasPaymentLink(h))) {
         showToast('One of these holds already has a payment request out. Cancel it first, or wait for the shopper to pay.', 'error');
         return;
       }
@@ -616,7 +622,8 @@ const OrganizerHoldsPage = () => {
                 </select>
                 <button
                   onClick={() => handleBatch('markSold')}
-                  disabled={batchMutation.isPending}
+                  disabled={batchMutation.isPending || selectionHasPaymentOut}
+                  title={selectionHasPaymentOut ? 'A selected hold already has a payment request out. Cancel it first, or wait for the shopper to pay.' : undefined}
                   className="text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-md disabled:opacity-50 transition-colors"
                 >
                   Mark Sold

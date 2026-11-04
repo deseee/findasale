@@ -5,8 +5,19 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 
-function renderMarkdown(text: string): string {
+// 2026-11-04: the reply is model output steered by user text, and it goes into innerHTML. Escape every HTML
+// character first so only the markdown below can produce tags (no <img onerror>, no <script>).
+function escapeHtml(text: string): string {
   return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderMarkdown(text: string): string {
+  return escapeHtml(text)
     // Headers
     .replace(/^### (.+)$/gm, '<h3 class="text-sm font-bold mt-3 mb-1">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 class="text-sm font-bold mt-3 mb-1">$1</h2>')

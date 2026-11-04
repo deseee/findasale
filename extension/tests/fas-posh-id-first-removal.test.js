@@ -81,7 +81,8 @@ test('a second pass that never reached the edit page reports a bounded transient
 
 test('the edit-page branch clears the loop guard when it arrives on the target listing', () => {
   const run = posh.slice(posh.indexOf('async function runPoshmarkRemovalQueue('));
-  const arrive = run.indexOf('if (pageId && targetId && pageId === targetId) {');
+  // 1.0.90: the target must also belong to this item (fasPoshDeleteTargetItem).
+  const arrive = run.indexOf("if (pageId && targetId && pageId === targetId && targetItem === String(item.id)) {");
   assert.ok(arrive > 0);
   assert.ok(/sessionStorage\.removeItem\('fasPoshIdNav'\)/.test(run.slice(arrive, arrive + 300)));
 });

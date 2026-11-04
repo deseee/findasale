@@ -13,6 +13,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import api from '../../../lib/api';
+import { safeHref, UNTRUSTED_LINK_REL } from '../../../lib/safeUrl';
 import { AUCTION_BUYER_PREMIUM_LABEL } from '../../../lib/platformFees';
 import ClaimListingModal from '../../../components/ClaimListingModal';
 
@@ -187,16 +188,17 @@ const OrganizerStorefront = () => {
           profilePhoto: orgData.profilePhoto,
           phone: orgData.phone,
           address: orgData.address,
-          website: orgData.website,
-          facebook: orgData.facebook,
-          instagram: orgData.instagram,
-          etsy: orgData.etsy,
+          // User-entered links: only http(s) URLs survive (safeHref), anything else is dropped.
+          website: safeHref(orgData.website, { assumeHttps: true }),
+          facebook: safeHref(orgData.facebook, { assumeHttps: true }),
+          instagram: safeHref(orgData.instagram, { assumeHttps: true }),
+          etsy: safeHref(orgData.etsy, { assumeHttps: true }),
           tagline: orgData.tagline,
           yearFounded: orgData.yearFounded,
-          twitterUrl: orgData.twitterUrl,
-          tiktokUrl: orgData.tiktokUrl,
-          youtubeUrl: orgData.youtubeUrl,
-          pinterestUrl: orgData.pinterestUrl,
+          twitterUrl: safeHref(orgData.twitterUrl, { assumeHttps: true }),
+          tiktokUrl: safeHref(orgData.tiktokUrl, { assumeHttps: true }),
+          youtubeUrl: safeHref(orgData.youtubeUrl, { assumeHttps: true }),
+          pinterestUrl: safeHref(orgData.pinterestUrl, { assumeHttps: true }),
           pickupWindows: orgData.pickupWindows,
           timezone: orgData.timezone,
           byAppointment: orgData.byAppointment || false,
@@ -957,7 +959,7 @@ const OrganizerStorefront = () => {
                     <a
                       href={brandKit.website}
                       target="_blank"
-                      rel="noopener noreferrer"
+                      rel={UNTRUSTED_LINK_REL}
                       className="flex items-center gap-2.5 text-sm text-[#C2410C] dark:text-[#E97C4D] hover:underline"
                     >
                       <Icon name="web" size={14} />
@@ -969,7 +971,7 @@ const OrganizerStorefront = () => {
                     <a
                       href={brandKit.instagram}
                       target="_blank"
-                      rel="noopener noreferrer"
+                      rel={UNTRUSTED_LINK_REL}
                       className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="instagram" size={14} />
@@ -980,7 +982,7 @@ const OrganizerStorefront = () => {
                     <a
                       href={brandKit.facebook}
                       target="_blank"
-                      rel="noopener noreferrer"
+                      rel={UNTRUSTED_LINK_REL}
                       className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="facebook" size={14} />
@@ -991,7 +993,7 @@ const OrganizerStorefront = () => {
                     <a
                       href={brandKit.tiktokUrl}
                       target="_blank"
-                      rel="noopener noreferrer"
+                      rel={UNTRUSTED_LINK_REL}
                       className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="tiktok" size={14} />
@@ -1002,7 +1004,7 @@ const OrganizerStorefront = () => {
                     <a
                       href={brandKit.youtubeUrl}
                       target="_blank"
-                      rel="noopener noreferrer"
+                      rel={UNTRUSTED_LINK_REL}
                       className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="youtube" size={14} />
@@ -1013,7 +1015,7 @@ const OrganizerStorefront = () => {
                     <a
                       href={brandKit.pinterestUrl}
                       target="_blank"
-                      rel="noopener noreferrer"
+                      rel={UNTRUSTED_LINK_REL}
                       className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="pinterest" size={14} />
@@ -1024,7 +1026,7 @@ const OrganizerStorefront = () => {
                     <a
                       href={brandKit.twitterUrl}
                       target="_blank"
-                      rel="noopener noreferrer"
+                      rel={UNTRUSTED_LINK_REL}
                       className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="twitter" size={14} />
@@ -1035,7 +1037,7 @@ const OrganizerStorefront = () => {
                     <a
                       href={brandKit.etsy}
                       target="_blank"
-                      rel="noopener noreferrer"
+                      rel={UNTRUSTED_LINK_REL}
                       className="flex items-center gap-2.5 text-sm text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] hover:text-[#C2410C] dark:hover:text-[#E97C4D] transition-colors"
                     >
                       <Icon name="external" size={14} />

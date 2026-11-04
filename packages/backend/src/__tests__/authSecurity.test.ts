@@ -9,6 +9,7 @@ import {
   signOAuthAssertion,
   verifyOAuthAssertion,
   enforceOAuthAssertion,
+  warnIfOAuthBridgeSecretMissing,
   __resetOAuthAssertionWarning,
 } from '../utils/oauthAssertion';
 
@@ -125,11 +126,18 @@ describe('oauth assertion', () => {
       expect(verifyOAuthAssertion(bad as any, fields, SECRET, NOW).ok).toBe(false);
     }
   });
-  it('enforceOAuthAssertion: legacy pass-through with a one-time warning when no secret, strict when set', () => {
+  it('enforceOAuthAssertion: fails closed with a one-time warning when no secret, strict when set', () => {
     __resetOAuthAssertionWarning();
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    expect(enforceOAuthAssertion(undefined, fields, {} as any, NOW)).toBeNull();
-    expect(enforceOAuthAssertion(undefined, fields, {} as any, NOW)).toBeNull();
+    // 2026-11-04: an unset secret refuses every profile, signed or not; it never accepts an unsigned one.
+    expect(enforceOAuthAssertion(undefined, fields, {} as any, NOW)).toBe('not_configured');
+    expect(enforceOAuthAssertion(signOAuthAssertion(fields, SECRET, 600, NOW), fields, {} as any, NOW)).toBe('not_configured');
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockClear();
+    expect(warnIfOAuthBridgeSecretMissing({} as any)).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toMatch(/OAUTH_BRIDGE_SECRET is not set/);
+    expect(warnIfOAuthBridgeSecretMissing({ OAUTH_BRIDGE_SECRET: SECRET } as any)).toBe(true);
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
 

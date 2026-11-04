@@ -15,12 +15,15 @@ test('a tab that just clicked List this item does not auto-open the create-listi
 });
 
 test('a fresh form after the click checks the live closet before calling it ambiguous', () => {
-  const ready = src.indexOf("if (outcomeState === 'ready') {");
+  // 1.0.90: the closet is checked for a fresh form AND for a form that never came back; only a live exact-title listing
+  // (closetConfirmed) records the earlier click as published.
+  const ready = src.indexOf("if (outcomeState === 'ready' || outcomeState === 'timeout') {");
   const dup = src.indexOf('fasPoshClosetDupCheck(queued.item)', ready);
-  const timeoutBranch = src.indexOf("if (outcomeState === 'timeout') {", ready);
+  const timeoutBranch = src.indexOf("if (outcomeState === 'timeout' && closetConfirmed) {", ready);
   const ambiguous = src.indexOf("code: 'publish_click_ambiguous'");
   assert.ok(ready > 0 && dup > ready && timeoutBranch > dup && ambiguous > timeoutBranch);
-  assert.ok(/r\.state === 'dup'[^\n]*outcomeState = 'timeout'/.test(src), 'a live closet match is treated as published');
+  assert.ok(/r\.state === 'dup'[^\n]*closetConfirmed = true/.test(src), 'a live closet match is treated as published');
+  assert.ok(/if \(closetConfirmed\) outcomeState = 'timeout';/.test(src));
 });
 
 test('manifest is at least 1.0.87', () => {

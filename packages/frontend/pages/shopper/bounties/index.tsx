@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useAuth } from '../../../components/AuthContext';
 import { Target, MapPin, Clock, DollarSign, X, Bell } from 'lucide-react';
 import api from '../../../lib/api';
+import { safeHref, UNTRUSTED_LINK_REL } from '../../../lib/safeUrl';
 import { useToast } from '../../../components/ToastContext';
 
 interface Bounty {
@@ -601,14 +602,18 @@ export default function ShopperBountiesPage() {
                               <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
                                 Reference Link
                               </p>
-                              <a
-                                href={bounty.referenceUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline break-all"
-                              >
-                                {bounty.referenceUrl}
-                              </a>
+                              {safeHref(bounty.referenceUrl) ? (
+                                <a
+                                  href={safeHref(bounty.referenceUrl) as string}
+                                  target="_blank"
+                                  rel={UNTRUSTED_LINK_REL}
+                                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+                                >
+                                  {bounty.referenceUrl}
+                                </a>
+                              ) : (
+                                <span className="text-xs text-gray-600 dark:text-gray-400 break-all">{bounty.referenceUrl}</span>
+                              )}
                             </div>
                           )}
 

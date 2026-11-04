@@ -244,7 +244,7 @@ export async function getEntry(entryId: string): Promise<any> {
  */
 export async function updateEntry(
   entryId: string,
-  data: Partial<{ title: string; content: string; category: string; tags: string[] }>
+  data: Partial<{ title: string; content: string; category: string; tags: string[]; status: 'PENDING_REVIEW' }>
 ): Promise<any> {
   const entry = await prisma.encyclopediaEntry.update({
     where: { id: entryId },

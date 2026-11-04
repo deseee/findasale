@@ -16,6 +16,7 @@
 
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
+import { safeHref, UNTRUSTED_LINK_REL } from '@/lib/safeUrl';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -123,7 +124,7 @@ export default function CompaniesCityPage({
           addressRegion: cityState,
           addressCountry,
         },
-        ...(company.website ? { sameAs: company.website } : {}),
+        ...(safeHref(company.website) ? { sameAs: safeHref(company.website) } : {}),
         ...(company.avgRating && company.totalReviews > 0
           ? {
               aggregateRating: {
@@ -281,10 +282,10 @@ export default function CompaniesCityPage({
                   >
                     View profile & sales
                   </Link>
-                  {company.website && (
+                  {safeHref(company.website) && (
                     <a
-                      href={company.website}
-                      rel="nofollow noopener noreferrer"
+                      href={safeHref(company.website) as string}
+                      rel={UNTRUSTED_LINK_REL}
                       target="_blank"
                       className="text-sm text-warm-500 dark:text-warm-400 hover:text-amber-600"
                     >

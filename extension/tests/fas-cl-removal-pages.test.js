@@ -190,9 +190,12 @@ test('title match tolerates Craigslist cutting a 72-character title at 70, but s
 test('removal keeps the exactly-one rule and passes the saved id to the read; the delete is clicked once', () => {
   assert.ok(/const all = await crRemAllRows\(\{ stopAtId: savedId \}\);/.test(src));
   assert.ok(/if \(ids\.length !== 1 && !\(ids\.length > 1 && item\.deleteAllMatches === true\)\)/.test(src));
-  assert.ok(/matches = all\.rows\.filter\(\(r\) => r\.active && crTitleMatches\(r, wanted\)\);/.test(src));
+  // 1.0.90: the title rule skips postings this run already deleted and turns the cut rule off when an id is saved, in duplicate
+  // cleanup and under deleteAllMatches.
+  assert.ok(/matches = all\.rows\.filter\(\(r\) => r\.active && done\.indexOf\(r\.postingId\) === -1 && crTitleMatches\(r, wanted, \{ exactOnly: exactOnly \}\)\);/.test(src));
+  assert.ok(/const exactOnly = !!savedRef \|\| done\.length > 0 \|\| item\.deleteAllMatches === true;/.test(src));
   assert.strictEqual((src.match(/submit\[0\]\.click\(\)/g) || []).length, 1);
-  assert.ok(/!\(target\.viaId \|\| crTitleMatches\(row, wanted\)\)/.test(src), 'live row re-check before delete');
+  assert.ok(/!\(target\.viaId \|\| crTitleMatches\(row, wanted, \{ exactOnly: done\.length > 0 \|\| item\.deleteAllMatches === true \}\)\)/.test(src), 'live row re-check before delete');
 });
 
 // ---- Renew All ----
@@ -217,7 +220,10 @@ test('Renew All verdict: success only when the result is visible; never assumed'
   const v = harness(server(1)).fns.crRenewAllVerdict;
   const B = (n) => ({ renewable: n, rows: 164 });
   assert.deepStrictEqual(v({ reverted: true, before: B(164), after: B(0) }), { ok: true, verified: 'renew_buttons_cleared' });
-  assert.deepStrictEqual(v({ reverted: true, before: null, after: null }), { ok: true, verified: 'button_returned' });
+  // 1.0.90: the button coming back with no known count is not a success (it used to mark every Craigslist item renewed).
+  assert.deepStrictEqual(v({ reverted: true, before: null, after: null }), { ok: false, reason: 'renew_all_button_returned_unverified' });
+  assert.deepStrictEqual(v({ reverted: true, before: B(0), after: B(0) }), { ok: false, reason: 'renew_all_button_returned_unverified' });
+  assert.deepStrictEqual(v({ reverted: true, before: B(164), after: B(10) }), { ok: true, verified: 'renew_buttons_cleared' });
   assert.deepStrictEqual(v({ reverted: true, before: B(164), after: B(164) }), { ok: false, reason: 'renew_all_finished_still_renewable:164/164' });
   // Button still "renewing, please wait" at the end of the wait, but the fresh read shows everything renewed.
   assert.deepStrictEqual(v({ reverted: false, before: B(164), after: B(0) }), { ok: true, verified: 'renew_buttons_cleared' });

@@ -107,15 +107,17 @@
     if (!rows.length) return null;
     for (let i = rows.length - 1; i >= 0; i--) {
       const label = rows[i].getAttribute('aria-label') || '';
-      const m = /^Enter, Message sent .+? by (.+)$/.exec(label);
+      const m = /^Enter, Message sent (.+?) by (.+)$/.exec(label);
       if (!m) continue;
-      const rest = m[1];
-      if (rest === 'You' || rest.indexOf('You:') === 0) continue; // own message -- skip
+      const rest = m[2];
+      // 1.0.90: the organizer (or an earlier automatic reply) already answered after the buyer's last message, so there is
+      // nothing to answer. The old code skipped "You" rows and kept walking back, re-answering an already answered message.
+      if (rest === 'You' || rest.indexOf('You:') === 0) return null;
       const colonIdx = rest.indexOf(': ');
       if (colonIdx === -1) continue; // no text content on this row -- skip, never guess
       const text = rest.slice(colonIdx + 2).trim();
       if (!text) continue;
-      return { el: rows[i], text };
+      return { el: rows[i], text, time: m[1], sender: rest.slice(0, colonIdx) };
     }
     return null;
   }
@@ -240,6 +242,34 @@
     return cachedItems;
   }
 
+  // 1.0.90: what was already answered is remembered across visits (chrome.storage.local), per thread + buyer message, so reopening
+  // a thread never sends the same reply twice.
+  const HANDLED_KEY = 'fasMsgAutosendHandled';
+  const HANDLED_MAX = 500;
+  const HANDLED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+  function handledKeyFor(threadTitle, incoming) {
+    return [String(location.pathname || ''), norm(threadTitle || ''), norm((incoming && incoming.sender) || ''), norm((incoming && incoming.time) || ''), norm((incoming && incoming.text) || '')].join('|').slice(0, 600);
+  }
+  function storageGet(key) {
+    return new Promise((resolve) => { try { chrome.storage.local.get([key], (r) => resolve((r && r[key]) || null)); } catch (e) { resolve(null); } });
+  }
+  function storageSet(obj) {
+    return new Promise((resolve) => { try { chrome.storage.local.set(obj, () => resolve()); } catch (e) { resolve(); } });
+  }
+  async function wasHandled(key) {
+    const map = (await storageGet(HANDLED_KEY)) || {};
+    return Object.prototype.hasOwnProperty.call(map, key);
+  }
+  async function rememberHandled(key) {
+    const map = (await storageGet(HANDLED_KEY)) || {};
+    const now = Date.now();
+    map[key] = now;
+    const kept = Object.keys(map).filter((k) => now - map[k] < HANDLED_TTL_MS).sort((a, b) => map[b] - map[a]).slice(0, HANDLED_MAX);
+    const out = {};
+    kept.forEach((k) => { out[k] = map[k]; });
+    await storageSet({ [HANDLED_KEY]: out });
+  }
+
   let lastHandledText = null;
   let processing = false;
   async function scan() {
@@ -265,12 +295,23 @@
 
     // PRIMARY: exact title match via the compose box's own aria-label (live-verified).
     // FALLBACK: fuzzy body-text scan, only if the primary parse fails for any reason.
-    let item = matchItemByExactTitle(payload.items || [], threadItemTitleFromComposeBox());
-    if (!item) item = matchItemByTitle(payload.items || [], findThreadContextText(thread));
+    const composeTitle = threadItemTitleFromComposeBox();
+    let item = matchItemByExactTitle(payload.items || [], composeTitle);
+    // 1.0.90: the fuzzy body-text fallback may only suggest a reply, never send one.
+    let fuzzyMatch = false;
+    if (!item) { item = matchItemByTitle(payload.items || [], findThreadContextText(thread)); fuzzyMatch = !!item; }
     if (!item) { T('info', 'fb_msg_no_item_match', 'New buyer message seen but it could not be matched to exactly one FindA.Sale item, so no reply was suggested.'); return; } // can't confidently match one item -- never guess.
 
     processing = true;
     lastHandledText = messageText;
+    const handledKey = handledKeyFor(composeTitle || item.title, incoming);
+    let alreadyHandled = false;
+    try { alreadyHandled = await wasHandled(handledKey); } catch (e) { alreadyHandled = false; }
+    if (alreadyHandled) {
+      T('info', 'fb_msg_already_handled', 'This buyer message was already answered earlier; nothing is sent again.');
+      processing = false;
+      return;
+    }
     // A real action starts here (we are about to ask the backend for a reply), so narrate it.
     T('begin', { platform: 'FACEBOOK', flow: 'messages', item: { id: item.id, title: item.title } });
     T('step', 'Preparing a reply to a buyer message', 'A buyer wrote about this item; asking FindA.Sale for a price/availability reply based on your thresholds.');
@@ -278,8 +319,10 @@
       const res = await send({ type: 'getMessageAutosendDecision', itemId: item.id, messageText });
       if (res && res.ok && res.data && res.data.replyText) {
         T('info', 'fb_msg_decision', 'Backend returned a reply.', { autosend: res.data.autosend === true });
-        if (res.data.autosend === true) {
+        if (res.data.autosend === true && !fuzzyMatch) {
           T('step', 'Sending the automatic reply', 'Your thresholds say this reply is safe to send, so it is typed into the message box and sent.');
+          // Remembered before the click: a send that went through but whose page then reloaded must never be sent twice.
+          await rememberHandled(handledKey);
           const sent = await attemptRealSend(res.data.replyText);
           if (sent) {
             T('end', 'Reply sent automatically.');

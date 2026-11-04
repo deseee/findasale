@@ -128,9 +128,22 @@
   // the card's own status text leaving "Active" as the only success signal. "Couldn't confirm
   // in time" is a skip, never a false "removed" mark. Card matching stays single-confident-title
   // only (listingCardByTitle returns null on zero/ambiguous) -- the wrong listing is never guessed.
+  // 1.0.90: the saved Facebook listing id for this item, when FindA.Sale has one.
+  function fbItemSavedId(item) {
+    const refs = (item && item.listingRefs) || {};
+    return SEL.fbSavedListingId(refs.FACEBOOK || (item && (item.remoteListingId || item.remoteListingUrl)) || '');
+  }
   async function removeOne(item) {
     T('step', 'Finding this listing on your selling page', 'Looking for exactly one active card titled "' + item.title + '". If there is not exactly one, nothing is touched, so the wrong listing is never marked sold.');
-    const match = SEL.listingCardByTitle(item.title);
+    const savedId = fbItemSavedId(item);
+    // 1.0.90: exact title (or saved id) only. Two live cards for this item are ambiguous: nothing is clicked and it is NOT
+    // reported as already removed (both listings are still up).
+    const activeCards = SEL.listingCardsByTitle(item.title, savedId);
+    if (activeCards.length > 1) {
+      T('warn', 'fb_remove_ambiguous', 'More than one active card is this item; nothing was clicked.', { title: item.title, count: activeCards.length });
+      return { ok: false, reason: 'More than one active "' + item.title + '" listing is live on Facebook -- skipped, not guessed. Remove the extra one by hand.' };
+    }
+    const match = activeCards.length === 1 ? activeCards[0] : null;
     if (!match) {
       // (2026-07-26 fix) Before treating "no active card with a 'Mark as sold' control" as a
       // failure, check whether the listing is already Sold on Facebook -- the normal steady
@@ -139,7 +152,7 @@
       // report -- the Bjorn Borg tennis ball and FILA golf set were both already Sold, so this
       // branch used to report a false failure and never tell the backend, which meant the same
       // already-done item got re-served and re-"failed" on every ~20-min poll forever.
-      const alreadySold = SEL.alreadySoldCardByTitle(item.title);
+      const alreadySold = SEL.alreadySoldCardByTitle(item.title, savedId);
       if (alreadySold) {
         T('ok', 'Already marked sold on Facebook.');
         return { ok: true, alreadyDone: true };
@@ -224,7 +237,7 @@
     // comment above) -- require the card to be gone for a full settle window, not just gone
     // on one MutationObserver tick, before declaring the removal confirmed.
     const confirmed = await waitForStableAbsence(
-      () => SEL.listingCardByTitle(item.title),
+      () => SEL.listingCardByTitle(item.title, savedId),
       { settleMs: 900, timeout: 12000 }
     );
     if (!confirmed) {
@@ -528,11 +541,18 @@
   // throughout this file: a candidate title matching zero or more than one Sold card is
   // skipped, never guessed -- marking the WRONG item sold is a materially worse failure than
   // missing this one for another ~20-min cycle.
-  function matchSoldCardForTitle(title, soldCards) {
+  // 1.0.90: exact title line or saved listing id (never "the card text contains the title"); a Pending card is never sold
+  // (allSoldListingCards drops it); and when this item still has a LIVE card (a relisted multi-unit item next to its old sold
+  // card) nothing is reported, since the old card is not a new sale.
+  function matchSoldCardForTitle(candidate, soldCards) {
+    const title = candidate && typeof candidate === 'object' ? candidate.title : candidate;
+    const savedId = candidate && typeof candidate === 'object' ? fbItemSavedId(candidate) : '';
     const want = SEL.norm(title);
     if (!want) return null;
-    const matches = soldCards.filter((c) => c.cardText === want || c.cardText.indexOf(want) !== -1);
-    return matches.length === 1 ? matches[0] : null;
+    const matches = soldCards.filter((c) => c.cardEl ? SEL.cardMatchesItem(c.cardEl, title, savedId) : c.cardText === want);
+    if (matches.length !== 1) return null;
+    if (SEL.listingCardsByTitle(title, savedId).length > 0) return null;
+    return matches[0];
   }
 
   async function runSoldDetectionScan() {
@@ -548,7 +568,7 @@
     const matchedTitles = [];
     let soldRunBegun = false;
     for (const candidate of candidates) {
-      const match = matchSoldCardForTitle(candidate.title, soldCards);
+      const match = matchSoldCardForTitle(candidate, soldCards);
       if (!match) continue; // zero/ambiguous match -- skip silently, re-checked next ~20-min cycle
       if (!matchedTitles.length && !soldRunBegun) {
         soldRunBegun = true;

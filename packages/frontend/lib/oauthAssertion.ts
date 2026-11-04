@@ -8,7 +8,8 @@
  *   2. Then set the SAME value as OAUTH_BRIDGE_SECRET on RAILWAY. The backend now enforces the signature
  *      and rejects unsigned or forged profiles.
  *   Setting Railway first would lock every Google/Facebook login out until Vercel catches up.
- *   With the secret unset on Vercel, nothing is signed and login behaves exactly as it did before.
+ *   2026-11-04: the backend now fails closed. With the secret unset on Railway every OAuth sign-in is refused, and
+ *   with it unset on Vercel nothing is signed, so the backend refuses those sign-ins too. Set it in both places.
  *
  * Rules: the secret is read from process.env.OAUTH_BRIDGE_SECRET only (never a NEXT_PUBLIC_ variable, never
  * sent to the browser). Only the resulting assertion string travels to the browser, and it is bound to
@@ -51,16 +52,24 @@ export function signOAuthAssertion(
   return `${body}.${b64u(sig)}`;
 }
 
+let warnedMissingSecret = false;
+
 /**
  * Returns a signed assertion when OAUTH_BRIDGE_SECRET is configured on this (server) process, else undefined
- * so the caller omits the field and the legacy unsigned flow continues unchanged.
+ * (and a one-time warning: the backend refuses unsigned profiles, so OAuth sign-in fails until it is set).
  */
 export function maybeSignOAuthAssertion(
   fields: OAuthAssertionFields,
   env: NodeJS.ProcessEnv = process.env
 ): string | undefined {
   const secret = env.OAUTH_BRIDGE_SECRET;
-  if (!secret) return undefined;
+  if (!secret) {
+    if (!warnedMissingSecret) {
+      warnedMissingSecret = true;
+      console.warn('[auth] OAUTH_BRIDGE_SECRET is not set on this server: OAuth profiles are not signed and the backend refuses them, so Google/Facebook sign-in fails until it is set on Vercel and Railway.');
+    }
+    return undefined;
+  }
   if (typeof fields.provider !== 'string' || typeof fields.providerId !== 'string' || !fields.provider || !fields.providerId) {
     return undefined;
   }

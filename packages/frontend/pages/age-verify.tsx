@@ -3,6 +3,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { signOut, useSession } from 'next-auth/react';
 import api from '../lib/api';
+import { safeReturnTo } from '../lib/safeUrl';
 
 const AgeVerifyPage = () => {
   const router = useRouter();
@@ -59,8 +60,8 @@ const AgeVerifyPage = () => {
       });
 
       // Age verified successfully — redirect to home or stored returnTo
-      const returnTo = router.query.returnTo || '/';
-      router.push(returnTo as string);
+      const returnTo = safeReturnTo(router.query.returnTo, '/');
+      router.push(returnTo);
     } catch (err: any) {
       const message = err.response?.data?.message || 'An error occurred';
       if (message.includes('18') || message.includes('underage')) {

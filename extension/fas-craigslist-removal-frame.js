@@ -157,12 +157,18 @@
   // Craigslist cuts posting titles at 70 characters (live: "Jefferson Airplane ... Vinyl LP Record, 1970s" is 72 chars on
   // FindA.Sale). Same rule as the price-edit flow's clTitleMatches: an exact match, or a dashboard title of 60-72 characters that
   // is a pure prefix of the wanted title (that long a prefix cannot belong to a different listing). The exactly-one rule still applies.
-  function crTitleMatches(row, wanted) {
+  // 1.0.90 (wrong-delete fix): the old rule took ANY 60-72 character dashboard title that was a prefix of the wanted title, so
+  // "...Lot 1" matched "...Lot 12", and two long titles sharing their first 70 characters matched each other. A cut title now
+  // counts only when it is exactly Craigslist's cut of the wanted title (the wanted title is longer than 70 characters and the
+  // dashboard shows its first 70). opts.exactOnly turns the cut rule off (duplicate cleanup, saved-id runs).
+  function crTitleMatches(row, wanted, opts) {
     if (!row || !wanted) return false;
     if (row.title === wanted || row.rawTitle === wanted) return true;
+    if (opts && opts.exactOnly) return false;
+    const CUT = 70; // CR_TITLE_CUT
     const c = String(row.title || '').replace(/\s*\.{3,}\s*$/, '').trim();
-    const w = String(wanted).replace(/\s*\.{3,}\s*$/, '');
-    return c.length >= 60 && c.length <= 72 && w.length > c.length && w.indexOf(c) === 0;
+    const w = String(wanted).replace(/\s*\.{3,}\s*$/, '').trim();
+    return !!(c && w.length > CUT && c === w.slice(0, CUT).trim());
   }
   // A saved Craigslist reference may be the bare posting id or the posting URL (".../d/<slug>/7986095940.html").
   function crPostingIdFromRef(ref) {
@@ -338,18 +344,23 @@
   // FindA.Sale item shares this title, i.e. every posting carrying it belongs to the item being removed
   // (live: two postings of one deleted item -- $7 and $8 -- were refused as 'ambiguous_duplicate_title'
   // and retried 11 times). In that case delete them one at a time (each deletion verified) until none remain.
+  // 1.0.90: exact titles only here (never the cut rule): deleteAllMatches is computed on the exact title by the backend.
   let crRemDupLoop = 0;
   async function crRemMoreDuplicates(item, wanted) {
     if (item.deleteAllMatches !== true || crRemDupLoop >= 6) return false;
     const all = await crRemAllRows();
     if (!all.ok) return false;
-    const left = all.rows.filter((r) => r.active && crTitleMatches(r, wanted));
+    const left = all.rows.filter((r) => r.active && crTitleMatches(r, wanted, { exactOnly: true }));
     if (!left.length) return false;
     crRemDupLoop++;
     return true;
   }
 
-  async function runCraigslistRemovalQueue(item) {
+  // doneIds (1.0.90): posting ids this run already deleted and verified (duplicate cleanup). The saved id is ignored once it is
+  // in this list (it now shows as a deleted row), the remaining duplicates are found by exact title, and the run reports
+  // Deleted (never "not found") when at least one delete was verified.
+  async function runCraigslistRemovalQueue(item, doneIds) {
+    const done = Array.isArray(doneIds) ? doneIds.slice() : [];
     const wanted = fasFoldTitle(item.title);
     FTA('step', 'Opening your Craigslist postings list', 'This item sold on another channel, so its Craigslist posting should come down. The extension needs your logged-in postings table first.', { frame: FT_FRAME });
     overlayInfo('This item sold elsewhere. Looking for the matching Craigslist posting for <b>' + escapeHtml(item.title) + '</b>...');
@@ -366,12 +377,14 @@
 
     // Resume: a delete for this item was already submitted (e.g. the frame reloaded) -- verify only.
     const pending = await getPending();
+    if (pending && pending.itemId === item.id && Array.isArray(pending.doneIds)) pending.doneIds.forEach((id) => { if (done.indexOf(id) === -1) done.push(id); });
     if (pending && pending.itemId === item.id && pending.postingId && pending.submittedAt) {
       FTA('step', 'Checking that the delete already sent went through', 'The page reloaded after the delete was submitted, so the extension re-reads your postings instead of deleting again.', { postingId: pending.postingId });
       overlayInfo('Checking that the Craigslist posting for <b>' + escapeHtml(item.title) + '</b> was deleted...');
       const v = await crRemVerifyDeleted(pending.postingId, pending.page);
       await setPending(null);
-      if (v.ok && await crRemMoreDuplicates(item, wanted)) { return runCraigslistRemovalQueue(item); }
+      if (v.ok && done.indexOf(pending.postingId) === -1) done.push(pending.postingId);
+      if (v.ok && await crRemMoreDuplicates(item, wanted)) { return runCraigslistRemovalQueue(item, done); }
       if (v.ok) {
         overlayInfo('Removed the Craigslist posting for <b>' + escapeHtml(item.title) + '</b> (confirmed deleted).');
         await report('crossPlatformRemovalDeleted', item);
@@ -396,7 +409,9 @@
     } else {
       // 1.0.19 / 1.0.82: a saved Craigslist posting id (listingRefs; the backend turns a stored posting URL into its id, and a
       // URL is parsed here too) is looked for first, by id only, in every status, and the read stops at the page that holds it.
-      const savedId = item.listingRefs && item.listingRefs.CRAIGSLIST ? crPostingIdFromRef(item.listingRefs.CRAIGSLIST) : '';
+      const savedRef = item.listingRefs && item.listingRefs.CRAIGSLIST ? crPostingIdFromRef(item.listingRefs.CRAIGSLIST) : '';
+      // 1.0.90: a saved id this run already deleted is spent; the remaining duplicates are found by exact title.
+      const savedId = savedRef && done.indexOf(savedRef) === -1 ? savedRef : '';
       FTA('step', savedId ? 'Finding the saved Craigslist posting id in your postings' : 'Reading every page of your Craigslist postings', savedId ? 'FindA.Sale saved this posting\'s id, so the extension reads your postings (50 per page, all statuses) until it reaches that id.' : 'To delete safely the extension must prove exactly one active posting has this exact title, which means reading all pages (50 postings each, all statuses).', { savedId: savedId || undefined });
       const all = await crRemAllRows({ stopAtId: savedId });
       FTA('info', 'postings_read', all.ok ? 'Read ' + all.rows.length + ' postings on ' + all.pages + ' page(s)' + (all.total != null ? ' (dashboard total ' + all.total + ')' : '') + (all.stoppedAtId ? ', stopped at the saved id' : '') : 'Reading postings failed: ' + all.reason, { ok: all.ok, rows: all.ok ? all.rows.length : undefined, pages: all.pages, total: all.ok ? all.total : undefined, reason: all.ok ? undefined : all.reason });
@@ -411,12 +426,22 @@
       let matches = idRows.filter((r) => r.active);
       let goneRows = idRows.filter((r) => !r.active);
       if (!idRows.length) {
-        matches = all.rows.filter((r) => r.active && crTitleMatches(r, wanted));
-        goneRows = matches.length ? [] : all.rows.filter((r) => !r.active && crTitleMatches(r, wanted));
+        // 1.0.90: the cut-title rule only when nothing better is known: never when FindA.Sale saved a posting id for this item
+        // (that id is the identity; an exact title is still accepted), never in duplicate cleanup, never under deleteAllMatches.
+        const exactOnly = !!savedRef || done.length > 0 || item.deleteAllMatches === true;
+        matches = all.rows.filter((r) => r.active && done.indexOf(r.postingId) === -1 && crTitleMatches(r, wanted, { exactOnly: exactOnly }));
+        goneRows = matches.length ? [] : all.rows.filter((r) => !r.active && crTitleMatches(r, wanted, { exactOnly: exactOnly }));
       }
       const ids = Array.from(new Set(matches.map((r) => r.postingId)));
       if (!ids.length && goneRows.length) FTA('info', 'already_deleted', 'The posting for this item is already deleted or expired on Craigslist (' + goneRows.slice(0, 5).map((r) => r.postingId).join(', ') + '); nothing to delete', { ids: goneRows.slice(0, 5).map((r) => r.postingId), viaSavedId: !!idRows.length });
       FTA('info', 'match_result', 'Found ' + ids.length + ' active posting(s) with this exact title', { matches: ids.length, deleteAllMatches: item.deleteAllMatches === true });
+      if (!ids.length && done.length) {
+        // 1.0.90: duplicate cleanup finished (every posting this run found is deleted and verified): that is a removal.
+        overlayInfo('Removed ' + done.length + ' Craigslist posting(s) for <b>' + escapeHtml(item.title) + '</b> (confirmed deleted).');
+        await setPending(null);
+        await report('crossPlatformRemovalDeleted', item);
+        return;
+      }
       if (ids.length !== 1 && !(ids.length > 1 && item.deleteAllMatches === true)) {
         // 2026-09-30 (S-EXT-RESYNC): crRemAllRows() read EVERY page of the postings dashboard (all.ok),
         // so zero active matches is a real "already gone" -- report it as listing_not_found like
@@ -430,7 +455,7 @@
       target = { postingId: ids[0], page: matches[0].page, viaId: !!idRows.length };
       if (target.page !== crRemCurrentPage()) {
         FTA('step', 'Going to the page that holds the posting', 'The matching posting is on page ' + target.page + ' of your list; the delete button must be used from that page.', { page: target.page });
-        await setPending({ itemId: item.id, postingId: target.postingId, page: target.page, viaId: target.viaId });
+        await setPending({ itemId: item.id, postingId: target.postingId, page: target.page, viaId: target.viaId, doneIds: done });
         location.href = crRemPageUrl(target.page);
         return;
       }
@@ -442,7 +467,7 @@
     const row = rows.find((r) => r.postingId === target.postingId);
     // An id-matched posting may have been retitled on Craigslist; the id itself is the identity there (same standard as
     // Poshmark/Mercari/Vinted/Grailed). A title-matched posting must still match the title.
-    if (!row || !row.active || !(target.viaId || crTitleMatches(row, wanted))) {
+    if (!row || !row.active || !(target.viaId || crTitleMatches(row, wanted, { exactOnly: done.length > 0 || item.deleteAllMatches === true }))) {
       await setPending(null);
       overlayWarn('The matching Craigslist posting changed before it could be deleted. Will try again.');
       await report('crossPlatformRemovalAttemptFailed', item, row ? 'row_revalidation_failed' : 'row_not_on_page');
@@ -458,7 +483,7 @@
       return;
     }
 
-    await setPending({ itemId: item.id, postingId: target.postingId, page: target.page, submittedAt: Date.now() });
+    await setPending({ itemId: item.id, postingId: target.postingId, page: target.page, submittedAt: Date.now(), doneIds: done });
     FTA('step', 'Deleting the Craigslist posting', 'Pressing that one posting\'s own delete button; Craigslist then sends the delete in the background.', { page: target.page });
     overlayInfo('Deleting the Craigslist posting for <b>' + escapeHtml(item.title) + '</b>...');
     submit[0].click(); // Craigslist intercepts this and sends one XHR delete (live-confirmed 2026-09-23)
@@ -466,7 +491,8 @@
     FTA('step', 'Confirming the delete with a fresh read', 'Craigslist\'s page shows "deleted" before the server confirms, so the extension re-reads your postings (up to about 20 seconds) and only trusts that.');
     const v = await crRemVerifyDeleted(target.postingId, target.page);
     await setPending(null);
-    if (v.ok && await crRemMoreDuplicates(item, wanted)) { return runCraigslistRemovalQueue(item); }
+    if (v.ok && done.indexOf(target.postingId) === -1) done.push(target.postingId);
+    if (v.ok && await crRemMoreDuplicates(item, wanted)) { return runCraigslistRemovalQueue(item, done); }
     if (v.ok) {
       overlayInfo('Removed the Craigslist posting for <b>' + escapeHtml(item.title) + '</b> (confirmed deleted).');
       await report('crossPlatformRemovalDeleted', item);
@@ -575,7 +601,9 @@
     const known = before && after && before.renewable > 0;
     if (o.reverted) {
       if (known && after.renewable >= before.renewable) return { ok: false, reason: 'renew_all_finished_still_renewable:' + before.renewable + '/' + after.renewable };
-      return { ok: true, verified: known ? 'renew_buttons_cleared' : 'button_returned' };
+      // 1.0.90: the button coming back is not proof anything was renewed. Success needs a known count that went down.
+      if (known && after.renewable < before.renewable) return { ok: true, verified: 'renew_buttons_cleared' };
+      return { ok: false, reason: 'renew_all_button_returned_unverified' };
     }
     if (known && after.renewable === 0) return { ok: true, verified: 'renew_buttons_cleared' };
     if (o.formGone) return { ok: false, reason: 'renew_all_form_disappeared_unverified' };

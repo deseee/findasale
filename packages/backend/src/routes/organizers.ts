@@ -38,6 +38,8 @@ import { requireTier } from '../middleware/requireTier';
 import { resolveAudienceAccess } from '../utils/audienceAccess';
 import { firstNameLastInitial } from '../utils/publicDisplayName';
 import { csvCell } from '../utils/csvSafe';
+// Website and social links are rendered as <a href> on public pages: http(s) only (2026-11-04).
+import { websiteUrlSchema, socialUrlSchema } from '../utils/safeLinkUrl';
 import { normalizeBusinessName, BUSINESS_NAME_MAX_LENGTH } from '../utils/businessName';
 import { unfollowOrganizerEverywhere } from '../services/organizerFollowService';
 
@@ -77,14 +79,14 @@ const organizerProfileSchema = z.object({
   tagline: z.string().max(120).optional(),
   yearFounded: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
   onboardingComplete: z.boolean().optional(),
-  website: z.string().url().optional().or(z.literal('')),
-  facebook: z.string().optional(),
-  instagram: z.string().optional(),
-  etsy: z.string().optional(),
-  twitterUrl: z.string().optional(),
-  tiktokUrl: z.string().optional(),
-  youtubeUrl: z.string().optional(),
-  pinterestUrl: z.string().optional(),
+  website: websiteUrlSchema.optional(),
+  facebook: socialUrlSchema.optional(),
+  instagram: socialUrlSchema.optional(),
+  etsy: socialUrlSchema.optional(),
+  twitterUrl: socialUrlSchema.optional(),
+  tiktokUrl: socialUrlSchema.optional(),
+  youtubeUrl: socialUrlSchema.optional(),
+  pinterestUrl: socialUrlSchema.optional(),
   venmoHandle: z.string().optional().or(z.literal('')),
   zelleHandle: z.string().optional().or(z.literal('')),
   pickupWindows: z.string().optional().or(z.literal('')),
@@ -102,7 +104,7 @@ const organizerProfileSchema = z.object({
   // S725: ebayDefaultPublishMode removed from PATCH allowlist (DRAFT mode killed —
   // see Organizer.ebayDefaultPublishMode @deprecated comment in schema.prisma).
   ebayDefaultShippingPolicyId: z.string().nullable().optional(),
-  ebayStoreUrl: z.string().url().optional().or(z.literal('')),
+  ebayStoreUrl: websiteUrlSchema.optional(),
   address: z.string().optional(),
   // eBay Custom Label append toggles
   skuAppendDate: z.boolean().optional(),

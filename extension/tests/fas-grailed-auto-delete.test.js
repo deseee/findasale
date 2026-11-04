@@ -154,9 +154,13 @@ test('the page must be that listing and show its title; a title-matched id must 
   // A retitled listing reached by its STORED id needs no title match (the id is FindA.Sale's own record).
   const byId = ownerPage();
   assert.strictEqual(await byId.fns.grDeleteOnListingPage(item(), ID, 'id'), 'deleted');
-  // Title-matched and Grailed's title carries the full FindA.Sale title -> deleted.
-  const titled = ownerPage({ apiTitle: 'Graphic T-Shirt, Rebecca Stone, Black Cotton XL', heading: 'Graphic T-Shirt, Rebecca Stone, Black Cotton XL' });
+  // Title-matched and Grailed's title IS the FindA.Sale title -> deleted.
+  const titled = ownerPage({ apiTitle: 'Graphic T-Shirt, Rebecca Stone, Black Cotton', heading: 'Graphic T-Shirt, Rebecca Stone, Black Cotton' });
   assert.strictEqual(await titled.fns.grDeleteOnListingPage(item({ listingRefs: {} }), ID, 'title'), 'deleted');
+  // 1.0.90: a Grailed title that only CONTAINS the FindA.Sale title is another listing -> refused, nothing clicked.
+  const longer = ownerPage({ apiTitle: 'Graphic T-Shirt, Rebecca Stone, Black Cotton XL', heading: 'Graphic T-Shirt, Rebecca Stone, Black Cotton XL' });
+  assert.strictEqual(await longer.fns.grDeleteOnListingPage(item({ listingRefs: {} }), ID, 'title'), 'title_mismatch');
+  assert.strictEqual(longer.del.clicks + longer.del.trusted, 0);
 });
 
 test('ambiguous controls are never clicked: two plain Delete buttons, or a dialog with two confirm candidates', async () => {
@@ -254,5 +258,7 @@ test('pure helpers', () => {
   assert.strictEqual(p.fns.grPageShowsListing(['Rebecca'], GR_TITLE), false);
   assert.strictEqual(p.fns.grPageShowsListing([GR_TITLE], ''), false);
   assert.strictEqual(p.fns.grTitleMatchesItem(GR_TITLE, 'graphic t-shirt, rebecca stone'), false);
-  assert.strictEqual(p.fns.grTitleMatchesItem('Vintage Tee, Black Cotton XL', 'tee, black cotton'), true);
+  // 1.0.90: exact (normalized) equality only.
+  assert.strictEqual(p.fns.grTitleMatchesItem('Vintage Tee, Black Cotton XL', 'tee, black cotton'), false);
+  assert.strictEqual(p.fns.grTitleMatchesItem('Tee,  Black Cotton', 'tee, black cotton'), true);
 });

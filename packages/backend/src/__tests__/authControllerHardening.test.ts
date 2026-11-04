@@ -46,12 +46,17 @@ function fakeRes() {
   return res;
 }
 const req = (body: any, extra: any = {}) => ({ body, ip: '1.2.3.4', headers: {}, cookies: {}, ...extra } as any);
+// 2026-11-04: the OAuth bridge fails closed without OAUTH_BRIDGE_SECRET, so a sign-in needs a signed assertion.
+const signedOAuth = (body: { provider: string; providerId: string; email?: string } & Record<string, any>) => {
+  process.env.OAUTH_BRIDGE_SECRET = 'bridge-secret';
+  return { ...body, oauthAssertion: signOAuthAssertion({ provider: body.provider, providerId: body.providerId, email: body.email }, 'bridge-secret') };
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
   delete process.env.OAUTH_BRIDGE_SECRET;
   process.env.JWT_SECRET = 'unit-test-jwt-secret';
-  process.env.JWT_REFRESH_SECRET = 'unit-test-refresh-secret';
+  process.env.JWT_REFRESH_SECRET = 'unit-refresh-sec';
   process.env.FRONTEND_URL = 'https://finda.sale';
   __resetOAuthAssertionWarning();
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -106,17 +111,30 @@ describe('oauthLogin input handling', () => {
   it('a deleted OAuth account is refused the same way', async () => {
     mockPrisma.user.findFirst.mockResolvedValue({ id: 'u2', email: 'x@y.co', role: 'USER', deletedAt: new Date(), suspendedAt: null });
     const res = fakeRes();
-    await oauthLogin(req({ provider: 'google', providerId: '5' }), res);
+    await oauthLogin(req(signedOAuth({ provider: 'google', providerId: '5' })), res);
     expect(res.statusCode).toBe(403);
   });
 
-  it('legacy mode (no secret) still signs a normal user in and never returns credential columns', async () => {
+  it('with no OAUTH_BRIDGE_SECRET every sign-in is refused (fail closed), even a well-formed one', async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: 'u3', email: 'ok@y.co', role: 'USER', roles: ['USER'], tokenVersion: 0, createdAt: new Date() });
+    const res = fakeRes();
+    await oauthLogin(req({ provider: 'google', providerId: '7' }), res);
+    expect(res.statusCode).toBe(401);
+    expect(res.body.code).toBe('OAUTH_ASSERTION_INVALID');
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    const link = fakeRes();
+    await linkOAuthProvider(req({ provider: 'google', providerId: '1' }, { user: { id: 'u1' } }), link);
+    expect(link.statusCode).toBe(401);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('a signed sign-in of a normal user never returns credential columns', async () => {
     mockPrisma.user.findFirst.mockResolvedValue({
       id: 'u3', email: 'ok@y.co', name: 'Ok', role: 'USER', roles: ['USER'], suspendedAt: null, deletedAt: null, tokenVersion: 0, createdAt: new Date(),
       password: 'hash', resetToken: 'secret-reset', emailVerificationToken: 'secret-verify', fraudSuspect: false,
     });
     const res = fakeRes();
-    await oauthLogin(req({ provider: 'google', providerId: '7', returnTo: 'https://finda.sale.evil.com/x' }), res);
+    await oauthLogin(req(signedOAuth({ provider: 'google', providerId: '7', returnTo: 'https://finda.sale.evil.com/x' })), res);
     expect(res.statusCode).toBe(200);
     expect(res.body.user.id).toBe('u3');
     for (const k of ['password', 'resetToken', 'emailVerificationToken', 'fraudSuspect']) expect(res.body.user).not.toHaveProperty(k);
@@ -126,7 +144,7 @@ describe('oauthLogin input handling', () => {
   it('keeps a same-origin returnTo', async () => {
     mockPrisma.user.findFirst.mockResolvedValue({ id: 'u3', email: 'ok@y.co', role: 'USER', roles: ['USER'], tokenVersion: 0, createdAt: new Date() });
     const res = fakeRes();
-    await oauthLogin(req({ provider: 'google', providerId: '7', returnTo: 'https://finda.sale/browse' }), res);
+    await oauthLogin(req(signedOAuth({ provider: 'google', providerId: '7', returnTo: 'https://finda.sale/browse' })), res);
     expect(res.body.returnTo).toBe('https://finda.sale/browse');
   });
 });

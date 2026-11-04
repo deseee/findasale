@@ -12,6 +12,7 @@
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
 import https from 'node:https';
+import { isAuthorizedProxyRequest } from '../../../lib/proxySecret';
 
 // Persistent keep-alive Agent — reused across invocations on the same warm
 // Fluid instance. Without this, every eBay call paid a full fresh TLS
@@ -160,9 +161,15 @@ function fullErrorTree(err: any): string {
   return parts.join(' | ');
 }
 
+// 2026-11-04: fail closed. With EBAY_PROXY_SECRET unset the proxy used to skip the check, so anyone could mint
+// eBay application tokens with our client credentials and relay any api.ebay.com path. Now it refuses every
+// request until the secret is set; this warning is logged once when the route loads.
+if (!process.env.EBAY_PROXY_SECRET) {
+  console.warn('[ebay-proxy] EBAY_PROXY_SECRET is not set: /api/proxy/ebay refuses every request until it is set.');
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const proxySecret = process.env.EBAY_PROXY_SECRET;
-  if (proxySecret && req.headers['x-proxy-secret'] !== proxySecret) {
+  if (!isAuthorizedProxyRequest(req.headers['x-proxy-secret'], process.env.EBAY_PROXY_SECRET)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 

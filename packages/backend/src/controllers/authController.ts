@@ -552,7 +552,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
     const name  = (typeof rawName === 'string' ? rawName.trim() : '') || 'User';
 
     // 2026-09-29: the browser used to be trusted to say who signed in. Require the HMAC assertion the NextAuth
-    // server signs (utils/oauthAssertion.ts) whenever OAUTH_BRIDGE_SECRET is configured.
+    // server signs (utils/oauthAssertion.ts). Fails closed (401) when OAUTH_BRIDGE_SECRET is not configured.
     const oauthDenied = enforceOAuthAssertion(oauthAssertion, { provider, providerId, email });
     if (oauthDenied) {
       console.warn(`[auth] /auth/oauth rejected: assertion ${oauthDenied} provider=${provider}`);

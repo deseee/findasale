@@ -214,11 +214,32 @@ describe('index.ts Stripe retirement gate', () => {
     '/api/stripe-connect/onboard',
     '/api/organizers/me/stripe/start-standard-migration',
     '/api/organizers/me/hub-owner/stripe/onboard',
+    // 2026-11-04: the Connect status/return reads answer 410 too.
+    '/api/stripe-connect/return',
+    '/api/stripe-connect/status',
+    '/api/organizers/me/hub-owner/stripe/status',
   ])('guards %s before the routers are mounted', (p) => {
     const at = guardAt(p);
     expect(at).toBeGreaterThan(-1);
     expect(at).toBeLessThan(src.indexOf("app.use('/api/stripe', stripeRoutes);"));
     expect(at).toBeLessThan(src.indexOf("app.use('/api/organizers',"));
+    expect(at).toBeLessThan(src.indexOf("app.use('/api/stripe-connect', stripeConnectRoutes);"));
+  });
+
+  it('the status/return guards answer 410 STRIPE_RETIRED while the platform is closed', () => {
+    const { stripeUnavailableGuard } = jest.requireActual('../utils/stripe');
+    const prev = process.env.STRIPE_PLATFORM_CLOSED;
+    delete process.env.STRIPE_PLATFORM_CLOSED; // closed by default
+    try {
+      const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
+      const next = jest.fn();
+      stripeUnavailableGuard({ path: '/status/c1' } as any, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(410);
+      expect(res.json.mock.calls[0][0].code).toBe('STRIPE_RETIRED');
+    } finally {
+      if (prev === undefined) delete process.env.STRIPE_PLATFORM_CLOSED; else process.env.STRIPE_PLATFORM_CLOSED = prev;
+    }
   });
 
   it('does not guard the non-Stripe cash register route or the /api/stripe router as a whole', () => {

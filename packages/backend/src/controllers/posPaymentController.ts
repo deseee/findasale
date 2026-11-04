@@ -2534,18 +2534,6 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     // this file's own test suite. Only catalog (itemId-bearing) lines are floored here --
     // misc/custom-amount lines (no itemId) remain free-form, same trust boundary
     // createPaymentRequest's own floor check and ADR-112 already document.
-    const rawCatalogItemsCents = Math.round(
-      items.filter((i) => i.itemId).reduce((sum, i) => sum + i.amount, 0) * 100
-    );
-    const minAllowedCatalogItemsCents = catalogSubtotalCents - discountResolution.discountAmountCents - 1;
-    if (rawCatalogItemsCents < minAllowedCatalogItemsCents) {
-      return res.status(400).json({
-        message: discountResolution.discountAmountCents > 0
-          ? `Total does not match the applied discount. Expected at least ${minAllowedCatalogItemsCents} cents for catalog items.`
-          : `Total does not match catalog pricing. Expected at least ${minAllowedCatalogItemsCents} cents for catalog items.`,
-      });
-    }
-
     const discountRatio = discountResolution.discountAmountCents > 0 && catalogSubtotalCents > 0
       ? discountResolution.discountAmountCents / catalogSubtotalCents
       : 0;
@@ -2555,6 +2543,25 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       const afterCents = Math.round(beforeCents * (1 - discountRatio));
       return { ...i, amount: afterCents / 100, rowDiscountCents: beforeCents - afterCents };
     });
+
+    // 2026-11-04 (#152): the floor is checked on what will actually be CHARGED for catalog lines (after the
+    // discount ratio above), against catalog minus the authorized discount. It used to compare the raw client
+    // amounts with that same floor and then apply the ratio again, so a line already lowered by the discount
+    // amount passed and was then discounted a second time (50% cap -> 75% off). Now the discount counts once.
+    // Tolerance: one cent per discounted catalog line for per-line rounding, plus one.
+    const catalogLineCount = chargedItems.filter((i) => i.itemId).length;
+    const chargedCatalogItemsCents = Math.round(
+      chargedItems.filter((i) => i.itemId).reduce((sum, i) => sum + i.amount, 0) * 100
+    );
+    const minAllowedCatalogItemsCents =
+      catalogSubtotalCents - discountResolution.discountAmountCents - 1 - (discountRatio > 0 ? catalogLineCount : 0);
+    if (chargedCatalogItemsCents < minAllowedCatalogItemsCents) {
+      return res.status(400).json({
+        message: discountResolution.discountAmountCents > 0
+          ? `Total does not match the applied discount. Expected at least ${minAllowedCatalogItemsCents} cents for catalog items.`
+          : `Total does not match catalog pricing. Expected at least ${minAllowedCatalogItemsCents} cents for catalog items.`,
+      });
+    }
 
     const subtotalCents = Math.round(chargedItems.reduce((sum, i) => sum + i.amount, 0) * 100);
     if (subtotalCents <= 0) {

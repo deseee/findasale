@@ -1526,6 +1526,31 @@ export function matchesBlocklistKeyword(haystack: string, keyword: string): bool
   return re.test(normForKeywordMatch(haystack));
 }
 
+/**
+ * 2026-11-04: whole-word, case-insensitive test for excludeKeywords (both rule shapes).
+ * excludeKeywords used plain substring matching, so an exclude fired when it was merely embedded in
+ * another word: 'ring' inside "Spring assisted knife" / "string" / "boxing", 'mounted' inside
+ * "unmounted". Because an exclude vetoes the whole rule, that let weapons through. Now the keyword
+ * must start and end on a word boundary (a non-letter/non-digit or the text edge). A trailing s/es
+ * is still tolerated so plurals ("tubes", "cases", "earrings") keep matching as before. Keywords
+ * with punctuation at an edge (e.g. 'new,') only get a boundary on their alphanumeric edges.
+ */
+const excludeRegexCache = new Map<string, RegExp>();
+export function matchesExcludeKeyword(haystack: string, keyword: string): boolean {
+  const kw = (keyword || '').toLowerCase();
+  if (!kw) return false;
+  let re = excludeRegexCache.get(kw);
+  if (re === undefined) {
+    const startsAlnum = /^[a-z0-9]/.test(kw);
+    const endsAlnum = /[a-z0-9]$/.test(kw);
+    const lead = startsAlnum ? '(?:^|[^a-z0-9])' : '';
+    const tail = endsAlnum ? '(?:e?s)?(?=[^a-z0-9]|$)' : '';
+    re = new RegExp(`${lead}${escapeRegex(kw)}${tail}`);
+    excludeRegexCache.set(kw, re);
+  }
+  return re.test((haystack || '').toLowerCase());
+}
+
 /** Read-only view of every CATEGORY_BLOCKLIST rule's keywords, for regression tests / audits. */
 export function listBlocklistKeywords(): { platform: EligibilityPlatform; keywords: readonly string[]; excludeKeywords: readonly string[] }[] {
   return RULES.filter((r): r is CategoryBlocklistRule => r.type === 'CATEGORY_BLOCKLIST').map((r) => ({
@@ -1620,7 +1645,9 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
       // matched 'wine' inside "Winelight") -- see matchesBlocklistKeyword.
       const isBlocked = rule.nameKeywords.some((kw) => matchesBlocklistKeyword(haystack, kw));
       if (!isBlocked) continue;
-      const isExcluded = (rule.excludeKeywords || []).some((kw) => haystack.includes(kw));
+      // 2026-11-04: whole-word (was haystack.includes(kw), so 'ring' inside "spring" or "string" and
+      // 'gunmetal' anywhere vetoed the whole weapons rule). See matchesExcludeKeyword.
+      const isExcluded = (rule.excludeKeywords || []).some((kw) => matchesExcludeKeyword(haystack, kw));
       if (isExcluded) continue;
       return { eligible: false, reason: rule.reason };
     }
@@ -1637,7 +1664,7 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
           && gated.keywords.some((kw) => hasWholeWordMatch(haystack, kw))
           && gated.requireAny.some((kw) => hasWholeWordMatch(haystack, kw))
           && !gated.unlessAny.some((kw) => hasWholeWordMatch(haystack, kw)));
-      const isExcluded = (rule.excludeKeywords || []).some((kw) => haystack.includes(kw));
+      const isExcluded = (rule.excludeKeywords || []).some((kw) => matchesExcludeKeyword(haystack, kw));
       if (!isAllowed || isExcluded) return { eligible: false, reason: rule.reason };
     }
 

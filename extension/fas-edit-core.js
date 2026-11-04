@@ -587,6 +587,9 @@
       if (tid === saved) return { ok: true, own: true };
       return { ok: false, own: false, code: 'remote_id_mismatch', reason: L + ' listing ...' + tid.slice(-6) + ' is not this item\'s saved listing (...' + saved.slice(-6) + '); nothing was saved' };
     }
+    // 1.0.90: this item has a saved listing id but the page's own id could not be read. A same-title sibling must not pass on the
+    // title alone, so nothing is saved.
+    if (saved && !tid) return { ok: false, own: false, code: 'remote_id_unknown', reason: 'Could not read which ' + L + ' listing this page is, and this item has a saved listing id (...' + saved.slice(-6) + '); nothing was saved' };
     var t = String(listingTitle == null ? '' : listingTitle).trim();
     var where = tid ? ' ...' + tid.slice(-6) : '';
     if (!t) return { ok: false, own: false, code: 'listing_title_mismatch', reason: 'Could not read the current title of the ' + L + ' listing' + where + ', so it cannot be proven to be this item\'s; nothing was saved' };

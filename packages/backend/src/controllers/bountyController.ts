@@ -39,6 +39,7 @@ import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { endEbayListingIfExists } from './ebayController';
+import { isHttpUrl } from '../utils/safeLinkUrl';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 
 
@@ -95,6 +96,15 @@ export const createBounty = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Reference links are shown to other users as <a href>: only http(s) URLs are stored.
+    let safeReferenceUrl: string | null = null;
+    if (referenceUrl != null && referenceUrl !== '') {
+      if (typeof referenceUrl !== 'string' || referenceUrl.length > 2048 || !isHttpUrl(referenceUrl)) {
+        return res.status(400).json({ message: 'Reference link must start with http:// or https://.' });
+      }
+      safeReferenceUrl = referenceUrl.trim();
+    }
+
     // Validate xpReward if provided
     const finalXpReward = xpReward != null ? Math.max(50, Number(xpReward)) : 25;
 
@@ -109,7 +119,7 @@ export const createBounty = async (req: AuthRequest, res: Response) => {
         maxBudget: maxBudget != null ? Number(maxBudget) : null,
         radiusMiles: radiusMiles != null ? Number(radiusMiles) : null,
         xpReward: finalXpReward,
-        referenceUrl: referenceUrl?.trim() || null,
+        referenceUrl: safeReferenceUrl,
       },
       include: { user: { select: { name: true } } },
     });

@@ -6,10 +6,9 @@
 importScripts('config.js', 'fas-trace.js', 'fas-edit-core.js', 'fas-cl-guard.js', 'fas-listing-ref.js', 'fas-removal-reason.js');
 const CFG = self.FAS_CONFIG;
 
-// FEATURE 2026-09-27 (S-EXT-VINTED-DEBUG-BRIDGE) -- see fas-vinted.js's matching postMessage
-// listener for the full rationale. Must match that file's FAS_DEBUG_TOKEN constant exactly, or the
-// 'debugSetVintedQueueForThisTab' handler below rejects every request.
-const FAS_DEBUG_TOKEN = 'fas-vinted-debug-bridge-8f3a1c2e9d4b7f60';
+// 1.0.90: the Vinted page-to-extension debug bridge (S-EXT-VINTED-DEBUG-BRIDGE) is removed. Its shared token was in the shipped
+// source, so any script on vinted.com could read extension storage, reload the extension or overwrite the Vinted queue. Nothing
+// replaces it; the 'debugSetVintedQueueForThisTab' message below is refused.
 
 // (2026-08-09, ADR-100) The "you/selling" management tab now lands directly on Facebook's own
 // OUT_OF_STOCK status filter instead of the bare unfiltered grid -- fas-remove.js's sold-
@@ -518,12 +517,43 @@ async function flushPendingListedReports() {
     await chrome.storage.local.set({ [FAS_PENDING_LISTED_KEY]: keep });
   } catch (e) { /* best-effort */ } finally { fasFlushingPendingListed = false; }
 }
+// 1.0.90: same durable retry for a "removed" report whose delete really happened on the marketplace but whose POST /removed failed
+// (signed out, network, 5xx). The backend /removed endpoint is idempotent for an already-removed listing.
+const FAS_PENDING_REMOVED_KEY = 'fasPendingRemovedReports';
+async function queuePendingRemovedReport(itemId, platform) {
+  try {
+    if (!itemId || !platform) return;
+    const cur = (await chrome.storage.local.get([FAS_PENDING_REMOVED_KEY]))[FAS_PENDING_REMOVED_KEY] || [];
+    if (!cur.some((r) => r.itemId === itemId && r.platform === platform)) cur.push({ itemId, platform, at: Date.now() });
+    await chrome.storage.local.set({ [FAS_PENDING_REMOVED_KEY]: cur.slice(-200) });
+  } catch (e) { /* best-effort */ }
+}
+let fasFlushingPendingRemoved = false;
+async function flushPendingRemovedReports() {
+  if (fasFlushingPendingRemoved) return;
+  fasFlushingPendingRemoved = true;
+  try {
+    const cur = (await chrome.storage.local.get([FAS_PENDING_REMOVED_KEY]))[FAS_PENDING_REMOVED_KEY] || [];
+    if (!cur.length) return;
+    const keep = [];
+    let blocked = false;
+    for (const r of cur) {
+      if (Date.now() - r.at > FAS_PENDING_LISTED_MAX_AGE_MS) continue;
+      if (blocked) { keep.push(r); continue; }
+      let resp;
+      try { resp = await apiFetch('/extension/items/' + encodeURIComponent(r.itemId) + '/removed', { method: 'POST', body: { platform: r.platform } }); } catch (e) { resp = { ok: false }; }
+      if (resp && resp.ok) continue;
+      if (!resp || resp.status === 401 || resp.status == null || resp.status >= 500) { blocked = true; keep.push(r); continue; }
+    }
+    await chrome.storage.local.set({ [FAS_PENDING_REMOVED_KEY]: keep });
+  } catch (e) { /* best-effort */ } finally { fasFlushingPendingRemoved = false; }
+}
 // Sign-in back (finda.sale auth cookie set) or browser start -> replay anything queued.
 try {
   chrome.cookies.onChanged.addListener((chg) => {
-    if (!chg.removed && chg.cookie && (chg.cookie.name === CFG.COOKIE_NAME || chg.cookie.name === CFG.REFRESH_COOKIE_NAME)) flushPendingListedReports();
+    if (!chg.removed && chg.cookie && (chg.cookie.name === CFG.COOKIE_NAME || chg.cookie.name === CFG.REFRESH_COOKIE_NAME)) { flushPendingListedReports(); flushPendingRemovedReports(); }
   });
-  chrome.runtime.onStartup.addListener(() => { flushPendingListedReports(); });
+  chrome.runtime.onStartup.addListener(() => { flushPendingListedReports(); flushPendingRemovedReports(); });
 } catch (e) { /* cookies API unavailable: the next successful report still drains the queue */ }
 
 // Registered at top level (not inside a message handler) so it survives MV3 service worker
@@ -556,6 +586,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
       if (queueTabId == null || tabId !== queueTabId) continue;
       const item = queue[index];
       if (!item || !item.id) continue;
+      // 1.0.90: when the content script's own fast path reported the PREVIOUS item and advanced the queue moments ago, this URL
+      // change belongs to that publish, not to the item now at the head. Reporting it would mark an item listed that was never
+      // posted, so the net stays out of it.
+      const prevQueued = index > 0 ? queue[index - 1] : null;
+      if (prevQueued && prevQueued.id) {
+        const recentReports = (await chrome.storage.local.get(['fasListedReportDedup'])).fasListedReportDedup || {};
+        const prevAt = recentReports[platform + ':' + prevQueued.id];
+        if (typeof prevAt === 'number' && Date.now() - prevAt < 60 * 1000) continue;
+      }
       // Idempotency guard: the content script's own fast-path may have already reported (and
       // advanced the queue) before this listener even runs -- re-check queue.length/index just
       // read above already covers "already advanced past this item", and this key guards against
@@ -621,14 +660,39 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
         const clHourlyWaitMs = await recordPlatformPostAndGetHourlyWaitMs('CRAIGSLIST', CRAIGSLIST_HOURLY_CAP);
         if (clHourlyWaitMs > 0) {
           console.log('[FAS Craigslist] hourly cap (' + CRAIGSLIST_HOURLY_CAP + '/60min) reached, holding next post ~' + Math.ceil(clHourlyWaitMs / 1000) + 's');
-          await craigslistDelayWithOverlay(tabId, { MIN: clHourlyWaitMs, MAX: clHourlyWaitMs }, false);
         }
-        await craigslistDelayWithOverlay(
-          tabId,
-          CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS,
-          false
-        ); // 2026-08-31: was humanQueueDelay() -- see injectCraigslistCountdownOverlay comment above for why sendMessage never worked here
-        chrome.tabs.update(tabId, { url: FAS_CRAIGSLIST_POST_URL }, () => {
+        // 1.0.90 (queue stall fix): the 150-210 s pacing wait (up to an hour at the hourly cap) used to be an in-memory sleep, and
+        // an idle MV3 worker is stopped after ~30 s, which left the tab on Craigslist's confirmation page for good. The resume is
+        // now persisted and driven by a chrome.alarms one-shot (fired even after the worker restarted), see fasClScheduleResume.
+        const clPaceMs = CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS.MIN + Math.random() * (CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS.MAX - CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS.MIN);
+        await fasClScheduleResume(tabId, Math.max(0, clHourlyWaitMs) + clPaceMs);
+      }
+    }
+  })();
+});
+
+// 1.0.90: persisted Craigslist queue resume (see the onUpdated Craigslist branch above). { tabId, resumeAt } is stored and an alarm
+// fires at resumeAt; the alarm handler (and a startup check) send the tab back to the post page. While a resume is pending the
+// posting run still holds the Craigslist single-flight lock (fasClGatherLockState treats it like a cooldown pause).
+const FAS_CL_RESUME_KEY = 'fasCraigslistResume';
+const FAS_CL_RESUME_ALARM = 'fasCraigslistResume';
+async function fasClScheduleResume(tabId, delayMs) {
+  const resumeAt = Date.now() + Math.max(0, delayMs);
+  await chrome.storage.local.set({ [FAS_CL_RESUME_KEY]: { tabId: tabId, resumeAt: resumeAt }, fasCraigslistPostBeat: Date.now() });
+  injectCraigslistCountdownOverlay(tabId, Math.max(0, delayMs), false); // cosmetic only
+  chrome.alarms.create(FAS_CL_RESUME_ALARM, { when: resumeAt });
+}
+async function fasClResumeDue(force) {
+  const rec = (await chrome.storage.local.get([FAS_CL_RESUME_KEY]))[FAS_CL_RESUME_KEY];
+  if (!rec || rec.tabId == null) return 'none';
+  if (!force && Date.now() < (Number(rec.resumeAt) || 0)) {
+    chrome.alarms.create(FAS_CL_RESUME_ALARM, { when: Number(rec.resumeAt) });
+    return 'not_yet';
+  }
+  await chrome.storage.local.remove([FAS_CL_RESUME_KEY]);
+  await chrome.storage.local.set({ fasCraigslistPostBeat: Date.now() });
+  const tabId = rec.tabId;
+  chrome.tabs.update(tabId, { url: FAS_CRAIGSLIST_POST_URL }, () => {
           // DIAGNOSTIC (2026-08-29, S-EXT-CRAIGSLIST-STALL round 3): this used to be
           // `void chrome.runtime.lastError` -- read-then-discarded, so a failed re-navigation
           // (closed tab, wrong tabId, permission issue, etc.) was completely invisible. If this
@@ -643,10 +707,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
             console.warn('[FAS Craigslist] re-navigation to POST_URL failed for tab', tabId, '-', chrome.runtime.lastError.message);
           }
         });
-      }
-    }
-  })();
-});
+  return 'resumed';
+}
+try {
+  chrome.runtime.onStartup.addListener(() => { fasClResumeDue(false).catch(() => {}); });
+} catch (e) { /* tests */ }
 
 // ---- Silent-mode removal tab lifecycle (2026-07-16 fix) ----
 // Silent ("Remove automatically") mode used to open the "Your listings" page in a HIDDEN
@@ -715,6 +780,51 @@ async function resolveVintedTabOwner(senderTab) {
   // nothing pending. fasVintedQueue/fasVintedIndex are left completely untouched.
   await chrome.storage.local.set({ fasVintedTabId: senderTab.id });
   return true;
+}
+
+// 1.0.90 (duplicate auto-publish fix): Facebook and Grailed posting queues are tied to the tab that runs them, the same way the
+// Poshmark/Vinted/Craigslist queues record their tab. Rules:
+//   - the recorded tab is served normally;
+//   - any other tab is refused while the recorded tab is still open on the marketplace (a second create tab, a duplicate
+//     tab, or a /sell page opened by hand never fills and publishes the same item again);
+//   - when no tab is recorded (an auto-queued run nobody opened yet) or the recorded tab is gone, the asking tab adopts the
+//     queue, but an adopted tab is served WITHOUT auto-publish: the form is filled and the organizer clicks Publish.
+//     Tabs the worker opens itself (setQueue/setGrailedQueue/openQueueTab/reopenGrailedTab) are never "adopted".
+// -> { own: boolean, adopted: boolean }
+const FAS_QUEUE_TAB_HOSTS = { fasQueueTabId: 'facebook.com', fasGrailedQueueTabId: 'grailed.com' };
+async function fasResolveQueueTabOwner(tabKey, senderTab) {
+  if (!senderTab || senderTab.id == null) return { own: false, adopted: false };
+  const adoptedKey = tabKey + 'Adopted';
+  const st = await chrome.storage.local.get([tabKey, adoptedKey]);
+  const rec = st[tabKey] != null ? st[tabKey] : null;
+  if (rec != null && senderTab.id === rec) return { own: true, adopted: st[adoptedKey] === true };
+  if (rec != null) {
+    const host = FAS_QUEUE_TAB_HOSTS[tabKey] || '';
+    const t = await tabsGet(rec);
+    if (t && typeof t.url === 'string' && (!host || t.url.indexOf(host) !== -1)) return { own: false, adopted: false };
+  }
+  await chrome.storage.local.set({ [tabKey]: senderTab.id, [adoptedKey]: true });
+  return { own: true, adopted: true };
+}
+// Records a tab the worker itself opened for a queue (never "adopted": it may auto-publish).
+async function fasRecordQueueTab(tabKey, tab) {
+  await chrome.storage.local.set({ [tabKey]: tab && tab.id != null ? tab.id : null, [tabKey + 'Adopted']: false });
+}
+
+// 1.0.90 (Facebook publish-attempt marker, same idea as Poshmark's): written right before Facebook's Publish is clicked and
+// cleared once the item is recorded listed or the queue moves past it. While a marker for the current item is fresh, the item is
+// never auto-published again (a reload of the create page, a second tab, a restart): the tab is told to settle it from the
+// organizer's live listings instead.
+const FAS_FB_PUBLISH_ATTEMPT_KEY = 'fasFbPublishAttempt';
+const FAS_FB_PUBLISH_ATTEMPT_MS = 6 * 60 * 60 * 1000;
+function fasFbAttemptFor(rec, itemId, now) {
+  return !!(rec && itemId && rec.itemId === itemId && typeof rec.at === 'number' && now - rec.at < FAS_FB_PUBLISH_ATTEMPT_MS);
+}
+async function fasFbClearAttempt(itemId) {
+  try {
+    const rec = (await chrome.storage.local.get([FAS_FB_PUBLISH_ATTEMPT_KEY]))[FAS_FB_PUBLISH_ATTEMPT_KEY];
+    if (rec && (itemId == null || rec.itemId === itemId)) await chrome.storage.local.remove([FAS_FB_PUBLISH_ATTEMPT_KEY]);
+  } catch (e) { /* best effort */ }
 }
 
 async function clearSilentRemovalState() {
@@ -1548,13 +1658,13 @@ const FAS_CL_GUARD_BG = self.FAS_CL_GUARD;
 let fasClLockChain = Promise.resolve();
 function fasClSerial(fn) { const run = fasClLockChain.then(fn, fn); fasClLockChain = run.catch(() => {}); return run; }
 async function fasClGatherLockState(excludeKind) {
-  const st = await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex', 'fasCraigslistQueueTabId', 'fasCraigslistPostBeat', 'fasCraigslistSessionPaused', 'fasCraigslistPostWaiting', FAS_EDIT_RUN_KEY, FAS_CL_CLAIM_KEY]);
+  const st = await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex', 'fasCraigslistQueueTabId', 'fasCraigslistPostBeat', 'fasCraigslistSessionPaused', 'fasCraigslistPostWaiting', 'fasCraigslistResume', FAS_EDIT_RUN_KEY, FAS_CL_CLAIM_KEY]);
   const queueTabId = st.fasCraigslistQueueTabId != null ? st.fasCraigslistQueueTabId : null;
   const queueTab = queueTabId != null ? await tabsGet(queueTabId) : null;
   const run = st[FAS_EDIT_RUN_KEY] || null;
   const runTab = run && run.tabId != null ? await tabsGet(run.tabId) : null;
   return {
-    post: { queueRemaining: !st.fasCraigslistPostWaiting && (st.fasCraigslistIndex || 0) < (st.fasCraigslistQueue || []).length, tabAlive: queueTabId == null ? true : !!queueTab, beatAt: Number(st.fasCraigslistPostBeat) || 0, paused: !!st.fasCraigslistSessionPaused },
+    post: { queueRemaining: !st.fasCraigslistPostWaiting && (st.fasCraigslistIndex || 0) < (st.fasCraigslistQueue || []).length, tabAlive: queueTabId == null ? true : !!queueTab, beatAt: Number(st.fasCraigslistPostBeat) || 0, paused: !!st.fasCraigslistSessionPaused || !!(st.fasCraigslistResume && st.fasCraigslistResume.tabId != null) },
     edit: run ? { platform: run.platform, startedAt: run.startedAt || 0, tabAlive: !!runTab } : null,
     removal: { inProgress: excludeKind === 'removal' ? false : await silentCrossPlatformRemovalInProgress('CRAIGSLIST') },
     claim: st[FAS_CL_CLAIM_KEY] || null
@@ -2672,9 +2782,9 @@ const FAS_AUTOLIST_PICKUP_BLOCKED = ['MERCARI', 'POSHMARK'];
 // entry gets a fresh timestamp on a queue this poller just filled.
 const FAS_AUTOLIST_QUEUE_CFG = {
   CRAIGSLIST: { queue: 'fasCraigslistQueue', index: 'fasCraigslistIndex', autoPublish: 'fasCraigslistAutoPublish' },
-  FACEBOOK: { queue: 'fasQueue', index: 'fasIndex', autoPublish: 'fasAutoPublish', setAt: 'fasQueueSetAt' },
+  FACEBOOK: { queue: 'fasQueue', index: 'fasIndex', autoPublish: 'fasAutoPublish', setAt: 'fasQueueSetAt', tabId: 'fasQueueTabId' },
   GUMTREE_AU: { queue: 'fasGumtreeAuQueue', index: 'fasGumtreeAuIndex' },
-  GRAILED: { queue: 'fasGrailedQueue', index: 'fasGrailedIndex', autoPublish: 'fasGrailedAutoPublish' },
+  GRAILED: { queue: 'fasGrailedQueue', index: 'fasGrailedIndex', autoPublish: 'fasGrailedAutoPublish', tabId: 'fasGrailedQueueTabId' },
   POSHMARK: { queue: 'fasPoshmarkQueue', index: 'fasPoshmarkIndex', autoPublish: 'fasPoshmarkAutoPublish' },
   // autoPublish omitted 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH, per claude_docs/architecture/
   // marketplace-ban-risk-playbook.md Part 4/Mercari) -- same reason GUMTREE_AU above has none:
@@ -2995,6 +3105,8 @@ async function checkAutoListQueue() {
     const writeObj = { [cfg.queue]: items.map((q) => Object.assign({}, q, self.FAS_KIT.queueFields(q))), [cfg.index]: 0 };
     if (cfg.autoPublish) writeObj[cfg.autoPublish] = st[cfg.autoPublish] !== false;
     if (cfg.setAt) writeObj[cfg.setAt] = Date.now();
+    // 1.0.90: a fresh auto queue has no tab yet; the popup's "Open the tab" (openQueueTab) records one.
+    if (cfg.tabId) { writeObj[cfg.tabId] = null; writeObj[cfg.tabId + 'Adopted'] = false; }
     await chrome.storage.local.set(writeObj);
     // 2026-10-21: remember what the auto queue loaded so the popup can say "N items queued" (cleared by the
     // popup's own check once the run moves on: it only shows while index is 0 and the first item id matches).
@@ -3139,6 +3251,7 @@ async function autoRenewDueItems(dueItems) {
                              // trailing verification-needed list; always reposts, never a guessed
                              // native-renew click)
   const fbRenewQueue = [];  // lightweight native-renew queue: {id, title, saleId}
+  const fbPriceChanged = []; // 1.0.90: due items whose price changed (renewed natively, price pushed by the edit engine)
   let craigslistDueCount = 0; // CHANGED 2026-09-27: Craigslist no longer queues per item -- native
                                // Renew All (see comment above) renews everything eligible in one
                                // action, so only a count is needed to decide whether to trigger it.
@@ -3158,7 +3271,11 @@ async function autoRenewDueItems(dueItems) {
       // "Renew listing" click.
       continue;
     } else if (staleIds.has(due.id)) {
-      fbQueue.push(buildRenewalQueueItem(full, organizerEmail));
+      // 1.0.90: a price-changed live Facebook listing is no longer reposted as a brand-new listing (the old one stayed up, a
+      // duplicate). It is renewed natively like any other due item and its new price goes through the price-edit engine
+      // (checkPendingUpdates -> fasEditEnqueue, the same path every price change uses), which edits the live listing in place.
+      fbRenewQueue.push({ id: full.id, title: full.title, saleId: full.saleId });
+      fbPriceChanged.push(full.id);
     } else {
       fbRenewQueue.push({ id: full.id, title: full.title, saleId: full.saleId });
     }
@@ -3170,9 +3287,16 @@ async function autoRenewDueItems(dueItems) {
   // flagged unavailable -- the removal flow owns the (24h) re-probe.
   const facebookUnavailable = !!(await getPlatformUnavailable('FACEBOOK'));
   if (facebookUnavailable) { if (fbQueue.length || fbRenewQueue.length) fasT('warn', 'renew_skipped', 'Facebook renewals skipped: the Facebook account is flagged unavailable', { platform: 'FACEBOOK', flow: 'renew', ctx: { skipped: fbQueue.length + fbRenewQueue.length } }); fbQueue.length = 0; fbRenewQueue.length = 0; }
+  if (fbPriceChanged.length && !facebookUnavailable) {
+    try { await checkPendingUpdates(); } catch (e) { /* the regular removal alarm tick retries the price push */ }
+  }
+  // 1.0.90: fbQueue stays empty (see above); kept so a future repost path must remove the old listing first. The organizer's
+  // stored "Publish automatically" choice is never overridden here.
   if (fbQueue.length && !(await hasActiveQueue('FACEBOOK'))) {
-    await chrome.storage.local.set({ fasQueue: fbQueue, fasIndex: 0, fasAutoPublish: true, fasQueueSetAt: Date.now() });
-    chrome.tabs.create({ url: CFG.FB_CREATE_URL, active: false });
+    const { fasAutoPublish: renewAutoPublish = true } = await chrome.storage.local.get(['fasAutoPublish']);
+    await chrome.storage.local.set({ fasQueue: fbQueue, fasIndex: 0, fasAutoPublish: renewAutoPublish !== false, fasQueueSetAt: Date.now(), fasQueueTabId: null, fasQueueTabIdAdopted: false });
+    const renewTab = await chrome.tabs.create({ url: CFG.FB_CREATE_URL, active: false });
+    await fasRecordQueueTab('fasQueueTabId', renewTab);
     started += fbQueue.length;
   }
   // CHANGED 2026-09-27 (Patrick-approved native Renew All switch, see this function's header
@@ -3292,6 +3416,10 @@ async function checkRenewals() {
 }
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === FAS_CL_RESUME_ALARM) {
+    await fasClResumeDue(false);
+    return;
+  }
   if (alarm.name === FAS_CRAIGSLIST_SESSION_ALARM) {
     // 2026-09-17: resumes a Craigslist run paused by startCraigslistSessionCooldown().
     // 2026-09-25: now reactive-only (craigslistRateLimitHit safety net) -- the proactive
@@ -3969,6 +4097,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // 1.0.66 (2026-10-26 retest): an item Poshmark flagged earlier and that is now listed there (live: a marquee
         // flagged at 12:25 and published at 18:52 the same day) is no longer held back, so it stops being reported as held.
         if (msg.platform === 'POSHMARK' && (markListedResp.ok || markListedResp.deduped)) await fasPoshUnflag(msg.itemId);
+        if ((msg.platform || 'FACEBOOK') === 'FACEBOOK' && (markListedResp.ok || markListedResp.deduped)) await fasFbClearAttempt(msg.itemId);
         sendResponse(markListedResp);
       } else if (msg.type === 'setRemoteListingId') {
         // S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23), generalized ADR-mercari-remote-listing-id-
@@ -4131,7 +4260,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         sendResponse({ ok: true, dataUrls: out });
       } else if (msg.type === 'setQueue') {
-        await chrome.storage.local.set({ fasQueue: msg.queue || [], fasIndex: 0, fasAutoPublish: msg.autoPublish !== false, fasQueueSetAt: Date.now() });
+        // 1.0.90: the worker opens the Facebook create tab itself (msg.openTab, sent by the popup) and records it as the queue's tab.
+        await chrome.storage.local.set({ fasQueue: msg.queue || [], fasIndex: 0, fasAutoPublish: msg.autoPublish !== false, fasQueueSetAt: Date.now(), fasQueueTabId: null, fasQueueTabIdAdopted: false });
+        await fasFbClearAttempt(null);
+        if (msg.openTab === true) {
+          const fbQueueTab = await chrome.tabs.create({ url: CFG.FB_CREATE_URL });
+          await fasRecordQueueTab('fasQueueTabId', fbQueueTab);
+        }
+        sendResponse({ ok: true });
+      } else if (msg.type === 'openQueueTab') {
+        // 1.0.90: the popup's "Reopen that tab" / "Open the tab" for a queue that is already stored. Opened here so the tab is
+        // recorded as the queue's own (it may auto-publish); a tab opened by hand only adopts the queue without auto-publish.
+        const oqPlat = String(msg.platform || '').toUpperCase();
+        const oqCfg = { FACEBOOK: { key: 'fasQueueTabId', url: CFG.FB_CREATE_URL }, GRAILED: { key: 'fasGrailedQueueTabId', url: CFG.GRAILED_POST_URL } }[oqPlat];
+        if (!oqCfg) { sendResponse({ ok: false, error: 'unsupported_platform' }); return; }
+        if (await fasIsPlatformPaused(oqPlat)) { sendResponse({ ok: false, error: 'paused' }); return; }
+        const oqTab = await chrome.tabs.create({ url: oqCfg.url });
+        await fasRecordQueueTab(oqCfg.key, oqTab);
         sendResponse({ ok: true });
       } else if (msg.type === 'getQueueItem') {
         // (2026-08-02 fix -- Christmas-tree phantom-refill bug) A queue is only ever advanced by
@@ -4152,11 +4297,43 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (fasQueue.length && Date.now() - fasQueueSetAt > FAS_QUEUE_STALE_MS) {
           await chrome.storage.local.set({ fasQueue: [], fasIndex: 0 });
           sendResponse({ ok: true, item: null, index: 0, total: 0, autoPublish: fasAutoPublish });
+        } else if (!fasQueue[fasIndex]) {
+          sendResponse({ ok: true, item: null, index: fasIndex, total: fasQueue.length, autoPublish: fasAutoPublish });
         } else {
-          sendResponse({ ok: true, item: await freshenQueueItem(fasQueue[fasIndex] || null), index: fasIndex, total: fasQueue.length, autoPublish: fasAutoPublish });
+          // 1.0.90: only the queue's own tab is served (see fasResolveQueueTabOwner); an adopted tab fills without publishing.
+          const fbOwner = await fasResolveQueueTabOwner('fasQueueTabId', sender && sender.tab);
+          if (!fbOwner.own) {
+            sendResponse({ ok: true, item: null, index: fasIndex, total: fasQueue.length, autoPublish: false, notOwner: true });
+          } else {
+            const fbCur = fasQueue[fasIndex];
+            const fbAttempt = (await chrome.storage.local.get([FAS_FB_PUBLISH_ATTEMPT_KEY]))[FAS_FB_PUBLISH_ATTEMPT_KEY];
+            const fbPending = fasFbAttemptFor(fbAttempt, fbCur && fbCur.id, Date.now());
+            sendResponse({ ok: true, item: await freshenQueueItem(fasQueue[fasIndex]), index: fasIndex, total: fasQueue.length,
+              autoPublish: fasAutoPublish && !fbOwner.adopted && !fbPending,
+              publishAttempt: fbPending ? { at: fbAttempt.at } : null });
+          }
         }
+      } else if (msg.type === 'fbPublishAttempt') {
+        // 1.0.90: fas-content.js reports the Publish click it is about to make (see FAS_FB_PUBLISH_ATTEMPT_KEY).
+        if (msg.itemId != null && typeof msg.itemId === 'string') {
+          await chrome.storage.local.set({ [FAS_FB_PUBLISH_ATTEMPT_KEY]: { itemId: msg.itemId, at: Date.now(), tabId: sender && sender.tab ? sender.tab.id : null } });
+        }
+        sendResponse({ ok: true });
+      } else if (msg.type === 'fbPublishAttemptResolved') {
+        // The organizer settled an unconfirmed publish ("not live, fill it again"): the marker goes, nothing is recorded.
+        await fasFbClearAttempt(msg.itemId || null);
+        sendResponse({ ok: true });
       } else if (msg.type === 'advanceQueue') {
         const st = await chrome.storage.local.get(['fasQueue', 'fasIndex']);
+        // 1.0.90: only the queue's own tab advances it, and only past the item it was given (itemId compare-and-swap, same as
+        // advancePoshmarkQueue / advanceGrailedQueue). A second tab or a double click can never skip the next item.
+        const fbAdvOwner = await fasResolveQueueTabOwner('fasQueueTabId', sender && sender.tab);
+        const fbAdvCur = (st.fasQueue || [])[st.fasIndex || 0];
+        if (!fbAdvOwner.own || (msg.itemId != null && (!fbAdvCur || fbAdvCur.id !== msg.itemId))) {
+          sendResponse({ ok: true, item: fbAdvCur || null, index: st.fasIndex || 0, total: (st.fasQueue || []).length, alreadyAdvanced: true, notOwner: !fbAdvOwner.own });
+          return;
+        }
+        if (fbAdvCur) await fasFbClearAttempt(fbAdvCur.id);
         const next = (st.fasIndex || 0) + 1;
         // Refresh the staleness clock on real forward progress so a legitimate long multi-item run
         // never gets treated as abandoned mid-way through.
@@ -4178,11 +4355,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // 150-210s/item pacing plus the same real 20/hr sliding cap. See the constant block above
           // (FACEBOOK_QUEUE_ADVANCE_DELAY_MS) for the full research citation.
           const fbHourlyWaitMs = await recordPlatformPostAndGetHourlyWaitMs('FACEBOOK', FACEBOOK_HOURLY_CAP);
+          // 1.0.90: a pacing hold is not an abandoned run. Stamp the stale clock past the end of the hold so getQueueItem's 30-minute
+          // self-clear never wipes a queue that is only waiting out the hourly cap; it is stamped again when the hold ends.
+          await chrome.storage.local.set({ fasQueueSetAt: Date.now() + Math.max(0, fbHourlyWaitMs) + FACEBOOK_QUEUE_ADVANCE_DELAY_MS.MAX });
           if (fbHourlyWaitMs > 0) {
             console.log('[FAS Facebook] hourly cap (' + FACEBOOK_HOURLY_CAP + '/60min) reached, holding next post ~' + Math.ceil(fbHourlyWaitMs / 1000) + 's');
             await humanQueueDelay(sender.tab && sender.tab.id, { MIN: fbHourlyWaitMs, MAX: fbHourlyWaitMs });
           }
           await humanQueueDelay(sender.tab && sender.tab.id, FACEBOOK_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+          await chrome.storage.local.set({ fasQueueSetAt: Date.now() });
         }
         sendResponse({ ok: true, item, index: next, total: (st.fasQueue || []).length });
       } else if (msg.type === 'setCraigslistQueue') {
@@ -4574,27 +4755,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await chrome.storage.local.set({ fasVintedTabId: vintedTab.id });
         sendResponse({ ok: true });
       } else if (msg.type === 'debugSetVintedQueueForThisTab') {
-        // FEATURE 2026-09-27 (S-EXT-VINTED-DEBUG-BRIDGE) -- see fas-vinted.js's postMessage
-        // listener for the full rationale. Same effect as setVintedQueue above, EXCEPT it scopes
-        // the queue to sender.tab.id (the tab that's already open and asking) instead of opening a
-        // brand new tab via chrome.tabs.create -- lets Claude's browser-automation tools drive a
-        // real, already-open Vinted tab through the exact same queue-consumption path
-        // (getVintedQueueItem/advanceVintedQueue's tab-identity check, see that fix's own
-        // 2026-09-27 comment above) a real popup click would use, without ever needing to open the
-        // popup. Gated behind FAS_DEBUG_TOKEN so a message from anywhere other than fas-vinted.js's
-        // own gated bridge is rejected outright.
-        if (msg.token !== FAS_DEBUG_TOKEN) {
-          sendResponse({ ok: false, error: 'bad_token' });
-        } else if (!sender.tab || sender.tab.id == null) {
-          sendResponse({ ok: false, error: 'no_sender_tab' });
-        } else {
-          await chrome.storage.local.set({
-            fasVintedQueue: Array.isArray(msg.queue) ? msg.queue : [],
-            fasVintedIndex: 0,
-            fasVintedTabId: sender.tab.id,
-          });
-          sendResponse({ ok: true, tabId: sender.tab.id });
-        }
+        // 1.0.90: debug bridge removed (see the note at the top of this file). Always refused, nothing is written.
+        sendResponse({ ok: false, error: 'debug_bridge_removed' });
       } else if (msg.type === 'getVintedQueueItem') {
         // FIX 2026-10-11 (S-EXT-VINTED-REOPEN-RESUME-BUG): ownership is now resolved (and
         // self-healed if the recorded owner tab closed) via the shared resolveVintedTabOwner()
@@ -4675,14 +4837,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // above. Updated again on every reopenGrailedTab call below, since Grailed (unlike
         // Poshmark/Mercari/Craigslist) opens a genuinely NEW tab per queue item instead of
         // navigating the same tab in place.
-        await chrome.storage.local.set({ fasGrailedQueue: msg.queue || [], fasGrailedIndex: 0, fasGrailedAutoPublish: msg.autoPublish !== false, fasGrailedQueueTabId: null });
+        await chrome.storage.local.set({ fasGrailedQueue: msg.queue || [], fasGrailedIndex: 0, fasGrailedAutoPublish: msg.autoPublish !== false, fasGrailedQueueTabId: null, fasGrailedQueueTabIdAdopted: false });
         const grailedQueueTab = await chrome.tabs.create({ url: CFG.GRAILED_POST_URL });
-        await chrome.storage.local.set({ fasGrailedQueueTabId: grailedQueueTab && grailedQueueTab.id != null ? grailedQueueTab.id : null });
+        await fasRecordQueueTab('fasGrailedQueueTabId', grailedQueueTab);
         sendResponse({ ok: true });
       } else if (msg.type === 'getGrailedQueueItem') {
         const { fasGrailedQueue = [], fasGrailedIndex = 0, fasGrailedAutoPublish = true } =
           await chrome.storage.local.get(['fasGrailedQueue', 'fasGrailedIndex', 'fasGrailedAutoPublish']);
-        sendResponse({ ok: true, item: await freshenQueueItem(fasGrailedQueue[fasGrailedIndex] || null), index: fasGrailedIndex, total: fasGrailedQueue.length, autoPublish: fasGrailedAutoPublish });
+        // 1.0.90: a queue nobody has touched for FAS_AUTOLIST_ABANDON_MS is an abandoned run (Grailed had no stale clear, so a
+        // /sell page opened days later auto-published the old head item). It is cleared here, nothing is marked listed.
+        const grTouched = ((await chrome.storage.local.get([FAS_QUEUE_TOUCHED_KEY]))[FAS_QUEUE_TOUCHED_KEY] || {}).GRAILED;
+        if (fasGrailedQueue.length && fasGrailedIndex < fasGrailedQueue.length && grTouched > 0 && Date.now() - grTouched > FAS_AUTOLIST_ABANDON_MS) {
+          await chrome.storage.local.set({ fasGrailedQueue: [], fasGrailedIndex: 0 });
+          sendResponse({ ok: true, item: null, index: 0, total: 0, autoPublish: false, stale: true });
+        } else if (!fasGrailedQueue[fasGrailedIndex]) {
+          sendResponse({ ok: true, item: null, index: fasGrailedIndex, total: fasGrailedQueue.length, autoPublish: fasGrailedAutoPublish });
+        } else {
+          // 1.0.90: tied to the queue's own tab (see fasResolveQueueTabOwner); an adopted tab fills without publishing.
+          const grOwner = await fasResolveQueueTabOwner('fasGrailedQueueTabId', sender && sender.tab);
+          if (!grOwner.own) sendResponse({ ok: true, item: null, index: fasGrailedIndex, total: fasGrailedQueue.length, autoPublish: false, notOwner: true });
+          else sendResponse({ ok: true, item: await freshenQueueItem(fasGrailedQueue[fasGrailedIndex]), index: fasGrailedIndex, total: fasGrailedQueue.length, autoPublish: fasGrailedAutoPublish && !grOwner.adopted });
+        }
       } else if (msg.type === 'reopenGrailedTab') {
         // BUG FIX 2026-08-19 (S-EXT-BATCH, P0): fas-grailed.js used to advance to the next queue
         // item via `location.href = LISTING_URL_HINT` -- a same-URL in-page reassignment (the
@@ -4699,11 +4874,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // must be re-pointed at that new tab each time, or the onUpdated reliability net would keep
         // matching against the now-closed previous tab's id (which Chrome may even reassign to an
         // unrelated tab later) and never fire for the tab actually running the rest of the queue.
-        const newGrailedQueueTab = await chrome.tabs.create({ url: CFG.GRAILED_POST_URL });
-        await chrome.storage.local.set({ fasGrailedQueueTabId: newGrailedQueueTab && newGrailedQueueTab.id != null ? newGrailedQueueTab.id : null });
-        if (sender && sender.tab && sender.tab.id != null) {
-          chrome.tabs.remove(sender.tab.id, () => { void chrome.runtime.lastError; });
+        // 1.0.90: only the queue's own tab may do this, once. The new tab is recorded before the old one is closed, so a repeat
+        // request from the old tab (a double click on "I posted / next") is a no-op instead of a second new tab that auto-publishes
+        // the next item again.
+        const reopenSt = await chrome.storage.local.get(['fasGrailedQueueTabId']);
+        const reopenSenderId = sender && sender.tab && sender.tab.id != null ? sender.tab.id : null;
+        if (reopenSenderId == null || reopenSt.fasGrailedQueueTabId == null || reopenSenderId !== reopenSt.fasGrailedQueueTabId) {
+          sendResponse({ ok: false, error: 'not_queue_tab' });
+          return;
         }
+        const newGrailedQueueTab = await chrome.tabs.create({ url: CFG.GRAILED_POST_URL });
+        await fasRecordQueueTab('fasGrailedQueueTabId', newGrailedQueueTab);
+        chrome.tabs.remove(reopenSenderId, () => { void chrome.runtime.lastError; });
         sendResponse({ ok: true });
       } else if (msg.type === 'advanceGrailedQueue') {
         // FIX (S-EXT-AUTOPUBLISH-DEDUP, 2026-08-29): same itemId compare-and-swap as
@@ -4839,6 +5021,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true, requested: true });
         }
       } else if (msg.type === 'craigslistRenewAllFinished') {
+        // 1.0.90: only the frame this worker granted the Renew All click to (fasCraigslistRenewAllInFlight.tabId) may report it.
+        // Any other report is ignored and marks nothing renewed.
+        const raSt = await chrome.storage.local.get(['fasCraigslistRenewAllInFlight']);
+        const raFlight = raSt.fasCraigslistRenewAllInFlight || null;
+        const raSender = sender && sender.tab && sender.tab.id != null ? sender.tab.id : null;
+        if (!raFlight || raSender == null || raFlight.tabId !== raSender) {
+          fasLog('warn', 'craigslistRenewAllFinished', 'ignored: report did not come from the Renew All tab', { hasInFlight: !!raFlight });
+          sendResponse({ ok: false, error: 'not_renew_all_tab' });
+          return;
+        }
         // ADDED 2026-09-27: fas-craigslist-removal-frame.js reports the outcome of one
         // runCraigslistRenewAll() attempt, fire-and-forget. Always clears the request flag and
         // closes the shared removal/renew tab (mirrors removalQueueDoneFor) -- a failed or
@@ -4994,6 +5186,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // writes the same REMOVE/REMOVED row either way.
         if (msg.note) fasLog('info', 'crossPlatformRemovalDeleted', String(msg.note).slice(0, 120) + (removed && removed.ok ? '' : ' (report failed)'),
           await fasRemovalReasonFor(msg.platform, msg.itemId), { platform: msg.platform, itemId: msg.itemId });
+        // 1.0.90: the delete on the marketplace really happened (the content script verified it), so the queue still moves on, but a
+        // failed /removed report is no longer dropped: it is kept and re-sent (sign-in back, browser start, next good report).
+        if (removed && removed.ok) flushPendingRemovedReports();
+        else await queuePendingRemovedReport(msg.itemId, msg.platform);
         await clearRemovalAttempt(msg.platform, msg.itemId);
         const cont = await advanceAndContinueCrossPlatformRemoval(msg.platform, tabId, msg.continueUrl || null);
         sendResponse({ ok: true, removed: !!(removed && removed.ok), next: cont.next });

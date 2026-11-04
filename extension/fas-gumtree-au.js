@@ -207,7 +207,7 @@
   function gumtreeAuRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
-    if (GT_PROHIBITED_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) return null;
+    if (GT_PROHIBITED_EXCLUDE_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) return null;
     if (GT_PROHIBITED_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Gumtree Australia does not allow this category of item (weapons including knives, alcohol/tobacco, drugs, counterfeit/replica goods, and several other restricted categories are prohibited).';
     }

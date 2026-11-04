@@ -4,6 +4,11 @@ const $ = (id) => document.getElementById(id);
 let ITEMS = [];
 let ORGANIZER = null;
 const selected = new Set();
+// 1.0.90: true from the first List click until the window closes, so a double click never starts two queues (two tabs, two posts).
+let queueStarting = false;
+// 1.0.90: ids rendered by the last render() pass. Selection is kept to these, so an item hidden by a filter, a search or a
+// channel switch is never queued without being seen.
+let renderedIds = new Set();
 // (2026-08-30, S-EXT-SELECT-ALL) IDs of the currently-rendered, currently-selectable rows --
 // recomputed every render() pass. "Selectable" excludes fbBlocked coin/currency items (row()
 // never gives those a checkbox at all -- see fbBlocked in row()). Select All operates on exactly
@@ -490,6 +495,8 @@ function renderHiddenSummary(counts) {
 
 function onChannelChange() {
   const ch = currentChannel();
+  // 1.0.90: selections are per channel. Items ticked for another marketplace (often already listed here) are never carried over.
+  selected.clear();
   showPaceHint(ch);
   const fb = ch === 'facebook';
   const cl = ch === 'craigslist';
@@ -568,13 +575,27 @@ async function checkResumeableQueue(channel) {
     banner.innerHTML = queue.length + ' item' + (queue.length === 1 ? '' : 's') + ' queued for ' + esc(cfg.label) +
       ' by your auto queue. <button type="button" class="link" id="resumeQueueBtn">Open the ' + esc(cfg.label) + ' tab</button> to post.';
     const abtn = document.getElementById('resumeQueueBtn');
-    if (abtn) abtn.onclick = () => { if (isChannelPaused(channel)) return; chrome.tabs.create({ url: CFG[cfg.postUrlKey] }); window.close(); };
+    if (abtn) abtn.onclick = () => { if (isChannelPaused(channel)) return; openQueueTabFor(channel, cfg); };
     return;
   }
   banner.innerHTML = 'A ' + esc(cfg.label) + ' posting run is already in progress (item ' + (index + 1) + ' of ' + queue.length + '). ' +
     '<button type="button" class="link" id="resumeQueueBtn">Reopen that tab</button> instead of picking items again.';
   const btn = document.getElementById('resumeQueueBtn');
-  if (btn) btn.onclick = () => { if (isChannelPaused(channel)) return; chrome.tabs.create({ url: CFG[cfg.postUrlKey] }); window.close(); };
+  if (btn) btn.onclick = () => { if (isChannelPaused(channel)) return; openQueueTabFor(channel, cfg); };
+}
+
+// 1.0.90: Facebook and Grailed queues are tied to the tab the worker opens for them (a tab opened any other way only fills, it
+// never auto-publishes), so their "open / reopen the tab" goes through the worker. Other channels open the tab directly as before.
+let queueTabOpening = false;
+async function openQueueTabFor(channel, cfg) {
+  if (queueTabOpening) return;
+  queueTabOpening = true;
+  if (channel === 'facebook' || channel === 'grailed') {
+    try { await send({ type: 'openQueueTab', platform: channel.toUpperCase() }); } catch (e) { /* the popup closes either way */ }
+  } else {
+    chrome.tabs.create({ url: CFG[cfg.postUrlKey] });
+  }
+  window.close();
 }
 
 // (2026-08-08) Best-effort informational note -- last DOM-observed Craigslist login state from
@@ -771,6 +792,10 @@ function render() {
       });
     });
   });
+  // 1.0.90: drop any selection that is not on screen now (hidden as already listed, by search, or by a filter).
+  renderedIds = new Set();
+  saleTitles.forEach((saleTitle) => { Object.keys(groups[saleTitle]).forEach((cat) => { groups[saleTitle][cat].forEach((it) => renderedIds.add(it.id)); }); });
+  Array.from(selected).forEach((id) => { if (!renderedIds.has(id)) selected.delete(id); });
   const selectAllBtn = $('selectAllBtn');
   if (selectAllBtn) {
     const allSelected = visibleSelectableIds.length > 0 && visibleSelectableIds.every((id) => selected.has(id));
@@ -897,7 +922,7 @@ function sync(id, on) { on ? selected.add(id) : selected.delete(id); updateCount
 function updateCount() {
   $('selCount').textContent = selected.size;
   const btn = $('listBtn');
-  btn.disabled = selected.size === 0 || isChannelPaused(currentChannel());
+  btn.disabled = queueStarting || selected.size === 0 || isChannelPaused(currentChannel());
   const ch = currentChannel();
   // ADR-102 (2026-08-09): generalized from a single craigslist-vs-not check to a small map so
   // Gumtree Australia gets its own label without re-deriving this logic a third time.
@@ -912,8 +937,22 @@ function updateCount() {
 }
 
 async function startQueue() {
+  // 1.0.90: single flight. A second click while the first is still building the queue is ignored.
+  if (queueStarting) return;
+  queueStarting = true;
+  if ($('listBtn')) $('listBtn').disabled = true;
+  let started = false;
+  try {
+    started = await startQueueOnce();
+  } finally {
+    // Every successful start closes this window; only a start that did nothing re-enables the button.
+    if (!started) { queueStarting = false; updateCount(); }
+  }
+}
+
+async function startQueueOnce() {
   // Per-marketplace pause: never open a posting tab for a paused channel (background.js also refuses).
-  if (isChannelPaused(currentChannel())) { updateCount(); return; }
+  if (isChannelPaused(currentChannel())) { updateCount(); return false; }
   // 2026-10-19: re-read the items from FindA.Sale right before building the queue. ITEMS is loaded when this window opens, so a
   // weight, price or description saved on FindA.Sale afterwards was invisible to the run (Patrick saved the Jones sign's weight and
   // Mercari still stopped for "no confirmed weight"). Selection is by item id and is untouched; a failed refresh keeps the loaded list.
@@ -940,9 +979,9 @@ async function startQueue() {
   // locked. The banner's Retry button re-checks and lifts this once access is back.
   if (ch === 'facebook' && fbAccountUnavailable) {
     await renderFacebookAccountBanner();
-    if (fbAccountUnavailable) return;
+    if (fbAccountUnavailable) return false;
   }
-  const queue = ITEMS.filter((it) => selected.has(it.id))
+  const queue = ITEMS.filter((it) => selected.has(it.id) && renderedIds.has(it.id))
     .filter((it) => !(ch === 'facebook' && it.facebookRestricted === true))
     .filter((it) => !isIneligibleOnCurrentChannel(it))
     .filter((it) => !isPickupOnlyBlockedOnCurrentChannel(it)) // S-VINTED-PICKUP-ONLY defense-in-depth
@@ -1027,7 +1066,7 @@ async function startQueue() {
     // (data we already have), same "fill what we already have, invent nothing" rule.
     email: (ORGANIZER && ORGANIZER.email) || null
   }));
-  if (!queue.length) return;
+  if (!queue.length) return false;
   if (currentChannel() === 'craigslist') {
     // Background stores the Craigslist queue AND opens post.craigslist.org; fas-craigslist.js
     // picks the item up on load. Facebook behavior below is unchanged.
@@ -1035,7 +1074,7 @@ async function startQueue() {
     const autoPublish = $('autoPublish').checked;
     await send({ type: 'setCraigslistQueue', queue, autoPublish });
     window.close();
-    return;
+    return true;
   }
   if (currentChannel() === 'gumtree_au') {
     // ADR-102 (2026-08-09): Background stores the queue AND opens the Gumtree AU post-ad page;
@@ -1043,7 +1082,7 @@ async function startQueue() {
     // manual-assist only, there's nothing to auto-publish yet.
     await send({ type: 'setGumtreeAuQueue', queue });
     window.close();
-    return;
+    return true;
   }
   // (2026-08-22, S-EXT-AUTOPUBLISH-POLICY) Vinted has no autoPublish param -- real ban-risk
   // carve-out, see fas-vinted.js's file header. CODE-ONLY: none of these four channels has been
@@ -1051,7 +1090,7 @@ async function startQueue() {
   if (currentChannel() === 'vinted') {
     await send({ type: 'setVintedQueue', queue });
     window.close();
-    return;
+    return true;
   }
   // REVERSED 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH, per claude_docs/architecture/
   // marketplace-ban-risk-playbook.md Part 4/Mercari): Mercari now has no autoPublish param
@@ -1061,7 +1100,7 @@ async function startQueue() {
   if (currentChannel() === 'mercari') {
     await send({ type: 'setMercariQueue', queue });
     window.close();
-    return;
+    return true;
   }
   // Poshmark/Grailed still thread the shared #autoPublish checkbox through, same as Craigslist
   // above -- corrected 2026-08-22, see each content script's file header. Mercari removed from
@@ -1071,12 +1110,14 @@ async function startQueue() {
     const autoPublish = $('autoPublish').checked;
     await send({ type: AUTOPUBLISH_CHANNEL_MSG[currentChannel()], queue, autoPublish });
     window.close();
-    return;
+    return true;
   }
   const autoPublish = $('autoPublish').checked;
-  await send({ type: 'setQueue', queue, autoPublish });
-  chrome.tabs.create({ url: CFG.FB_CREATE_URL });
+  // 1.0.90: the worker opens the Facebook tab itself and records it as the queue's tab (same as Poshmark/Grailed), so a second
+  // create tab never fills and publishes the same item.
+  await send({ type: 'setQueue', queue, autoPublish, openTab: true });
   window.close();
+  return true;
 }
 
 function esc(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }

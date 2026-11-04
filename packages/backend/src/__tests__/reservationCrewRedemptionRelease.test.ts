@@ -16,6 +16,8 @@ var mockPrisma: any = {
   organizer: { findUnique: jest.fn() },
   workspaceMember: { findFirst: jest.fn() },
   item: { updateMany: jest.fn() },
+  // 2026-11-04: batchUpdateHolds markSold reads open/paid payment links (services/holdSettlementGuard.ts).
+  pOSPaymentLink: { findMany: jest.fn().mockResolvedValue([]) },
   $transaction: jest.fn(),
 };
 jest.mock('../lib/prisma', () => ({ prisma: mockPrisma }));

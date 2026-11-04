@@ -248,12 +248,61 @@
     }
   }
 
-  function listingCardByTitle(title) {
+  // 1.0.90 (wrong-listing fix): a card belongs to an item only when one of the card's own text lines is EXACTLY the item title
+  // (normalized), or, when FindA.Sale saved this item's Facebook listing id, when the card links to that listing. The old rule
+  // ("the card text contains the title") let "Lamp" match a "Brass Lamp Shade" card and mark the wrong listing sold.
+  function fbSavedListingId(ref) {
+    const s = String(ref == null ? '' : ref).trim();
+    if (/^\d{6,}$/.test(s)) return s;
+    const m = /\/marketplace\/item\/(\d{6,})/.exec(s);
+    return m ? m[1] : '';
+  }
+  function cardListingIds(cardEl) {
+    const out = [];
+    try {
+      Array.from(cardEl.querySelectorAll('a[href*="/marketplace/item/"]')).forEach((a) => {
+        const id = fbSavedListingId(a.getAttribute('href') || a.href || '');
+        if (id && out.indexOf(id) === -1) out.push(id);
+      });
+    } catch (e) { /* detached */ }
+    return out;
+  }
+  function cardTitleLines(cardEl) {
+    const lines = [];
+    try {
+      String(cardEl.innerText || '').split(/\n+/).forEach((l) => { const t = norm(l); if (t) lines.push(t); });
+      Array.from(cardEl.querySelectorAll('span, a, div, h2, h3')).forEach((el) => {
+        if (el.children && el.children.length > 1) return;
+        const t = norm(el.textContent);
+        if (t && t.length <= 300) lines.push(t);
+      });
+    } catch (e) { /* detached */ }
+    return lines;
+  }
+  function cardMatchesItem(cardEl, title, savedId) {
     const want = norm(title);
-    if (!want) return null;
+    if (!cardEl || !want) return false;
+    const sid = fbSavedListingId(savedId);
+    if (sid) {
+      const ids = cardListingIds(cardEl);
+      if (ids.length) return ids.indexOf(sid) !== -1;   // the saved id decides whenever the card shows its own id
+    }
+    return cardTitleLines(cardEl).indexOf(want) !== -1;
+  }
+  function countMarkAsSold(cardEl) {
+    try {
+      return Array.from(cardEl.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"]'))
+        .filter((b) => norm(b.textContent) === 'mark as sold').length;
+    } catch (e) { return 0; }
+  }
+  // Every ACTIVE card (it still offers "Mark as sold") that is this item. A container holding more than one card is never a match.
+  function listingCardsByTitle(title, savedId) {
+    const want = norm(title);
+    if (!want) return [];
     const soldButtons = Array.from(document.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"]'))
       .filter((b) => norm(b.textContent) === 'mark as sold');
     const candidates = [];
+    const seen = new Set();
     for (const btn of soldButtons) {
       let el = btn, hops = 0, cardText = null, cardEl = null;
       while (el && hops < 16) {
@@ -263,11 +312,16 @@
         const t = norm(el.textContent);
         if (t.indexOf('$') !== -1 && t.length > 40) { cardText = t; cardEl = el; break; }
       }
-      if (cardText && (cardText === want || cardText.indexOf(want) !== -1)) {
-        candidates.push({ button: btn, cardEl, cardText });
-      }
+      if (!cardEl || seen.has(cardEl)) continue;
+      seen.add(cardEl);
+      if (countMarkAsSold(cardEl) > 1) continue;
+      if (cardMatchesItem(cardEl, title, savedId)) candidates.push({ button: btn, cardEl, cardText });
     }
-    if (candidates.length === 1) return candidates[0];
+    return candidates;
+  }
+  function listingCardByTitle(title, savedId) {
+    const c = listingCardsByTitle(title, savedId);
+    if (c.length === 1) return c[0];
     return null; // zero or ambiguous (multiple) matches -- caller skips + flags, never guesses
   }
 
@@ -285,7 +339,7 @@
   // ("Mark as available" AND "Relist this item" both sit on the same sold card, so a naive count
   // would see 2 hits on one real card and wrongly call it ambiguous), then require exactly one
   // candidate card. Zero or truly ambiguous (multiple distinct cards) still return null.
-  function alreadySoldCardByTitle(title) {
+  function alreadySoldCardByTitle(title, savedId) {
     const want = norm(title);
     if (!want) return null;
     const markers = Array.from(document.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"]'))
@@ -311,8 +365,9 @@
         if (t.indexOf('$') !== -1 && t.length > 40) { if (!cardMap.has(t)) cardMap.set(t, el); break; }
       }
     }
+    // 1.0.90: exact title line (or saved id), and a Pending card is not sold.
     const candidates = Array.from(cardMap.entries())
-      .filter(([cardText]) => cardText === want || cardText.indexOf(want) !== -1)
+      .filter(([cardText, cardEl]) => !fbCardIsPending(cardText) && cardMatchesItem(cardEl, title, savedId))
       .map(([cardText, cardEl]) => ({ cardEl, cardText }));
     if (candidates.length === 1) return candidates[0];
     return null; // zero or ambiguous -- caller falls through to the genuine skip+flag path
@@ -344,7 +399,7 @@
         const t = norm(el.textContent);
         if (t.indexOf('$') !== -1 && t.length > 40) { cardText = t; cardEl = el; break; }
       }
-      if (cardText && (cardText === want || cardText.indexOf(want) !== -1)) {
+      if (cardEl && cardMatchesItem(cardEl, title)) { // 1.0.90: exact title line, not containment
         candidates.push({ button: btn, cardEl, cardText });
       }
     }
@@ -417,6 +472,16 @@
   function looksOrderRelated(t) {
     return t.indexOf('order') !== -1;
   }
+  // 1.0.90: Facebook shows "Mark as available" on a listing marked Pending too. A card is only treated as SOLD when it carries
+  // "Relist this item" or a checkout-order marker, or when "Mark as available" sits next to a "Sold" status. Pending never counts.
+  function fbCardIsPending(cardText) {
+    const t = String(cardText || '').replace(/mark as (sold|available|pending)/g, ' ');
+    return /\bpending\b/.test(t);
+  }
+  function fbCardShowsSoldStatus(cardText) {
+    const t = String(cardText || '').replace(/mark as (sold|available|pending)/g, ' ');
+    return /\bsold\b/.test(t);
+  }
   function allSoldListingCards() {
     // (2026-08-24, dead-marker fix) Widened to also include a[role="link"] -- confirmed via
     // live QA against 2 real Facebook-Checkout-sold orders that the real "View Order" control
@@ -434,7 +499,7 @@
     // single real Sold card with two markers could show up TWICE in the returned list, causing
     // matchSoldCardForTitle in fas-remove.js to see 2 matches for what is actually one card and
     // wrongly treat it as ambiguous.
-    const seen = new Set(); // normalized card text, deduped
+    const seen = new Map(); // normalized card text -> { cardEl, strong }, deduped
     for (const btn of allRoleButtons) {
       const t = norm(btn.textContent);
       if (!t) continue;
@@ -455,7 +520,9 @@
         if (cardText.indexOf('$') !== -1 && cardText.length > 40) {
           const cardStillActive = cardText.indexOf('mark as sold') !== -1;
           if (isTrustedExact || !cardStillActive) {
-            seen.add(cardText);
+            const strong = t === 'relist this item' || isCheckoutMatch;
+            const prev = seen.get(cardText);
+            seen.set(cardText, { cardEl: (prev && prev.cardEl) || el, strong: !!(strong || (prev && prev.strong)) });
           } else {
             console.log('[FindA.Sale] allSoldListingCards: matched a widened Checkout-sold marker ("' + t + '") but its card still shows "Mark as sold" -- excluded as a likely false-positive substring match. Review manually if this card really is sold.');
           }
@@ -463,7 +530,9 @@
         }
       }
     }
-    return Array.from(seen).map((cardText) => ({ cardText }));
+    return Array.from(seen.entries())
+      .filter(([cardText, v]) => !fbCardIsPending(cardText) && (v.strong || fbCardShowsSoldStatus(cardText)))
+      .map(([cardText, v]) => ({ cardText, cardEl: v.cardEl }));
   }
 
   // Facebook's custom div[role="button"] controls (category chips, "Enter exact weight",
@@ -599,7 +668,7 @@
   function isSwitchOn(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
 
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, categoryChips, persistentCategoryChips, bestTextMatch,
-    elementByText, radioLabelByText, listingCardByTitle, alreadySoldCardByTitle, allSoldListingCards, renewButtonByTitle, loadAllListingCards, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
+    elementByText, radioLabelByText, listingCardByTitle, listingCardsByTitle, cardMatchesItem, fbSavedListingId, fbCardIsPending, alreadySoldCardByTitle, allSoldListingCards, renewButtonByTitle, loadAllListingCards, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
     switchByLabel, isSwitchOn, isRadioChecked, weightExactLink, weightExactInputs,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price', hideFromFriendsToggle: 'friend' } };
 })();

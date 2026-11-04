@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { signIn } from 'next-auth/react';
 import api from '../lib/api';
+import { safeReturnTo } from '../lib/safeUrl';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/ToastContext';
 import { usePasskey } from '../hooks/usePasskey';
@@ -59,8 +60,8 @@ const LoginPage = () => {
         }
       } else {
         // Honour ?redirect= param, then fall back to role-based default
-        const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : null;
-        if (redirect && redirect.startsWith('/')) {
+        const redirect = safeReturnTo(router.query.redirect, '');
+        if (redirect) {
           router.push(redirect);
         } else if (response.data.user.roles?.includes('ORGANIZER')) {
           router.push('/organizer/dashboard');
@@ -103,8 +104,8 @@ const LoginPage = () => {
         }
       } else {
         // Honour ?redirect= param, then fall back to role-based default
-        const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : null;
-        if (redirect && redirect.startsWith('/')) {
+        const redirect = safeReturnTo(router.query.redirect, '');
+        if (redirect) {
           router.push(redirect);
         } else if (result.user.roles?.includes('ORGANIZER')) {
           router.push('/organizer/dashboard');

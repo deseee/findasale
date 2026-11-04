@@ -64,6 +64,10 @@ export interface CashCheckoutPayload {
   discountType?: string;
   discountValue?: number;
   discountReasonNote?: string;
+  // 2026-11-04: the User.id of the cashier who rang the sale up, so the replay can apply the same
+  // team-member price floor and discount cap the live register applies.
+  cashierUserId?: string;
+  isTestTransaction?: boolean;
 }
 
 const DB_NAME = 'findASaleOffline';
@@ -251,11 +255,14 @@ export async function recordOfflineItemDelete(itemId: string, saleId: string): P
  */
 export async function recordOfflineCashCheckout(
   saleId: string,
-  payload: Omit<CashCheckoutPayload, 'clientTransactionId'>
+  payload: Omit<CashCheckoutPayload, 'clientTransactionId'>,
+  // 2026-11-04: the id the live request already sent for this sale. Reusing it means a replay
+  // after a timed-out request that DID commit is recognized by the server as the same sale.
+  existingClientTransactionId?: string
 ): Promise<string> {
   const db = await initOfflineDB();
   const now = new Date().toISOString();
-  const clientTransactionId = generateClientTransactionId();
+  const clientTransactionId = existingClientTransactionId || generateClientTransactionId();
 
   await saveToStore(db, 'syncQueue', {
     localId: clientTransactionId,

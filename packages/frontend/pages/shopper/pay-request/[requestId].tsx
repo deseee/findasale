@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuth } from '../../../components/AuthContext';
@@ -22,6 +22,8 @@ export default function PaymentRequestPage() {
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isDeclining, setIsDeclining] = useState(false);
+  const [confirmLocked, setConfirmLocked] = useState(false);
+  const confirmLockRef = useRef(false);
   const [countdown, setCountdown] = useState<CountdownState | null>(null);
 
   const { data: request, isLoading, isError, status } = usePOSPaymentRequest(
@@ -111,6 +113,16 @@ export default function PaymentRequestPage() {
   // which one is sent is decided by which form rendered, keyed off request.processor
   // below. The confirm endpoint itself branches on the SAME field.
   const handlePaymentSuccess = async (paymentIntentIdOrSourceId: string) => {
+    // 2026-11-04: one confirm at a time, and none after the card was authorized. The form used to stay live
+    // while /confirm was pending and on the "still processing" answer, so a second submit could authorize
+    // the card again. Only a refusal the server explained unlocks the form for another try.
+    if (confirmLockRef.current) return;
+    confirmLockRef.current = true;
+    setConfirmLocked(true);
+    const unlock = () => {
+      confirmLockRef.current = false;
+      setConfirmLocked(false);
+    };
     if (requestId) {
       try {
         const body =
@@ -129,6 +141,8 @@ export default function PaymentRequestPage() {
           // as if paid -- the shopper stays on this page so the socket/poll-driven status
           // update can still resolve it once the organizer/admin retries.
           showToast(response.data.message || 'Your payment is still processing...', 'info');
+        } else {
+          unlock();
         }
       } catch (err: any) {
         // Log error but still redirect — webhook fallback may catch it
@@ -139,6 +153,7 @@ export default function PaymentRequestPage() {
         const failureData = err?.response?.data;
         if (typeof failureData?.message === 'string' && (failureData?.squareCode || failureData?.code === 'CARD_DECLINED')) {
           showToast(failureData.message, 'error');
+          unlock();
           return;
         }
         showToast('Payment processing... (fallback to webhook)', 'info');
@@ -296,7 +311,7 @@ export default function PaymentRequestPage() {
                 squareLocationId={request.organizerSquareLocationId}
                 onSuccess={handlePaymentSuccess}
                 onError={handlePaymentError}
-                isProcessing={isPaid}
+                isProcessing={isPaid || confirmLocked}
               />
             </div>
           )}

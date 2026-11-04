@@ -286,73 +286,10 @@
     });
   } catch (e) { /* non-fatal -- local guessed countdown above still covers the click feedback */ }
 
-  // FEATURE 2026-09-27 (S-EXT-VINTED-DEBUG-BRIDGE, Patrick-directed -- "build that first ... so you
-  // can start doing that shit yourself"). Claude has no way to click this extension's own toolbar
-  // popup (chrome-extension:// pages are unreachable to browser automation, and OS-level computer
-  // control is deliberately read-only on browsers) -- the popup was, until now, the ONLY way to set
-  // fasVintedQueue, so every real (non-manual-test) repro of this bug required Patrick to click
-  // "List" himself. This listens for a same-window, same-origin postMessage carrying a shared debug
-  // token and relays it to background.js's 'debugSetVintedQueueForThisTab' handler, which mirrors
-  // setVintedQueue's exact effect but scopes the queue to the CALLING tab (this one) instead of
-  // opening a brand new one. From an already-open vinted.com tab, this lets Claude's own browser-
-  // automation tools set the queue and then navigate/reload to /items/new to trigger the exact same
-  // fillListing() pipeline a real popup click would -- no new fill logic, only a new way to seed the
-  // queue; still never auto-clicks Upload/Publish (see this file's own header). Gated three ways so
-  // an arbitrary vinted.com-hosted script can't drive this: (1) event.source must be this exact
-  // window, (2) event.origin must be this page's own origin, (3) a long fixed shared-secret token
-  // must match exactly -- this is a private, unpublished, personal-use extension, not one
-  // distributed to any third party, and this bridge does nothing setVintedQueue's normal message
-  // doesn't already do.
-  const FAS_DEBUG_TOKEN = 'fas-vinted-debug-bridge-8f3a1c2e9d4b7f60';
-  window.addEventListener('message', (event) => {
-    try {
-      if (event.source !== window) return;
-      if (event.origin !== location.origin) return;
-      const data = event.data;
-      if (!data || data.__fasDebugBridge !== true) return;
-      if (data.token !== FAS_DEBUG_TOKEN) { console.warn('[FAS Vinted] debug bridge: bad token, ignoring.'); return; }
-      if (!fasContextAlive()) { console.warn('[FAS Vinted] debug bridge: extension context is gone (stale/unreloaded) -- reload the extension and refresh this page.'); return; }
-      // READ-ONLY DIAGNOSTIC 2026-09-27 (S-EXT-VINTED-MIDFILL-NAV-GUARD): a second action on this
-      // SAME already-approved bridge -- same origin/window/token gates as the queue-set action
-      // below, does nothing that action doesn't already do in kind (relay a chrome.storage.local
-      // call for this tab back to the page). This one only ever READS specific, already-named
-      // keys and never sets, clicks, fills, or navigates anything -- added so the nav-probe
-      // breadcrumbs (fasVintedNavProbeLog / fasVintedMidFillUnload / fasVintedReviewUnload) can be
-      // inspected directly instead of relying on manually copying DevTools console output, which
-      // kept silently failing (collapsed object previews, clipboard mishaps).
-      if (data.action === 'debugReadStorage') {
-        const keys = Array.isArray(data.keys) ? data.keys : [];
-        chrome.storage.local.get(keys, (res) => {
-          if (chrome.runtime.lastError) {
-            window.postMessage({ __fasDebugStorageResult: true, error: chrome.runtime.lastError.message }, location.origin);
-            return;
-          }
-          window.postMessage({ __fasDebugStorageResult: true, result: res }, location.origin);
-        });
-        return;
-      }
-      // READ-TRIGGERED ACTION 2026-10-11 (S-EXT-VINTED-DEBUG-RELOAD): same gates as every other
-      // action on this bridge (same-window, same-origin, same shared token) -- adds no new attack
-      // surface. Root problem this solves: every dispatch tonight that edited this file could only
-      // syntax-check the result, never watch the PATCHED code actually run, because nothing
-      // available (Claude in Chrome's navigate refuses chrome://extensions; computer-use is
-      // Chrome-read-only here) could reload the unpacked extension from disk to pick the edit up.
-      // chrome.runtime.reload() is the extension's own standard self-reload API -- for an unpacked
-      // extension this is the same effect as clicking "Reload" in chrome://extensions (re-reads
-      // manifest + all scripts from disk), callable from any extension-privileged context, which
-      // this content script already is. No UI click required.
-      if (data.action === 'debugReloadExtension') {
-        console.log('[FAS Vinted] debug bridge: reloading extension now (chrome.runtime.reload()).');
-        try { chrome.runtime.reload(); } catch (e) { console.warn('[FAS Vinted] debug bridge: reload threw -- ' + (e && e.message || e)); }
-        return;
-      }
-      chrome.runtime.sendMessage({ type: 'debugSetVintedQueueForThisTab', token: data.token, queue: data.queue || [] }, (resp) => {
-        if (chrome.runtime.lastError) { console.warn('[FAS Vinted] debug bridge: sendMessage failed -- ' + chrome.runtime.lastError.message); return; }
-        console.log('[FAS Vinted] debug bridge: queue set for this tab -- ' + JSON.stringify(resp));
-        window.postMessage({ __fasDebugBridgeAck: true, resp }, location.origin);
-      });
-    } catch (e) { console.warn('[FAS Vinted] debug bridge: threw -- ' + (e && e.message || e)); }
-  });
+  // 1.0.90: the page-to-extension debug bridge (S-EXT-VINTED-DEBUG-BRIDGE, a window 'message' listener gated by a token that was
+  // in this shipped file) is removed. Any script running on vinted.com could use it to read extension storage (queued items with the
+  // organizer's email and sale address), reload the extension mid-run or overwrite this tab's Vinted queue. Production builds have
+  // no page-to-extension bridge; diagnostics are read from the extension's own pages instead.
 
   // NAV PROBE 2026-09-27 (S-EXT-VINTED-MIDFILL-NAV-GUARD): relay from fas-vinted-bridge.js's
   // MAIN-world navigation probe (see that file for exactly what it detects and why -- diagnostic
@@ -2039,7 +1976,10 @@
         searchInput.focus();
         setNativeValue(searchInput, query);
         await sleep(600);
-        const leaves = qa('.web_ui__Cell__title, [role="option"], li[role="option"], [role="menuitemradio"]')
+        // 1.0.90: only options inside the open category panel; a page-wide scan could click an unrelated leaf.
+        const catPanel = document.querySelector('[data-testid*="catalog-select-dropdown" i]') || findOpenPanel('category', true);
+        if (!catPanel) break;
+        const leaves = Array.from(catPanel.querySelectorAll('.web_ui__Cell__title, [role="option"], li[role="option"], [role="menuitemradio"]'))
           .filter((el) => el.textContent && el.textContent.trim().length > 0 && el.textContent.trim().length < 60);
         const opt = bestScoringOption(leaves, query);
         if (opt) {
@@ -2051,18 +1991,10 @@
       console.warn('[FAS Vinted] Category "' + categoryText + '" -- search input found but no result matched any segment (UNVERIFIED taxonomy) -- left for the organizer to choose.');
       return false;
     }
-    // Fallback: old blind tree-walk, kept in case Vinted ever reverts to a plain click-through tree.
-    let pickedAny = false;
-    for (let level = 0; level < 4; level++) {
-      await sleep(250);
-      const opt = optionElByText(categoryText);
-      if (!opt) break;
-      opt.click();
-      pickedAny = true;
-      await sleep(300);
-    }
-    if (!pickedAny) console.warn('[FAS Vinted] Category "' + categoryText + '" -- no level matched in the picker (UNVERIFIED taxonomy) -- left for the organizer to choose.');
-    return pickedAny;
+    // 1.0.90: the old page-wide blind tree-walk (loose text match on any li/option) is gone. With no search box the category is
+    // left blank for the organizer instead of guessed.
+    console.warn('[FAS Vinted] Category "' + categoryText + '" -- no category search box found -- left for the organizer to choose.');
+    return false;
   }
 
   // Brand: three entry paths (popular list / type-ahead / full name) -- this only attempts the
@@ -2239,7 +2171,11 @@
     if (!opener) return false;
     vintedOpenPicker(opener);
     await sleep(350);
-    const opt = optionElByText(value);
+    // 1.0.90: only an option inside THIS field's own open panel, by exact text. No panel, no click.
+    const panel = findOpenPanel(fieldId, true);
+    if (!panel) return false;
+    const want = norm(value);
+    const opt = Array.from(panel.querySelectorAll('[role="option"], [role="menuitem"], [role="menuitemradio"], li')).find((o) => norm(o.textContent) === want) || null;
     if (!opt) return false;
     opt.click();
     await sleep(200);
@@ -5022,7 +4958,12 @@
     // see the comment above) and its Help Centre documents it for items sold outside Vinted. Try that
     // first; the in-page confirmation step is NOT live-verified, so anything unexpected backs out with
     // Escape and falls through to the existing, proven delete path below -- never a regression.
-    const FAS_VINTED_PREFER_MARK_SOLD = true;
+    // 1.0.90 (false-sale fix): "Mark as sold" is used ONLY when the item really sold elsewhere (removal reason SOLD_ELSEWHERE).
+    // An unpublished, policy-pulled or deleted item is deleted instead: a Vinted listing closed as "sold" is later read back by the
+    // wardrobe sold-check and was reported to FindA.Sale as a sale of an item that is still available.
+    const vintRR = (typeof self !== 'undefined' && self.FAS_REMOVAL_REASON) || (typeof window !== 'undefined' && window.FAS_REMOVAL_REASON) || null;
+    const vintRemovalKey = vintRR ? vintRR.keyOf(item) : 'SOLD_ELSEWHERE';
+    const FAS_VINTED_PREFER_MARK_SOLD = vintRemovalKey === 'SOLD_ELSEWHERE';
     const soldBtn = document.querySelector('button[data-testid="mark-as-sold-button"]');
     if (FAS_VINTED_PREFER_MARK_SOLD && soldBtn && soldBtn.offsetParent !== null) {
       try {
@@ -5043,8 +4984,24 @@
           await sleep(700);
           if (!document.querySelector('button[data-testid="mark-as-sold-button"]') || /^\/member\//.test(location.pathname)) confirmed = true;
         }
+        // 1.0.90: the button disappearing is not proof. Vinted's own item details must say the listing is closed; otherwise the
+        // proven delete path below runs (deleting an already-closed listing is harmless).
+        const closedId = (/\/items\/(\d{1,20})(?:[-/?#]|$)/.exec(location.pathname || '') || [])[1] || vintRemovalListingId(item);
         if (confirmed) {
-          console.log('[FAS Vinted] sold-elsewhere removal: listing marked as sold on Vinted (no delete).');
+          confirmed = false;
+          if (closedId) {
+            for (let i = 0; i < 3 && !confirmed; i++) {
+              const lk = await vintLookupItemById(closedId);
+              const body = lk && lk.ok && lk.json && lk.json.item ? lk.json.item : null;
+              if (body && body.is_closed === true) confirmed = true;
+              else await sleep(800);
+            }
+          }
+        }
+        if (confirmed) {
+          // The extension closed this listing itself: the wardrobe sold-check must never report it as a Vinted sale.
+          await vintSoldRememberSelfClosed(closedId);
+          console.log('[FAS Vinted] sold-elsewhere removal: listing marked as sold on Vinted (no delete), confirmed closed.');
           return 'deleted'; // downstream treats 'deleted' as "no longer an active listing"
         }
         console.log('[FAS Vinted] sold-elsewhere removal: "Mark as sold" did not complete -- falling back to delete.');
@@ -5668,6 +5625,18 @@
       return;
     }
     const f = matches[0];
+    // 1.0.90: the item page alone is not proof this is the new listing (an older own listing with the same title opened in this
+    // tab inside the capture window would be recorded). Require that the organizer's wardrobe holds exactly one listing with this
+    // title and that it is this one; anything else is left to the wardrobe capture.
+    try {
+      const memberId = await vintCapOwnMemberId(false);
+      const idx = memberId ? await vintCapWardrobeTitleIndex(memberId) : null;
+      const ids = idx && idx.ok ? idx.byTitle.get(vintRemNorm(f.title)) : null;
+      if (!ids || ids.size !== 1 || !ids.has(String(here))) {
+        console.log('[FAS Vinted] id-capture: /items/' + here + ' is not the only wardrobe listing titled like this fill (' + (ids ? ids.size : 'wardrobe unread') + ') -- not recording.');
+        return;
+      }
+    } catch (e) { return; }
     const resp = await vintCapReport(f.itemId, here, 'item_page_after_fill');
     console.log('[FAS Vinted] id-capture: item ' + f.itemId + ' -> /items/' + here + ' (item page):', resp && resp.ok ? 'recorded' : ('not recorded (' + ((resp && resp.data && resp.data.reason) || (resp && resp.error) || 'no response') + ')'));
     if (vintCapIsSettled(resp)) vintCapForgetFill(f.itemId);
@@ -5813,6 +5782,17 @@
 
   // Complete read of the wardrobe -> { ok: true, sold: [{ vintedId, title }], total } or
   // { ok: false, why }. Any failed/odd page, or hitting the page cap, is { ok: false }.
+  // 1.0.90: a listing the extension closed with "Mark as sold" (a removal of an item that sold elsewhere) is recorded as already
+  // reported, so the wardrobe sold-check never sends it to FindA.Sale as a Vinted sale.
+  async function vintSoldRememberSelfClosed(vintedId) {
+    try {
+      const id = String(vintedId == null ? '' : vintedId);
+      if (!/^\d{1,20}$/.test(id)) return;
+      const reported = new Set((await vintRemStorageGet(VINT_SOLD_REPORTED_KEY)) || []);
+      reported.add(id);
+      await vintRemStorageSet(VINT_SOLD_REPORTED_KEY, Array.from(reported).slice(-VINT_SOLD_REPORTED_CAP));
+    } catch (e) { /* best effort */ }
+  }
   async function vintSoldReadWardrobe(memberId) {
     const sold = [];
     let total = 0;

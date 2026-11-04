@@ -2228,9 +2228,18 @@
     }
     return null;
   }
-  async function dismissPoshmarkFragileModalIfPresent() {
+  // 1.0.90: each fragile-chain button is clicked at most once per publish attempt, at most POSH_FRAGILE_MAX_CLICKS in total, and
+  // nothing is clicked after the inner "Publish" (the outer modal stays in the DOM under it and used to be re-clicked in a loop).
+  const POSH_FRAGILE_MAX_CLICKS = 2;
+  async function dismissPoshmarkFragileModalIfPresent(chain) {
+    const st = chain || { clicked: new Set(), count: 0, innerDone: false };
+    if (st.innerDone || st.count >= POSH_FRAGILE_MAX_CLICKS) return false;
     const btn = findPoshmarkFragileModalPublishButton();
-    if (!btn) return false;
+    if (!btn || st.clicked.has(btn)) return false;
+    const isInner = bodyText().toLowerCase().indexOf('will not be compensating me') !== -1;
+    st.clicked.add(btn);
+    st.count++;
+    if (isInner) st.innerDone = true;
     overlay('<b>FindA.Sale</b> - Poshmark flagged this as a fragile item; continuing publish...');
     await humanPause(300, 600);
     realClick(btn);
@@ -2247,8 +2256,9 @@
   // caught after the first is dismissed.
   async function waitForPoshmarkPublishConfirmation(maxWaitMs) {
     const start = Date.now();
+    const fragileChain = { clicked: new Set(), count: 0, innerDone: false };
     while (Date.now() - start < maxWaitMs) {
-      const dismissed = await dismissPoshmarkFragileModalIfPresent();
+      const dismissed = await dismissPoshmarkFragileModalIfPresent(fragileChain);
       if (dismissed) { await sleep(400); continue; }
       if (!looksLikeSellForm()) return true;
       await sleep(400);
@@ -3216,8 +3226,24 @@
     // markListed), then continue to the next item.
     // 1.0.39: Poshmark's guidelines prohibit pickup/meetups in place of shipping, so a pickup-only item is never filled. Guards a stale queue.
     if (queued.item.localPickupOnly === true) {
-      try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
-      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- marked local pickup only, and Poshmark does not allow pickup in place of shipping. Nothing was filled.</div>');
+      // 1.0.90: same advance as the prohibited-item skip below, so the run never stalls on a pickup-only item.
+      tWarn('pickup_only_skip', 'Skipped: marked local pickup only (Poshmark does not allow pickup in place of shipping)', {});
+      tEnd('Skipped: local pickup only', {});
+      const pickMore = (queued.index + 1) < queued.total;
+      await fasPoshAdvance(queued.item.id, 'pickup_only');
+      clearPoshNavRetryState();
+      clearPoshPublishAttemptState();
+      const pickMsg = '<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- marked local pickup only, and Poshmark does not allow pickup in place of shipping. Nothing was filled.</div>';
+      if (pickMore && queued.autoPublish !== false) {
+        overlay(pickMsg + '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
+        await humanPause(3000, 4000);
+        await navigateToPoshmarkCreateListing();
+        return;
+      }
+      overlay(pickMsg + (pickMore ? button('fas-posh-next', 'Next item &#9654;', true) : '') + button('fas-posh-close', 'Close', false));
+      const pickNext = document.getElementById('fas-posh-next');
+      if (pickNext) pickNext.onclick = async () => { pickNext.disabled = true; await navigateToPoshmarkCreateListing(); };
+      closeBtnHandler();
       return;
     }
     const poshRestrictionReason = poshmarkRestrictionReason(queued.item.category, queued.item.title);
@@ -3283,12 +3309,21 @@
       let outcomeState = await waitForFormReady(5000);
       tInfo('publish_attempt_outcome', 'Earlier-click check: ' + outcomeState, { outcomeState: outcomeState });
       // 1.0.87: a fresh form alone does not mean the click failed; a live exact-title listing in the closet settles it as published.
-      if (outcomeState === 'ready') {
-        for (let attempt = 0; attempt < 3 && outcomeState === 'ready'; attempt++) {
+      // 1.0.90: and the form NOT coming back does not mean it succeeded either (an error page, a login wall, or the organizer
+      // opening the closet all look like that). Published is recorded only with closet evidence: a live exact-title listing.
+      let closetConfirmed = false;
+      if (outcomeState === 'ready' || outcomeState === 'timeout') {
+        const formBack = outcomeState === 'ready';
+        for (let attempt = 0; attempt < 3 && !closetConfirmed; attempt++) {
           if (attempt) await sleep(4000);
           let r = null;
           try { r = await fasPoshClosetDupCheck(queued.item); } catch (e) { r = null; }
-          if (r && r.state === 'dup') { tInfo('publish_attempt_closet_found', 'The earlier click is live in your closet', { attempt: attempt }); outcomeState = 'timeout'; }
+          if (r && r.state === 'dup') { tInfo('publish_attempt_closet_found', 'The earlier click is live in your closet', { attempt: attempt }); closetConfirmed = true; }
+        }
+        if (closetConfirmed) outcomeState = 'timeout';
+        else if (!formBack) {
+          tWarn('publish_attempt_no_closet_evidence', 'The sell form did not come back, but no live listing with this exact title was found in your closet; not recording it as published', {});
+          outcomeState = 'ready';
         }
       }
       if (outcomeState === 'interstitial') {
@@ -3297,14 +3332,14 @@
         closeBtnHandler();
         return;
       }
-      if (outcomeState === 'timeout') {
+      if (outcomeState === 'timeout' && closetConfirmed) {
         // Sell form did not reappear -- treat exactly like doPoshmarkAutoPublish's own normal
         // success path: clear both markers, report the publish, and advance the CAS-protected queue
         // index (safe even if background.js's reliability net already advanced it independently --
         // see advancePoshmarkQueue's own compare-and-swap), then continue the run forward instead of
         // stalling on manual review.
-        console.log('[FAS Poshmark] Sell form did not reappear within 5s after reload -- treating the earlier "List this item" click as a successful publish and continuing the queue.');
-        tOk('The sell form did not come back, so the earlier click is treated as published');
+        console.log('[FAS Poshmark] The earlier "List this item" click is live in the closet (exact title) -- recording it as published and continuing the queue.');
+        tOk('A live listing with this exact title is in your closet, so the earlier click is recorded as published');
         clearPoshPublishAttemptState();
         clearPoshNavRetryState();
         await fasPoshMarkListed(queued.item.id, await fasPoshCaptureFromCloset(queued.item, await fasListingRef('POSHMARK', 1500)));
@@ -3312,13 +3347,13 @@
         tEnd('Published (confirmed after a page reload)', {});
         const more = (queued.index + 1) < queued.total;
         if (more && queued.autoPublish !== false) {
-          overlay('<b>FindA.Sale</b><div style="margin-top:6px">Confirmed <b>' + escapeHtml(queued.item.title) + '</b> published (this tab reloaded right after clicking List this item, and the sell form did not come back -- treating as a success).</div>' +
+          overlay('<b>FindA.Sale</b><div style="margin-top:6px">Confirmed <b>' + escapeHtml(queued.item.title) + '</b> published (this tab reloaded right after clicking List this item, and the listing is live in your closet).</div>' +
             '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
           await humanPause(600, 1200);
           await navigateToPoshmarkCreateListing();
           return;
         }
-        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Confirmed <b>' + escapeHtml(queued.item.title) + '</b> published (this tab reloaded right after clicking List this item, and the sell form did not come back -- treating as a success).</div>' +
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Confirmed <b>' + escapeHtml(queued.item.title) + '</b> published (this tab reloaded right after clicking List this item, and the listing is live in your closet).</div>' +
           (more ? button('fas-posh-next', 'Next item &#9654;', true) : button('fas-posh-close', 'Close', false)));
         const next = document.getElementById('fas-posh-next');
         if (next) next.onclick = async () => { await navigateToPoshmarkCreateListing(); };
@@ -3921,7 +3956,7 @@
           type: 'crossPlatformRemovalDeleted', platform: 'POSHMARK', itemId: item.id, continueUrl: continueUrl || null
         });
       } catch (e) {}
-      try { sessionStorage.removeItem('fasPoshDeleteTargetId'); } catch (e) {}
+      try { sessionStorage.removeItem('fasPoshDeleteTargetId'); sessionStorage.removeItem('fasPoshDeleteTargetItem'); } catch (e) {}
       return 'deleted';
     }
 
@@ -4046,7 +4081,7 @@
     const verdict = poshClassifyPostLookup(look.status, look.json, poshClosetUsername(closetUrl));
     console.log('[FAS Poshmark] removal: listing id ' + id + ' -> ' + verdict.kind + ' (' + verdict.detail + ')');
     if (verdict.kind === 'removed') {
-      try { sessionStorage.removeItem('fasPoshIdNav'); sessionStorage.removeItem('fasPoshDeleteTargetId'); sessionStorage.removeItem('fasPoshClosetSearchedFor'); } catch (e) {}
+      try { sessionStorage.removeItem('fasPoshIdNav'); sessionStorage.removeItem('fasPoshDeleteTargetId'); sessionStorage.removeItem('fasPoshDeleteTargetItem'); sessionStorage.removeItem('fasPoshClosetSearchedFor'); } catch (e) {}
       if (verifyOnly) {
         try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'POSHMARK', itemId: item.id, reason: 'listing_not_found', verifyOnly: true, continueUrl: closetUrl || null }); } catch (e) {}
         return true;
@@ -4071,7 +4106,7 @@
         try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'POSHMARK', itemId: item.id, reason: 'edit_page_not_reached', continueUrl: closetUrl || null }); } catch (e) {}
         return true;
       }
-      sessionStorage.setItem('fasPoshDeleteTargetId', id);
+      sessionStorage.setItem('fasPoshDeleteTargetId', id); sessionStorage.setItem('fasPoshDeleteTargetItem', String(item.id)); // 1.0.90: bound to this item
       sessionStorage.setItem('fasPoshIdNav', JSON.stringify({ id: id, itemId: item.id, at: Date.now() }));
       sessionStorage.removeItem('fasPoshClosetSearchedFor');
       await humanPause(1200, 2200); // SAFETY FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-PACING)
@@ -4107,9 +4142,14 @@
     if (location.pathname.indexOf('/edit-listing/') !== -1 && item.reason !== 'RESYNC_VERIFY') {
       const pageId = extractPoshmarkListingId(location.pathname);
       const targetId = sessionStorage.getItem('fasPoshDeleteTargetId');
-      if (pageId && targetId && pageId === targetId) {
+      // 1.0.90: the target must belong to THIS item. A stale target left by an earlier item's removal never deletes the page the
+      // tab happens to land on for a later item.
+      const targetItem = sessionStorage.getItem('fasPoshDeleteTargetItem');
+      if (pageId && targetId && pageId === targetId && targetItem === String(item.id)) {
         try { sessionStorage.removeItem('fasPoshIdNav'); } catch (e) {} // 1.0.74: arrived (see poshRemoveByListingId's loop guard)
         const result = await deletePoshmarkListingOnEditPage(item, targetId, closetUrl);
+        // Every outcome below is terminal for this target (deleted, a permanent or a retriable failure that re-plans from the closet).
+        try { sessionStorage.removeItem('fasPoshDeleteTargetId'); sessionStorage.removeItem('fasPoshDeleteTargetItem'); } catch (e) {}
         if (result === 'deleted') {
           overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Poshmark.</div>');
           // Deliberately nothing else: the crossPlatformRemovalDeleted message already dispatched
@@ -4173,7 +4213,7 @@
       if (onRightPage) {
         const listingId = extractPoshmarkListingId(location.href);
         if (listingId) {
-          sessionStorage.setItem('fasPoshDeleteTargetId', listingId);
+          sessionStorage.setItem('fasPoshDeleteTargetId', listingId); sessionStorage.setItem('fasPoshDeleteTargetItem', String(item.id)); // 1.0.90: bound to this item
           // SAFETY FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-PACING, precautionary -- Patrick live
           // report of a runaway burst of activity in background.js's own console, several
           // messages/sec, exact trigger not confirmed since the console cleared before it could be
@@ -4270,7 +4310,7 @@
       try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'POSHMARK', itemId: item.id, reason: 'verify_still_live', verifyOnly: true, continueUrl: closetUrl || null }); } catch (e) {}
       return;
     }
-    sessionStorage.setItem('fasPoshDeleteTargetId', match.id);
+    sessionStorage.setItem('fasPoshDeleteTargetId', match.id); sessionStorage.setItem('fasPoshDeleteTargetItem', String(item.id)); // 1.0.90: bound to this item
     sessionStorage.removeItem('fasPoshClosetSearchedFor'); // 2026-09-23: a later retry of this item must search again
     await humanPause(1200, 2200); // SAFETY FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-PACING) -- see comment above
     location.href = 'https://poshmark.com/edit-listing/' + match.id; // fresh load lands in the /edit-listing/ branch above

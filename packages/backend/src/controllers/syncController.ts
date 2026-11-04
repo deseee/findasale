@@ -470,9 +470,52 @@ async function handleDeleteItem(operation: SyncOperation) {
  * NOT be silently dropped or auto-resolved; the frontend routes it to a "needs
  * reconciliation" state instead of endless retry.
  */
+type OfflineCashActor = {
+  id: string;
+  subscriptionTier: string | null;
+  actorKind?: 'ORGANIZER' | 'TEAM_MEMBER';
+  actingUserId?: string;
+  workspaceId?: string;
+  workspaceRole?: import('@prisma/client').WorkspaceRole;
+};
+
+/**
+ * Resolves who rang up a queued offline cash sale (2026-11-04). Exported for tests.
+ *  - no cashierUserId (older queue entries): the owner organizer, unchanged behaviour;
+ *  - the owner's own user id: ORGANIZER;
+ *  - anyone else: TEAM_MEMBER, with the role from their accepted membership in the owner's
+ *    workspace, or with no workspace at all when that membership no longer exists (fails closed).
+ */
+export async function resolveOfflineCashier(
+  organizer: { id: string; subscriptionTier: string | null; userId?: string },
+  cashierUserId: unknown
+): Promise<OfflineCashActor> {
+  const base = { id: organizer.id, subscriptionTier: organizer.subscriptionTier };
+  if (typeof cashierUserId !== 'string' || !cashierUserId) return base;
+  if (organizer.userId && cashierUserId === organizer.userId) {
+    return { ...base, actorKind: 'ORGANIZER', actingUserId: cashierUserId };
+  }
+  const member = await prisma.workspaceMember.findFirst({
+    where: {
+      userId: cashierUserId,
+      acceptedAt: { not: null },
+      teamMember: { isNot: null },
+      workspace: { ownerId: organizer.id },
+    },
+    select: { workspaceId: true, role: true },
+    orderBy: { acceptedAt: 'desc' },
+  });
+  return {
+    ...base,
+    actorKind: 'TEAM_MEMBER',
+    actingUserId: cashierUserId,
+    ...(member ? { workspaceId: member.workspaceId, workspaceRole: member.role } : {}),
+  };
+}
+
 async function handleCheckoutCash(
   operation: SyncOperation,
-  organizer: { id: string; subscriptionTier: string | null }
+  organizer: { id: string; subscriptionTier: string | null; userId?: string }
 ) {
   const { payload } = operation;
 
@@ -505,8 +548,16 @@ async function handleCheckoutCash(
     // This is strictly better than today (discount always dropped to $0), not a complete fix;
     // flagged for a follow-up that threads the original actor's workspace role into the
     // offline queue payload.
+    // 2026-11-04: the live register applies the team-member price floor and discount cap
+    // (checkStaffLinePrices / resolvePosDiscount) to the cashier standing at the register. The queued
+    // payload now carries that cashier's User.id; when it is someone other than the owner, the
+    // replay runs as that TEAM_MEMBER so the same rules apply. A cashier who is no longer an
+    // accepted member of the owner's workspace gets no permission (any price reduction is refused).
+    // Entries queued before this field existed keep the previous owner-level behaviour.
+    const actor = await resolveOfflineCashier(organizer, payload?.cashierUserId);
+
     const result = await processCashSaleCore({
-      organizer,
+      organizer: actor,
       saleId: operation.saleId,
       items: payload?.items ?? [],
       cashReceived: payload?.cashReceived ?? 0,
@@ -515,6 +566,8 @@ async function handleCheckoutCash(
       discountType: payload?.discountType,
       discountValue: payload?.discountValue,
       discountReasonNote: payload?.discountReasonNote,
+      // A test sale queued offline stays a test sale when it syncs (it used to be recorded as real).
+      isTestTransaction: payload?.isTestTransaction === true,
     });
 
     return {

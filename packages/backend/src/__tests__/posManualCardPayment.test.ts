@@ -305,4 +305,45 @@ describe('POS manual card entry -- manualCardPayment (Square rebuild)', () => {
     expect(purchase!.discountAmountCents).toBe(1000); // $10.00 discount on the $100 item
     expect(purchase!.discountType).toBe('PERCENT');
   });
+
+  it('#152: a line already lowered by the discount is refused, so the discount is never applied twice', async () => {
+    const { orgUser, sale, item } = await seed('double-discount', 100);
+    const req: any = {
+      user: { id: orgUser.id, role: 'ORGANIZER', roles: ['ORGANIZER'], email: orgUser.email },
+      body: {
+        sourceId: 'cnon:test-manual-double-discount',
+        saleId: sale.id,
+        // $100 item sent at $50 with 50% off: the old floor passed it and then charged $25 (75% off).
+        items: [{ itemId: item.id, amount: 50, label: item.title }],
+        discountType: 'PERCENT',
+        discountValue: 50,
+      },
+    };
+    const res = makeMockRes();
+    await manualCardPayment(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].message).toMatch(/does not match the applied discount/);
+    expect(mockCreateAndCapturePayment).not.toHaveBeenCalled();
+    const purchases = await prisma.purchase.findMany({ where: { itemId: item.id } });
+    expect(purchases.length).toBe(0);
+  });
+
+  it('#152: the same 50% discount on the full catalog amount charges exactly half', async () => {
+    const { orgUser, sale, item } = await seed('single-discount', 100);
+    mockCreateAndCapturePayment.mockResolvedValueOnce({ ok: true, paymentId: 'sqp_manual_single_discount', captured: true });
+    const req: any = {
+      user: { id: orgUser.id, role: 'ORGANIZER', roles: ['ORGANIZER'], email: orgUser.email },
+      body: {
+        sourceId: 'cnon:test-manual-single-discount',
+        saleId: sale.id,
+        items: [{ itemId: item.id, amount: 100, label: item.title }],
+        discountType: 'PERCENT',
+        discountValue: 50,
+      },
+    };
+    const res = makeMockRes();
+    await manualCardPayment(req, res);
+    expect(res.status).not.toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].subtotalCents).toBe(5000);
+  });
 });

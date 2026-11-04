@@ -10,6 +10,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEncyclopediaEntry } from '../../hooks/useEncyclopedia';
+import { safeHref, UNTRUSTED_LINK_REL } from '../../lib/safeUrl';
 import EncyclopediaCard from '../../components/EncyclopediaCard';
 import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
@@ -97,17 +98,22 @@ const MarkdownContent: React.FC<{ content: string }> = ({ content }) => {
               </em>
             );
           } else if (match[3] && match[4]) {
-            // Link
+            // Link: only http(s) targets become a link; anything else shows as plain text.
+            const linkHref = safeHref(match[4]);
             parts.push(
-              <a
-                key={`link-${match.index}`}
-                href={match[4]}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sage-green hover:text-sage-green/80 underline"
-              >
-                {match[3]}
-              </a>
+              linkHref ? (
+                <a
+                  key={`link-${match.index}`}
+                  href={linkHref}
+                  target="_blank"
+                  rel={UNTRUSTED_LINK_REL}
+                  className="text-sage-green hover:text-sage-green/80 underline"
+                >
+                  {match[3]}
+                </a>
+              ) : (
+                <span key={`link-${match.index}`}>{match[3]}</span>
+              )
             );
           }
 

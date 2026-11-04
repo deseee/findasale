@@ -33,6 +33,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Sentry from '@sentry/nextjs';
 import axios from 'axios';
 import api, { postWithRetry } from '../../../lib/api';
+import { currentQualityReview, enqueueQualityReview, removeQualityReview, QualityReviewEntry } from '../../../lib/qualityReviewQueue';
 import { getItemImageUrl } from '../../../lib/imageUtils';
 import { computeCropRect } from '../../../lib/cropGeometry';
 import CSVImportModal from '../../../components/CSVImportModal';
@@ -706,11 +707,11 @@ const AddItemsDetailPage = () => {
   const { queue, enqueue, uploadingCount } = useUploadQueue(saleId as string);
 
   // Phase 3.5: Tiered lighting quality system state
-  const [qualityModalOpen, setQualityModalOpen] = useState(false);
-  const [qualityResult, setQualityResult] = useState<ImageQualityResult | null>(null);
-  const [pendingQualityBlob, setPendingQualityBlob] = useState<Blob | null>(null);
-  const [pendingQualityTempId, setPendingQualityTempId] = useState<string | null>(null);
-  const [pendingQualityAppendId, setPendingQualityAppendId] = useState<string | null>(null);
+  // 2026-11-04: one queue entry per capture (keyed by its temp id) instead of one shared set of
+  // pending fields, so a later capture can never overwrite an earlier capture's pending photo.
+  // The overlay shows the oldest entry; see lib/qualityReviewQueue.ts.
+  const [qualityQueue, setQualityQueue] = useState<QualityReviewEntry<Blob>[]>([]);
+  const currentQuality = currentQualityReview(qualityQueue);
 
   // Face detection modal state
   const [faceDetectionOpen, setFaceDetectionOpen] = useState(false);
@@ -1920,24 +1921,18 @@ const AddItemsDetailPage = () => {
 
       // 3. Check quality with tiered system
       const quality = await checkImageQuality(processedBlob);
-      setQualityResult(quality);
-      setPendingQualityBlob(processedBlob);
 
-      // Handle tiered quality response
-      if (quality.tier === 3) {
-        // Tier 3: Show modal overlay inside camera, don't close camera
-        // Store context for resuming upload after user decision
-        setPendingQualityTempId(tempId);
-        setPendingQualityAppendId(appendToItemId);
-        setQualityModalOpen(true);
+      // Handle tiered quality response. Tier 2 and 3 wait for the organizer's decision; the
+      // capture's own blob and target are queued under its temp id (never shared page state).
+      if (quality.tier === 3 || quality.tier === 2) {
+        const entry: QualityReviewEntry<Blob> = {
+          captureId: tempId,
+          blob: processedBlob,
+          appendToItemId,
+          tier: quality.tier,
+        };
+        setQualityQueue((q) => enqueueQualityReview(q, entry));
         return; // Stop processing, wait for user action
-      } else if (quality.tier === 2) {
-        // Tier 2: Show overlay inside camera, auto-continue upload
-        // Store context for user decision
-        setPendingQualityTempId(tempId);
-        setPendingQualityAppendId(appendToItemId);
-        setQualityModalOpen(true);
-        return; // Wait for user to decide (Use Anyway or Retake)
       }
       // Tier 1: No warning, proceed to upload
 
@@ -2127,33 +2122,35 @@ const AddItemsDetailPage = () => {
   };
 
   // Quality modal handlers
-  const handleQualityRetake = () => {
-    setQualityModalOpen(false);
-    // Remove the bad temp item from carousel so the user starts fresh
-    if (pendingQualityTempId) {
-      setRapidItems((prev) => prev.filter((item) => item.id !== pendingQualityTempId));
+  // Removes a capture that will not be uploaded: drops its temp item and unblocks any photo
+  // waiting to append to it (that append fails fast with a clear message instead of timing out).
+  const dropQualityCapture = (entry: QualityReviewEntry<Blob>) => {
+    setQualityQueue((q) => removeQualityReview(q, entry.captureId));
+    if (!entry.appendToItemId) {
+      setRapidItems((prev) => prev.filter((item) => item.id !== entry.captureId));
+      rejectTempItem(entry.captureId, 'The photo for this item was not used.');
     }
-    setPendingQualityBlob(null);
-    setPendingQualityTempId(null);
-    setPendingQualityAppendId(null);
-    // Camera remains open for retake
+  };
+
+  const handleQualityRetake = () => {
+    const entry = currentQuality;
+    if (!entry) return;
+    // Remove the bad temp item from carousel so the user starts fresh. Camera remains open.
+    dropQualityCapture(entry);
   };
 
   const handleQualityUsePhoto = async () => {
-    // User chose to use photo despite Tier 2 warning
-    // Continue upload with the pending blob
-    setQualityModalOpen(false);
-
-    if (!pendingQualityBlob || !pendingQualityTempId) {
+    // User chose to use photo despite the warning. Continue the upload with THIS capture's blob.
+    const entry = currentQuality;
+    if (!entry) {
       if (process.env.NODE_ENV !== 'production') console.error('Missing quality context for resuming upload');
       showToast('Upload failed. Please try again.', 'error');
       return;
     }
+    setQualityQueue((q) => removeQualityReview(q, entry.captureId));
+    const { blob: pendingQualityBlob, captureId: pendingQualityTempId, appendToItemId: pendingQualityAppendId } = entry;
 
     try {
-      // Resume upload from phase 4 (face detection and beyond)
-      const hasFace = await detectFace(pendingQualityBlob);
-
       // 5. Upload
       if (pendingQualityAppendId) {
         // Bug fix (2026-07-03): same temp-id race as processAndUploadRapidPhoto: wait
@@ -2202,7 +2199,7 @@ const AddItemsDetailPage = () => {
               : item
           )
         );
-        if (pendingQualityTempId) resolveTempItem(pendingQualityTempId, itemId);
+        resolveTempItem(pendingQualityTempId, itemId);
 
         queryClient.invalidateQueries({ queryKey: ['items', saleId] });
         pollForAI(itemId);
@@ -2217,7 +2214,7 @@ const AddItemsDetailPage = () => {
       const errorMessage = msg ? `Upload failed: ${msg}` : 'Upload failed. Please try again.';
       showToast(errorMessage, 'error');
 
-      if (!pendingQualityAppendId && pendingQualityTempId) {
+      if (!pendingQualityAppendId) {
         // Create-new-item call failed after the quality-warning "Use Anyway" resume.
         // Without this, the temp item stayed on the amber "still processing" icon
         // forever with no indication it actually failed (Sentry FINDASALE-NEXTJS-V
@@ -2229,24 +2226,14 @@ const AddItemsDetailPage = () => {
         );
         rejectTempItem(pendingQualityTempId, `This item couldn't be created: ${errorMessage}`);
       }
-    } finally {
-      setPendingQualityBlob(null);
-      setPendingQualityTempId(null);
-      setPendingQualityAppendId(null);
     }
   };
 
   const handleQualitySkipItem = () => {
-    setQualityModalOpen(false);
-    setPendingQualityBlob(null);
-    setPendingQualityTempId(null);
-    setPendingQualityAppendId(null);
-
-    // Remove the temp item from carousel since user skipped it
-    if (pendingQualityTempId) {
-      setRapidItems((prev) => prev.filter((item) => item.id !== pendingQualityTempId));
-    }
-    // Camera remains open for next capture
+    const entry = currentQuality;
+    if (!entry) return;
+    // Remove the temp item from carousel since user skipped it. Camera remains open.
+    dropQualityCapture(entry);
   };
 
   // Face detection modal handlers
@@ -3283,9 +3270,9 @@ const AddItemsDetailPage = () => {
               // RapidCapture's isObscured prop doc for why this is needed).
               isObscured={!!previewItemId}
               qualityOverlay={
-                qualityModalOpen && qualityResult
+                currentQuality
                   ? {
-                      tier: qualityResult.tier as 2 | 3,
+                      tier: currentQuality.tier,
                       onUsePhoto: handleQualityUsePhoto,
                       onRetake: handleQualityRetake,
                       onSkip: handleQualitySkipItem,

@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import * as encyclopediaService from '../services/encyclopediaService';
+import { findUnsafeMarkdownLinks } from '../utils/safeLinkUrl';
+
+const UNSAFE_LINK_MESSAGE = 'Links in an entry must start with http:// or https://.';
 
 /**
  * GET /api/encyclopedia/entries
@@ -63,6 +66,9 @@ export const createEntry = async (req: AuthRequest, res: Response) => {
 
     if (!slug || !title || !content || !category) {
       return res.status(400).json({ message: 'slug, title, content, and category are required' });
+    }
+    if (findUnsafeMarkdownLinks(content).length > 0) {
+      return res.status(400).json({ message: UNSAFE_LINK_MESSAGE });
     }
 
     const entry = await encyclopediaService.createEntry(req.user.id, {
@@ -143,18 +149,32 @@ export const updateEntry = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not authorized to edit this entry' });
     }
 
+    if (content !== undefined && findUnsafeMarkdownLinks(content).length > 0) {
+      return res.status(400).json({ message: UNSAFE_LINK_MESSAGE });
+    }
+
+    // A published entry edited by its author goes back to review, the same as a new submission, so
+    // an approved entry cannot be rewritten into something that was never reviewed. Admin edits stay
+    // published.
+    const isAdmin = req.user.role === 'ADMIN' || (Array.isArray(req.user.roles) && req.user.roles.includes('ADMIN'));
+    const changesBody = [title, content, category, tags].some((v) => v !== undefined);
+    const sendBackToReview = !isAdmin && changesBody && entry.status === 'PUBLISHED';
+
     const result = await encyclopediaService.updateEntry(entryId, {
       title,
       content,
       category,
       tags,
+      ...(sendBackToReview ? { status: 'PENDING_REVIEW' } : {}),
     });
 
     res.json({
       success: true,
       entryId: result.id,
       updatedAt: result.updatedAt,
+      status: result.status,
       changeNote,
+      ...(sendBackToReview ? { message: 'Thanks! Your changes will be reviewed by our team before they go live.' } : {}),
     });
   } catch (error: any) {
     console.error('[Encyclopedia] Error updating entry:', error);

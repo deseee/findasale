@@ -178,11 +178,11 @@
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
     if (FB_COIN_CURRENCY_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))
-        && !FB_COIN_CURRENCY_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+        && !FB_COIN_CURRENCY_EXCLUDE_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing coins or currency (Commerce Policy).';
     }
     if (FB_WEAPON_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))
-        && !FB_WEAPON_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+        && !FB_WEAPON_EXCLUDE_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing weapons, ammunition, or explosives (Commerce Policy).';
     }
     if (FB_ALCOHOL_ANIMAL_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
@@ -213,7 +213,7 @@
       return 'Facebook Marketplace does not allow listing historical or cultural heritage artifacts (Commerce Policy).';
     }
     if (FB_HUMAN_REMAINS_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))
-        && !FB_HUMAN_REMAINS_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+        && !FB_HUMAN_REMAINS_EXCLUDE_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
       return 'Facebook Marketplace does not allow listing human body parts or remains (Commerce Policy).';
     }
     if (FB_DOCUMENTS_NAME_KEYWORDS.some((kw) => fasKeywordMatch(haystack, kw))) {
@@ -1095,14 +1095,20 @@
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Listing ' + (index + 1) + ' of ' + total + '</div>');
       const nextBtn = document.getElementById('fas-next');
       const skipBtn = document.getElementById('fas-skip');
-      if (nextBtn) nextBtn.onclick = async () => { T('info', 'fb_manual_publish_confirmed', 'Organizer confirmed they published this listing by hand.'); await mark(item); T('end', 'Listing confirmed by you; moving to the next item.'); await advanceAuto(); };
-      if (skipBtn) skipBtn.onclick = async () => { T('warn', 'fb_manual_skip', 'Organizer skipped this listing without publishing it.'); T('end', 'Skipped by you.'); await advanceAuto(); };
+      // 1.0.90: each button acts once (a double click never advances twice; the worker also checks the item id).
+      let manualHandled = false;
+      if (nextBtn) nextBtn.onclick = async () => { if (manualHandled) return; manualHandled = true; nextBtn.disabled = true; if (skipBtn) skipBtn.disabled = true; T('info', 'fb_manual_publish_confirmed', 'Organizer confirmed they published this listing by hand.'); await mark(item); T('end', 'Listing confirmed by you; moving to the next item.'); await advanceAuto(item.id); };
+      if (skipBtn) skipBtn.onclick = async () => { if (manualHandled) return; manualHandled = true; skipBtn.disabled = true; if (nextBtn) nextBtn.disabled = true; T('warn', 'fb_manual_skip', 'Organizer skipped this listing without publishing it.'); T('end', 'Skipped by you.'); await advanceAuto(item.id); };
       return { catResult, photosOk, autoPublished: false, hideFromFriendsOk };
     }
 
     overlay('<b>FindA.Sale</b> — publishing <b>' + escapeHtml(item.title) + '</b>…');
     T('step', 'Publishing the listing', 'Clicking Facebook\'s Publish button; this is the one step that makes the listing live.');
     await humanPause(600, 1200);
+    // 1.0.90: publish-attempt marker (like Poshmark's). Written before the click so a reload, a second tab or a restart inside the
+    // window never publishes this item again; the worker clears it once the item is recorded listed or the queue moves on.
+    try { await chrome.runtime.sendMessage({ type: 'fbPublishAttempt', itemId: item.id }); } catch (e) { /* worker unreachable: the click below is still single */ }
+    try { sessionStorage.setItem('fasFbPublishAttempt', JSON.stringify({ itemId: item.id, at: Date.now() })); } catch (e) { /* storage blocked */ }
     await clickButton('Publish', 'Audience');
     T('step', 'Confirming Facebook accepted it', 'Waiting up to 20 seconds for Facebook to leave the create form, which is the signal that the publish worked.');
 
@@ -1119,6 +1125,11 @@
     const publishedOk = await waitFor(() => (location.href.indexOf('/marketplace/create/') === -1 ? true : null), 20000)
       .catch(() => false);
     if (!publishedOk) throw hardError('Publish', 'Clicked Publish but couldn\'t confirm it went through -- check this listing manually.');
+    // 1.0.90: leaving the create form is not enough on its own. A redirect to a login or checkpoint page (or anywhere outside
+    // Marketplace) is not a publish; it stays unconfirmed and the organizer settles it.
+    if (onLoginWall() || !/^\/marketplace\//.test(location.pathname || '')) {
+      throw hardError('Publish', 'Clicked Publish, but Facebook went to ' + (location.pathname || 'another page') + ' instead of your listing, so the publish is not confirmed.');
+    }
 
     // ADR-086 prerequisite: capture Facebook's own post-publish URL as remoteListingId. The
     // publishedOk check above already proves location.href moved off the create-flow -- this is
@@ -1128,7 +1139,8 @@
     // an organizer clicked Publish themselves, so its remoteListingId stays null (fail-closed,
     // matches ADR-086's own design: an item without a captured remoteListingId is simply not
     // eligible for price-sync later).
-    const remoteListingId = location.href;
+    // 1.0.90: only a real listing page URL is a listing reference; anything else is stored as null (never a wrong id).
+    const remoteListingId = /^\/marketplace\/item\/\d+/.test(location.pathname || '') ? location.href : null;
     T('ok', 'Facebook accepted the listing.', { landedOn: location.pathname });
 
     return { catResult, photosOk, autoPublished: true, remoteListingId, hideFromFriendsOk };
@@ -1151,7 +1163,7 @@
       overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' + note +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Listing ' + (index + 1) + ' of ' + total + '</div>');
       await humanPause(1200, 2000);
-      await advanceAuto();
+      await advanceAuto(item.id);
     } catch (e) {
       const step = (e && e.fasStep) || 'unknown';
       T('problem', {
@@ -1200,7 +1212,7 @@
         // resolved) -- pass null, same fail-closed convention the manual-publish path (see
         // autoPublish===false above) already uses for "we know it published but not the exact
         // remote URL".
-        if (c) c.onclick = async () => { T('info', 'fb_publish_confirmed_by_user', 'Organizer confirmed the listing is live on Facebook.'); await mark(item, null); T('end', 'Marked done by you.'); await advanceAuto(); };
+        if (c) c.onclick = async () => { if (c.disabled) return; c.disabled = true; T('info', 'fb_publish_confirmed_by_user', 'Organizer confirmed the listing is live on Facebook.'); await mark(item, null); T('end', 'Marked done by you.'); await advanceAuto(item.id); };
       }
     }
   }
@@ -1213,11 +1225,47 @@
     } catch (e) { T('error', 'fb_mark_listed_failed', 'Could not tell FindA.Sale this item was listed: ' + ((e && e.message) || e), { itemId: item.id }); }
   }
 
-  async function advanceAuto() {
+  let advancing = false;
+  async function advanceAuto(itemId) {
+    // 1.0.90: one advance per page; the worker also refuses to advance past an item other than itemId.
+    if (advancing) return;
+    advancing = true;
     overlay('<b>FindA.Sale</b> — loading the next listing…');
-    const r = await chrome.runtime.sendMessage({ type: 'advanceQueue' });
+    const r = await chrome.runtime.sendMessage({ type: 'advanceQueue', itemId: itemId || null });
     if (r && r.ok && r.item) { T('info', 'fb_queue_advance', 'Moving to the next queued item.', { index: r.index, total: r.total }); location.href = 'https://www.facebook.com/marketplace/create/item'; }
     else { T('info', 'fb_queue_done', 'Queue finished; no more items for Facebook.'); overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
+  }
+
+  // 1.0.90: settle an unconfirmed Facebook publish from the organizer's live listings. Nothing is filled or published here.
+  function showUnconfirmedPublish(item, index, total, attempt) {
+    let when = '';
+    try { when = new Date(attempt && attempt.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { when = ''; }
+    T('problem', {
+      code: 'fb_publish_unconfirmed_hold',
+      title: 'Not publishing again: an earlier Publish for this item was not confirmed',
+      what: 'Publish was clicked for this item' + (when ? ' at ' + when : '') + ', but the result was never confirmed.',
+      why: 'Publishing it again could create a second listing on Facebook.',
+      next: 'Open your Facebook listings. If it is there, choose "It is live". If it is not, choose "Not live, fill it again".',
+      ctx: { itemId: item && item.id }
+    });
+    T('end', 'Held for your check (unconfirmed earlier publish).');
+    overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Publish was already clicked for <b>' + escapeHtml(item.title) + '</b>' +
+      (when ? ' at ' + escapeHtml(when) : '') + ' but never confirmed, so it will not be published again automatically. Check your Facebook listings first.</div>' +
+      '<div style="margin-top:6px;font-size:12px"><a href="https://www.facebook.com/marketplace/you/selling" target="_blank" rel="noopener" style="color:#9fe0b4">Open my Facebook listings</a></div>' +
+      btn('fas-unconf-live', 'It is live, mark done and continue', true) + btn('fas-unconf-retry', 'Not live, fill it again', false) + btn('fas-unconf-skip', 'Skip this item', false) +
+      '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Listing ' + (index + 1) + ' of ' + total + '</div>');
+    let settled = false;
+    const once = (fn) => async () => { if (settled) return; settled = true; ['fas-unconf-live', 'fas-unconf-retry', 'fas-unconf-skip'].forEach((id) => { const b = document.getElementById(id); if (b) b.disabled = true; }); await fn(); };
+    const live = document.getElementById('fas-unconf-live');
+    const retry = document.getElementById('fas-unconf-retry');
+    const skip = document.getElementById('fas-unconf-skip');
+    if (live) live.onclick = once(async () => { await mark(item, null); await advanceAuto(item.id); });
+    if (retry) retry.onclick = once(async () => {
+      try { await chrome.runtime.sendMessage({ type: 'fbPublishAttemptResolved', itemId: item.id }); } catch (e) { /* reload re-checks */ }
+      try { sessionStorage.removeItem('fasFbPublishAttempt'); } catch (e) { /* storage blocked */ }
+      location.reload();
+    });
+    if (skip) skip.onclick = once(async () => { await advanceAuto(item.id); });
   }
 
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -1248,10 +1296,13 @@
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(q.item.title || 'this item') + '</b> -- ' + escapeHtml(fbReason) + '</div>');
       await humanPause(1200, 1800);
       await sleep(2500); // keep the explanation readable before moving on
-      await advanceAuto();
+      await advanceAuto(q.item.id);
       return;
     }
     T('ok', 'Item is allowed on Facebook.');
+    // 1.0.90: Publish was already clicked for this item and never confirmed (the worker's publish-attempt marker). Do not fill or
+    // publish it again; the organizer settles it from the live listings.
+    if (q.publishAttempt) { showUnconfirmedPublish(q.item, q.index, q.total, q.publishAttempt); return; }
     try {
       T('step', 'Opening Facebook\'s listing form', 'Waiting for the "Item for sale" form to load so the fields can be filled.');
       await waitFor(() => SEL.fieldByLabel(LABELS.title), 15000);

@@ -47,6 +47,15 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+// 2026-11-04: both are fail-closed secrets. Without OAUTH_BRIDGE_SECRET the OAuth login bridge refuses every
+// sign-in (it never accepts unsigned profiles); without EBAY_PROXY_SECRET the Vercel eBay proxy refuses every
+// request. Neither stops the server: log a clear warning so the missing setting is visible at boot.
+import { warnIfOAuthBridgeSecretMissing } from './utils/oauthAssertion';
+warnIfOAuthBridgeSecretMissing();
+if (!process.env.EBAY_PROXY_SECRET) {
+  console.warn('[ebay] EBAY_PROXY_SECRET is not set: the eBay proxy (/api/proxy/ebay on Vercel) refuses requests without it, so eBay calls routed through the proxy will fail until it is set on Vercel and Railway.');
+}
+
 // P0-2: STRIPE_SECRET_KEY check. 2026-09-29: payments run on Square and Stripe is closed by default
 // (STRIPE_PLATFORM_CLOSED only reopens it when explicitly 'false'), so a missing key is a hard exit
 // only when Stripe is enabled; while it is closed we log one warning and keep booting. The decision
@@ -625,6 +634,11 @@ app.use('/api/stripe/recover-payment-intent', stripeUnavailableGuard);
 app.use('/api/stripe-connect/onboard', stripeUnavailableGuard);
 app.use('/api/organizers/me/stripe/start-standard-migration', stripeUnavailableGuard);
 app.use('/api/organizers/me/hub-owner/stripe/onboard', stripeUnavailableGuard);
+// 2026-11-04: the Stripe Connect status/return reads answer the same 410 STRIPE_RETIRED while the platform is
+// closed (Stripe is fully retired). They used to call Stripe or report a stale Stripe account state.
+app.use('/api/stripe-connect/return', stripeUnavailableGuard);
+app.use('/api/stripe-connect/status', stripeUnavailableGuard);
+app.use('/api/organizers/me/hub-owner/stripe/status', stripeUnavailableGuard);
 app.use('/api/square/webhook', express.raw({ type: 'application/json' })); // Square migration Wave 1 #5: HMAC signature check needs the exact raw body
 app.use('/api/ebay/account-deletion', express.raw({ type: '*/*' }));
 app.use('/api/ebay/notifications', express.raw({ type: '*/*' }));

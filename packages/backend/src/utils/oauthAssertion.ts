@@ -10,8 +10,10 @@
  *   base64url(JSON{p,i,e,x}) + '.' + HMAC-SHA256(OAUTH_BRIDGE_SECRET, thatBase64)
  * over provider, providerId, normalized email and an expiry, and the browser forwards it as `oauthAssertion`.
  * The backend recomputes the HMAC and requires the claims to equal the request fields. The secret never reaches
- * the browser. Enforcement is ON whenever OAUTH_BRIDGE_SECRET is set on the backend; while it is unset the legacy
- * unsigned behavior is kept (one loud warning per process) so login keeps working until the frontend ships.
+ * the browser. Enforcement is always ON. 2026-11-04: when OAUTH_BRIDGE_SECRET is NOT set the bridge fails closed
+ * (every /auth/oauth and /auth/oauth/link request is refused) instead of accepting unsigned profiles, which
+ * would let anyone sign in as any user whose provider id they know. A warning is logged at startup and on the
+ * first refused request.
  */
 import crypto from 'crypto';
 
@@ -88,9 +90,20 @@ let warnedLegacy = false;
 /** Test helper. */
 export const __resetOAuthAssertionWarning = () => { warnedLegacy = false; };
 
+export const OAUTH_BRIDGE_SECRET_MISSING_WARNING =
+  '[auth] OAUTH_BRIDGE_SECRET is not set: Google/Facebook sign-in through /auth/oauth is REFUSED (fail closed) until it is set to the same value on Vercel and Railway.';
+
+/** Startup check (index.ts). Logs a clear warning when the bridge secret is missing; returns whether it is set. */
+export function warnIfOAuthBridgeSecretMissing(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.OAUTH_BRIDGE_SECRET) return true;
+  console.warn(OAUTH_BRIDGE_SECRET_MISSING_WARNING);
+  return false;
+}
+
 /**
  * Controller entry point. Returns null when the request may proceed, else a reason string for a 401.
- * With no OAUTH_BRIDGE_SECRET configured the request is allowed (legacy) and a warning is logged once.
+ * With no OAUTH_BRIDGE_SECRET configured every request is refused ('not_configured'); unsigned profiles are
+ * never accepted.
  */
 export function enforceOAuthAssertion(
   assertion: unknown,
@@ -102,9 +115,9 @@ export function enforceOAuthAssertion(
   if (!secret) {
     if (!warnedLegacy) {
       warnedLegacy = true;
-      console.warn('[auth] OAUTH_BRIDGE_SECRET is not set: /auth/oauth accepts UNSIGNED provider profiles from the browser (account takeover / fake-account risk). Set it on Vercel and Railway.');
+      console.warn(OAUTH_BRIDGE_SECRET_MISSING_WARNING);
     }
-    return null;
+    return 'not_configured';
   }
   const r = verifyOAuthAssertion(assertion, fields, secret, nowMs);
   return r.ok ? null : r.reason;

@@ -34,6 +34,7 @@ import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, roun
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { createPaymentLinkInternal } from './posController'; // markSold settlement router: reuse Stripe Payment Link + QR
 import { manuallyReclaimPosPaymentLink } from '../jobs/posStrandedSaleReconcileCron'; // Manual-reclaim P2 fix (2026-09-13): CHECKOUT_LINK 'reclaim invoice' override, reuses the cron's own paid-check + revert logic
+import { findHoldSettlementConflict, HoldSettlementConflictError } from '../services/holdSettlementGuard';
 import { invoiceableWhere, isInvoicedOrClaimed, InvoiceClaimLostError, releaseDeadInvoiceAnchors } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim; P0 (2026-08-17): dead-anchor release
 import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // Hold-to-Pay P1 (2026-08-17): released invoices left PAYABLE Stripe sessions live
 import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // P1 fix (2026-09-04, S-CARDING-INCIDENT-2026-09-03 follow-up): Hold-to-Pay invoicing never ran the shared Stripe-onboarding/sale-state gate
@@ -929,6 +930,14 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         });
       }
 
+      // 2026-11-04: a CHECKOUT_LINK settlement sets neither invoiceId nor the claim, so the check
+      // above cannot see it. Refuse any hold whose checkout link is still payable, and any hold
+      // that has already been paid, for every settlement mode (see services/holdSettlementGuard.ts).
+      const settlementConflict = await findHoldSettlementConflict(prisma, organizer.id, validRouted);
+      if (settlementConflict) {
+        return res.status(409).json({ message: settlementConflict.message, code: settlementConflict.code });
+      }
+
       // Resolve mode: explicit request wins; otherwise default from the (first) sale.
       const settlementMode: SettlementMode =
         requestedMode ?? resolveDefaultSettlementMode(validRouted[0].item.sale);
@@ -1207,6 +1216,13 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       // closes the payment link.
       if (action === 'release' && validHolds.some(isInvoicedOrClaimed)) {
         throw new BatchReleaseInvoicedHoldError();
+      }
+
+      // RECORD re-check inside the transaction (2026-11-04): a checkout link created for one of
+      // these holds after the router check above must still stop the cash record.
+      if (action === 'markSold') {
+        const inTxConflict = await findHoldSettlementConflict(tx, organizer.id, validHolds);
+        if (inTxConflict) throw new HoldSettlementConflictError(inTxConflict);
       }
 
       const validIds = validHolds.map((h) => h.id);
@@ -1609,6 +1625,9 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       return res.status(409).json({
         message: 'One or more of these holds already has a payment request out. Release that invoice first.',
       });
+    }
+    if (error instanceof HoldSettlementConflictError) {
+      return res.status(409).json({ message: error.conflict.message, code: error.conflict.code });
     }
     console.error('[reservations] batchUpdateHolds error:', error);
     res.status(500).json({ message: 'Server error' });
