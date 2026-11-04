@@ -62,7 +62,7 @@ for (const city of cities) {
   for (const cat of categories) {
     const slug = `sales-${city.slug}-${cat.slug}`;
     const title = `${cat.name} at Sales & Auctions in ${city.name}, ${city.state}`;
-    const metaTitle = `${cat.name} — ${city.name} Sales | FindA.Sale`.slice(0, 60);
+    const metaTitle = `${cat.name}: ${city.name} Sales | FindA.Sale`.slice(0, 60);
     const metaDescription = `Find ${cat.keyword} at estate sales, yard sales, and auctions in ${city.name}, ${city.state}. Browse active listings, compare prices, and set alerts.`.slice(0, 160);
 
     entries.push({
@@ -87,14 +87,14 @@ for (const city of cities) {
           },
           {
             heading: `What to Expect at ${city.name} Sales`,
-            body: `${city.name}, ${city.state} typically has estate sales and auctions active on weekends. Prices at local sales often run 30–70% below retail, especially for ${cat.keyword}. Early access and preview days are common for larger sales — follow organizers on FindA.Sale to get notified first.`
+            body: `${city.name}, ${city.state} typically has estate sales and auctions active on weekends. Prices at local sales often run 30–70% below retail, especially for ${cat.keyword}. Early access and preview days are common for larger sales. Follow organizers on FindA.Sale to get notified first.`
           },
           {
             heading: `Tips for Buying ${cat.name} at Local Sales`,
-            body: `Bring cash — many ${city.name} estate sales don't take cards. Inspect items carefully; most sales are final. For ${cat.keyword}, check condition, look for maker marks, and compare against recent eBay sold prices before bidding or buying.`
+            body: `Bring cash: many ${city.name} estate sales don't take cards. Inspect items carefully; most sales are final. For ${cat.keyword}, check condition, look for maker marks, and compare against recent eBay sold prices before bidding or buying.`
           }
         ],
-        cta: `Browse active ${cat.name.toLowerCase()} listings in ${city.name} on FindA.Sale — real inventory, real prices, updated daily.`
+        cta: `Browse active ${cat.name.toLowerCase()} listings in ${city.name} on FindA.Sale: real inventory, real prices, updated daily.`
       }
     });
   }
@@ -109,12 +109,12 @@ for (const catSlug of trendCategories) {
     const year = d.getFullYear();
     const catDisplay = catSlug.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     const slug = `trending-${catSlug}-${monthName.toLowerCase()}-${year}`;
-    const metaTitle = `Top ${catDisplay} at Sales — ${monthName} ${year} | FindA.Sale`.slice(0, 60);
+    const metaTitle = `Top ${catDisplay} at Sales: ${monthName} ${year} | FindA.Sale`.slice(0, 60);
     const metaDescription = `See the ${catDisplay.toLowerCase()} items selling fast at estate sales, auctions, and yard sales in ${monthName} ${year}. Real prices and trends.`.slice(0, 160);
 
     entries.push({
       slug,
-      title: `Top ${catDisplay} Items Selling at Sales — ${monthName} ${year}`,
+      title: `Top ${catDisplay} Items Selling at Sales: ${monthName} ${year}`,
       h1: `Top ${catDisplay} Finds at Sales This Month`,
       description: `Which ${catDisplay.toLowerCase()} items are moving fastest at estate sales and auctions in ${monthName} ${year}.`,
       metaTitle,
@@ -128,7 +128,7 @@ for (const catSlug of trendCategories) {
         sections: [
           {
             heading: `What's Hot in ${catDisplay} This Month`,
-            body: `Demand for ${catDisplay.toLowerCase()} at estate sales tends to spike in spring and fall — peak estate sale season. Items with clear maker marks, original boxes, and documented provenance consistently outperform comparable unmarked pieces by 40–80%.`
+            body: `Demand for ${catDisplay.toLowerCase()} at estate sales tends to spike in spring and fall: peak estate sale season. Items with clear maker marks, original boxes, and documented provenance consistently outperform comparable unmarked pieces by 40–80%.`
           },
           {
             heading: `Pricing Trends for ${catDisplay}`,
@@ -136,10 +136,10 @@ for (const catSlug of trendCategories) {
           },
           {
             heading: `What to Watch at Sales This Month`,
-            body: `Set up a Wishlist alert on FindA.Sale for ${catDisplay.toLowerCase()} and get notified the moment a matching item is listed. Sales with active inventory are marked with item counts — filter by category before you go.`
+            body: `Set up a Wishlist alert on FindA.Sale for ${catDisplay.toLowerCase()} and get notified the moment a matching item is listed. Sales with active inventory are marked with item counts. Filter by category before you go.`
           }
         ],
-        cta: `Track ${catDisplay.toLowerCase()} listings in real time on FindA.Sale — browse by category, city, and sale type.`
+        cta: `Track ${catDisplay.toLowerCase()} listings in real time on FindA.Sale: browse by category, city, and sale type.`
       }
     });
   }

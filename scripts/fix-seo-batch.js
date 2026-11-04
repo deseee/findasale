@@ -177,7 +177,7 @@ function transformEntry(entry) {
 }
 
 function buildDescription(entry) {
-  return `${entry.title} — what to pay, what to avoid, and how to find pieces at estate sales, auctions, yard sales, and flea markets.`;
+  return `${entry.title}: what to pay, what to avoid, and how to find pieces at estate sales, auctions, yard sales, and flea markets.`;
 }
 
 const transformed = allEntries.map(transformEntry);
@@ -210,7 +210,7 @@ function getTiffanyLampEntry() {
     slug: "tiffany-lamp-pricing-guide-2026",
     title: "Tiffany Lamp Prices: Studio vs. Reproduction",
     h1: "Tiffany Lamp Prices: Authentic Studio vs. Reproduction",
-    description: "Price guide for authentic Tiffany Studios lamps vs. reproductions — how to identify genuine leaded glass pieces and what they sell for at estate sales.",
+    description: "Price guide for authentic Tiffany Studios lamps vs. reproductions: how to identify genuine leaded glass pieces and what they sell for at estate sales.",
     metaTitle: "Tiffany Lamp Price Guide 2026 | FindA.Sale",
     metaDescription: "Authentic Tiffany Studios lamps range $2,000–$100,000+. Learn to spot reproductions and what genuine leaded glass lamps sell for at estate sales.",
     type: "pricing-guide",
@@ -218,30 +218,30 @@ function getTiffanyLampEntry() {
     city: "", state: "", metro: "",
     updatedAt: "2026-05-11T00:00:00.000Z",
     content: {
-      intro: "Authentic Tiffany Studios lamps (1893–1933) command $2,000–$100,000+ at estate sales and auctions, while even quality reproductions top out around $2,000. The gap comes down to three things: hand-rolled opalescent glass, hand-soldered lead came, and a marked bronze base — all checkable at the sale.",
+      intro: "Authentic Tiffany Studios lamps (1893–1933) command $2,000–$100,000+ at estate sales and auctions, while even quality reproductions top out around $2,000. The gap comes down to three things: hand-rolled opalescent glass, hand-soldered lead came, and a marked bronze base: all checkable at the sale.",
       sections: [
         {
           heading: "Tiffany Studio Lamp Prices by Shade Design",
-          body: "Geometric shades (1800–1900 series): $2,000–$8,000. Floral shades (Peony, Tulip, Daffodil): $5,000–$25,000. Dragonfly shade: $12,000–$60,000. Wisteria (most sought-after): $15,000–$100,000+. Pond Lily multi-socket: $10,000–$45,000. Base style affects value 15–40% — tree-trunk bronze bases command premiums over plain column bases. Matching original base-to-shade pairings add another 20–30%."
+          body: "Geometric shades (1800–1900 series): $2,000–$8,000. Floral shades (Peony, Tulip, Daffodil): $5,000–$25,000. Dragonfly shade: $12,000–$60,000. Wisteria (most sought-after): $15,000–$100,000+. Pond Lily multi-socket: $10,000–$45,000. Base style affects value 15–40%. Tree-trunk bronze bases command premiums over plain column bases. Matching original base-to-shade pairings add another 20–30%."
         },
         {
           heading: "Tiffany Studios Marks: What to Look For",
-          body: "Authentic bases are cast or stamped 'TIFFANY STUDIOS NEW YORK' with a model number (e.g. '533'). Shades often carry a paper tag or impressed mark on the inside rim. Early pieces (pre-1902) may read 'Tiffany Glass and Decorating Co.' instead. Absence of a mark doesn't confirm reproduction — marks wear off — but a proper mark strongly supports authenticity and adds 25–50% vs. unmarked studio pieces."
+          body: "Authentic bases are cast or stamped 'TIFFANY STUDIOS NEW YORK' with a model number (e.g. '533'). Shades often carry a paper tag or impressed mark on the inside rim. Early pieces (pre-1902) may read 'Tiffany Glass and Decorating Co.' instead. Absence of a mark doesn't confirm reproduction (marks wear off) but a proper mark strongly supports authenticity and adds 25–50% vs. unmarked studio pieces."
         },
         {
           heading: "Authentic Contemporaries Worth Knowing: Duffner, Handel, Bradley",
-          body: "Not every leaded glass lamp is either Tiffany or fake. Studio contemporaries Duffner & Kimberly ($1,200–$8,000), Handel ($800–$5,000), and Miller lamps ($400–$2,000) were quality producers under their own marks. Bradley & Hubbard is frequently mistaken for Tiffany. These are legitimate collectibles — not reproductions — and are often underpriced because buyers only recognize the Tiffany name."
+          body: "Not every leaded glass lamp is either Tiffany or fake. Studio contemporaries Duffner & Kimberly ($1,200–$8,000), Handel ($800–$5,000), and Miller lamps ($400–$2,000) were quality producers under their own marks. Bradley & Hubbard is frequently mistaken for Tiffany. These are legitimate collectibles (not reproductions) and are often underpriced because buyers only recognize the Tiffany name."
         },
         {
           heading: "Red Flags That Confirm a Reproduction",
-          body: "Glass too uniform: every pane of identical color and thickness — authentic Tiffany glass is hand-rolled, showing natural variation in color and density under light. Lead came appears bright silver instead of dark, aged gray. Base feels lightweight with casting seams and sharp edges. Stamp reads 'Tiffany-style' rather than 'Tiffany Studios.' Shade wobbles or shows non-period hardware. Any plastic, resin, or acrylic panels confirm modern reproduction regardless of claimed origin."
+          body: "Glass too uniform: every pane of identical color and thickness. Authentic Tiffany glass is hand-rolled, showing natural variation in color and density under light. Lead came appears bright silver instead of dark, aged gray. Base feels lightweight with casting seams and sharp edges. Stamp reads 'Tiffany-style' rather than 'Tiffany Studios.' Shade wobbles or shows non-period hardware. Any plastic, resin, or acrylic panels confirm modern reproduction regardless of claimed origin."
         },
         {
           heading: "Quick Authentication Checks at the Sale",
-          body: "Hold the shade up to a light source: authentic opalescent glass shifts color and shows slight variation across each pane. Flip the base: look for 'TIFFANY STUDIOS NEW YORK' and a model number. Check the lead came with a fingernail — it should feel slightly soft, not rigid like zinc. Weigh it mentally: genuine Tiffany shades are heavy for their size due to dense glass. A UV flashlight sometimes reveals authentic glass fluorescence that reproductions lack."
+          body: "Hold the shade up to a light source: authentic opalescent glass shifts color and shows slight variation across each pane. Flip the base: look for 'TIFFANY STUDIOS NEW YORK' and a model number. Check the lead came with a fingernail. It should feel slightly soft, not rigid like zinc. Weigh it mentally: genuine Tiffany shades are heavy for their size due to dense glass. A UV flashlight sometimes reveals authentic glass fluorescence that reproductions lack."
         }
       ],
-      cta: "Tiffany and leaded glass lamps appear most often in high-estate liquidations and dedicated antique auctions. Set an alert on FindA.Sale for 'Tiffany lamp' or 'leaded glass lamp' to be notified across estate sales, auctions, and consignment sales in your area — and always request base-mark and glass-detail photos before bidding online."
+      cta: "Tiffany and leaded glass lamps appear most often in high-estate liquidations and dedicated antique auctions. Set an alert on FindA.Sale for 'Tiffany lamp' or 'leaded glass lamp' to be notified across estate sales, auctions, and consignment sales in your area, and always request base-mark and glass-detail photos before bidding online."
     }
   };
 }

@@ -201,7 +201,7 @@ const LineQueuePage = () => {
               )}
               className="flex-1 bg-amber-600 text-white py-3 rounded-xl font-semibold disabled:opacity-40 hover:bg-amber-700 dark:hover:bg-amber-700 transition-colors"
             >
-              {actionLoading === 'callNext' ? 'Sending…' : `Call Next #${waiting[0]?.position ?? '–'}`}
+              {actionLoading === 'callNext' ? 'Sending…' : `Call Next #${waiting[0]?.position ?? 'N/A'}`}
             </button>
             <button
               disabled={waiting.length === 0 || actionLoading !== null}
