@@ -41,6 +41,7 @@ import ConfirmDialog from '../ConfirmDialog';
 import VoiceDescriptionInput from '../VoiceDescriptionInput';
 import BarcodeScanner from '../BarcodeScanner';
 import CatalogSuggestionPanel from '../CatalogSuggestionPanel';
+import IntakeReviewPanel from '../IntakeReviewPanel';
 import { ShippingNetPreview } from '../ShippingNetPreview';
 import { EbayFeeCheckBadge } from '../EbayFeeCheckBadge';
 import { EbayMonthlyQuotaCounter } from '../EbayMonthlyQuotaCounter';
@@ -2038,6 +2039,14 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                     </p>
                   )}
                 </div>
+              )}
+
+              {/* Listing check notes from photo tagging (catalogSuggestions.intakeReview): additive, renders only when present. */}
+              {item?.catalogSuggestions && (
+                <IntakeReviewPanel
+                  catalogSuggestions={item.catalogSuggestions}
+                  onFill={(field, value) => setFormData((prev) => ({ ...prev, [field]: value }))}
+                />
               )}
 
               {/* Catalog enrichment suggestions: additive, renders only when present.

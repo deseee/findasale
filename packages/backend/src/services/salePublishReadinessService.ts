@@ -16,14 +16,20 @@
  */
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { hasTestMarker } from './intakeConsistencyChecks';
+import { isAutoPublishBlocked } from './intakeReview';
 
-export type NotReadyReason = 'NO_TITLE' | 'NO_PRICE' | 'NO_PHOTO' | 'HIDDEN';
+// 2026-11-05 (intake audit: "[price book test]" / "Do not publish" items went live with their sale): an item whose title or
+// description carries a test / do-not-publish marker, or whose stored intake review blocked automatic publishing, is never
+// published automatically with the sale. The organizer can still publish it on its own after removing the marker.
+export type NotReadyReason = 'NO_TITLE' | 'NO_PRICE' | 'NO_PHOTO' | 'HIDDEN' | 'TEST_MARKER';
 
 export const NOT_READY_REASON_LABEL: Record<NotReadyReason, string> = {
   NO_TITLE: 'Needs a title',
   NO_PRICE: 'Needs a price',
   NO_PHOTO: 'Needs a photo',
   HIDDEN: 'Hidden from shoppers',
+  TEST_MARKER: 'Marked as a test or do-not-publish item',
 };
 
 /** Unpublished items that belong to the sale and count as the organizer's items. */
@@ -39,6 +45,8 @@ export type ReadinessInputItem = {
   price: number | null;
   photoUrls: string[] | null;
   isActive: boolean | null;
+  description?: string | null;
+  catalogSuggestions?: unknown;
 };
 
 /** Pure: the reasons an unpublished item cannot go live yet. Empty array = ready. */
@@ -49,6 +57,7 @@ export function itemNotReadyReasons(item: ReadinessInputItem): NotReadyReason[] 
   if (!Number.isFinite(price) || price <= 0) reasons.push('NO_PRICE');
   if (!Array.isArray(item.photoUrls) || item.photoUrls.length === 0) reasons.push('NO_PHOTO');
   if (item.isActive === false) reasons.push('HIDDEN');
+  if (hasTestMarker(item.title, item.description) || isAutoPublishBlocked(item.catalogSuggestions)) reasons.push('TEST_MARKER');
   return reasons;
 }
 
@@ -78,7 +87,7 @@ export async function getSalePublishReadiness(saleId: string, db: ReadinessDb = 
   const [items, publishedItemCount] = await Promise.all([
     db.item.findMany({
       where: { saleId, ...UNPUBLISHED_SALE_ITEM_FILTER },
-      select: { id: true, title: true, price: true, photoUrls: true, isActive: true },
+      select: { id: true, title: true, price: true, photoUrls: true, isActive: true, description: true, catalogSuggestions: true },
       orderBy: { createdAt: 'asc' },
     }),
     db.item.count({

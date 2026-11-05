@@ -35,6 +35,7 @@ import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 import { applyAiCardResult, withPreservedCardSuggestion, AiCardDb } from './cardAiSuggestion'; // card-aware re-analyze (same result, no extra API call)
 import { persistShadowPricing } from './shadowPricingStore'; // shadow mode: market estimate returned/stored beside the model price (never Item.price)
+import { withIntakeReview, type IntakeReview } from './intakeReview'; // 2026-11-05 intake review notes (catalogSuggestions.intakeReview)
 
 export type ReanalyzeErrorCode =
   | 'ITEM_NOT_FOUND'
@@ -60,6 +61,8 @@ export interface ReanalyzeBefore {
 }
 
 export interface ReanalyzeAfter {
+  /** 2026-11-05: intake quality review (verify-pass suggestions and checks) for the regenerated fields. */
+  intakeReview?: IntakeReview | null;
   title: string | null;
   description: string | null;
   category: string | null;
@@ -205,7 +208,12 @@ export async function reanalyzeItem(
     // Shadow Market estimate query stability: pass the item's existing title so the eBay lookup uses only the tokens the
     // old and regenerated titles share. Never for test-image runs (those photos are not this item). Affects the lookup
     // query only; the regenerated title is still what Re-analyze writes.
-    result = await analyzeItemImages(buffers, mimeTypes, undefined, undefined, usingTestImages ? undefined : { priorTitle: item.title });
+    // 2026-11-05: organizer-edited fields are passed so the verify pass never auto-corrects them.
+    result = await analyzeItemImages(buffers, mimeTypes, undefined, undefined, {
+      ...(usingTestImages ? {} : { priorTitle: item.title }),
+      userEditedFields: item.userEditedFields ?? [],
+      organizerWeightSet: item.packageConfirmedByOrganizer === true || (item.userEditedFields ?? []).includes('packageWeightOz'),
+    });
   } catch (err: any) {
     console.error('[Reanalyze] analyzeItemImages threw:', err?.message || err);
     return { ok: false, code: 'AI_UNAVAILABLE' };
@@ -328,6 +336,7 @@ export async function reanalyzeItem(
   // Price intentionally excluded — organizer pricing always wins.
 
   const after: ReanalyzeAfter = {
+    intakeReview: result.intakeReview ?? null,
     title: result.title ?? null,
     description: result.description ?? null,
     category: result.category ?? null,
@@ -366,6 +375,10 @@ export async function reanalyzeItem(
     const data: Record<string, any> = { ...appliedData };
     if (catalogSuggestionWrite !== undefined) {
       data.catalogSuggestions = withPreservedCardSuggestion(item.catalogSuggestions, catalogSuggestionWrite);
+    }
+    // 2026-11-05: store the fresh intake review beside the enrichment/card suggestions (replaces any older review).
+    if (result.intakeReview) {
+      data.catalogSuggestions = withIntakeReview(item.catalogSuggestions, data.catalogSuggestions, result.intakeReview);
     }
     // P0 fix: keep ebayShippingClassification in sync whenever reanalysis actually
     // changes category and/or tags (classifyEbayShipping was previously only ever

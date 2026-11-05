@@ -797,7 +797,9 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       GRAILED: checkEligibility('GRAILED', buildListingEligibilityItem(it, { forNewListing: false })),
       POSHMARK: checkEligibility('POSHMARK', { ...buildListingEligibilityItem(it, { forNewListing: true }), originZip: saleLocationById.get(it.saleId || '')?.zip || null }),
       MERCARI: checkEligibility('MERCARI', buildListingEligibilityItem(it, { forNewListing: true })),
-      VINTED: checkEligibility('VINTED', buildListingEligibilityItem(it, { forNewListing: false })),
+      // 2026-11-05: Vinted now opts into new-listing-only gates too (only COLLECTIBLE_ROUTING uses it for Vinted; no Vinted rule has
+      // other newListingOnly limits), so records/cards/comics/video games are not suggested for Vinted. Live listings are never pulled.
+      VINTED: checkEligibility('VINTED', buildListingEligibilityItem(it, { forNewListing: true })),
     },
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false, it.qrAssetReady)) : (it.photoUrls || []),
     // Gated 2026-09-14 (see hasTrustedPackage above) -- previously exposed the raw,

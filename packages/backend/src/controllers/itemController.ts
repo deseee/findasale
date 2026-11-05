@@ -4530,7 +4530,8 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
           timeout: 10000,
         });
         const imageBuffer = Buffer.from(imageResponse.data);
-        const aiResult = await analyzeItemImage(imageBuffer, 'image/jpeg');
+        // 2026-11-05: tag suggestions only, so the intake verify pass and checks are skipped (no extra paid call).
+        const aiResult = await analyzeItemImage(imageBuffer, 'image/jpeg', undefined, { intakeReview: false });
         if (aiResult?.tags) {
           suggestedTags = aiResult.tags;
           // Increment quota counter after successful analysis

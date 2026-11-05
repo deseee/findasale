@@ -35,6 +35,7 @@ import { getEbayImageMatch, buildEbayMatchContext } from '../services/ebayImageS
 import { runGroundedIdentityAsync } from '../services/groundedIdentityService';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 import { applyAiCardResult, withPreservedCardSuggestion, AiCardDb } from '../services/cardAiSuggestion'; // card-aware tagging (same Haiku call, no extra API call)
+import { withIntakeReview } from '../services/intakeReview'; // 2026-11-05 intake review notes (catalogSuggestions.intakeReview)
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -341,6 +342,8 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
           }
 
           let analysis: any = null;
+          // 2026-11-05: organizer-edited fields for the intake verify pass (it never auto-corrects these).
+          let batchUserEdited: string[] = [];
           // Validated card block from the cloud AI result only (the Ollama fallback JSON is unvalidated and never carries one).
           let cloudCard: any = null;
 
@@ -355,6 +358,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             });
             if (gateItem) {
               const gateEditedFields = gateItem.userEditedFields ?? [];
+              batchUserEdited = gateEditedFields;
               const coreFields = ['title', 'category', 'condition', 'price', 'brand'] as const;
               const allOrganizerFilled = coreFields.every(field => {
                 if (gateEditedFields.includes(field)) return true;
@@ -387,7 +391,10 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               const imageBuffers = clusterImages.map(img => img.buffer);
               const mimeTypes = clusterImages.map(img => img.mimeType);
               // Phase 2: Pass clusterPhotos for role-context analysis
-              analysis = await analyzeItemImages(imageBuffers, mimeTypes, undefined, clusterPhotosForAnalysis);
+              analysis = await analyzeItemImages(imageBuffers, mimeTypes, undefined, clusterPhotosForAnalysis, {
+                userEditedFields: batchUserEdited,
+                organizerWeightSet: batchUserEdited.includes('packageWeightOz'),
+              });
               cloudCard = analysis?.card ?? null;
             } catch (err: any) {
               console.error(`Cloud AI error for item ${itemId}:`, err.message);
@@ -649,6 +656,14 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                   ? { upc: analysis.upc } : {}),
                 // The write REPLACES the whole JSON, so a stored cardSuggestion (pending seller-confirm card condition or slab read) is carried over.
                 ...(catalogSuggestionWrite !== undefined ? { catalogSuggestions: withPreservedCardSuggestion(existing?.catalogSuggestions, catalogSuggestionWrite) } : {}),
+                // 2026-11-05: intake review notes (verify-pass suggestions, checks) in the same JSON, other keys kept.
+                ...(analysis?.intakeReview ? {
+                  catalogSuggestions: withIntakeReview(
+                    existing?.catalogSuggestions,
+                    catalogSuggestionWrite !== undefined ? withPreservedCardSuggestion(existing?.catalogSuggestions, catalogSuggestionWrite) : undefined,
+                    analysis.intakeReview,
+                  ) as any,
+                } : {}),
                 // AI package estimate persistence — feeds estimatePackageProfile step-4 AI path.
                 // cloudAIService already gates these at packageConfidence >= 0.5 before returning.
                 ...(analysis?.estimatedWeightOz != null && analysis?.packageConfidence != null ? {

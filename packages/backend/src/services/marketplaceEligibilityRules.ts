@@ -29,6 +29,7 @@
 import { EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS } from './ebayRateEstimateService';
 import { etsyWhenMadeQualifies } from '../config/etsyWhenMade';
 import { poshmarkLabelInfo } from './poshmarkLabelSurcharge';
+import { detectCategoryFamily, type CategoryFamily } from './intakeCategoryFamilies';
 
 export type EligibilityPlatform = 'FACEBOOK' | 'CRAIGSLIST' | 'GUMTREE_AU' | 'GRAILED' | 'POSHMARK' | 'MERCARI' | 'VINTED' | 'REVERB' | 'ETSY';
 
@@ -276,12 +277,28 @@ interface SizeWeightCeilingRule {
   reason: string;
 }
 
+/**
+ * COLLECTIBLE_ROUTING (2026-11-05, intake audit of 316 live items): low-value shippable collectibles (records, trading
+ * cards, coins, comics, video games and game manuals) were landing on fashion-led marketplaces where they do not sell,
+ * instead of eBay. This shape keeps those families off a platform for NEW listings only (item.forNewListing === true),
+ * so it changes the default suggestion / auto queue and never queues takedown of a listing that is already live
+ * (getPendingRemovals does not set forNewListing). Family detection is the shared intake table
+ * (services/intakeCategoryFamilies.ts, detectCategoryFamily over category + title).
+ */
+interface CollectibleRoutingRule {
+  type: 'COLLECTIBLE_ROUTING';
+  platform: EligibilityPlatform;
+  families: readonly CategoryFamily[];
+  reason: string;
+}
+
 type EligibilityRule =
   | CategoryBlocklistRule
   | CategoryAllowlistRule
   | AttributeAgeAllowlistRule
   | PrerequisiteLookupRule
-  | SizeWeightCeilingRule;
+  | SizeWeightCeilingRule
+  | CollectibleRoutingRule;
 
 // ---- FACEBOOK (migrated verbatim from the original isFacebookRestrictedCoinOrCurrencyItem,
 // extensionController.ts, pre-2026-08-19) -- Facebook Commerce Policy prohibits listing currency,
@@ -296,6 +313,9 @@ const FB_COIN_CURRENCY_CATEGORY_IDS: readonly string[] = [
   FB_COIN_CURRENCY_CATEGORY_ID_ROOT,
   ...(EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS[FB_COIN_CURRENCY_CATEGORY_ID_ROOT] || []),
 ];
+
+/** Families kept off fashion-led marketplaces for new listings (COLLECTIBLE_ROUTING). Exported for tests. */
+export const COLLECTIBLE_ROUTING_FAMILIES: readonly CategoryFamily[] = ['VINYL_RECORD', 'TRADING_CARD', 'COIN_CURRENCY', 'COMIC', 'VIDEO_GAME'];
 
 const RULES: EligibilityRule[] = [
   {
@@ -1309,6 +1329,22 @@ const RULES: EligibilityRule[] = [
     reason: 'Over Mercari\'s 50lb / 34"x20" shipping ceiling -- beyond this Mercari requires shipping outside its own label flow, which this extension can\'t drive.',
   },
 
+  // ---- Collectible routing (2026-11-05, see CollectibleRoutingRule). New listings only; live listings are never pulled.
+  // Electronics are deliberately NOT in the Poshmark list: Patrick's 2026-10-17 decision allows cameras and ordinary
+  // electronics on Poshmark. Vinted already blocks coins and stamps outright (rule above); this adds the rest.
+  {
+    type: 'COLLECTIBLE_ROUTING',
+    platform: 'POSHMARK',
+    families: COLLECTIBLE_ROUTING_FAMILIES,
+    reason: 'Collectibles like records, cards, coins, comics and video games sell on eBay, not Poshmark, so they are not suggested here.',
+  },
+  {
+    type: 'COLLECTIBLE_ROUTING',
+    platform: 'VINTED',
+    families: COLLECTIBLE_ROUTING_FAMILIES,
+    reason: 'Collectibles like records, cards, coins, comics and video games sell on eBay, not Vinted, so they are not suggested here.',
+  },
+
   // ---- ETSY (ADR-135 D4, batch E-B2) -- Etsy's Creativity Standards only allow items made or
   // designed by the seller, handpicked vintage (20+ years old), and craft or party supplies
   // (https://www.etsy.com/legal/creativity); the API Terms, Section 5 (Prohibited Behavior), bind the
@@ -1719,6 +1755,16 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
       // (4) No usable data (or too recent): ineligible. Allowlist posture, same asymmetry as
       // CATEGORY_ALLOWLIST: if the age cannot be confirmed, the item is hidden.
       return { eligible: false, reason: rule.reason };
+    }
+
+    if (rule.type === 'COLLECTIBLE_ROUTING') {
+      if (item.forNewListing !== true) continue; // never affects listings that are already live
+      const family = detectCategoryFamily({ category: item.category, title: item.title });
+      // Game consoles and controllers are electronics hardware, which Poshmark allows (2026-10-17): only games,
+      // cartridges and manuals are routed away.
+      if (family === 'VIDEO_GAME' && /\b(console|controller|gamepad|joystick|headset|charger|adapter|power supply)s?\b/i.test(item.title || '')) continue;
+      if (family && rule.families.includes(family)) return { eligible: false, reason: rule.reason };
+      continue;
     }
 
     // PREREQUISITE_LOOKUP: reserved, no rules of this shape exist yet -- no-op, neither blocks nor

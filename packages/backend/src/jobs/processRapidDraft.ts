@@ -20,6 +20,7 @@ import { mergeAiRecordIdentity } from '../services/marketplace/recordIdentity'; 
 import { applyAiCardResult, withPreservedCardSuggestion, AiCardDb } from '../services/cardAiSuggestion'; // card-aware tagging (same Haiku call, no extra API call)
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 import { persistShadowPricing } from '../services/shadowPricingStore'; // shadow mode: second (market) price kept beside the model price
+import { withIntakeReview, storedWeightNote, appendIntakeNotes, readIntakeReview } from '../services/intakeReview'; // 2026-11-05 intake review notes (catalogSuggestions.intakeReview)
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -268,10 +269,16 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       // Call Vision → Haiku chain with all photos (or single if only one available)
       let aiResult: AITagResult | null;
       let aiUnavailableError: any = null;
+      // 2026-11-05 intake quality layer: the verify pass never changes an organizer-edited field, and the weight
+      // estimate is left alone when the organizer set or confirmed the package weight.
+      const intakeOptions = {
+        userEditedFields: userEditedFields,
+        organizerWeightSet: item.packageConfirmedByOrganizer === true || userEditedFields.includes('packageWeightOz'),
+      };
       try {
         aiResult = photoBuffers.length === 1
-          ? await analyzeItemImage(photoBuffers[0], mimeTypes[0])
-          : await analyzeItemImages(photoBuffers, mimeTypes);
+          ? await analyzeItemImage(photoBuffers[0], mimeTypes[0], undefined, intakeOptions)
+          : await analyzeItemImages(photoBuffers, mimeTypes, undefined, undefined, intakeOptions);
       } catch (cloudErr: any) {
         // Cloud AI (Vision → Claude Haiku) threw — e.g. Anthropic out of credit (HTTP 400).
         // Mirror the upload paths' Ollama fallback so Rapidfire items don't stall in DRAFT.
@@ -551,7 +558,13 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         ...(!rapidCatalogApply.upc && !userEdited.includes('upc') && !item.upc && aiResult?.upc
           ? { upc: aiResult.upc } : {}),
         // A pending card condition suggestion lives in the same JSON, so a re-run keeps it (see cardAiSuggestion.ts).
-        ...(rapidCatalogSuggestion !== undefined ? { catalogSuggestions: withPreservedCardSuggestion(item.catalogSuggestions, rapidCatalogSuggestion) } : {}),
+        // 2026-11-05: the intake review (verify-pass suggestions, consistency/fact/photo/weight notes) rides along in the same
+        // JSON under catalogSuggestions.intakeReview; every other key (enrichment, cardSuggestion) is kept.
+        ...(() => {
+          const base = rapidCatalogSuggestion !== undefined ? withPreservedCardSuggestion(item.catalogSuggestions, rapidCatalogSuggestion) : undefined;
+          const next = withIntakeReview(item.catalogSuggestions, base, aiResult.intakeReview);
+          return next !== undefined ? { catalogSuggestions: next as any } : {};
+        })(),
         // AI package estimate persistence — feeds estimatePackageProfile step-4 AI path.
         // cloudAIService already gates these at packageConfidence >= 0.5 before returning.
         ...(aiResult?.estimatedWeightOz != null && aiResult?.packageConfidence != null ? {
@@ -596,6 +609,12 @@ export async function processRapidDraft(itemId: string): Promise<void> {
                 mergedData[key] = aiValue;
               }
             }
+          }
+          // 2026-11-05: keep the intake review notes even when the organizer edited during tagging (the generic loop above
+          // skips catalogSuggestions once it holds anything). Organizer field values are untouched; this is notes only.
+          if (aiResult.intakeReview) {
+            const base = mergedData.catalogSuggestions !== undefined ? mergedData.catalogSuggestions : freshItem.catalogSuggestions;
+            mergedData.catalogSuggestions = withIntakeReview(freshItem.catalogSuggestions, base, aiResult.intakeReview);
           }
           // P0 fix: the generic loop above would never let AI-computed ebayShippingClassification
           // through (freshItem.ebayShippingClassification is always a non-empty string default
@@ -670,6 +689,28 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         }
       } catch (packageEstErr) {
         console.warn(`[rapidfire] curated package-estimate auto-confirm failed for item ${itemId}:`, packageEstErr);
+      }
+
+      // 2026-11-05 weight sanity (note only): a package weight filled automatically (category profile / estimate, not the
+      // organizer) that is outside the plausible range for this kind of item gets a review note. Never changes the weight.
+      if (aiResult.intakeReview) {
+        try {
+          const fresh = await prisma.item.findUnique({
+            where: { id: itemId },
+            select: { title: true, packageWeightOz: true, packageConfirmedByOrganizer: true, userEditedFields: true, catalogSuggestions: true },
+          });
+          const organizerSet = !fresh || fresh.packageConfirmedByOrganizer === true || (fresh.userEditedFields ?? []).includes('packageWeightOz');
+          const note = !organizerSet ? storedWeightNote(aiResult.intakeReview.family, fresh?.packageWeightOz ?? null, fresh?.title ?? aiResult.title) : null;
+          const stored = fresh ? readIntakeReview(fresh.catalogSuggestions) : null;
+          if (note && stored && fresh) {
+            const updated = appendIntakeNotes(stored, [note]);
+            if (updated !== stored) {
+              await prisma.item.update({ where: { id: itemId }, data: { catalogSuggestions: withIntakeReview(fresh.catalogSuggestions, undefined, updated) as any } });
+            }
+          }
+        } catch (weightNoteErr) {
+          console.warn(`[rapidfire] stored weight check failed for item ${itemId}:`, weightNoteErr);
+        }
       }
 
       // PRODUCTION grounded identity (ADR grounded-identification-production-2026-07-02).

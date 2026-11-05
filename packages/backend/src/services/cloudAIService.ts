@@ -27,6 +27,10 @@ import type { AIRecordIdentity } from './marketplace/recordIdentity';
 import { normalizeAiCard, AICardResult } from './cardAiSuggestion'; // card-aware tagging: validates the optional `card` block
 import { extractFccIdFromText, normalizeFccIdStrict } from '../utils/fccId'; // FCC ID: OCR fallback + shape check for the model-read value
 import { normalizeTaggedText } from './textHomoglyphs'; // 2026-10-27: mixed-script homoglyph fix on AI title/description
+// 2026-11-05 intake quality layer: category facts table, verify pass, deterministic checks, weight bounds, review notes
+import { buildCategoryFactsPrompt, detectCategoryFamily } from './intakeCategoryFamilies';
+import { runIntakeQuality, normalizePrintedText } from './intakeReview';
+import type { IntakeReview, PrintedTextTranscription } from './intakeReviewTypes';
 
 // Destructured (same values) so the pre-commit secret scan does not read an env lookup as a hardcoded key.
 const { GOOGLE_VISION_API_KEY, ANTHROPIC_API_KEY } = process.env;
@@ -334,6 +338,12 @@ export interface AITagResult {
   // recognizable game (validated by normalizeAiCard). When present, suggestedConditionGrade (S/A/B/C/D) is cleared:
   // a card is asked about on the NM/LP/MP/HP/DMG scale instead. Persisted by cardAiSuggestion.applyAiCardResult.
   card?: AICardResult | null;
+  // 2026-11-05: structured verbatim transcription of printed text (brand, model/catalog numbers, credits, packaging counts),
+  // written by pass 1 before the title. Read by the verify pass and the deterministic consistency checks.
+  printedText?: PrintedTextTranscription | null;
+  // 2026-11-05: intake quality review (verify-pass corrections, consistency/fact/photo/weight notes). Persisted by the callers
+  // on Item.catalogSuggestions.intakeReview. Absent when the quality layer was not run (e.g. Curio, tag-only callers).
+  intakeReview?: IntakeReview;
   detectedPrintedText?: string; // ADR 2026-08-29: Haiku's own literal transcription of visible printed text, output before composing the title -- reduces phrase-substitution errors (e.g. "Time and Chance" mis-titled as "Time and Change")
 }
 
@@ -631,7 +641,7 @@ export function extractIsbnFromText(text: string | null | undefined): string | n
 
 // ── Step 1: Google Vision label extraction ────────────────────────────────────
 
-export async function getVisionLabels(imageBase64: string): Promise<{ objectLabels: string[]; detectedText: string[]; qualityScore: number; ocrIsbn?: string; ocrFccId?: string }> {
+export async function getVisionLabels(imageBase64: string): Promise<{ objectLabels: string[]; detectedText: string[]; qualityScore: number; ocrIsbn?: string; ocrFccId?: string; ocrFullText?: string }> {
   try {
     const response = await axios.post(
       `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
@@ -682,7 +692,9 @@ export async function getVisionLabels(imageBase64: string): Promise<{ objectLabe
     // in with generic label guesses (see evidence-hierarchy instruction in the Haiku prompts).
     const objectLabels = [...new Set([...objects, ...labels])].slice(0, 18);
     const detectedText = [...new Set(detectedTexts)].slice(0, 18);
-    return { objectLabels, detectedText, qualityScore, ocrIsbn, ocrFccId };
+    // 2026-11-05: the full OCR block (capped) is passed to Haiku as a verbatim spelling/count reference.
+    const ocrFullText = fullOcrBlock ? fullOcrBlock.replace(/\s+/g, ' ').trim().slice(0, 800) : undefined;
+    return { objectLabels, detectedText, qualityScore, ocrIsbn, ocrFccId, ocrFullText };
   } catch (error: any) {
     // Feature #109: Graceful degradation — return empty labels on Vision API failure
     console.warn('[cloudAIService] Google Vision API error:', error.message || error);
@@ -813,6 +825,52 @@ function buildWebDetectionContext(webMatch: { webEntities: string[]; bestGuessLa
   return `\n\nGoogle web image search match: ${parts.join('; ')}. This comes from matching the photo against pages elsewhere on the web (not eBay's own catalog) — treat it as a weak hint only, and never let it override legible on-item text or brand marks.`;
 }
 
+// ── 2026-11-05 intake quality: shared pass-1 prompt blocks ───────────────────
+// Same model (ANTHROPIC_MODEL, Haiku by default) for every call; quality comes from the prompt and the verify pass.
+
+/** Options for analyzeItemImage / analyzeItemImages. */
+export interface AnalyzeItemOptions {
+  /** Re-analyze only: the item's existing title (stable shadow-pricing query). */
+  priorTitle?: string | null;
+  /** Organizer-edited fields: the verify pass never changes these (organizer intent wins). */
+  userEditedFields?: readonly string[] | null;
+  /** The organizer set or confirmed the package weight: the weight estimate is not clamped. */
+  organizerWeightSet?: boolean;
+  /** false = skip the intake quality layer (verify pass + checks), e.g. Curio scans or tag-only lookups. Default on. */
+  intakeReview?: boolean;
+}
+
+const INTAKE_PRINTED_TEXT_RULES = `Exact printed text (do this FIRST): before writing anything else, transcribe the visible printed text that identifies the item into "printedText", character by character, exactly as printed: brand (as on the label or logo), modelNumbers, catalogNumbers, credits (performer, author, composer or maker names), counts printed on packaging (e.g. "10 Diskettes", "Set of 6") and other short identifying text. Copy spellings exactly from the label, including unusual spellings, punctuation and capitalization. Never correct, complete or translate a printed word, never substitute a more familiar word, and never invent or recall text that is not visible; leave out anything partly hidden or unreadable rather than guess. Then build the title, description and brand from printedText: names and numbers in them must match printedText exactly (if the label reads "Kalan", the brand is "Kalan", not "Kalani"; keep every word of a printed title, e.g. "That's What She Said", never drop one).`;
+
+const INTAKE_FACT_GUARDRAILS = `Fact rules (known mistakes to avoid):
+- Counts: count the units you can actually see. The title, the description and any "Set of N" tag must all use that same number. If packaging prints a different number than what is present (box printed "10 Diskettes" but 7 visible), the description must say both.
+- Condition: NEW only with evidence the item is sealed or unused (factory seal, shrink wrap, tags attached, never opened). Opened, torn or damaged packaging, visible wear, or anything tested or played is USED. The description must never contradict the condition (never "used condition" with condition NEW).
+- US coins: never call a coin "silver" without date and mint evidence. Dimes, quarters and half dollars dated 1964 or earlier are 90% silver; Kennedy halves 1965-1970 are 40% silver; Eisenhower dollars (1971-1978) are copper-nickel clad except the S mint silver collector issues (so a 1972 Ike dollar without an S mint mark is clad); 1942-1945 war nickels with a large mint mark above Monticello are 35% silver; cents are never silver; other circulating US coins after 1964 are clad. State the mint mark, or "no mint mark", when the coin face is visible.
+- Reproductions: anything marked or recognizable as a reproduction, replica, reissue or reprint is never categorized "Antiques" and never tagged "Antique".
+- Tags describe this item itself (what it is, brand, material, era, style), never a different device it is used with (blank CD-R discs are not "DVD Writer" or "Optical Drive").
+- Category follows what the item IS: store fixtures and hardware (racks, hangers, brackets, mannequins) are never "Clothing, Shoes & Accessories".
+- Records: when a photo shows the disc, say so; never write that the vinyl is "not visually confirmed" if it is visible.
+- The description must never start with stray numbers, list markers or symbols.`;
+
+/** Full Vision OCR block as a verbatim spelling reference (empty when Vision read nothing). */
+function buildOcrContext(ocrFullText?: string | null): string {
+  const t = (ocrFullText || '').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  return `\n\nOCR transcript of the printed text in the photos (machine-read, verbatim): "${t.slice(0, 1200)}". Treat its spellings, numbers and counts as ground truth wherever they match text you can see, copy them exactly into printedText, and never "correct" them. OCR can split or merge words; do not copy OCR noise that is not visibly printed on the item.`;
+}
+
+/** Category-specific facts for pass 1, with the family Vision already suggests marked. */
+function buildCategoryFactsContext(objectLabels: string[], detectedText: string[]): string {
+  try {
+    const hint = detectCategoryFamily({ labels: [...objectLabels, ...detectedText], title: [...objectLabels, ...detectedText].join(' ') });
+    return `\n${buildCategoryFactsPrompt(hint)}`;
+  } catch {
+    return '';
+  }
+}
+
+const INTAKE_PRINTED_TEXT_JSON = `"printedText": { "brand": null, "modelNumbers": [], "catalogNumbers": [], "credits": [], "counts": [], "other": [] },`;
+
 // ── Step 2: Claude Haiku structured analysis ──────────────────────────────────
 
 async function getHaikuAnalysis(
@@ -823,7 +881,8 @@ async function getHaikuAnalysis(
   comps?: ComparableSale[],
   catalogMatches?: CatalogMatch[] | null,
   webMatch?: { webEntities: string[]; bestGuessLabels: string[] } | null,
-  ebayMatch?: EbayImageMatch | null
+  ebayMatch?: EbayImageMatch | null,
+  ocrFullText?: string | null
 ): Promise<AITagResult> {
   const labelContext =
     objectLabels.length > 0 || detectedText.length > 0
@@ -852,6 +911,9 @@ async function getHaikuAnalysis(
   // eBay searchByImage live match (ADR-ebay-searchbyimage-tagging-2026-07-02): independent
   // evidence source, same conditional-inclusion shape as catalog/web-detection above.
   const ebayMatchContext = buildEbayMatchContext(ebayMatch ?? null);
+  // 2026-11-05 intake quality: verbatim OCR reference + category-specific required facts.
+  const ocrContext = buildOcrContext(ocrFullText);
+  const categoryFactsContext = buildCategoryFactsContext(objectLabels, detectedText);
 
   try {
     // Estimate tokens for cost tracking (#104)
@@ -864,7 +926,7 @@ Analyze this item photo and respond with ONLY valid JSON (no markdown, no explan
       'https://api.anthropic.com/v1/messages',
       {
         model: ANTHROPIC_MODEL,
-        max_tokens: 600, // ADR-132: +100 headroom for the optional recordIdentity object; +100 for the optional card object
+        max_tokens: 1000, // ADR-132: +100 headroom for the optional recordIdentity object; +100 for the optional card object; 2026-11-05: +400 for printedText and fuller category facts
         messages: [
           {
             role: 'user',
@@ -879,10 +941,12 @@ Analyze this item photo and respond with ONLY valid JSON (no markdown, no explan
               },
               {
                 type: 'text',
-                text: `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} secondary-sale marketplace (estate sales, yard sales, auctions, flea markets, consignment).${labelContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}
+                text: `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} secondary-sale marketplace (estate sales, yard sales, auctions, flea markets, consignment).${labelContext}${ocrContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}
 
 Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).
 
+${INTAKE_PRINTED_TEXT_RULES}
+${INTAKE_FACT_GUARDRAILS}${categoryFactsContext}
 Accuracy over richness: only state attributes (era, brand, material, maker, category) you can actually SEE or verify from the photos and any visible marks/labels. When unsure, omit the attribute rather than guessing a confident-but-wrong value.
 Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include an era/decade when there is reasonable supporting evidence — style, materials, maker marks, or a date — but do not force it or infer age from wear alone; leave it out when you are genuinely unsure rather than guess. Avoid vague words like "Beautiful" or "Nice". If a title, name, or other text is printed or visible on the item itself, transcribe it EXACTLY as shown, character-by-character — do not substitute a more common or expected word/phrase for what is actually printed, even when the literal text is unusual or the substitution would read more naturally (e.g. a real album title that happens to be an atypical variant of a common phrase must be transcribed as printed, not "corrected" to the more familiar wording). Always populate the "detectedPrintedText" field with your literal transcription of any visible printed title/name/text (or null if none is visible) BEFORE composing the title -- when it is non-null, "title" and "description" must reuse that exact transcription verbatim wherever they incorporate that text, not a re-derived or "corrected" version of it.
 Sets & lots: If the photo(s) clearly show MULTIPLE matching or coordinated items that a shopper would buy together as one lot (e.g., a set of golf clubs, a set of matching dishes, a group of the same figurine, a boxed tool set), catalog the WHOLE GROUP as one set/lot — do NOT describe just a single piece. Title it as a set (e.g., "Northwestern Golf Club Set", "Pyrex Mixing Bowl Set"), state the piece count when you can count them, and include a "Set of N" tag. Only treat it as a set when the items are genuinely a coordinated group sold together; a single item shown alongside unrelated background objects is still ONE item — catalog just that item.
@@ -902,6 +966,7 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
 Shipping package: Estimate the PACKED shipping weight (item + box + padding) in ounces, and the packed box outer dimensions (length, width, height) in inches. Pick the eBay packageType enum that best fits: PACKAGE_THICK_ENVELOPE (thin/flat <12oz), MAILING_BOX (most boxed items), LARGE_PACKAGE (over ~18in any side or heavy), USPS_FLAT_RATE_ENVELOPE (documents/flat). Rate packageConfidence 0.0-1.0 on how sure you are of weight + dimensions. If packageConfidence is below 0.5 (you cannot reasonably estimate size/weight), set estimatedWeightOz, estimatedDimensionsIn, and estimatedPackageType to null — do not guess.
 
 {
+  ${INTAKE_PRINTED_TEXT_JSON}
   "detectedPrintedText": "literal transcription of any visible printed title/name/text, or null if none visible",
   "title": "short specific title",
   "description": "1-2 sentence description with condition details",
@@ -949,6 +1014,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     let parsed = JSON.parse(raw) as AITagResult;
     applyCardAwareness(parsed);
+    parsed.printedText = normalizePrintedText(parsed.printedText); // 2026-11-05: evidence-only, sanitized
     // Ensure tags is always an array even if Haiku omits the field
     if (!Array.isArray(parsed.tags)) {
       parsed.tags = [];
@@ -1208,6 +1274,36 @@ function deriveCuratedTags(candidateTerms: string[]): string[] {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
+ * 2026-11-05: runs the intake quality layer (services/intakeReview.ts) on a pass-1 result. Skipped when the caller
+ * opts out (options.intakeReview === false). Re-applies the homoglyph fix when the verify pass changed text.
+ * Never throws: on any error the pass-1 result is returned unchanged.
+ */
+async function runIntakeQualitySafely(
+  result: AITagResult,
+  imageBase64Array: string[],
+  mimeTypes: string[],
+  ctx: { ocrText: string; photoQualityScores: Array<number | null>; objectLabels: string[]; options?: AnalyzeItemOptions }
+): Promise<void> {
+  if (ctx.options?.intakeReview === false) return;
+  try {
+    const review = await runIntakeQuality(result, {
+      imageBase64Array,
+      mimeTypes,
+      ocrText: ctx.ocrText,
+      photoQualityScores: ctx.photoQualityScores,
+      objectLabels: ctx.objectLabels,
+      userEditedFields: ctx.options?.userEditedFields ?? null,
+      organizerWeightSet: ctx.options?.organizerWeightSet === true,
+    });
+    if (review.appliedCorrections.some((c) => c.field === 'title' || c.field === 'description')) {
+      normalizeTaggedText(result, '[cloudAI] verify');
+    }
+  } catch (err) {
+    console.warn('[cloudAI] intake quality layer failed (ignored):', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
  * Analyze an item image using Google Vision + Claude Haiku.
  *
  * Flow:
@@ -1224,7 +1320,8 @@ function deriveCuratedTags(candidateTerms: string[]): string[] {
 export async function analyzeItemImage(
   buffer: Buffer,
   mimeType = 'image/jpeg',
-  comps?: ComparableSale[]
+  comps?: ComparableSale[],
+  options?: AnalyzeItemOptions
 ): Promise<AITagResult | null> {
   if (!isCloudAIAvailable()) return null;
 
@@ -1253,6 +1350,8 @@ export async function analyzeItemImage(
   let detectedText: string[] = [];
   let ocrIsbn: string | undefined;
   let ocrFccId: string | undefined;
+  let ocrFullText: string | undefined;
+  let visionQuality: number | null = null;
   let catalogMatches: CatalogMatch[] | null = null;
   let webMatch: { webEntities: string[]; bestGuessLabels: string[] } | null = null;
   let ebayMatch: EbayImageMatch | null = null;
@@ -1273,6 +1372,9 @@ export async function analyzeItemImage(
     detectedText = visionSettled.value.detectedText;
     ocrIsbn = visionSettled.value.ocrIsbn;
     ocrFccId = visionSettled.value.ocrFccId;
+    ocrFullText = visionSettled.value.ocrFullText;
+    // A Vision failure returns a neutral 0.5 with no labels: that is "unknown", not a quality reading.
+    visionQuality = visionSettled.value.objectLabels.length > 0 ? visionSettled.value.qualityScore : null;
   }
   // Vision API unavailable or quota exceeded — Haiku will analyse image alone (unchanged behavior)
   if (catalogSettled.status === 'fulfilled') {
@@ -1288,13 +1390,22 @@ export async function analyzeItemImage(
   }
   // getWebDetectionMatch() never throws (returns null on error) — allSettled defensive as above
 
-  const result = await getHaikuAnalysis(imageBase64, mimeType, objectLabels, detectedText, comps, catalogMatches, webMatch, ebayMatch);
+  const result = await getHaikuAnalysis(imageBase64, mimeType, objectLabels, detectedText, comps, catalogMatches, webMatch, ebayMatch, ocrFullText);
   if (ocrIsbn) result.ocrIsbn = ocrIsbn; // ADR-089: thread OCR-derived ISBN onto the analysis result
   // FCC ID: the deterministic OCR-regex value wins over the model-read value when they disagree.
   if (ocrFccId) {
     result.ocrFccId = ocrFccId;
     result.fccId = ocrFccId;
   }
+
+  // 2026-11-05 intake quality layer: Haiku verify pass (same photo buffer, same model, same cost gates) + deterministic
+  // checks + category facts/photos + weight bounds. Never throws; the pass-1 result stands if anything fails.
+  await runIntakeQualitySafely(result, [imageBase64], [mimeType], {
+    ocrText: [ocrFullText, ...detectedText].filter(Boolean).join(' '),
+    photoQualityScores: [visionQuality],
+    objectLabels,
+    options,
+  });
 
   // Fix C: curated tag suggestions derived LOCALLY (no extra Anthropic call). Match the curated
   // vocabulary against the main-response tags + Vision object labels + detected text.
@@ -1377,7 +1488,8 @@ export async function analyzeItemImages(
   clusterPhotos?: ClusterPhoto[],
   // Re-analyze only: the item's existing title, so the shadow Market estimate searches eBay with a stable query
   // (tokens common to old and new title) instead of the freshly regenerated, drift-prone title.
-  options?: { priorTitle?: string | null }
+  // 2026-11-05: also carries the intake quality options (organizer-edited fields, weight set, opt-out).
+  options?: AnalyzeItemOptions
 ): Promise<AITagResult | null> {
   if (!isCloudAIAvailable()) return null;
 
@@ -1414,6 +1526,8 @@ export async function analyzeItemImages(
   let detectedText: string[] = [];
   let ocrIsbn: string | undefined; // ADR-089: first checksum-valid ISBN across all photos
   let ocrFccId: string | undefined; // FCC ID: first labelled FCC ID found by OCR across all photos
+  let ocrFullText = ''; // 2026-11-05: OCR blocks from every photo, joined (capped), as a verbatim reference for Haiku
+  let photoQualityScores: Array<number | null> = []; // 2026-11-05: per photo, best-first order; null = Vision failed
   // Reverse-Image Product Index (ADR 2026-07-01 §1): catalog-match vector search
   // runs IN PARALLEL with the per-photo Vision pass below (both are pre-Haiku,
   // independent of each other) — not sequentially after Vision. Uses the FIRST
@@ -1438,8 +1552,8 @@ export async function analyzeItemImages(
     const allVisionResults = await Promise.all(
       imageBase64Array.map((b64, idx) =>
         getVisionLabels(b64)
-          .then(res => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: res.qualityScore, objectLabels: res.objectLabels, detectedText: res.detectedText, ocrIsbn: res.ocrIsbn as string | undefined, ocrFccId: res.ocrFccId as string | undefined }))
-          .catch(() => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: 0, objectLabels: [] as string[], detectedText: [] as string[], ocrIsbn: undefined as string | undefined, ocrFccId: undefined as string | undefined }))
+          .then(res => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: res.qualityScore, objectLabels: res.objectLabels, detectedText: res.detectedText, ocrIsbn: res.ocrIsbn as string | undefined, ocrFccId: res.ocrFccId as string | undefined, ocrFullText: res.ocrFullText as string | undefined }))
+          .catch(() => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: 0, objectLabels: [] as string[], detectedText: [] as string[], ocrIsbn: undefined as string | undefined, ocrFccId: undefined as string | undefined, ocrFullText: undefined as string | undefined }))
       )
     );
 
@@ -1474,6 +1588,8 @@ export async function analyzeItemImages(
     detectedText = Array.from(new Set(allDetectedText)).slice(0, 20);
     ocrIsbn = allVisionResults.map(r => r.ocrIsbn).find((v): v is string => !!v);
     ocrFccId = allVisionResults.map(r => r.ocrFccId).find((v): v is string => !!v);
+    ocrFullText = Array.from(new Set(allVisionResults.map(r => r.ocrFullText).filter((v): v is string => !!v))).join(' | ').slice(0, 1600);
+    photoQualityScores = photosWithScores.map(p => (p.objectLabels.length > 0 ? p.qualityScore : null));
   } catch {
     // Vision pass failed — proceed with original order and no labels (non-blocking)
   }
@@ -1493,13 +1609,22 @@ export async function analyzeItemImages(
   );
 
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
-  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch, ebayMatch, options?.priorTitle);
+  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch, ebayMatch, options?.priorTitle, ocrFullText);
   if (ocrIsbn) result.ocrIsbn = ocrIsbn; // ADR-089: thread OCR-derived ISBN onto the analysis result
   // FCC ID: the deterministic OCR-regex value wins over the model-read value when they disagree.
   if (ocrFccId) {
     result.ocrFccId = ocrFccId;
     result.fccId = ocrFccId;
   }
+
+  // 2026-11-05 intake quality layer: Haiku verify pass on the SAME already-loaded (best-first) photo buffers, capped
+  // (AI_VERIFY_MAX_IMAGES), same model and cost gates, then deterministic checks. Never throws.
+  await runIntakeQualitySafely(result, imageBase64Array, types, {
+    ocrText: [ocrFullText, ...detectedText].filter(Boolean).join(' '),
+    photoQualityScores,
+    objectLabels,
+    options,
+  });
 
   // Fix C: curated tag suggestions derived LOCALLY (no extra Anthropic call). Match the curated
   // vocabulary against the main-response tags + Vision object labels + detected text.
@@ -1574,7 +1699,8 @@ async function getHaikuAnalysisMultiImage(
   catalogMatches?: CatalogMatch[] | null,
   webMatch?: { webEntities: string[]; bestGuessLabels: string[] } | null,
   ebayMatch?: EbayImageMatch | null,
-  priorTitle?: string | null
+  priorTitle?: string | null,
+  ocrFullText?: string | null
 ): Promise<AITagResult> {
   const labelContext =
     objectLabels.length > 0 || detectedText.length > 0
@@ -1598,6 +1724,9 @@ async function getHaikuAnalysisMultiImage(
   // eBay searchByImage live match (ADR-ebay-searchbyimage-tagging-2026-07-02): independent
   // evidence source, same conditional-inclusion shape as catalog/web-detection above.
   const ebayMatchContext = buildEbayMatchContext(ebayMatch ?? null);
+  // 2026-11-05 intake quality: verbatim OCR reference + category-specific required facts.
+  const ocrContext = buildOcrContext(ocrFullText);
+  const categoryFactsContext = buildCategoryFactsContext(objectLabels, detectedText);
 
   const roleContext = buildRoleContextPrompt(clusterPhotos);
 
@@ -1630,10 +1759,12 @@ ${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`
     // Add text prompt at the end
     contentArray.push({
       type: 'text',
-      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}${roleContext}
+      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}${ocrContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}${roleContext}
 
 Analyze and respond with ONLY valid JSON (no markdown, no explanation).
 
+${INTAKE_PRINTED_TEXT_RULES}
+${INTAKE_FACT_GUARDRAILS}${categoryFactsContext}
 Accuracy over richness: only state attributes (era, brand, material, maker, category) you can actually SEE or verify from the photos and any visible marks/labels. When unsure, omit the attribute rather than guessing a confident-but-wrong value.
 Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include an era/decade when there is reasonable supporting evidence — style, materials, maker marks, or a date — but do not force it or infer age from wear alone; leave it out when you are genuinely unsure rather than guess. Avoid vague words like "Beautiful" or "Nice". If a title, name, or other text is printed or visible on the item itself, transcribe it EXACTLY as shown, character-by-character — do not substitute a more common or expected word/phrase for what is actually printed, even when the literal text is unusual or the substitution would read more naturally (e.g. a real album title that happens to be an atypical variant of a common phrase must be transcribed as printed, not "corrected" to the more familiar wording). Always populate the "detectedPrintedText" field with your literal transcription of any visible printed title/name/text (or null if none is visible) BEFORE composing the title -- when it is non-null, "title" and "description" must reuse that exact transcription verbatim wherever they incorporate that text, not a re-derived or "corrected" version of it.
 Sets & lots: If the photo(s) clearly show MULTIPLE matching or coordinated items that a shopper would buy together as one lot (e.g., a set of golf clubs, a set of matching dishes, a group of the same figurine, a boxed tool set), catalog the WHOLE GROUP as one set/lot — do NOT describe just a single piece. Title it as a set (e.g., "Northwestern Golf Club Set", "Pyrex Mixing Bowl Set"), state the piece count when you can count them, and include a "Set of N" tag. Only treat it as a set when the items are genuinely a coordinated group sold together; a single item shown alongside unrelated background objects is still ONE item — catalog just that item.
@@ -1652,6 +1783,7 @@ Record identity: ONLY if the item is a vinyl record, CD or cassette, fill "recor
 Trading card: ONLY if the photo(s) show a single collectible trading card (Magic: The Gathering, Pokemon, Yu-Gi-Oh!, Disney Lorcana, One Piece, a sports card, or another card game), fill the "card" object; for every other item set "card" to null. Fields: game (MTG | POKEMON | YUGIOH | LORCANA | ONE_PIECE | OTHER; use OTHER for sports cards and any other card game), cardName (as printed), setName and setCode (only if printed on the card), collectorNumber (as printed, e.g. "138/195"), language (en | es | fr | de | it | pt | ja | ko | ru | zhs | zht), finish (NONFOIL | FOIL | ETCHED | HOLO | REVERSE_HOLO, only if clearly visible). Report a field ONLY if it is printed or clearly readable on the card; never guess a set or collector number from memory, use null instead. Then EITHER (ungraded card) set "suggestedCardCondition" to NM | LP | MP | HP | DMG judged from visible edge and corner wear, whitening, scratches, creases and bends (NM = no visible wear, LP = light wear, MP = moderate wear, HP = heavy wear, DMG = tears, water damage, heavy creasing or writing). Be conservative: when unsure between two conditions pick the WORSE one, and use null if the photos cannot show the card's surface and edges well. OR (card inside a graded slab) set "grader" (PSA | BGS | BVG | BCCG | CGC | SGC | TAG | CSG | HGA | ISA | OTHER), "grade" (the number on the label, e.g. "9" or "9.5") and "certNumber", each read from the slab label only, and leave "suggestedCardCondition" null. For a card, "suggestedConditionGrade" is ignored.
 
 {
+  ${INTAKE_PRINTED_TEXT_JSON}
   "detectedPrintedText": "literal transcription of any visible printed title/name/text, or null if none visible",
   "title": "short specific title",
   "description": "1-2 sentence description with condition details",
@@ -1675,7 +1807,7 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
       'https://api.anthropic.com/v1/messages',
       {
         model: ANTHROPIC_MODEL,
-        max_tokens: 600, // ADR-132: +100 headroom for the optional recordIdentity object; +100 for the optional card object
+        max_tokens: 1000, // ADR-132: +100 headroom for the optional recordIdentity object; +100 for the optional card object; 2026-11-05: +400 for printedText and fuller category facts
         messages: [
           {
             role: 'user',
@@ -1703,6 +1835,7 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     let parsed = JSON.parse(raw) as AITagResult;
     applyCardAwareness(parsed);
+    parsed.printedText = normalizePrintedText(parsed.printedText); // 2026-11-05: evidence-only, sanitized
 
     if (!Array.isArray(parsed.tags)) {
       parsed.tags = [];

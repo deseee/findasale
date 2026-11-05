@@ -185,7 +185,10 @@ export const submitScan = async (req: AuthRequest, res: Response): Promise<Respo
       let aiResult: Awaited<ReturnType<typeof analyzeItemImage>> | null = null;
       let aiThrew = false;
       try {
-        aiResult = files.length > 1 ? await analyzeItemImages(buffers, mimeTypes) : await analyzeItemImage(buffers[0], mimeTypes[0]);
+        // 2026-11-05: Curio is a consumer identification scan, not item intake: skip the intake verify pass and checks.
+        aiResult = files.length > 1
+          ? await analyzeItemImages(buffers, mimeTypes, undefined, undefined, { intakeReview: false })
+          : await analyzeItemImage(buffers[0], mimeTypes[0], undefined, { intakeReview: false });
       } catch (aiErr) {
         // BUG FIX (findasale-hacker/QA pass, 2026-08-29): analyzeItemImage(s)() does not only
         // return null on failure -- it can also THROW (AI_TIMEOUT/AI_RATE_LIMIT/AI_PARSE_ERROR/
