@@ -3,12 +3,16 @@
  * where they do not sell). Collectible families are not suggested for NEW Poshmark/Vinted listings; live listings are never
  * pulled (the takedown sweep does not set forNewListing); eBay, Mercari, Facebook and Craigslist are unchanged; Poshmark's
  * electronics allowance (2026-10-17), $5 minimum (2026-10-19) and pickup-only rule (2026-10-27) still hold.
+ * The routing applies to NEW intake only: items created on/after COLLECTIBLE_ROUTING_SINCE. Existing inventory (created
+ * earlier, or with no createdAt) keeps its previous behaviour.
  */
 jest.mock('../../lib/prisma', () => ({ prisma: {} }));
 
-import { checkEligibility, buildListingEligibilityItem, COLLECTIBLE_ROUTING_FAMILIES, pickupOnlyEligibilityReason } from '../marketplaceEligibilityRules';
+import { checkEligibility, buildListingEligibilityItem, COLLECTIBLE_ROUTING_FAMILIES, COLLECTIBLE_ROUTING_SINCE, pickupOnlyEligibilityReason } from '../marketplaceEligibilityRules';
 
-const pkg = { packageWeightOz: 12, packageLengthIn: 12, packageWidthIn: 12, packageHeightIn: 2, price: 25 };
+const AFTER_CUTOFF = new Date('2026-11-06T12:00:00.000Z');
+const BEFORE_CUTOFF = new Date('2026-11-04T23:59:59.999Z');
+const pkg = { packageWeightOz: 12, packageLengthIn: 12, packageWidthIn: 12, packageHeightIn: 2, price: 25, createdAt: AFTER_CUTOFF };
 const newListing = (it: Record<string, unknown>) => buildListingEligibilityItem({ ...pkg, ebayCategoryId: null, ...it } as any, { forNewListing: true });
 const liveCheck = (it: Record<string, unknown>) => buildListingEligibilityItem({ ...pkg, ebayCategoryId: null, ...it } as any, { forNewListing: false });
 
@@ -43,6 +47,32 @@ describe('collectible routing (new listings only)', () => {
   it.each(COLLECTIBLES)('$title live listing is never flagged for takedown by this rule', (item) => {
     expect(checkEligibility('POSHMARK', liveCheck(item)).eligible).toBe(true);
     expect(checkEligibility('VINTED', liveCheck(item)).eligible).toBe(true);
+  });
+
+  it('exports the cutoff as 2026-11-05 UTC', () => {
+    expect(COLLECTIBLE_ROUTING_SINCE).toBe('2026-11-05T00:00:00.000Z');
+  });
+
+  it('buildListingEligibilityItem copies createdAt when present and omits it otherwise', () => {
+    expect(newListing({ category: 'Music', title: 'LP' }).createdAt).toEqual(AFTER_CUTOFF);
+    expect('createdAt' in newListing({ category: 'Music', title: 'LP', createdAt: undefined })).toBe(false);
+  });
+
+  it('an item created exactly at the cutoff (ISO string) is routed', () => {
+    const r = checkEligibility('POSHMARK', newListing({ ...COLLECTIBLES[2], createdAt: COLLECTIBLE_ROUTING_SINCE }));
+    expect(r.eligible).toBe(false);
+  });
+
+  it.each(COLLECTIBLES)('$title created before the cutoff (existing inventory) stays eligible on Poshmark and Vinted', (item) => {
+    expect(checkEligibility('POSHMARK', newListing({ ...item, createdAt: BEFORE_CUTOFF })).eligible).toBe(true);
+    expect(checkEligibility('VINTED', newListing({ ...item, createdAt: BEFORE_CUTOFF.toISOString() })).eligible).toBe(true);
+  });
+
+  it.each(COLLECTIBLES)('$title with no createdAt is treated as existing inventory and stays eligible', (item) => {
+    for (const createdAt of [undefined, null]) {
+      expect(checkEligibility('POSHMARK', newListing({ ...item, createdAt })).eligible).toBe(true);
+      expect(checkEligibility('VINTED', newListing({ ...item, createdAt })).eligible).toBe(true);
+    }
   });
 
   it('keeps Poshmark electronics (cameras, consoles) eligible', () => {

@@ -2860,6 +2860,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
       packageConfirmedByOrganizer: true, packageEstimateSource: true,
       ebayShippingOverride: true, crosslisterFreeShipping: true,
       allowBestOffer: true, bestOfferMinimumAmt: true, bestOfferAutoAcceptAmt: true,
+      createdAt: true, // 2026-11-05: COLLECTIBLE_ROUTING applies only to items created on/after COLLECTIBLE_ROUTING_SINCE
     },
   });
 

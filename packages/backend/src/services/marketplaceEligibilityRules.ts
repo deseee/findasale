@@ -87,6 +87,11 @@ export interface EligibilityCheckItem {
    * of a listing that is already up.
    */
   forNewListing?: boolean;
+  /**
+   * 2026-11-05: Item.createdAt. Only read by COLLECTIBLE_ROUTING, which applies to items created on/after
+   * COLLECTIBLE_ROUTING_SINCE (new intake only, never existing inventory). Missing means "existing", so not routed.
+   */
+  createdAt?: Date | string | null;
   /** Listing price in dollars. Only read by newListingOnly.minPriceUsd (Poshmark's $3 minimum). */
   price?: number | null;
 
@@ -316,6 +321,14 @@ const FB_COIN_CURRENCY_CATEGORY_IDS: readonly string[] = [
 
 /** Families kept off fashion-led marketplaces for new listings (COLLECTIBLE_ROUTING). Exported for tests. */
 export const COLLECTIBLE_ROUTING_FAMILIES: readonly CategoryFamily[] = ['VINYL_RECORD', 'TRADING_CARD', 'COIN_CURRENCY', 'COMIC', 'VIDEO_GAME'];
+
+/**
+ * COLLECTIBLE_ROUTING applies only to items created on/after this instant (new items coming through intake). Existing
+ * inventory, and any item whose createdAt is unknown, is never routed, so the owner's existing records, cards etc.
+ * keep their current Poshmark/Vinted behaviour (including relisting after a deliberate removal).
+ */
+export const COLLECTIBLE_ROUTING_SINCE = '2026-11-05T00:00:00.000Z';
+const COLLECTIBLE_ROUTING_SINCE_MS = Date.parse(COLLECTIBLE_ROUTING_SINCE);
 
 const RULES: EligibilityRule[] = [
   {
@@ -1626,6 +1639,7 @@ export function buildListingEligibilityItem(
     packageLengthIn?: unknown; packageWidthIn?: unknown; packageHeightIn?: unknown;
     aiPackageDimsJson?: unknown;
     ebayShippingOverride?: string | null;
+    createdAt?: Date | string | null;
   },
   opts: { forNewListing: boolean }
 ): EligibilityCheckItem {
@@ -1644,6 +1658,7 @@ export function buildListingEligibilityItem(
   // 2026-10-27: pickup-only applies to new listings AND the takedown sweep (set only when present, so callers'
   // object shapes are unchanged for every other item).
   if (it.ebayShippingOverride != null) out.ebayShippingOverride = it.ebayShippingOverride;
+  if (it.createdAt != null) out.createdAt = it.createdAt; // COLLECTIBLE_ROUTING cutoff (new intake only)
   if (opts.forNewListing) {
     out.forNewListing = true; // Poshmark size/no-data gate and $ minimum apply to NEW listings only
     out.price = num(it.price);
@@ -1759,6 +1774,10 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
 
     if (rule.type === 'COLLECTIBLE_ROUTING') {
       if (item.forNewListing !== true) continue; // never affects listings that are already live
+      // New intake only: items created before the cutoff, or with no createdAt, are existing inventory.
+      if (item.createdAt == null) continue;
+      const createdMs = item.createdAt instanceof Date ? item.createdAt.getTime() : Date.parse(String(item.createdAt));
+      if (!Number.isFinite(createdMs) || createdMs < COLLECTIBLE_ROUTING_SINCE_MS) continue;
       const family = detectCategoryFamily({ category: item.category, title: item.title });
       // Game consoles and controllers are electronics hardware, which Poshmark allows (2026-10-17): only games,
       // cartridges and manuals are routed away.

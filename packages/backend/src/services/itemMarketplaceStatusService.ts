@@ -397,6 +397,7 @@ export const ITEM_STATUS_SELECT = {
   stockTotal: true, // 1.0.76: Vinted "sold one, N left" note (vintedReadyToListAgain)
   stockSold: true,
   ebayShippingOverride: true, // 2026-10-27: pickup-only is ineligible on Poshmark, Mercari, Vinted, Grailed and Etsy (live listing flagged for removal)
+  createdAt: true, // 2026-11-05: COLLECTIBLE_ROUTING applies only to items created on/after COLLECTIBLE_ROUTING_SINCE
 } as const;
 
 /** Longest the status endpoint waits for eBay's condition policy; the lookup keeps running and fills its cache. */
