@@ -12,8 +12,9 @@
  *    ones) is left untouched, so real Russian/Greek text survives.
  *  - Zero-width characters (U+200B..U+200D, U+2060, U+FEFF) are stripped everywhere.
  *
- * Pure: no I/O, no env, no imports. normalizeTextField() is the logging wrapper for write paths.
+ * Pure: no I/O, no env, only import is the pure titleCaps helper (2026-11-08). normalizeTextField() is the logging wrapper for write paths.
  */
+import { normalizeTitleCaps } from './titleCaps';
 
 /** Cyrillic and Greek letters that render the same as a Latin letter in common fonts. */
 const LOOKALIKE_TO_LATIN: Readonly<Record<string, string>> = {
@@ -140,6 +141,12 @@ export function normalizeTaggedText<R extends { title?: string | null; descripti
   if (!result) return result;
   const r = result as { title?: string | null; description?: string | null };
   if (typeof r.title === 'string') r.title = normalizeTextField(r.title, `${context} title`);
+  // 2026-11-08: ALL-CAPS name words copied from a card/label ("Paulo O'NEILL") never reach a title; codes with digits,
+  // known acronyms and an all-caps brand are kept.
+  if (typeof r.title === 'string') {
+    const brand = (result as { brand?: unknown }).brand;
+    r.title = normalizeTitleCaps(r.title, [typeof brand === 'string' ? brand : null]);
+  }
   if (typeof r.description === 'string') r.description = normalizeTextField(r.description, `${context} description`);
   return result;
 }

@@ -25,6 +25,7 @@ import {
   trackAICall,
 } from '../lib/aiCostTracker';
 import { getCategoryFamilySpec, type CategoryFamily } from './intakeCategoryFamilies';
+import { isShoutedWord, normalizeTitleCaps } from './titleCaps';
 import type { AppliedIntakeCorrection, IntakeReviewNote, PrintedTextTranscription, VerifyPassStatus, VerifyPassUsage } from './intakeReviewTypes';
 
 /** Pass-1 fields the verify pass may check and correct. */
@@ -197,6 +198,166 @@ function display(v: unknown): string | number | null {
 export interface ApplyVerifyOptions {
   userEditedFields?: readonly string[] | null;
   threshold?: number;
+  /** Vision OCR text for the item; with the pass-1 printedText it is the evidence a name-spelling change needs. */
+  ocrText?: string | null;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Safety guards (2026-11-08). Live incident: the verify pass returned {field:"description", new:"<short fragment>"}
+// ("Card back is visible in photo 2.") and the fragment replaced the whole description; it also "corrected" a right
+// title spelling ("Paul O'Neill") to a hallucinated one in ALL CAPS ("Paulo O'NEILL"). These guards run on every
+// high-confidence correction before it is applied (intake and the inventory recheck both go through here). A
+// correction that fails a guard is never applied; it becomes a review note instead.
+// ---------------------------------------------------------------------------------------------------------------
+
+/** A current description shorter than this may be replaced outright (nothing worth keeping to lose). */
+export const DESC_VERY_SHORT = 40;
+/** Max length of a fragment that may be appended as a sentence. */
+export const DESC_APPEND_MAX = 220;
+
+/** Distinct lowercase words longer than 3 characters (a trailing plural "s" is dropped so Card/Cards match). */
+export function significantTokens(text: unknown): Set<string> {
+  const out = new Set<string>();
+  for (const raw of String(text ?? '').toLowerCase().split(/[^a-z0-9]+/)) {
+    if (raw.length <= 3) continue;
+    out.add(raw.length > 4 && raw.endsWith('s') ? raw.slice(0, -1) : raw);
+  }
+  return out;
+}
+
+/** Share of `base`'s significant tokens that are still present in `next` (1 when base has none). */
+export function tokenRetention(base: unknown, next: unknown): number {
+  const a = significantTokens(base);
+  if (a.size === 0) return 1;
+  const b = significantTokens(next);
+  let kept = 0;
+  for (const t of a) if (b.has(t)) kept += 1;
+  return kept / a.size;
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+const PHOTO_REF = /\b(photos?|pictures?|pictured|images?|shown|visible|scans?)\b/i;
+const GRADING_REF = /\b(raw|ungraded|graded|grade|psa|bgs|sgc|cgc|slab|slabbed|encapsulated)\b/i;
+const CONDITION_REF = /\b(mint|excellent|good|fair|poor|wear|worn|damaged?|creases?|creased|scratch(es|ed)?|chip(s|ped)?|stains?|stained|tears?|torn|sealed|unused|dings?|corners?|centering|condition)\b/i;
+
+export type DescriptionGuard =
+  | { action: 'replace'; value: string }
+  | { action: 'append'; value: string }
+  | { action: 'note'; why: string };
+
+/**
+ * Decides what to do with a high-confidence description correction. Exported for tests.
+ *   - replace: the current description is empty/very short, or `next` is a plausible FULL rewrite (at least 70% of the
+ *     current length, at least 60 chars when the current is 60+, and it keeps at least 60% of the current description's
+ *     distinct words longer than 3 characters).
+ *   - append (safe addition): `next` is a short new sentence (<= 220 chars) that adds a fact (e.g. "The card is raw.")
+ *     without overlapping the existing text, does not talk about the photos, and cannot contradict what is already
+ *     there: it is not appended when both mention grading, both mention condition, or it carries a year the
+ *     description does not have. It is added as a sentence at the end; nothing existing is removed.
+ *   - note: anything else (a partial rewrite or fragment). No change; the organizer sees the suggestion.
+ */
+export function guardDescriptionCorrection(current: unknown, next: string): DescriptionGuard {
+  const cur = String(current ?? '').trim();
+  const nxt = next.trim();
+  if (cur.length < DESC_VERY_SHORT) return { action: 'replace', value: nxt };
+  const lengthOk = nxt.length >= cur.length * 0.7 && (cur.length < 60 || nxt.length >= 60);
+  const retention = tokenRetention(cur, nxt);
+  if (lengthOk && retention >= 0.6) return { action: 'replace', value: nxt };
+  // Not a full rewrite. Consider appending it as a new sentence.
+  if (nxt.length > DESC_APPEND_MAX) return { action: 'note', why: 'it would drop most of the current description' };
+  if (PHOTO_REF.test(nxt)) return { action: 'note', why: 'it describes the photos, not the item' };
+  if (cur.toLowerCase().includes(nxt.toLowerCase().replace(/[.!?]+$/, ''))) return { action: 'note', why: 'the description already says this' };
+  const overlap = tokenRetention(nxt, cur); // share of the fragment's words the description already has
+  if (overlap > 0.5) return { action: 'note', why: 'it is a partial rewrite that would drop the rest of the description' };
+  if (GRADING_REF.test(nxt) && GRADING_REF.test(cur)) return { action: 'note', why: 'the description already covers grading' };
+  if (CONDITION_REF.test(nxt) && CONDITION_REF.test(cur)) return { action: 'note', why: 'the description already covers condition' };
+  const years = nxt.match(/\b(1[89]\d\d|20\d\d)\b/g) || [];
+  if (years.some((y) => !cur.includes(y))) return { action: 'note', why: 'it adds a year the description does not have' };
+  const joined = `${cur.replace(/\s+$/, '')}${/[.!?]$/.test(cur) ? '' : '.'} ${nxt}${/[.!?]$/.test(nxt) ? '' : '.'}`;
+  if (joined.length > 2000) return { action: 'note', why: 'the description would be too long' };
+  return { action: 'append', value: joined };
+}
+
+function wordsOf(text: string): string[] {
+  return text.split(/\s+/).map((w) => w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '')).filter(Boolean);
+}
+
+/** Evidence text for spelling: OCR plus everything pass 1 transcribed from the item. */
+export function spellingEvidence(result: VerifiableResult, ocrText?: string | null): string {
+  const pt = result.printedText;
+  const parts: unknown[] = [ocrText, result.detectedPrintedText];
+  if (pt && typeof pt === 'object') {
+    parts.push(pt.brand, ...(pt.modelNumbers || []), ...(pt.catalogNumbers || []), ...(pt.credits || []), ...(pt.counts || []), ...(pt.other || []));
+  }
+  return parts.filter((p) => typeof p === 'string' && p.trim()).join(' \n ').toLowerCase();
+}
+
+/**
+ * Word-level spelling changes between `from` and `to`: a new word (4+ letters) that replaces a removed word sharing its
+ * first two letters within 2 edits ("Paul" -> "Paulo", "Jefferies" -> "Jeffries"). Exported for tests.
+ */
+export function spellingChanges(from: string, to: string): Array<{ from: string; to: string }> {
+  const fromWords = wordsOf(from);
+  const toWords = wordsOf(to);
+  const fromLower = new Set(fromWords.map((w) => w.toLowerCase()));
+  const toLower = new Set(toWords.map((w) => w.toLowerCase()));
+  const removed = fromWords.filter((w) => !toLower.has(w.toLowerCase()) && !/\d/.test(w));
+  const out: Array<{ from: string; to: string }> = [];
+  for (const w of toWords) {
+    const lw = w.toLowerCase();
+    if (fromLower.has(lw) || /\d/.test(w) || lw.replace(/[^a-z]/g, '').length < 4) continue;
+    const match = removed.find((r) => {
+      const lr = r.toLowerCase();
+      if (lr + 's' === lw || lw + 's' === lr || lr + 'es' === lw || lw + 'es' === lr) return false; // plural, not spelling
+      return lr.slice(0, 2) === lw.slice(0, 2) && levenshtein(lr, lw) <= 2;
+    });
+    if (match) out.push({ from: match, to: w });
+  }
+  return out;
+}
+
+/**
+ * Title guard. Returns null when the title correction is safe to apply, or the reason it is not. Exported for tests.
+ *   (a) it drops more than 40% of the current title's significant words;
+ *   (b) it introduces an ALL-CAPS word (3+ letters) the current title did not have in caps (codes with digits and
+ *       known acronyms are fine);
+ *   (c) it changes the spelling of a word (a name) and the OCR / printed text does not contain the new spelling.
+ */
+export function guardTitleCorrection(current: unknown, next: string, evidence: string): string | null {
+  const cur = String(current ?? '');
+  if (cur.trim()) {
+    if (tokenRetention(cur, next) < 0.6) return 'it would drop too much of the current title';
+    const curCaps = new Set(cur.split(/\s+/).filter((w) => isShoutedWord(w)).map((w) => w.replace(/[^A-Za-z]/g, '')));
+    const newCaps = next.split(/\s+/).filter((w) => isShoutedWord(w) && !curCaps.has(w.replace(/[^A-Za-z]/g, '')));
+    if (newCaps.length > 0) return `it puts "${newCaps[0]}" in capitals`;
+    const unsupported = spellingChanges(cur, next).find((c) => !evidence || !evidence.includes(c.to.toLowerCase()));
+    if (unsupported) return `the text read from the photos does not show the spelling "${unsupported.to}"`;
+  }
+  return null;
+}
+
+/** Brand guard: a spelling change to the brand needs OCR / printed-text support. */
+export function guardBrandCorrection(current: unknown, next: unknown, evidence: string): string | null {
+  if (typeof current !== 'string' || !current.trim() || typeof next !== 'string' || !next.trim()) return null;
+  const a = current.trim().toLowerCase();
+  const b = next.trim().toLowerCase();
+  if (a === b) return null;
+  if (levenshtein(a, b) <= 2 && (!evidence || !evidence.includes(b))) return `the text read from the photos does not show the spelling "${next.trim()}"`;
+  return null;
 }
 
 /**
@@ -213,6 +374,8 @@ export function applyVerifyCorrections<T extends VerifiableResult>(
   const threshold = opts.threshold ?? verifyApplyThreshold();
   const edited = new Set((opts.userEditedFields || []).map((f) => String(f)));
   const touched = new Set<string>();
+  let evidenceCache: string | null = null;
+  const evidence = (): string => (evidenceCache ??= spellingEvidence(result, opts.ocrText));
   try {
     for (const c of corrections) {
       try {
@@ -231,28 +394,51 @@ export function applyVerifyCorrections<T extends VerifiableResult>(
         const staleOld = typeof c.old === 'string' && oldText.length > 0 && !normText(display(current)).includes(oldText);
         const label = FIELD_LABEL[field] || field;
         const reason = c.reason ? c.reason.replace(/\u2014/g, ',') : '';
+        // Safety guards: decide the value to write, or why it must stay a note.
+        let finalValue: unknown = cleaned;
+        let blockedWhy: string | null = null;
+        let appendedDesc = false;
         if (c.confidence >= threshold && !staleOld) {
-          (result as unknown as Record<string, unknown>)[field] = field === 'brand' && cleaned === null ? undefined : cleaned;
+          if (field === 'description' && typeof cleaned === 'string') {
+            const g = guardDescriptionCorrection(current, cleaned);
+            if (g.action === 'note') blockedWhy = g.why;
+            else {
+              finalValue = g.value;
+              appendedDesc = g.action === 'append';
+            }
+          } else if (field === 'title' && typeof cleaned === 'string') {
+            blockedWhy = guardTitleCorrection(current, cleaned, evidence());
+            if (!blockedWhy) finalValue = normalizeTitleCaps(cleaned, [typeof result.brand === 'string' ? result.brand : null]);
+          } else if (field === 'brand') {
+            blockedWhy = guardBrandCorrection(current, cleaned, evidence());
+          }
+          if (!blockedWhy && normText(display(current)) === normText(display(finalValue))) continue;
+        }
+        if (c.confidence >= threshold && !staleOld && !blockedWhy) {
+          (result as unknown as Record<string, unknown>)[field] = field === 'brand' && finalValue === null ? undefined : finalValue;
           touched.add(field);
-          applied.push({ field, from: current ?? null, to: cleaned, reason, confidence: c.confidence, source: 'verify' });
+          applied.push({ field, from: current ?? null, to: finalValue, reason: appendedDesc ? `${reason}${reason ? ' ' : ''}(added to the description)` : reason, confidence: c.confidence, source: 'verify' });
           notes.push({
             code: 'VERIFY_APPLIED',
             severity: 'info',
             source: 'verify',
             field,
-            message: `Updated the ${label} to match the photos${reason ? `: ${reason}` : '.'}`,
+            message: appendedDesc
+              ? `Added a sentence to the description${reason ? `: ${reason}` : '.'}`
+              : `Updated the ${label} to match the photos${reason ? `: ${reason}` : '.'}`,
             current: display(current),
-            suggested: display(cleaned),
+            suggested: display(finalValue),
             confidence: c.confidence,
           });
         } else {
           touched.add(field);
+          if (blockedWhy) console.warn(`[intakeVerify] ${field} correction not applied (${blockedWhy})`);
           notes.push({
             code: 'VERIFY_SUGGESTION',
             severity: c.confidence >= 0.5 ? 'medium' : 'low',
             source: 'verify',
             field,
-            message: `Check the ${label}${reason ? `: ${reason}` : '.'}`,
+            message: `Check the ${label}${reason ? `: ${reason}` : '.'}${blockedWhy ? ` (Not changed automatically: ${blockedWhy}.)` : ''}`,
             current: display(current),
             suggested: display(cleaned),
             confidence: c.confidence,
@@ -316,8 +502,10 @@ export function buildVerifyPrompt(args: Omit<RunVerifyPassArgs, 'imageBase64Arra
 Draft (JSON): ${pass1Json}
 ${photos}${prior}${facts}${shots}
 
+A correction replaces the WHOLE field. For "description", "new" must be the COMPLETE corrected description: keep every existing fact (player, year, set, card number, condition, and so on) and change only the part that is wrong or missing. Never return a fragment or a single added sentence as "new" for the description. Never mention the photos ("photo 2", "shown", "visible") in a description. For "title", "new" must be the complete corrected title in Title Case (never ALL CAPS names), keeping every correct word.
+
 Check, field by field:
-- Printed text: brand, model numbers, catalog numbers, credits/names and titles must be spelled EXACTLY as printed on the item. Never "correct" a printed spelling to a more familiar word and never invent text.
+- Printed text: brand, model numbers, catalog numbers, credits/names and titles must be spelled EXACTLY as printed on the item. Never "correct" a printed spelling to a more familiar word and never invent text. Only change the spelling of a name when the OCR text above shows the new spelling; otherwise leave it.
 - Counts: the number of pieces in the title and description must match the number of pieces you can see. If packaging prints a different number than what is present, the description must say so. A lot stays a lot: never turn a lot of several items into a single item.
 - Years: every year in the title, the description and the tags must be the same year, read from the item itself (the card front or back, the copyright line, the label). If the title and the description disagree, correct the one that does not match what is printed.
 - Set names: for trading cards the set name AND any subset or insert name printed on the card (for example "EX2000", "Xpress", "Pro Motion", "Highlights") belong in the title. Never drop one that is printed or that the draft or earlier listing already had.

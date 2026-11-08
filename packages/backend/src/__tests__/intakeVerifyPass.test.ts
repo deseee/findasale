@@ -67,7 +67,7 @@ describe('applyVerifyCorrections (merge rules)', () => {
       { field: 'brand', old: 'Kalani', new: 'Kalan', reason: 'Headstock reads Kalan', confidence: 0.95 },
       { field: 'condition', old: 'NEW', new: 'USED', reason: 'Visible wear on the body', confidence: 'high' },
       { field: 'tags', old: 'DVD Writer', new: ['Ukulele', 'Soprano Ukulele'], reason: 'Tag names a different device', confidence: 0.6 },
-    ]), { threshold: 0.85 });
+    ]), { threshold: 0.85, ocrText: 'KALAN soprano' }); // 2026-11-08: a brand spelling change needs OCR support
     expect(r.brand).toBe('Kalan');
     expect(r.condition).toBe('USED');
     expect(r.tags).toEqual(['Ukulele', 'DVD Writer']); // low confidence: not applied

@@ -5,6 +5,8 @@ Sentry.init({
   environment: process.env.NODE_ENV || 'development',
   tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 0,
   enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
+  // 2026-11-08 span budget: per-file resource and paint/mark timing spans add volume, not signal.
+  ignoreSpans: [{ op: /^resource\./ }, { op: 'mark' }, { op: 'measure' }, { op: 'paint' }],
   // Replay captures sessions when an error occurs — 0% normally, 100% on error
   replaysSessionSampleRate: 0,
   replaysOnErrorSampleRate: 1.0,

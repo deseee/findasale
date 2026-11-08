@@ -14,6 +14,10 @@ Sentry.init({
   environment: process.env.NODE_ENV || 'development',
   tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 0,
   enabled: !!process.env.SENTRY_DSN,
+  // 2026-11-08 span budget: Express middleware/router/handler spans were ~80% of all spans (28M+ middleware spans
+  // in 14 days) and carry no signal beyond the http.server span. Log-ingest endpoints are traced for nothing.
+  ignoreSpans: [{ op: 'middleware.express' }, { op: 'router.express' }, { op: 'request_handler.express' }],
+  ignoreTransactions: ['POST /api/crawler-log', 'POST /api/internal/isr-log'],
   beforeSend(event, hint) {
     // Drop MulterError: Unexpected field — this is a handled 400 (stale client sending wrong
     // field name to POST /upload/rapidfire). Sentry v8 OTEL instrumentation captures it at

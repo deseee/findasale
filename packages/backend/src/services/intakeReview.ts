@@ -28,6 +28,7 @@ import {
 import { dedupeAdjacentWords, extractCounts, runConsistencyChecks, stripPhotoAbsenceClaims } from './intakeConsistencyChecks';
 import { lotSignal, preserveLotCount, preserveSetNames } from './intakePreservation';
 import { applyVerifyCorrections, runVerifyPass, type VerifiableResult } from './intakeVerifyPass';
+import { normalizeTitleCaps } from './titleCaps';
 import type { AppliedIntakeCorrection, IntakeReview, IntakeReviewNote, VerifyPassStatus } from './intakeReviewTypes';
 
 export type { IntakeReview, IntakeReviewNote } from './intakeReviewTypes';
@@ -129,6 +130,16 @@ export function applyDeterministicFixes(
       const d = dedupeAdjacentWords(result.title, evidence);
       if (d.removed.length > 0) {
         fix('title', d.title, `repeated word "${d.removed[0]}"`, 'consistency', 'TITLE_DUPLICATE_FIXED', `Removed the repeated word "${d.removed[0]}" from the title.`);
+      }
+    }
+  } catch { /* never block tagging */ }
+
+  // 1b. ALL-CAPS name words ("Paulo O'NEILL") -> Title Case. Codes with digits, known acronyms and an all-caps brand stay.
+  try {
+    if (!titleLocked && typeof result.title === 'string') {
+      const t = normalizeTitleCaps(result.title, [typeof result.brand === 'string' ? result.brand : null]);
+      if (t !== result.title) {
+        fix('title', t, 'all-caps words', 'consistency', 'TITLE_CAPS_FIXED', 'Changed ALL-CAPS words in the title to Title Case.');
       }
     }
   } catch { /* never block tagging */ }
@@ -387,7 +398,7 @@ export async function runIntakeQuality(result: IntakeQualityResult, input: Intak
       missingShots = verify.missingShots;
       photosUnclear = verify.photosUnclear;
       if (verify.corrections.length > 0) {
-        const merged = applyVerifyCorrections(result, verify.corrections, { userEditedFields: input.userEditedFields });
+        const merged = applyVerifyCorrections(result, verify.corrections, { userEditedFields: input.userEditedFields, ocrText: input.ocrText });
         appliedCorrections.push(...merged.applied);
         notes.push(...merged.notes);
         family = familyOf(result, input.objectLabels) ?? family;
