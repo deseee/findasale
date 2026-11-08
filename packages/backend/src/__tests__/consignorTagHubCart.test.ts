@@ -42,7 +42,6 @@ jest.mock('../services/bulkLot/bulkLotBoothCartService', () => ({
   reserveCartLotLines: jest.fn(),
   settleCartLotLine: jest.fn(),
 }));
-jest.mock('../utils/stripe', () => ({ getStripe: jest.fn() }));
 jest.mock('../services/checkoutGuard', () => {
   class CheckoutGuardError extends Error {}
   return { CheckoutGuardError, assertBoothCartCheckoutAllowed: jest.fn() };

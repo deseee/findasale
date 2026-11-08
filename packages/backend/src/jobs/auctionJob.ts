@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { gateCardCharge, defaultGateDeps } from '../services/restrictedItem/cardPaymentGate'; // 2026-11-06 restricted-item card gate
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from '../services/xpService'; // Explorer's Guild XP awards
@@ -222,7 +223,25 @@ export const endAuctions = async () => {
         // neither processor -- see the fallback branch below, which forces the resulting
         // Purchase to PENDING (never a silent, uncollected 'PAID') until they complete Square
         // onboarding.
+        // Restricted-item card gate (2026-11-06): a blocked lot gets NO card link. The winner's Purchase is still recorded
+        // PENDING below (same as the not-Square-eligible branch) and is collected in cash. Read through `tx`: this
+        // transaction already holds the item's row lock (see defaultGateDeps).
+        let auctionCardAllowed = true;
         if (organizerHasSquare && highestBid) {
+          const gate = await gateCardCharge({
+            processor: 'SQUARE',
+            organizerId: currentItem.sale!.organizerId,
+            lines: [{ itemId: currentItem.id, amountCents: buyerChargeCents }],
+            cardChargeCents: buyerChargeCents,
+            context: { path: 'square.online.auctionClose', buyerUserId: highestBid.userId, sessionRef: currentItem.id },
+            deps: defaultGateDeps(tx as any),
+          });
+          if (!gate.ok) {
+            auctionCardAllowed = false;
+            console.warn(`[auctionJob] item ${currentItem.id}: card payment blocked by the restricted-item gate -- no payment link; winning bid recorded PENDING for cash collection.`);
+          }
+        }
+        if (organizerHasSquare && highestBid && auctionCardAllowed) {
           const linkResult = await createSquareCheckoutLink({
             organizerId: currentItem.sale!.organizerId,
             idempotencyKey: buildSquareIdempotencyKey(['auction-square', currentItem.id]),
@@ -239,7 +258,7 @@ export const endAuctions = async () => {
           } else {
             console.error(`[auctionJob] Square payment link creation failed for item ${currentItem.id}: ${linkResult.code} -- ${linkResult.message}`);
           }
-        } else if (highestBid) {
+        } else if (highestBid && auctionCardAllowed) {
           console.warn(`Organizer for item ${currentItem.id} is not Square-eligible (missing/incomplete Square onboarding) -- skipping payment link creation. Winning bid recorded as PENDING pending organizer Square onboarding.`);
         }
 

@@ -1,4 +1,6 @@
 import { getFinixClient } from './finixConnectService';
+import { prisma } from '../lib/prisma';
+import { assertCardAllowedForItems, cardGateResponseBody, type CardGateLine, type CardGateResponseBody } from './restrictedItem/cardPaymentGate';
 
 /**
  * Finix Payment Service (2026-09-18, sandbox build-ahead-of-approval)
@@ -45,6 +47,18 @@ export interface FinixSplitTransfer {
 }
 
 export interface FinixTransferParams {
+  /**
+   * RESTRICTED-ITEM GATE (2026-11-06) -- REQUIRED. The FindA.Sale organizer this transfer charges for, and every line it
+   * charges for (itemId null for a line with no Item row). createFinixTransfer runs assertCardAllowedForItems('FINIX',
+   * ...) BEFORE any Finix call and refuses the whole transfer (code CARD_PAYMENT_BLOCKED, no network call) unless every
+   * line is card-allowed AND the line amounts sum exactly to amountCents. A caller with a mixed cart must split first
+   * (record the blocked lines as cash) and pass only the allowed lines. No caller can bypass this: it is inside the one
+   * function that talks to Finix.
+   */
+  organizerId: string;
+  lines: CardGateLine[];
+  /** Audit context: stable path name and an optional cart/invoice reference (never a card token). */
+  gateContext?: { path?: string; buyerUserId?: string | null; sessionRef?: string | null };
   /** The merchant the funds are sourced from / the "parent" transfer merchant -- UNCONFIRMED exact required-field semantics against a real charge (card charge vs merchant-to-merchant transfer may differ). */
   merchantId: string;
   /** Payment instrument id (tokenized card) -- UNCONFIRMED exact field name ("source" per the split-transactions example pulled 2026-09-18). */
@@ -81,6 +95,8 @@ export interface FinixTransferFailure {
   code: string;
   message: string;
   raw?: unknown;
+  /** Set when code === 'CARD_PAYMENT_BLOCKED': the per-item split for the frontend (see cardPaymentGate.ts). */
+  cardGate?: CardGateResponseBody;
 }
 
 export type FinixTransferResult = FinixTransferSuccess | FinixTransferFailure;
@@ -95,7 +111,8 @@ const DECLINE_MESSAGE = 'Your card was declined. Please check your card details 
  * production approval lands and the party-count question above is resolved.
  *
  * NOT wired into any controller/route yet -- this is isolated new code per this
- * dispatch's scope, not yet reachable from any live checkout path.
+ * dispatch's scope, not yet reachable from any live checkout path. The restricted-item gate (2026-11-06) is built in
+ * at the top of this function, so the first caller that wires it in is gated automatically.
  *
  * IDEMPOTENCY RECOVERY -- CONFIRMED and IMPLEMENTED 2026-09-19 (real sandbox testing, full
  * test suite pass): Finix does not transparently replay a duplicate idempotency_id the way
@@ -108,6 +125,40 @@ const DECLINE_MESSAGE = 'Your card was declined. Please check your card details 
  * test suite)", "Idempotency-duplicate error shape" for the exact confirmed evidence.
  */
 export async function createFinixTransfer(params: FinixTransferParams): Promise<FinixTransferResult> {
+  // RESTRICTED-ITEM GATE (2026-11-06): runs before getFinixClient() so a blocked transfer never touches Finix.
+  if (!params.organizerId || !Array.isArray(params.lines) || params.lines.length === 0) {
+    return { ok: false, code: 'CARD_GATE_LINES_REQUIRED', message: 'A Finix transfer must name its organizer and item lines.' };
+  }
+  const linesTotal = params.lines.reduce((sum, l) => sum + Math.round(Number(l.amountCents) || 0), 0);
+  if (linesTotal !== Math.round(params.amountCents)) {
+    return {
+      ok: false,
+      code: 'CARD_GATE_LINES_MISMATCH',
+      message: `Item lines (${linesTotal}) do not sum to the transfer amount (${params.amountCents}).`,
+    };
+  }
+  // Hacker pass (2026-11-06): the gate must judge the organizer whose Finix merchant is actually charged. Bind the
+  // caller-supplied organizerId to merchantId in the database, so a future caller cannot pass an unsuspended organizer
+  // for another organizer's (suspended / restricted) merchant. A vendor booth or consignor merchant has no Organizer row
+  // with that finixMerchantId, so such a caller must pass the hub/sale organizer whose merchant it is charging; anything
+  // else fails closed here.
+  const merchantOwner = await (prisma as any).organizer.findFirst({
+    where: { id: params.organizerId, finixMerchantId: params.merchantId },
+    select: { id: true },
+  });
+  if (!merchantOwner) {
+    return { ok: false, code: 'CARD_GATE_MERCHANT_MISMATCH', message: 'The Finix merchant does not belong to this organizer.' };
+  }
+  const decision = await assertCardAllowedForItems('FINIX', params.lines, params.organizerId, {
+    path: params.gateContext?.path || 'finix.transfer',
+    buyerUserId: params.gateContext?.buyerUserId ?? null,
+    sessionRef: params.gateContext?.sessionRef ?? params.idempotencyKey ?? null,
+  });
+  if (!decision.allCardAllowed) {
+    const body = cardGateResponseBody(decision);
+    return { ok: false, code: 'CARD_PAYMENT_BLOCKED', message: body.message, cardGate: body };
+  }
+
   const client = getFinixClient();
 
   if (params.splitTransfers && params.splitTransfers.length > 0) {

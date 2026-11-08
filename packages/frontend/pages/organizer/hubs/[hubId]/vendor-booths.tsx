@@ -16,7 +16,7 @@ import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
 import TierGate from '../../../../components/TierGate';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
-import HubOwnerStripeOnboarding from '../../../../components/HubOwnerStripeOnboarding';
+import HubOwnerSquareOnboarding from '../../../../components/HubOwnerSquareOnboarding';
 import HubManagementNav from '../../../../components/HubManagementNav';
 import { Trash2, Edit2, Copy, Check, Mail, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -237,7 +237,7 @@ const buildNotifyRows = (booth: VendorBooth): NotifyRow[] => {
       at: booth.confirmNotifiedAt,
       detail:
         confirmState === 'sent'
-          ? `${vendor} was told their booth is confirmed and asked to connect Stripe.`
+          ? `${vendor} was told their booth is confirmed and asked to connect a payment account.`
           : confirmState === 'missing'
             ? `You confirmed this booth and ${vendor} was never told. They are waiting on you.`
             : confirmState === 'untracked'
@@ -260,9 +260,12 @@ const buildNotifyRows = (booth: VendorBooth): NotifyRow[] => {
                 ? 'Nobody ever claimed this booth or was invited to it, so there is nobody to tell.'
                 : 'This booth has not been rejected or cancelled.',
     },
+    // Stripe is retired (2026-11-04): this row is shown only for a booth that actually connected Stripe in
+    // the past (a historical record); for everyone else the Square row below is the only one that applies.
+    ...(booth.stripeOnboarded || booth.stripeNotifiedAt ? [
     {
       key: 'stripe',
-      label: 'Stripe alert to you',
+      label: 'Stripe alert to you (before the switch to Square)',
       state: stripeState,
       at: booth.stripeNotifiedAt,
       detail:
@@ -274,6 +277,7 @@ const buildNotifyRows = (booth: VendorBooth): NotifyRow[] => {
               ? 'Stripe was connected before we started recording these alerts, so we cannot say.'
               : 'This vendor has not connected Stripe yet.',
     },
+    ] as NotifyRow[] : []),
     {
       key: 'square',
       label: 'Square alert to you',
@@ -770,7 +774,7 @@ const VendorBoothsPage: React.FC = () => {
   const feeChargeStatusLabel = (status: string) => {
     switch (status) {
       case 'PENDING_PAYMENT_METHOD': return 'Awaiting vendor payment method';
-      case 'PENDING_STRIPE_ONBOARDING': return 'Awaiting hub Stripe setup';
+      case 'PENDING_STRIPE_ONBOARDING': return 'Awaiting hub payment setup';
       default: return status.charAt(0) + status.slice(1).toLowerCase();
     }
   };
@@ -825,7 +829,7 @@ const VendorBoothsPage: React.FC = () => {
 
           {/* ADR-090 Phase 1: prompts the hub owner to connect Stripe when a booth's
               revenue-share agreement needs it -- renders nothing once already onboarded. */}
-          <HubOwnerStripeOnboarding />
+          <HubOwnerSquareOnboarding />
 
           {/* Claimed-but-unconfirmed booths are blocked from selling entirely, so they get
               said out loud at the top of the page instead of only being findable by

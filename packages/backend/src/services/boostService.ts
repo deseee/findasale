@@ -8,9 +8,8 @@
  *            no organizer involved) → BoostPurchase status=ACTIVE immediately on success.
  *            Added when Square replaced Stripe as FindA.Sale's only payment processor;
  *            covers the case a user is short on XP and pays the cash price instead.
- *   STRIPE → permanently blocked (FindA.Sale's Stripe platform account is permanently
- *            closed). Kept only so a raw/stale API caller gets a clean 503 instead of
- *            a guaranteed Stripe-account error.
+ *   STRIPE → retired (owner decision 2026-11-04). A raw/stale API caller that still sends
+ *            STRIPE gets a clean STRIPE_UNAVAILABLE error; no Stripe call exists here.
  *
  * XP rail is wrapped in a Prisma $transaction so ledger and BoostPurchase land atomically.
  * SQUARE rail creates the BoostPurchase row only AFTER a successful Square charge (no
@@ -20,12 +19,12 @@
 import { prisma } from '../lib/prisma';
 import { spendXp, awardXp } from './xpService';
 import { getBoostPrice, getEffectiveDurationDays } from './boostPricing';
-import { getStripe } from '../utils/stripe';
 import { getSquarePlatformClient, getPlatformSquareLocationId } from '../utils/square';
 import { toSquareMoney, buildSquareIdempotencyKey } from './squarePaymentService';
 import { SquareError } from 'square';
 import { BoostType, PaymentMethod } from '@prisma/client';
 import { createNotification } from '../lib/notificationService';
+import { StripeRetiredError } from '../utils/stripe';
 
 export interface PurchaseBoostParams {
   boostType: BoostType;
@@ -289,114 +288,17 @@ export async function purchaseBoost(
     return { boostPurchase: boost };
   }
 
-  // ─── STRIPE RAIL ───────────────────────────────────────────────────────
-  // Idempotency fix (findasale-dev, architect-approved): this flow is
-  // authenticated-only — boostController.ts buyBoost() 401s without req.user, and
-  // POST /api/boosts/purchase (routes/boosts.ts) requires the `authenticate`
-  // middleware. There is no guest path here (unlike guest checkout in
-  // stripeController.ts createPaymentIntent), so a stable key can be built purely
-  // from userId + target + tier — no per-request random suffix needed. Mirrors the
-  // `pi-${itemId}-${req.user.id}${couponSuffix}` pattern in stripeController.ts
-  // createPaymentIntent (~L642-648).
-  const idempotencyKey = `boost-${userId}-${boostType}-${targetType ?? 'none'}-${targetId ?? 'none'}-${effectiveDuration}`;
-
-  // DB-level guard (defense-in-depth alongside the Stripe idempotencyKey — mirrors
-  // the reuse-existing-row pattern in stripeController.ts createPaymentIntent around
-  // its stripePaymentIntentId lookup, "BUG 1 fix"): if a recent PENDING
-  // BoostPurchase already exists for this exact user+target+tier, reuse it instead
-  // of creating a duplicate row. Window is generous (1h) since a legitimate re-buy
-  // of the identical boost within that window is rare and the row will otherwise
-  // have flipped to ACTIVE/EXPIRED by then.
-  const RECENT_PENDING_WINDOW_MS = 60 * 60 * 1000;
-  const existingPending = await prisma.boostPurchase.findFirst({
-    where: {
-      userId,
-      boostType,
-      targetType: targetType ?? null,
-      targetId: targetId ?? null,
-      paymentMethod: 'STRIPE',
-      status: 'PENDING',
-      createdAt: { gte: new Date(Date.now() - RECENT_PENDING_WINDOW_MS) },
-    },
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      boostType: true,
-      status: true,
-      expiresAt: true,
-      activatedAt: true,
-      stripePaymentIntentId: true,
-    },
-  });
-
-  // Create PENDING BoostPurchase FIRST — prevents race condition where webhook
-  // fires before the row exists (ADR Risk R1) — unless a recent one already exists.
-  const pendingBoost =
-    existingPending ??
-    (await prisma.boostPurchase.create({
-      data: {
-        userId,
-        boostType,
-        targetType: targetType ?? null,
-        targetId: targetId ?? null,
-        paymentMethod: 'STRIPE',
-        stripeAmountCents: pricing.stripeAmountCents,
-        durationDays: effectiveDuration,
-        activatedAt,
-        expiresAt,
-        status: 'PENDING',
-      },
-      select: {
-        id: true,
-        boostType: true,
-        status: true,
-        expiresAt: true,
-        activatedAt: true,
-        stripePaymentIntentId: true,
-      },
-    }));
-
-  // Create the Stripe PaymentIntent using the stable idempotencyKey — a genuine
-  // retry (same user, same target, same tier) returns the SAME PaymentIntent from
-  // Stripe instead of minting a new one. If this exact BoostPurchase row already has
-  // a PaymentIntent attached (reused row above), retrieve that PI directly rather
-  // than calling create again.
-  const stripe = getStripe();
-  const paymentIntent = pendingBoost.stripePaymentIntentId
-    ? await stripe.paymentIntents.retrieve(pendingBoost.stripePaymentIntentId)
-    : await stripe.paymentIntents.create(
-        {
-          amount: pricing.stripeAmountCents,
-          currency: 'usd',
-          metadata: {
-            boostPurchaseId: pendingBoost.id,
-            userId,
-            boostType,
-          },
-          description: `FindA.Sale Boost: ${pricing.label}`,
-        },
-        { idempotencyKey }
-      );
-
-  // Store the PaymentIntent ID on the boost record (no-op if already set from a
-  // prior attempt on the reused row).
-  if (!pendingBoost.stripePaymentIntentId) {
-    await prisma.boostPurchase.update({
-      where: { id: pendingBoost.id },
-      data: { stripePaymentIntentId: paymentIntent.id },
-    });
-  }
-
-  return {
-    boostPurchase: pendingBoost,
-    clientSecret: paymentIntent.client_secret ?? undefined,
-  };
+  // The old STRIPE rail (PaymentIntent + webhook activation) was removed with Stripe on 2026-11-04.
+  // STRIPE is refused at the top of this function; anything else that reaches here is unsupported.
+  throw new Error(`[boostService] Unsupported payment method: ${paymentMethod}`);
 }
 
 /**
  * Refund a boost purchase.
  * XP rail: re-award XP via awardXp with BOOST_REFUND type (excluded from rank-up logic).
- * Stripe rail: creates Stripe refund via admin — not callable from user-facing API.
+ * Square rail: refunds the platform-level Square payment.
+ * Stripe rail (historical rows only): Stripe is retired (2026-11-04), so the money cannot be returned from
+ * here; the call throws STRIPE_RETIRED and the row is left unchanged for a manual refund.
  */
 export async function refundBoost(
   boostPurchaseId: string,
@@ -419,10 +321,7 @@ export async function refundBoost(
       preMultipliedHuntPassXp: true,
     });
   } else if (boost.paymentMethod === 'STRIPE' && boost.stripePaymentIntentId) {
-    const stripe = getStripe();
-    await stripe.refunds.create({
-      payment_intent: boost.stripePaymentIntentId,
-    });
+    throw new StripeRetiredError('This boost was paid through Stripe, which is retired. Refund it outside FindA.Sale.');
   } else if (boost.paymentMethod === 'SQUARE' && boost.squarePaymentId) {
     // Platform-level refund -- mirrors the platform-level charge above (getSquarePlatformClient(),
     // never an organizer's own token, since a boost purchase never involved an organizer account).
@@ -456,43 +355,15 @@ export async function expireBoosts(): Promise<number> {
 }
 
 /**
- * Sweep stale PENDING boosts (Stripe rail only -- the XP rail creates ACTIVE
- * BoostPurchase rows directly and never produces PENDING, see purchaseBoost above) --
- * called by boostExpiryJob cron alongside expireBoosts().
+ * Sweep stale PENDING boosts -- called by boostExpiryJob cron alongside expireBoosts().
  *
- * Fix for a confirmed gap (S1187 audit, exhaustive grep of packages/backend/src/jobs/*.ts):
- * boostExpiryJob.ts only ever swept status='ACTIVE' -> 'EXPIRED'. A Stripe-rail boost
- * that never got its webhook (payment_intent.succeeded via stripeController.ts's
- * boostPurchaseId branch, PENDING -> ACTIVE) -- buyer abandons the payment sheet, a
- * webhook delivery is lost -- stayed PENDING forever. BoostPurchase.expiresAt is NOT a
- * usable staleness signal here: it is set at PENDING-creation time to the boost's own
- * FUTURE duration (activatedAt + durationDays, which can be 1 hour, 2 years, or 100
- * years depending on boostType -- see purchaseBoost above), not an abandonment window.
- * createdAt + a fixed threshold is the correct staleness signal instead.
+ * Only the retired Stripe rail ever produced PENDING BoostPurchase rows (the XP and Square rails create
+ * ACTIVE rows directly). Stripe is retired (owner decision 2026-11-04), so a PENDING Stripe boost can no
+ * longer be verified against Stripe. It is never flipped blindly (it might have been paid before the
+ * switch with its webhook missed): rows older than BOOST_PENDING_EXPIRY_HOURS (default 2) are counted
+ * and logged as STRIPE-PENDING-SKIPPED for manual review. No Stripe call is made.
  *
- * Evidence-first Stripe verification (NOT a blind timeout), same philosophy as
- * invoiceExpiryJob.ts / posStrandedSaleReconcileCron.ts / purchaseExpiryJob.ts:
- *   - succeeded                                    -> missed-webhook safety net. Flip
- *     PENDING -> ACTIVE, recomputing activatedAt/expiresAt with the EXACT same logic
- *     stripeController.ts's boost-webhook branch uses (durationDays===999 -> +2yr;
- *     durationDays<=1 -> +1hr; else +durationDays).
- *   - canceled / requires_payment_method /
- *     requires_confirmation                        -> genuinely abandoned. Flip
- *     PENDING -> FAILED.
- *   - anything else (requires_action, requires_capture, processing)
- *                                                   -> still potentially in flight,
- *     left alone, re-checked next run.
- *
- * Race safety: the PENDING -> ACTIVE/FAILED flip is an atomic conditional `updateMany`
- * (WHERE status = 'PENDING') so a webhook resolving the same boost mid-sweep always
- * wins the race. BoostPurchase.stripePaymentIntentId IS @unique (unlike
- * Purchase.stripePaymentIntentId), so no PI-grouping is needed here -- one boost per PI.
- *
- * Kill-switch: set BOOST_EXPIRY_RECLAIM_DISABLED=1 to make this sweep early-return
- * (rollback lever independent of expireBoosts()'s ACTIVE->EXPIRED sweep, which keeps
- * running).
- *
- * Threshold: BOOST_PENDING_EXPIRY_HOURS (default 2).
+ * Kill-switch: set BOOST_EXPIRY_RECLAIM_DISABLED=1 to make this sweep early-return.
  */
 export async function reclaimPendingBoosts(): Promise<{ activated: number; failed: number }> {
   if (process.env.BOOST_EXPIRY_RECLAIM_DISABLED === '1') {
@@ -503,86 +374,13 @@ export async function reclaimPendingBoosts(): Promise<{ activated: number; faile
   const thresholdHours = parseFloat(process.env.BOOST_PENDING_EXPIRY_HOURS ?? '2');
   const cutoff = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
 
-  const candidates = await prisma.boostPurchase.findMany({
+  const stale = await prisma.boostPurchase.count({
     where: { status: 'PENDING', createdAt: { lt: cutoff } },
-    select: { id: true, stripePaymentIntentId: true, userId: true, boostType: true, durationDays: true, createdAt: true },
   });
-
-  if (candidates.length === 0) return { activated: 0, failed: 0 };
-
-  console.log(`[boostService] reclaimPendingBoosts: checking ${candidates.length} PENDING BoostPurchase row(s) older than ${thresholdHours}h.`);
-
-  let activated = 0;
-  let failed = 0;
-  let skippedNoPi = 0;
-
-  const stripe = getStripe();
-  const ABANDONED_STATUSES = new Set(['canceled', 'requires_payment_method', 'requires_confirmation']);
-
-  for (const boost of candidates) {
-    try {
-      if (!boost.stripePaymentIntentId) {
-        // Should not happen -- purchaseBoost creates the PENDING row, then the PI, then
-        // stores the PI id in a follow-up update. A crash between those two steps could
-        // leave this null. No Stripe ground truth means no safe verification -- log and
-        // skip rather than guess.
-        console.warn(`[boostService] reclaimPendingBoosts: NO-PI-SKIPPED boost=${boost.id} createdAt=${boost.createdAt.toISOString()} -- expired PENDING with no stripePaymentIntentId. NOT auto-reverting; needs manual review.`);
-        skippedNoPi++;
-        continue;
-      }
-
-      const paymentIntent = await stripe.paymentIntents.retrieve(boost.stripePaymentIntentId);
-
-      if (paymentIntent.status === 'succeeded') {
-        // Missed-webhook safety net -- mirror stripeController.ts's boost-webhook
-        // expiresAt calc exactly (see header comment).
-        const now = new Date();
-        const expiresAt = new Date(now);
-        if (boost.durationDays === 999) {
-          expiresAt.setFullYear(expiresAt.getFullYear() + 2);
-        } else if (boost.durationDays <= 1) {
-          expiresAt.setTime(now.getTime() + 60 * 60 * 1000);
-        } else {
-          expiresAt.setDate(expiresAt.getDate() + boost.durationDays);
-        }
-
-        const result = await prisma.boostPurchase.updateMany({
-          where: { id: boost.id, status: 'PENDING' },
-          data: { status: 'ACTIVE', activatedAt: now, expiresAt },
-        });
-        if (result.count > 0) {
-          activated++;
-          console.error(`[boostService] reclaimPendingBoosts: STRANDED-PAID-RECLAIMED boost=${boost.id} (${boost.boostType}) pi=${boost.stripePaymentIntentId} -- Stripe shows succeeded but still PENDING past ${thresholdHours}h (webhook missed). Flipped to ACTIVE.`);
-        }
-      } else if (ABANDONED_STATUSES.has(paymentIntent.status)) {
-        const result = await prisma.boostPurchase.updateMany({
-          where: { id: boost.id, status: 'PENDING' },
-          data: { status: 'FAILED' },
-        });
-        if (result.count > 0) {
-          failed++;
-          console.log(`[boostService] reclaimPendingBoosts: EXPIRED-RECLAIMED boost=${boost.id} (${boost.boostType}) pi=${boost.stripePaymentIntentId} stripeStatus=${paymentIntent.status} -- abandoned past ${thresholdHours}h. Flipped to FAILED.`);
-
-          if (boost.userId) {
-            await createNotification({
-              userId: boost.userId,
-              type: 'boost_purchase_expired',
-              title: 'Boost purchase not completed',
-              body: 'Your boost checkout was not completed in time, so the payment attempt was cancelled. You can try again anytime.',
-              channel: 'OPERATIONAL',
-            }).catch(err => console.error(`[boostService] reclaimPendingBoosts: failed to notify user ${boost.userId} for boost=${boost.id}:`, err));
-          }
-        }
-      } else {
-        console.log(`[boostService] reclaimPendingBoosts: IN-FLIGHT-SKIPPED boost=${boost.id} pi=${boost.stripePaymentIntentId} stripeStatus=${paymentIntent.status} -- not a terminal state yet, retrying next run.`);
-      }
-    } catch (err: any) {
-      console.error(`[boostService] reclaimPendingBoosts: failed to reclaim boost ${boost.id} -- will retry next run:`, err?.message ?? err);
-    }
+  if (stale > 0) {
+    console.warn(`[boostService] reclaimPendingBoosts: STRIPE-PENDING-SKIPPED ${stale} PENDING boost(s) older than ${thresholdHours}h on the retired Stripe rail -- cannot be verified, left for manual review.`);
   }
-
-  console.log(`[boostService] reclaimPendingBoosts: ${activated} ACTIVE (missed webhook), ${failed} FAILED (abandoned), ${skippedNoPi} NO-PI skipped.`);
-  return { activated, failed };
+  return { activated: 0, failed: 0 };
 }
 
 /**

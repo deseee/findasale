@@ -167,6 +167,8 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
       shadowEnginePrice: after.shadowEnginePrice ?? null,
       shadowEngineConfidence: after.shadowEngineConfidence ?? null,
       shadowEngineCompsFound: after.shadowEngineCompsFound ?? null,
+      // 2026-11-05: listing check notes for the regenerated fields (stored at catalogSuggestions.intakeReview when applied).
+      intakeReview: after.intakeReview ?? null,
       ebaySynced,
       ebayCategoryLocked,
     });

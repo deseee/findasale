@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth';
 import { requireAdmin } from '../middleware/adminAuth';
+import { setOrganizerCardSuspensionHandler, setItemRestrictedClassOverrideHandler, listRestrictedItemAuditHandler } from '../controllers/restrictedItemAdminController'; // 2026-11-06
 import { prisma } from '../index';
 import { Prisma } from '@prisma/client';
 import {
@@ -96,6 +97,11 @@ router.get('/sales', getSales);
 router.delete('/sales/:saleId', deleteSale);
 router.get('/activity', getRecentActivity);
 router.patch('/organizers/:organizerId/tier', updateOrganizerTier);
+// Restricted-item card blocking (2026-11-06): organizer card suspension, item class override, audit log. Admin-only
+// (router.use(authenticate, requireAdmin) above; each handler re-checks the role).
+router.patch('/organizers/:organizerId/card-suspension', setOrganizerCardSuspensionHandler);
+router.patch('/items/:itemId/restricted-class', setItemRestrictedClassOverrideHandler);
+router.get('/restricted-items/audit', listRestrictedItemAuditHandler);
 
 // Admin Purchases (2026-08-27, carding-incident cleanup): search/filter/paginate ALL
 // purchases (authenticated + guest checkout) and bulk-refund up to 25 at once. See

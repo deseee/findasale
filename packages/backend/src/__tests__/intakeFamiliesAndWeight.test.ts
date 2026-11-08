@@ -81,7 +81,8 @@ describe('photo notes', () => {
     const vinylOnePhoto = photoNotes('VINYL_RECORD', { photoCount: 1, verifyStatus: 'failed', missingShots: [], photosUnclear: false });
     expect(vinylOnePhoto.map((n) => n.current)).toEqual(['vinyl_disc', 'vinyl_label']);
     const cardVerified = photoNotes('TRADING_CARD', { photoCount: 3, verifyStatus: 'ran', missingShots: ['card_back'], photosUnclear: false });
-    expect(cardVerified.map((n) => n.code)).toEqual(['MISSING_PHOTO']);
+    // 2026-11-05: with enough photos for the shot, a verify-pass "missing" claim asks the organizer to check (photo 2 is often the back).
+    expect(cardVerified.map((n) => [n.code, n.severity])).toEqual([['CHECK_PHOTO', 'medium']]);
     const cardOk = photoNotes('TRADING_CARD', { photoCount: 2, verifyStatus: 'ran', missingShots: [], photosUnclear: false, qualityScores: [0.95, 0.9] });
     expect(cardOk).toEqual([]);
   });

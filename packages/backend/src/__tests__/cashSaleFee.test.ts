@@ -38,9 +38,8 @@
  *     response, not a live deduction path (see the "createPayout — Square has no on-demand
  *     payout, so cash-debt netting moved" tests below)
  *
- * MOCKING NOTES: reservationController pulls in Stripe (still needed transitively for
- * utils/expireCheckoutSession.ts's getStripe import, even though no code path exercised here
- * calls it), Socket.io, email, eBay/Shopify/FB and the POS payment-link builder at import time.
+ * MOCKING NOTES: reservationController pulls in Socket.io, email, eBay/Shopify/FB and the POS
+ * payment-link builder at import time (it no longer imports any Stripe client, retired 2026-11-04).
  * All are mocked — none of them are on the RECORD path, whose entire footprint is the database.
  * The assertions are DB rows and response bodies.
  */
@@ -50,12 +49,6 @@ import { prisma } from '../lib/prisma';
 // ── Mocks (hoisted by ts-jest above these declarations — `var`, not `const`, deliberately) ──
 var mockPayoutsCreate = jest.fn();
 
-jest.mock('../utils/stripe', () => ({
-  getStripe: jest.fn(() => ({
-    payouts: { create: mockPayoutsCreate },
-  })),
-  default: jest.fn(),
-}));
 
 jest.mock('../lib/socket', () => ({ getIO: jest.fn(() => null) }));
 jest.mock('../services/liveFeedService', () => ({ pushEvent: jest.fn() }));
@@ -97,10 +90,6 @@ jest.mock('../lib/notificationService', () => ({
 }));
 jest.mock('../controllers/posController', () => ({
   createPaymentLinkInternal: jest.fn(),
-}));
-jest.mock('../services/stripeConnectService', () => ({
-  shouldUseDirectCharge: jest.fn().mockResolvedValue(false),
-  getAccountStatus: jest.fn().mockResolvedValue({ chargesEnabled: true }),
 }));
 jest.mock('../services/checkoutGuard', () => ({
   assertCheckoutAllowed: jest.fn().mockResolvedValue(undefined),

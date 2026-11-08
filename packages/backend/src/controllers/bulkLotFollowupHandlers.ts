@@ -68,7 +68,7 @@ export interface FollowupDeps {
   resolveActor: (req: AuthRequest, res: Response) => Promise<ResolvedCaller | null>;
   sell: SellUnitsInTx;
   markPaid: NonNullable<HoldDeps['markPaid']>;
-  createSquareLink: (organizerId: string, p: { holdInvoiceId: string; amountCents: number; description: string; appFeeCents: number }) => Promise<SquareLinkResult>;
+  createSquareLink: (organizerId: string, p: { holdInvoiceId: string; amountCents: number; description: string; appFeeCents: number; itemId?: string }) => Promise<SquareLinkResult>;
   deleteSquareLink: (organizerId: string, p: { paymentLinkId: string }) => Promise<{ ok: boolean }>;
   feeFor: (subscriptionTier: string | null | undefined, amountCents: number) => number;
   /** Called after the cards of a lot change by hand or by a hold (eBay bundle reconcile). Must never throw. */

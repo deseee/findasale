@@ -152,7 +152,7 @@ export interface HoldDeps {
   /** holdInvoicePaymentRecorder.markHoldInvoicePaid (needed for convert). */
   markPaid?: (invoiceId: string, ref: { processor: 'STRIPE' | 'SQUARE'; externalPaymentId: string | null }, opts: { source: 'pos-cash' }) => Promise<{ recorded: boolean; alreadyPaid: boolean; deadInvoice?: boolean }>;
   /** Square payment link create and cancel (needed for SQUARE convert and for releasing a hold with a link). */
-  createSquareLink?: (p: { holdInvoiceId: string; amountCents: number; description: string; appFeeCents: number }) => Promise<SquareLinkResult>;
+  createSquareLink?: (p: { holdInvoiceId: string; amountCents: number; description: string; appFeeCents: number; itemId?: string }) => Promise<SquareLinkResult>;
   deleteSquareLink?: (p: { paymentLinkId: string }) => Promise<{ ok: boolean }>;
   /** Platform fee in cents on a card or link amount. */
   feeCents?: (amountCents: number) => number;
@@ -462,7 +462,7 @@ export async function convertBulkHold(db: HoldDb, deps: HoldDeps, ctx: ConvertCt
   if (!ctx.squareReady || !deps.createSquareLink) throw new BulkHoldError('BULK_HOLD_SQUARE_UNAVAILABLE', 409);
   const newId = invoiceId;
   const appFee = deps.feeCents ? deps.feeCents(hold.lineCents) : 0;
-  const link = await deps.createSquareLink({ holdInvoiceId: newId, amountCents: hold.lineCents, description: `Bulk lot, ${formatCardCount(hold.quantity)} cards`, appFeeCents: appFee });
+  const link = await deps.createSquareLink({ holdInvoiceId: newId, amountCents: hold.lineCents, description: `Bulk lot, ${formatCardCount(hold.quantity)} cards`, appFeeCents: appFee, itemId: hold.itemId });
   if (!link.ok) throw new BulkHoldError('BULK_HOLD_PAYMENT_FAILED', 402, { message: link.message });
   try {
     await db.$transaction(async (tx: any) => {

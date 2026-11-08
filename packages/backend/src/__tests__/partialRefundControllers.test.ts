@@ -1,7 +1,7 @@
 /**
  * Partial refunds must not restore inventory (money review P1-14, 2026-09-29).
  *
- * The three refund entry points (stripeController.createRefund, disputeController.updateDisputeStatus,
+ * The three refund entry points (refundController.createRefund, disputeController.updateDisputeStatus,
  * adminController.bulkRefundPurchases) used to put the item back on sale after ANY refund, so a partial
  * refund (buyer keeps the item) let it be sold a second time. Now:
  *   - the item is restored only when the refund brings the purchase to fully refunded;
@@ -59,7 +59,6 @@ const overrides: Record<string, () => any> = {
     executeVerifiedRefund: (...a: any[]) => mockExecuteStripe(...a),
     RefundError: MockRefundError,
     sendRefundConfirmationEmail: jest.fn(),
-    disputeClawbackEnabled: jest.fn(),
   }),
   '../lib/notificationService': () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }),
 };
@@ -137,9 +136,9 @@ beforeEach(() => {
   mockExecuteStripe.mockResolvedValue({ refundedAmount: 100, purchase: { id: 'p1', itemId: 'item1', amount: 100 } });
 });
 
-describe('stripeController.createRefund', () => {
+describe('refundController.createRefund (moved from stripeController 2026-11-04)', () => {
   const call = async (body: any = {}) => {
-    const { createRefund } = loadController('stripeController');
+    const { createRefund } = loadController('refundController');
     const res = makeRes();
     await createRefund({ user: { id: 'owner1', roles: ['ORGANIZER'], role: 'ORGANIZER' }, params: { purchaseId: 'p1' }, body } as any, res);
     return res;

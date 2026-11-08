@@ -27,13 +27,6 @@ jest.mock('../../lib/prisma', () => ({
     markdownCycle: { count: (...a: any[]) => mockMarkdownCount(...a) },
   },
 }));
-jest.mock('../../utils/stripe', () => ({
-  getStripe: () => ({
-    subscriptions: { update: (...a: any[]) => mockStripeUpdate(...a), retrieve: jest.fn() },
-    webhooks: { constructEvent: jest.fn() },
-    billingPortal: { sessions: { create: jest.fn() } },
-  }),
-}));
 jest.mock('../../lib/syncTier', () => ({ syncTier: jest.fn() }));
 jest.mock('../../services/tierGraceService', () => ({
   calculateDowngradeDelta: (...a: any[]) => mockCalculateDelta(...a),

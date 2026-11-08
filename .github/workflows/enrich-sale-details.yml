@@ -17,7 +17,7 @@ on:
 
 jobs:
   setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -33,7 +33,7 @@ jobs:
       matrix:
         batch_index: ${{ fromJSON(needs.setup.outputs.matrix) }}
       fail-fast: false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
 
     steps:

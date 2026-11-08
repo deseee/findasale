@@ -394,6 +394,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               analysis = await analyzeItemImages(imageBuffers, mimeTypes, undefined, clusterPhotosForAnalysis, {
                 userEditedFields: batchUserEdited,
                 organizerWeightSet: batchUserEdited.includes('packageWeightOz'),
+                logLabel: `batch item=${itemId}`,
               });
               cloudCard = analysis?.card ?? null;
             } catch (err: any) {

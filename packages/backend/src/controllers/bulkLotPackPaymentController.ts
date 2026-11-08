@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { gateCardCharge, linesFromItemPrices, CardPaymentBlockedError } from '../services/restrictedItem/cardPaymentGate'; // 2026-11-06 restricted-item card gate
 import crypto from 'crypto';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
@@ -6,6 +7,7 @@ import { prisma } from '../lib/prisma';
 import { BULK_LOT_MESSAGES, BulkLotDb, isBulkLotError } from '../services/bulkLot/bulkLotService';
 import { loadLotPackSizes, planPackLine } from '../services/bulkLot/bulkLotPackService';
 import {
+  findPackReplay,
   PackCheckoutDeps,
   PackCheckoutDb,
   PackRefundResult,
@@ -253,6 +255,19 @@ export async function handleBulkPackPayment(req: AuthRequest, res: Response, pac
         }
       },
     };
+
+    // Restricted-item card gate (2026-11-06): one lot item, the whole pack charge. Skipped for a replay of an attempt that
+    // was already recorded (executePackCheckout answers that with the existing Purchase and charges nothing).
+    if (!(await findPackReplay(prisma as unknown as PackCheckoutDb, txnKey))) {
+      const gate = await gateCardCharge({
+        processor: 'SQUARE',
+        organizerId: sale.organizerId,
+        lines: [{ itemId: item.id, amountCents: plan.cents }],
+        cardChargeCents: plan.cents,
+        context: { path: 'square.online.bulkPack', buyerUserId: req.user?.id ?? null, sessionRef: txnKey },
+      });
+      if (!gate.ok) return res.status(gate.status).json(gate.body);
+    }
 
     const result = await executePackCheckout(deps, {
       itemId: item.id,

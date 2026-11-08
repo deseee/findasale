@@ -33,7 +33,6 @@ import { getAutoQueueSettings, patchAutoQueueSettings, releaseHeldPoshmarkItems 
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { suppressionService } from '../services/suppressionService';
 import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue, getEbayInsertionsForecast, getEbaySyncIssues, retryEbaySync } from '../controllers/platformStatsController';
-import { startStandardMigration, getHubOwnerStripeStatus, initiateHubOwnerStripeOnboarding } from '../controllers/stripeConnectController';
 import { requireTier } from '../middleware/requireTier';
 import { resolveAudienceAccess } from '../utils/audienceAccess';
 import { firstNameLastInitial } from '../utils/publicDisplayName';
@@ -158,14 +157,11 @@ router.get('/me/ebay-insertions-forecast', authenticate, getEbayInsertionsForeca
 router.get('/me/ebay-sync-issues', authenticate, getEbaySyncIssues);
 router.post('/me/ebay-sync-issues/retry', authenticate, retryEbaySync);
 
+// The Stripe Connect endpoints (/me/stripe/start-standard-migration, /me/hub-owner/stripe/status,
+// /me/hub-owner/stripe/onboard) were removed with Stripe (2026-11-04); index.ts answers them with
+// 410 STRIPE_RETIRED. Hub owners connect through /api/square-connect/hub-owner/onboard.
+
 // Authenticated: get revenue analytics for the current organizer
-router.post('/me/stripe/start-standard-migration', authenticate, startStandardMigration);
-
-// ADR-090 Phase 1: hub-owner Stripe Connect onboarding (Standard account, reuses
-// Organizer.stripeConnectId — see stripeConnectController.ts for full rationale).
-router.get('/me/hub-owner/stripe/status', authenticate, getHubOwnerStripeStatus);
-router.post('/me/hub-owner/stripe/onboard', authenticate, initiateHubOwnerStripeOnboarding);
-
 router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';

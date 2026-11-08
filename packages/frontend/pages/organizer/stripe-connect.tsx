@@ -16,7 +16,7 @@ interface ConsignorStatus {
   };
 }
 
-// FIX 2026-09-08: both POST handlers below (handleInviteToACH, handleInviteToSquare) use
+// FIX 2026-09-08: the POST handler below (handleInviteToSquare) uses
 // plain fetch() rather than the app-wide `api` axios wrapper (lib/api.ts), so neither ever
 // attached the double-submit x-csrf-token header the backend's CSRF middleware requires for
 // any cookie-authenticated state-mutating request (packages/backend/src/middleware/csrf.ts).
@@ -41,7 +41,9 @@ const ACHPayoutsPage: React.FC = () => {
   const [consignors, setConsignors] = useState<ConsignorStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { consignorId, success, refresh } = router.query;
+  // Kept for the old Stripe return URL (?consignorId=...&success=1). Stripe is retired (2026-11-04), so
+  // nothing is verified on return any more; the Square status below is the only source of truth.
+  const { success } = router.query;
 
   // Square is the sole payout processor for consignors. Stripe onboarding removed
   // 2026-09-09 -- the Stripe platform account is permanently closed. Supersedes the
@@ -54,18 +56,13 @@ const ACHPayoutsPage: React.FC = () => {
   const [squareInviting, setSquareInviting] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    // If returning from Stripe, update that consignor's status
-    if (consignorId && (success || refresh)) {
-      handleReturnFromStripe(consignorId as string);
-    }
-
     // Load all consignors for workspace
     loadConsignors();
   }, []);
 
   // Square's OAuth callback is a single fixed URL with no return-to-origin mechanism for this
   // page (see square-oauth-callback.tsx's REDIRECT_TARGET map), so this page can't rely on a
-  // same-tab redirect back here the way handleReturnFromStripe above does. Instead, fetch every
+  // same-tab redirect back here. Instead, fetch every
   // listed consignor's Square status directly whenever the consignor list changes -- this both
   // seeds the initial badges and re-syncs after the poll in handleInviteToSquare fires.
   useEffect(() => {
@@ -91,18 +88,6 @@ const ACHPayoutsPage: React.FC = () => {
     } catch (err) {
       // Best-effort -- the badge just won't update until the next successful poll or reload.
       console.error('Error checking consignor Square status:', err);
-    }
-  };
-
-  const handleReturnFromStripe = async (cId: string) => {
-    try {
-      const response = await fetch(`/api/stripe-connect/return/${cId}`, {
-        method: 'GET',
-      });
-      if (!response.ok) throw new Error('Failed to verify onboarding');
-      const data = await response.json();
-    } catch (err) {
-      console.error('Error verifying onboarding:', err);
     }
   };
 
@@ -153,9 +138,8 @@ const ACHPayoutsPage: React.FC = () => {
       }
 
       if (data.onboardingUrl) {
-        // Open in a new tab and poll for the result -- Square has one fixed OAuth redirect URL
-        // (unlike Stripe's per-request return_url), so this tab can't wait for a same-tab
-        // redirect back. Same pattern as HubOwnerStripeOnboarding.tsx's Square-equivalent poll.
+        // Open in a new tab and poll for the result -- Square has one fixed OAuth redirect URL, so
+        // this tab can't wait for a same-tab redirect back. Same pattern as HubOwnerSquareOnboarding.tsx.
         window.open(data.onboardingUrl, '_blank');
         window.setTimeout(() => refreshSquareStatus(cId), 3000);
       }

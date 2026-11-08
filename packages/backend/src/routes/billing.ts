@@ -5,8 +5,6 @@ import {
   getSubscription,
   cancelSubscription,
   undoCancelSubscription,
-  createBillingPortal,
-  handleStripeWebhook,
   getDowngradePreview,
   confirmDowngrade,
   optInOffPlatformSales,
@@ -25,13 +23,11 @@ router.get('/subscription', authenticate, getSubscription);
 router.post('/cancel', authenticate, cancelSubscription);
 // Undo a scheduled cancellation while the paid period is still running (DB-only, 2026-09-29).
 router.post('/cancel/undo', authenticate, undoCancelSubscription);
-router.post('/portal', authenticate, paymentLimiter, createBillingPortal);
 router.get('/downgrade-preview', authenticate, getDowngradePreview);
 router.post('/downgrade-confirm', authenticate, confirmDowngrade);
 
 // Square Plan B (2026-09-13) -- PRO/TEAMS recurring billing via Cards API + FindA.Sale-owned
-// scheduler (jobs/squareBillingChargeJob.ts). Separate endpoints, not a replacement of the
-// Stripe ones above (which stay in place for any still-live legacy Stripe subscriber).
+// scheduler (jobs/squareBillingChargeJob.ts).
 router.post('/square/subscribe', authenticate, paymentLimiter, createSquareBillingSubscription);
 router.post('/square/cancel', authenticate, cancelSquareBillingSubscription);
 
@@ -40,8 +36,7 @@ router.post('/square/cancel', authenticate, cancelSquareBillingSubscription);
 router.post('/off-platform-sales/opt-in', authenticate, optInOffPlatformSales);
 router.get('/off-platform-usage', authenticate, getOffPlatformUsage);
 
-// Webhook (no auth — signature verified in controller)
-// NOTE: Raw body middleware must be applied in index.ts BEFORE json parser for this route
-router.post('/webhook', handleStripeWebhook);
+// POST /webhook and POST /portal were Stripe-only and are retired (2026-11-04): index.ts answers
+// both with 410 STRIPE_RETIRED before this router runs.
 
 export default router;

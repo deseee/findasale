@@ -12,6 +12,7 @@ var mockPrisma: any = {
   purchase: { count: jest.fn() },
   consignorPayout: { count: jest.fn() },
   consignorPayoutItem: { count: jest.fn() },
+  consignorSettlementBatch: { count: jest.fn() }, // 2026-11-05: ConsignorSettlementBatch.workspaceId is ON DELETE RESTRICT
 };
 jest.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
 jest.mock('@sentry/node', () => ({ captureException: jest.fn() }));
@@ -37,6 +38,7 @@ function setZeroTrail() {
   mockPrisma.purchase.count.mockResolvedValue(0);
   mockPrisma.consignorPayout.count.mockResolvedValue(0);
   mockPrisma.consignorPayoutItem.count.mockResolvedValue(0);
+  mockPrisma.consignorSettlementBatch.count.mockResolvedValue(0);
 }
 
 describe('consignorController delete and archive', () => {
@@ -159,6 +161,15 @@ describe('workspaceController.deleteWorkspace money-trail guard', () => {
     expect(mockPrisma.organizerWorkspace.delete).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(409);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'WORKSPACE_HAS_MONEY_TRAIL' }));
+  });
+
+  it('refuses with 409 when consignor settlement batches exist (RESTRICT FK since 2026-11-05)', async () => {
+    mockPrisma.consignorSettlementBatch.count.mockResolvedValue(1);
+    const res = makeRes();
+    await ctl.deleteWorkspace(req(), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(mockPrisma.consignorSettlementBatch.count).toHaveBeenCalledWith({ where: { workspaceId: 'ws1' } });
+    expect(mockPrisma.organizerWorkspace.delete).not.toHaveBeenCalled();
   });
 
   it('refuses with 409 when payouts exist, and still 403s a non-owner first', async () => {

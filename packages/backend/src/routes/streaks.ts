@@ -444,29 +444,18 @@ router.post('/cancel-huntpass', authenticate, async (req: AuthRequest, res: Resp
       return respond(claim.count !== 1, user.huntPassExpiry);
     }
 
-    if (!user.huntPassStripeSubscriptionId) {
+    // Legacy pass billed through Stripe (retired 2026-11-04): there is no processor subscription left
+    // to update, so the cancel is recorded in the database only, exactly like the Square branch.
+    if (!user.huntPassStripeSubscriptionId || !user.huntPassActive) {
       return res.status(400).json({ message: 'No active Hunt Pass subscription found.' });
     }
 
-    if (user.huntPassCancelAtPeriodEnd) {
-      return respond(true, user.huntPassExpiry);
-    }
-
-    const { getStripe } = await import('../utils/stripe');
-    const stripe = getStripe();
-
-    const updated = await stripe.subscriptions.update(user.huntPassStripeSubscriptionId, {
-      cancel_at_period_end: true,
-    });
-
-    const expiresAtDate = new Date(updated.current_period_end * 1000);
-    // Mirror the scheduled-cancel state locally so the UI can show it (legacy Stripe branch).
-    await prisma.user.update({
-      where: { id: req.user.id },
+    const legacyClaim = await prisma.user.updateMany({
+      where: { id: req.user.id, huntPassActive: true, huntPassCancelAtPeriodEnd: false },
       data: { huntPassCancelAtPeriodEnd: true },
     });
-    sendConfirmation(expiresAtDate);
-    respond(false, expiresAtDate);
+    if (legacyClaim.count === 1) sendConfirmation(user.huntPassExpiry);
+    respond(legacyClaim.count !== 1, user.huntPassExpiry);
   } catch (err) {
     console.error('POST /api/streaks/cancel-huntpass error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -515,10 +504,14 @@ router.post('/resume-huntpass', authenticate, async (req: AuthRequest, res: Resp
       return res.json({ cancelAtPeriodEnd: false, alreadyActive: true, expiresAt, message: renewalCopy });
     }
 
-    if (user.huntPassBillingProcessor !== 'square' && user.huntPassStripeSubscriptionId) {
-      const { getStripe } = await import('../utils/stripe');
-      const stripe = getStripe();
-      await stripe.subscriptions.update(user.huntPassStripeSubscriptionId, { cancel_at_period_end: false });
+    // A legacy pass billed through Stripe (retired 2026-11-04) can never renew, so "keep my Hunt Pass"
+    // would be a false promise. Say so and point the shopper at a fresh subscription instead.
+    if (user.huntPassBillingProcessor !== 'square') {
+      return res.status(409).json({
+        code: 'HUNT_PASS_RESUBSCRIBE_REQUIRED',
+        expiresAt,
+        message: 'This Hunt Pass was billed through a card processor we no longer use, so it cannot renew. You keep your perks until it ends. Subscribe again with a card to keep Hunt Pass after that.',
+      });
     }
 
     await prisma.user.updateMany({

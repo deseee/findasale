@@ -58,7 +58,6 @@ jest.mock('../controllers/performanceController', () => mockProxyFactory());
 jest.mock('../controllers/platformStatsController', () => mockProxyFactory());
 jest.mock('../controllers/posTiersController', () => mockProxyFactory());
 jest.mock('../controllers/printKitController', () => mockProxyFactory());
-jest.mock('../controllers/stripeConnectController', () => mockProxyFactory());
 jest.mock('../controllers/watermarkController', () => mockProxyFactory());
 jest.mock('../lib/publicSaleGate', () => mockProxyFactory());
 jest.mock('../lib/saleLocationPrivacy', () => mockProxyFactory());

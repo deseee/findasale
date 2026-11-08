@@ -209,6 +209,9 @@ async function awardForCanonical(canonicalId: string, siblingIds: string[]): Pro
         purchaseId: purchase.id,
         holdUntil: new Date(Date.now() + HOLD_72H_MS),
         preMultipliedHuntPassXp: true,
+        // 2026-11-05 (schema review #9): DB-level once-per-payment guard behind the check-then-write above (another process,
+        // e.g. the sync checkout response and the webhook on two instances). canonicalId is stable across the payment's rows.
+        idempotencyKey: `PURCHASE_COMPLETED:${canonicalId}`,
       });
     });
 
@@ -230,6 +233,7 @@ async function awardForCanonical(canonicalId: string, siblingIds: string[]): Pro
           saleId,
           purchaseId: purchase.id,
           description: 'First purchase milestone',
+          idempotencyKey: `FIRST_PURCHASE_EVER:${userId}`, // 2026-11-05: once per shopper, enforced by the database
         });
       });
 

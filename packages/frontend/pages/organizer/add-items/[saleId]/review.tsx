@@ -44,6 +44,7 @@ import { computeItemReadiness } from '../../../../lib/itemReadiness';
 import { normalizeCondition as normalizeConditionValue } from '../../../../lib/conditionModel';
 import ItemFormSheet from '../../../../components/itemForm/ItemFormSheet';
 import CardConditionConfirm from '../../../../components/cardRecord/CardConditionConfirm'; // trading card condition (NM/LP/MP/HP/DMG), one-tap confirm
+import IntakeReviewPanel from '../../../../components/IntakeReviewPanel'; // 2026-11-05: Listing check notes (compact badge on each card)
 import {
   createAutosaveController,
   buildAutosavePayload,
@@ -198,6 +199,11 @@ interface Item {
   groundedSource?: string | null;
   // Shadow mode (2026-10-11): saved market estimate beside the model price (display only; null when none saved)
   shadowPricing?: ShadowPricing | null;
+  // 2026-11-05: Listing check notes from photo tagging (trimmed catalogSuggestions.intakeReview; null when none)
+  intakeReview?: {
+    notes: Array<{ code: string; severity: 'high' | 'medium' | 'low' | 'info'; field?: string; message: string; current?: string | number | null; suggested?: string | number | null }>;
+    blockAutoPublish?: boolean;
+  } | null;
 }
 
 // Track which items should be pushed to eBay
@@ -2305,6 +2311,12 @@ const ReviewPage = () => {
                           </div>
                         );
                       })()}
+                      {/* 2026-11-05: Listing check notes (count badge, tap to expand). Renders nothing when the item has none. */}
+                      {item.intakeReview && item.intakeReview.notes.length > 0 && (
+                        <div className="-mt-2 mb-3">
+                          <IntakeReviewPanel catalogSuggestions={{ intakeReview: item.intakeReview }} compact />
+                        </div>
+                      )}
                       {reanalyzeErrors.has(item.id) && (
                         <div className="-mt-2 mb-3 flex items-start gap-1.5 text-[11px] text-red-500 dark:text-red-400" role="alert">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-px flex-shrink-0" aria-hidden="true">

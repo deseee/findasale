@@ -42,8 +42,6 @@ jest.mock('../services/facebookNudgeService', () => ({ notifyFacebookExportedIte
 jest.mock('../services/marketplaceStockSyncService', () => ({ syncMarketplaceStock: jest.fn().mockResolvedValue(undefined) }));
 const mockCreateNotification = jest.fn().mockResolvedValue(undefined);
 jest.mock('../lib/notificationService', () => ({ createNotification: (...a: any[]) => mockCreateNotification(...a) }));
-jest.mock('../services/stripeConnectService', () => ({ shouldUseDirectCharge: jest.fn().mockResolvedValue(false) }));
-jest.mock('../utils/stripe', () => ({ getStripe: () => ({ paymentLinks: { update: jest.fn().mockResolvedValue({}) } }) }));
 jest.mock('../services/squareCheckoutLinkService', () => ({ deleteSquareCheckoutLink: jest.fn().mockResolvedValue({ ok: true }) }));
 const mockRefund = jest.fn();
 jest.mock('../services/squareDeadInvoiceRefundService', () => ({

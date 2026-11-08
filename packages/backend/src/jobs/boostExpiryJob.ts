@@ -1,8 +1,7 @@
 /**
- * boostExpiryJob.ts — Cron: expire stale ACTIVE BoostPurchase records, and
- * (S1187 fix) reclaim stale PENDING BoostPurchase records that never got their
- * Stripe webhook (see boostService.ts's reclaimPendingBoosts for the full gap
- * writeup and evidence-first Stripe verification pattern).
+ * boostExpiryJob.ts — Cron: expire stale ACTIVE BoostPurchase records, and report
+ * stale PENDING ones left on the retired Stripe rail (see boostService.ts's
+ * reclaimPendingBoosts; Stripe retired 2026-11-04, no Stripe call is made).
  * Phase 2b: Runs every hour. Flips status=ACTIVE AND expiresAt < now -> status=EXPIRED.
  * Same pattern as reservationExpiryJob.ts.
  */
@@ -20,7 +19,7 @@ cron.schedule('5 * * * *', cronGuard({ jobName: 'boostExpiryJob' }, async () => 
 
   const { activated, failed } = await reclaimPendingBoosts();
   if (activated > 0 || failed > 0) {
-    console.log(`[boostExpiryJob] Reclaimed stale PENDING boosts: ${activated} activated (missed webhook), ${failed} failed (abandoned)`);
+    console.log(`[boostExpiryJob] Reclaimed stale PENDING boosts: ${activated} activated, ${failed} failed`);
   }
 }));
 

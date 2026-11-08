@@ -6,6 +6,8 @@
 import express from 'express';
 import { prisma } from '../lib/prisma';
 import { reanalyzeItem } from '../services/reanalyzeService'; // Re-analyze: shared Smart-tagging pipeline (internal + organizer)
+import { intakeReviewStats } from '../services/intakeReview'; // 2026-11-05: intake quality summary in the reanalyze response
+import { runIntakeRecheck, parseIntakeRecheckParams } from '../services/intakeRecheckService'; // 2026-11-05: inventory recheck (verify pass + checks on stored items)
 import { ingestFromGitHubActions } from '../controllers/internalScraperController';
 import {
   triggerSaleDetailEnrichment,
@@ -1071,10 +1073,50 @@ router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: 
     }
 
     const { before, after, ebaySynced, ebaySyncReason, ebayCategoryLocked } = result;
-    res.json({ itemId, applied: apply, before, after, ebaySynced, ebaySyncReason, ebayCategoryLocked });
+    // 2026-11-05: the intake quality review (verify pass status, corrections, notes) at the top level, dry-run and apply
+    // alike, so a dry run shows what the verify pass and checks did without writing anything.
+    const intakeReview = after.intakeReview ?? null;
+    res.json({
+      itemId,
+      applied: apply,
+      before,
+      after,
+      intakeReview,
+      intakeQuality: intakeReview ? { ...intakeReviewStats(intakeReview), verifyPass: intakeReview.verifyPass, verifySkipReason: intakeReview.verifySkipReason ?? null, verifyUsage: intakeReview.verifyUsage ?? null } : null,
+      ebaySynced,
+      ebaySyncReason,
+      ebayCategoryLocked,
+    });
   } catch (err: any) {
     console.error('[Reanalyze] route error:', err?.message || err);
     res.status(500).json({ error: 'reanalyze failed', detail: String(err?.message || err) });
+  }
+});
+
+// POST /api/internal/intake-recheck
+// 2026-11-05 inventory recheck: runs the intake quality layer (Haiku verify pass + deterministic fixes and checks) over
+// EXISTING items using their stored photos and current fields (pass 1 is not re-run). Secret-protected, not user-facing.
+// Body: { organizerId?, itemIds?: string[], limit?: number (default 25, max 100), apply?: boolean (default false),
+//         statuses?: string[] (default AVAILABLE + RESERVED; SOLD/DONATED are never allowed), delayMs?: number (default 750) }
+// apply=false returns what it would do and writes nothing. apply=true writes only high-confidence corrections and
+// deterministic fixes to title/description/brand/condition/category/tags that are NOT in userEditedFields, and stores the
+// notes at catalogSuggestions.intakeReview. Never changes price or package weight, never touches SOLD items, and never
+// pushes to any marketplace (see services/intakeRecheckService.ts for how eBay-listed items are marked).
+// Sequential with a small delay; stops early when the AI cost ceiling or daily call cap is reached.
+router.post('/intake-recheck', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    let params;
+    try {
+      params = parseIntakeRecheckParams(req.body);
+    } catch (paramErr: any) {
+      res.status(400).json({ error: paramErr?.message || 'invalid parameters' });
+      return;
+    }
+    const result = await runIntakeRecheck(params);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[intakeRecheck] route error:', err?.message || err);
+    res.status(500).json({ error: 'intake recheck failed', detail: String(err?.message || err) });
   }
 });
 

@@ -2252,15 +2252,11 @@ export default function POSPage() {
     setPaymentStatus('cancelled');
     setErrorMessage('Payment cancelled.');
 
-    if (paymentIntentId && ENABLE_STRIPE_TERMINAL_CARD_READER) {
-      try {
-        await api.post('/stripe/terminal/cancel', { paymentIntentId });
-      } catch (err) {
-        console.error('[pos] Failed to cancel payment intent:', err);
-      }
+    // The Stripe Terminal card-reader cancel call (/stripe/terminal/cancel) was removed with Stripe
+    // (2026-11-04); that endpoint no longer exists. Clear any leftover id and force a fresh
+    // clientTransactionId if the organizer retries this cart.
+    if (paymentIntentId) {
       setPaymentIntentId('');
-      // A cancelled PaymentIntent can never be reused -- force a fresh clientTransactionId
-      // (and Stripe idempotency key) if the organizer retries this cart.
       clientTransactionIdRef.current = null;
     }
 

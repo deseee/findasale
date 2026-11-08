@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { gateCardCharge, linesFromItemPrices, CardPaymentBlockedError } from '../services/restrictedItem/cardPaymentGate'; // 2026-11-06 restricted-item card gate
 import crypto from 'crypto';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
@@ -42,6 +43,7 @@ import { recordAffiliateConversion, resolveAffiliateAttribution } from '../servi
 import { getSquarePlatformClient, getPlatformSquareLocationId } from '../utils/square'; // #132 (2026-09-18): À La Carte Square rail, mirrors boostService.ts's platform-level flat-fee pattern
 import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // 2026-09-29 Sale Passport wiring: purchase XP, milestones, referral, OG Buyer badge, achievement and passport stamp (idempotent, never throws)
 import { SquareError } from 'square';
+import { createOrFindExisting } from '../utils/uniqueViolation'; // 2026-11-05: P2002 on a Purchase idempotency key = already recorded
 
 /**
  * Square Checkout -- Wave 1 #1 (2026-09-07). Mirrors stripeController.ts's
@@ -402,6 +404,22 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
         .catch((err: unknown) => console.error(`[squarePayment] failed to release coupon claim ${couponId}:`, err));
     };
 
+    // Restricted-item card gate (2026-11-06): last check before the charge (before the cash-debt claim, so nothing has
+    // to be released on a block except the coupon claim). One item: either the card takes all of it or none of it.
+    {
+      const gate = await gateCardCharge({
+        processor: 'SQUARE',
+        organizerId: item.sale!.organizerId,
+        lines: [{ itemId: item.id, amountCents: finalPriceCents }],
+        cardChargeCents: finalPriceCents,
+        context: { path: 'square.online.single', buyerUserId: req.user?.id ?? null, sessionRef: item.id },
+      });
+      if (!gate.ok) {
+        await releaseCouponClaim();
+        return res.status(gate.status).json(gate.body);
+      }
+    }
+
     // Cash-fee-debt recoupment (2026-09-12): pad this card sale's appFeeMoney with whatever
     // room exists to collect outstanding Organizer.cashFeeBalance -- see cashFeeService.ts.
     let appFeeCents: number;
@@ -463,8 +481,12 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       where: { squarePaymentId: chargeResult.paymentId, itemId: item.id },
     });
 
+    let purchaseCreatedNow = false;
     if (!purchase) {
-      purchase = await prisma.purchase.create({
+      // 2026-11-05 (schema review #2): a concurrent identical request can win the (squarePaymentId, itemId) partial unique
+      // index between the findFirst above and this insert. The loser re-reads the winner's row and takes the idempotent-retry
+      // branch below instead of answering 500 for a charge that is already recorded.
+      const recorded = await createOrFindExisting(() => prisma.purchase.create({
         data: {
           userId: req.user?.id ?? null,
           itemId: item.id,
@@ -508,8 +530,12 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
               }
             : {}),
         },
-      });
+      }), () => prisma.purchase.findFirst({ where: { squarePaymentId: chargeResult.paymentId, itemId: item.id } }));
+      purchase = recorded.row;
+      purchaseCreatedNow = recorded.created;
+    }
 
+    if (purchaseCreatedNow) {
       // The debt was claimed before the charge (2026-09-30); this is now only the confirmation.
       await settleCashDebtCollection({ organizerId: item.sale!.organizerId, debtAppliedCents });
 
@@ -842,6 +868,19 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
       itemIds.slice().sort().join(','),
     ]);
 
+    // Restricted-item card gate (2026-11-06): online cart has no cash leg, so any blocked item refuses the whole card
+    // charge with the per-item split (the shopper pays those items in cash with the seller).
+    {
+      const gate = await gateCardCharge({
+        processor: 'SQUARE',
+        organizerId: items[0].sale!.organizerId,
+        lines: items.map((i) => ({ itemId: i.id, amountCents: Math.round((i.price as number) * 100) })),
+        cardChargeCents: totalCents,
+        context: { path: 'square.online.cart', buyerUserId: req.user.id, sessionRef: saleId },
+      });
+      if (!gate.ok) return res.status(gate.status).json(gate.body);
+    }
+
     // Cash-fee-debt recoupment (2026-09-12): pad this cart's single charge's appFeeMoney with
     // whatever room exists to collect outstanding Organizer.cashFeeBalance -- see cashFeeService.ts.
     const { appFeeCents, debtAppliedCents } = await applyCashDebtToAppFee({
@@ -916,9 +955,11 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
         where: { squarePaymentId: chargeResult.paymentId, itemId: item.id },
       });
       if (!purchase) {
-        purchase = await prisma.purchase.create({
+        // 2026-11-05 (schema review #2): a concurrent identical cart request that wins the (squarePaymentId, itemId) unique index
+        // first leaves this request its row to reuse (no second affiliate conversion, debt claim released below).
+        const recorded = await createOrFindExisting(() => prisma.purchase.create({
           data: {
-            userId: req.user.id,
+            userId: req.user!.id,
             itemId: item.id,
             saleId,
             amount: item.price as number,
@@ -934,10 +975,13 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
             buyerCardFingerprint: chargeResult.cardFingerprint ?? undefined,
             affiliateLinkId: cartAffiliateLinkId ?? undefined,
           },
-        });
-        anyNewPurchaseCreated = true;
-        if (cartAffiliateLinkId) {
-          await recordAffiliateConversion(purchase.id);
+        }), () => prisma.purchase.findFirst({ where: { squarePaymentId: chargeResult.paymentId, itemId: item.id } }));
+        purchase = recorded.row;
+        if (recorded.created) {
+          anyNewPurchaseCreated = true;
+          if (cartAffiliateLinkId) {
+            await recordAffiliateConversion(purchase.id);
+          }
         }
       }
       createdPurchaseIds.push(purchase.id);

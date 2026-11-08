@@ -32,7 +32,6 @@ jest.mock('../lib/aiTagsQuotaTracker', () => ({
   checkAiTagQuota: jest.fn().mockResolvedValue({ exceeded: false, used: 0, limit: 100, remaining: 100 }),
   incrementAiTagCount: jest.fn(),
 }));
-jest.mock('../utils/expireCheckoutSession', () => ({ retrieveCheckoutSessionAcrossAccounts: jest.fn() }));
 // marketplaceEligibilityRules (real here, through itemChannelStatusService) reads the descendants map at load time.
 jest.mock('../services/ebayRateEstimateService', () => ({ classifyPackageSurchargeTrigger: () => 'SAFE', EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS: {} }));
 jest.mock('../utils/ebayShippingClassifier', () => ({ classifyEbayShipping: () => null }));

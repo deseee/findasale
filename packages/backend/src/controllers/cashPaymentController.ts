@@ -54,6 +54,7 @@ import {
   type ResolvedTagLine,
 } from '../services/consignorTagService'; // 2026-10-06: consignor price tags, minted inside the sale transaction
 import { escapeHtml } from '../utils/htmlEscape'; // ADR-136 Addendum A: the lot line on the receipt carries an organizer-typed lot name
+import { isPurchaseKeyViolation } from '../utils/uniqueViolation'; // 2026-11-05: P2002 on a Purchase key = already recorded
 
 /**
  * #561 offline POS cash-checkout queuing: typed error carrying HTTP status + retryability +
@@ -462,6 +463,12 @@ export async function processCashSaleCore(params: {
     } catch (txErr) {
       bulkStockResult.clear();
       if (txErr instanceof CashSaleReplayInTransaction) return replayResultFor(txErr.rows);
+      if (clientTransactionId && isPurchaseKeyViolation(txErr)) {
+        // 2026-11-05 (schema review #2): (clientTransactionId, itemId) is unique, so a concurrent identical submission that the
+        // advisory lock did not serialize (another process) loses here. Its rows exist: answer as the idempotent replay.
+        const recorded = await prisma.purchase.findMany({ where: { clientTransactionId, sale: { organizerId: organizer.id } } });
+        if (recorded.length > 0) return replayResultFor(recorded);
+      }
       if (isBulkLotError(txErr)) {
         // A lot ran out between the check above and the guarded decrement: nothing was taken and nothing was recorded.
         throw new CashSaleError(txErr.message, txErr.status, false, txErr.code);
@@ -469,9 +476,19 @@ export async function processCashSaleCore(params: {
       throw txErr;
     }
   } else {
-    for (const item of chargedItems) {
-      const purchase = await createPurchaseRow(prisma, item);
-      purchaseIds.push(purchase.id);
+    try {
+      for (const item of chargedItems) {
+        const purchase = await createPurchaseRow(prisma, item);
+        purchaseIds.push(purchase.id);
+      }
+    } catch (rowErr) {
+      // 2026-11-05 (schema review #2): only reachable for a TEST transaction carrying a clientTransactionId (every live sale with
+      // one takes the transactional branch above). A unique violation there means it was already recorded: answer as the replay.
+      if (clientTransactionId && isPurchaseKeyViolation(rowErr)) {
+        const recorded = await prisma.purchase.findMany({ where: { clientTransactionId, sale: { organizerId: organizer.id } } });
+        if (recorded.length > 0) return replayResultFor(recorded);
+      }
+      throw rowErr;
     }
   }
 

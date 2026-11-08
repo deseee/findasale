@@ -11,22 +11,14 @@
  * releaseInvoiceById cancels the HoldInvoice directly by its own id instead.
  *
  * These tests assert against the real database (same pattern as
- * cashSaleFee.test.ts / reservation.integration.test.ts) — everything Stripe-shaped is
- * mocked since these fixtures use stripeSessionId: null (the 100%-cash-split path,
- * which never creates a Stripe Checkout Session), so the Stripe mock is never actually
- * invoked by the assertions below; it exists purely so importing the controller module
- * (which imports ../utils/stripe transitively) does not reach out to a real Stripe key.
+ * cashSaleFee.test.ts / reservation.integration.test.ts). These fixtures use stripeSessionId: null
+ * (the 100%-cash-split path). Stripe is retired (2026-11-04) and the controller no longer imports a
+ * Stripe client, so nothing Stripe-shaped needs mocking.
  */
 
 import { prisma } from '../lib/prisma';
 
 // ── Mocks (hoisted by ts-jest above these declarations — `var`, not `const`, deliberately) ──
-jest.mock('../utils/stripe', () => ({
-  getStripe: jest.fn(() => ({
-    checkout: { sessions: { retrieve: jest.fn(), expire: jest.fn() } },
-  })),
-  default: jest.fn(),
-}));
 jest.mock('../lib/socket', () => ({ getIO: jest.fn(() => null) }));
 jest.mock('../services/liveFeedService', () => ({ pushEvent: jest.fn() }));
 jest.mock('../services/saleStatusService', () => ({ pushSaleStatus: jest.fn() }));
@@ -67,10 +59,6 @@ jest.mock('../lib/notificationService', () => ({
 }));
 jest.mock('../controllers/posController', () => ({
   createPaymentLinkInternal: jest.fn(),
-}));
-jest.mock('../services/stripeConnectService', () => ({
-  shouldUseDirectCharge: jest.fn().mockResolvedValue(false),
-  getAccountStatus: jest.fn().mockResolvedValue({ chargesEnabled: true }),
 }));
 jest.mock('../services/checkoutGuard', () => ({
   assertCheckoutAllowed: jest.fn().mockResolvedValue(undefined),

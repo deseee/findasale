@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { gateCardCharge, linesFromItemPrices } from '../services/restrictedItem/cardPaymentGate'; // 2026-11-06 restricted-item card gate
 import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import * as Sentry from '@sentry/node';
@@ -40,7 +41,6 @@ import { resolvePosDiscount } from '../services/posDiscountService';
 import { computeOversoldSettlement, settleOversoldPayment, notifyOversoldSettlement } from '../services/oversoldPaymentRefundService'; // ADR-136 Addendum A: a lot that sells out after a manual card entry was charged is refunded in full by the same service the QR link recorder uses
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, Organizer POS wiring
 import { posPaymentFailureBody } from '../services/posPaymentFailure'; // 2026-09-30: generic client message + stable code for payment-adapter failures; detail is logged server-side only
-import * as stripePos from '../services/stripePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): Stripe POS logic extracted verbatim, zero behavior change
 import * as squarePos from '../services/squarePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): phone-based Square POS adapter -- charge creation moved to accept/confirm time, see file header
 import {
   resolveTagLines,
@@ -56,6 +56,7 @@ import {
   type StoredTagLine,
 } from '../services/consignorTagService'; // 2026-10-06: consignor price tags, minted inside the sale's own transaction
 import { escapeHtml } from '../utils/htmlEscape';
+import { isPurchaseKeyViolation } from '../utils/uniqueViolation';
 import { transactionalEmailService } from '../lib/transactionalEmailService'; // 2026-09-16 fix: shopper receipt/notification email gap on manual-card + QR POS payments (mirrors cashPaymentController.ts's receipt pattern)
 
 
@@ -1507,6 +1508,22 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
     let externalPaymentId: string;
 
     if (posRequest.processor === 'SQUARE') {
+      // Restricted-item card gate (2026-11-06): before ANY Square call (sandbox too -- the gate never moves money and a
+      // QA run should see the same decision). The card leg (cardAmountCents, or the total when not split) must fit inside
+      // the card-allowed items; a cashier who put the blocked items in the cash leg goes through. Classes are re-read
+      // from the database here, not taken from the request created earlier.
+      {
+        const confirmCardCents = posRequest.cardAmountCents ?? posRequest.totalAmountCents;
+        const gate = await gateCardCharge({
+          processor: 'SQUARE',
+          organizerId: posRequest.organizerId,
+          lines: await linesFromItemPrices(posRequest.itemIds ?? [], posRequest.totalAmountCents),
+          cardChargeCents: confirmCardCents,
+          context: { path: 'square.pos.paymentRequest', buyerUserId: req.user.id, sessionRef: posRequest.id },
+        });
+        if (!gate.ok) return res.status(gate.status).json({ success: false, charged: false, ...gate.body });
+      }
+
       if (isTestBypassActive) {
         // Real Square Sandbox ADR (2026-09-17, supersedes the old no-op bypass): routes to
         // FindA.Sale's platform-level Square SANDBOX credential set
@@ -1627,20 +1644,13 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       // and a second copy in the Stripe branch, which let a replayed or concurrent confirm re-run
       // the whole fulfillment and double-accrue the cash-leg commission.
     } else {
-      const result = await stripePos.retrieveAndVerifyPayment({
-        paymentIntentId: paymentIntentId!,
-        stripeConnectId: organizerProfile.stripeConnectId!,
-        posRequestId: requestId,
+      // A historical POSPaymentRequest created on Stripe before the switch: Stripe is retired (2026-11-04),
+      // so its PaymentIntent can no longer be verified or confirmed. Refuse cleanly; nothing is recorded.
+      return res.status(410).json({
+        code: 'STRIPE_RETIRED',
+        error: 'This payment request was created with a payment processor that is no longer available. Start a new payment request.',
+        message: 'This payment request was created with a payment processor that is no longer available. Start a new payment request.',
       });
-
-      if (!result.ok) {
-        const failure = posPaymentFailureBody(result, `confirm ${requestId} (Stripe)`, { includeErrorField: true });
-        return res.status(failure.status).json(failure.body);
-      }
-
-      externalPaymentId = result.externalPaymentId;
-
-      // PAID transition: see the guarded block below (2026-09-29), shared by both processors.
     }
 
     // Square migration Wave 1 #3 (2026-09-07): per-item and misc Purchase rows below need
@@ -2031,6 +2041,16 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           unavailableItemId: finalizeErr.itemId,
           detail: finalizeErr.detail,
           firstFailure: true,
+        });
+      }
+      if (isPurchaseKeyViolation(finalizeErr)) {
+        // 2026-11-05 (schema review #2): a Purchase for this payment + item already exists (a concurrent confirm recorded it).
+        // The transaction rolled back this attempt only; the sale is recorded, so answer as the already-completed replay.
+        console.warn(`[pos-payment] confirmPaymentRequest: request ${requestId} payment ${externalPaymentId} already recorded (unique key); answering as completed.`);
+        return res.json({
+          success: true,
+          receiptUrl: '/shopper/history?view=receipts',
+          message: 'Payment already completed',
         });
       }
       console.error('[pos-payment] confirmPaymentRequest: payment captured but PAID transition / fulfillment failed:', finalizeErr);
@@ -2633,6 +2653,21 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: manualLegProblem, code: 'CARD_AMOUNT_TOO_SMALL' });
     }
 
+    // Restricted-item card gate (2026-11-06): POS manual card entry. Lines are the server-validated charged lines; the card
+    // subtotal (sale minus the cash leg) must fit inside the card-allowed lines, so a cashier who rang the blocked items
+    // up in the cash leg goes through. On a block the 409 body carries the split (allowed / blocked, card / cash amounts)
+    // for the register to re-enter the cash leg. Nothing has been charged or accrued yet at this point.
+    {
+      const gate = await gateCardCharge({
+        processor: 'SQUARE',
+        organizerId: organizer.id,
+        lines: chargedItems.map((ci) => ({ itemId: ci.itemId ?? null, amountCents: Math.round(ci.amount * 100) })),
+        cardChargeCents: cardSubtotalCents,
+        context: { path: 'square.pos.manualCard', sessionRef: saleId ?? null },
+      });
+      if (!gate.ok) return res.status(gate.status).json(gate.body);
+    }
+
     // Cash-fee exposure cap (2026-09-24 ruling, now also applied to this split path 2026-09-29):
     // best-effort pre-charge check (this endpoint has no request row to lock against, so two
     // simultaneous manual splits are not serialized the way createPaymentRequest's are; the
@@ -2977,6 +3012,10 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         manualBulkResults.clear();
         if (txErr instanceof ManualCardReplayInTransaction) {
           manualBulkReplayRows = txErr.rows;
+        } else if (isPurchaseKeyViolation(txErr)) {
+          // 2026-11-05 (schema review #2): the (squarePaymentId, itemId) unique index caught a concurrent identical submission
+          // that the advisory lock did not (another process). Same answer as the in-transaction replay above.
+          manualBulkReplayRows = await prisma.purchase.findMany({ where: { squarePaymentId }, select: { id: true } });
         } else if (isBulkLotError(txErr) || isConsignorTagError(txErr)) {
           // The cards ran out (or the consignor tag could not be minted) after the charge. Nothing was taken or recorded: give the money back.
           const failedByTag = isConsignorTagError(txErr);
@@ -3125,6 +3164,16 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         const purchase = await buildManualRow(prisma, item, idx, itemFeeCents, itemDebtCents);
         purchaseIds.push(purchase.id);
       } catch (err: any) {
+        if (isPurchaseKeyViolation(err)) {
+          // 2026-11-05 (schema review #2): this line is already recorded for this Square payment (a concurrent identical
+          // submission). Not a failure: keep its row id and do not take a second unit of stock.
+          const already = item.itemId
+            ? await prisma.purchase.findFirst({ where: { squarePaymentId, itemId: item.itemId }, select: { id: true } })
+            : null;
+          if (already) purchaseIds.push(already.id);
+          console.warn(`[pos-payment] manualCardPayment: Purchase for item ${item.itemId ?? '(misc)'} already recorded for payment ${squarePaymentId}; skipping.`);
+          continue;
+        }
         // P0 fix precedent (2026-08-08, Terminal readiness audit / confirmPaymentRequest
         // above): the Square charge is ALREADY captured by this point -- a failure here
         // means money was taken but this one line item wasn't recorded as sold. Alert and

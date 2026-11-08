@@ -48,7 +48,7 @@ name: CI Typecheck & Tests
 #       Needs an eslint config + violation cleanup before gating. Left non-blocking.
 #   Every step still RUNS and PRINTS; tests + lint just don't fail the suite yet.
 #
-# Setup mirrors the repo's existing workflows (corepack + setup-node@v4, node 22,
+# Setup mirrors the repo's existing workflows (corepack + setup-node@v7, node 22,
 # pnpm cache). corepack reads the packageManager field from root package.json and
 # activates that pnpm version automatically -- no pnpm/action-setup step needed, and
 # no version hardcoded here (a hardcoded 8.15.5 sat here stale for a while after the
@@ -87,10 +87,10 @@ concurrency:
 jobs:
   typecheck:
     name: Typecheck, tests & lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      # Prevents OOM kill (exit 134/SIGABRT) on GitHub Actions ubuntu-latest runners.
+      # Prevents OOM kill (exit 134/SIGABRT) on GitHub Actions ubuntu-24.04 runners.
       # Full-monorepo tsc exceeds the default 2GB V8 heap — 4GB cap fixes it.
       NODE_OPTIONS: --max-old-space-size=4096
 
@@ -123,13 +123,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Enable Corepack
         run: corepack enable
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'pnpm'

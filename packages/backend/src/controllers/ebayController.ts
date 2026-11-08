@@ -4,6 +4,7 @@ import express, { Request, Response } from 'express';
 import sanitizeHtml from 'sanitize-html';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { isUniqueViolation } from '../utils/uniqueViolation'; // 2026-11-05: Item.ebayListingId / ebayOfferId unique when set
 import { userCanPublish, emailNotVerifiedBody } from '../lib/publishGate'; // 2026-10-23: verify to publish (eBay push included)
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots are never pushed to eBay in v1
 import { bulkChannelRefusal, findBulkLotItemIds, isBulkLotError, type BulkLotDb } from '../services/bulkLot/bulkLotService';
@@ -6658,6 +6659,22 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
     // confidence. Returned in the response and logged so duplicates / orphans are visible, not silent.
     const unreconciled: Array<{ ebayListingId: string; sku: string | null; title: string; reason: string }> = [];
 
+    // 2026-11-05 (schema review #8): Item.ebayListingId / Item.ebayOfferId are unique when set (partial unique indexes).
+    // The dedup reads below are check-then-write and organizer-scoped, so a listing already linked to ANOTHER item (a sale
+    // item whose denormalized organizerId is null, another organizer on the same eBay account, a concurrent import) now
+    // fails the write with P2002. Record it as unreconciled and skip it instead of failing the whole import.
+    const writeEbayLinkOrSkip = async (listingId: string, sku: string | null, title: string, write: () => Promise<unknown>): Promise<boolean> => {
+      try {
+        await write();
+        return true;
+      } catch (err) {
+        if (!isUniqueViolation(err, ['ebayListingId', 'ebayOfferId'])) throw err;
+        unreconciled.push({ ebayListingId: listingId, sku, title, reason: 'listing_already_linked_to_another_item' });
+        console.warn(`[eBay Import] listing ${listingId} (sku="${sku ?? ''}") is already linked to another item; skipped.`);
+        return false;
+      }
+    };
+
     // Lazily-fetched set of ItemIDs live right now (null = fetch incomplete, so staleness is unprovable).
     let liveIdsPromise: Promise<Set<string> | null> | null = null;
     const getLiveIds = (): Promise<Set<string> | null> =>
@@ -6694,14 +6711,15 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       }
       // Single inventory number (2026-10-13): adopting links the listing only. Stock (stockTotal / stockSold / ebayQuantityAvailable) is
       // deliberately NOT written here: the platform owns the number and the stock sync pushes it to eBay.
-      await prisma.item.update({
+      const adopted = await writeEbayLinkOrSkip(listingId, sku, title, () => prisma.item.update({
         where: { id: candidate.id },
         data: {
           ebayListingId: listingId,
           listedOnEbayAt: candidate.listedOnEbayAt ?? new Date(),
           ...(importCanPublish && candidate.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
         },
-      });
+      }));
+      if (!adopted) return true; // accounted for (linked elsewhere): the caller must not create a duplicate item
       console.log(`[eBay Import] ADOPTED by SKU prefix: listing ${listingId} (sku="${sku}") -> item ${candidate.id} (was ${candidate.ebayListingId ?? 'unlinked'})`);
       return true;
     };
@@ -6748,7 +6766,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       const willSetCategoryOnReconcile = !hit.category && !!categoryName;
       // Single inventory number (2026-10-13): reconcile links the listing and fills blanks only. Stock is NOT written (the platform
       // owns the number; the stock sync pushes it to eBay).
-      await prisma.item.update({
+      const reconciled = await writeEbayLinkOrSkip(listingId, null, rawTitle, () => prisma.item.update({
         where: { id: hit.id },
         data: {
           ebayListingId: listingId,
@@ -6760,7 +6778,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           // should not sit on the "review & publish" queue.
           ...(importCanPublish && hit.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
         },
-      });
+      }));
+      if (!reconciled) return true; // accounted for (linked elsewhere): the caller must not create a duplicate item
       console.log(`[eBay Import] Reconciled eBay listing ${listingId} to existing item ${hit.id} by title match ("${target}")`);
       return true;
     };
@@ -6870,15 +6889,15 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           if (existing) {
             // Backfill: migrate SKU-stored ebayListingId to numeric ID so sold-sync can match
             if (ebayListingIdToStore !== sku && existing.ebayListingId !== ebayListingIdToStore) {
-              await prisma.item.update({
-                where: { id: existing.id },
+              const backfilled = await writeEbayLinkOrSkip(ebayListingIdToStore, sku, existing.title, () => prisma.item.update({
+                where: { id: existing!.id },
                 data: {
                   ebayListingId: ebayListingIdToStore,
                   // Auto-publish on FindA.Sale — item is live on eBay.
-                  ...(importCanPublish && existing.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
+                  ...(importCanPublish && existing!.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
                 },
-              });
-              console.log(`[eBay Import] Backfilled numeric listingId ${ebayListingIdToStore} on item ${existing.id} (was SKU: ${sku})`);
+              }));
+              if (backfilled) console.log(`[eBay Import] Backfilled numeric listingId ${ebayListingIdToStore} on item ${existing.id} (was SKU: ${sku})`);
             }
             skipped++;
             continue;
@@ -6904,15 +6923,15 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
 
               if (listingId && existing) {
                 // Update item with the numeric listing ID and mark as listed
-                await prisma.item.update({
-                  where: { id: existing.id },
+                await writeEbayLinkOrSkip(listingId, sku, existing.title, () => prisma.item.update({
+                  where: { id: existing!.id },
                   data: {
                     ebayListingId: listingId,
                     listedOnEbayAt: new Date(),
                     // Auto-publish on FindA.Sale — item is live on eBay.
-                    ...(importCanPublish && existing.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
+                    ...(importCanPublish && existing!.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
                   },
-                });
+                }));
                 skipped++;
                 continue;
               }
@@ -6946,7 +6965,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         const invQty = Number.isFinite(invQtyRaw) && invQtyRaw > 1 ? Math.floor(invQtyRaw) : null;
         unreconciled.push({ ebayListingId: ebayListingIdToStore, sku, title, reason: 'created_new_inventory_item_no_match' });
 
-        await prisma.item.create({
+        const createdInventoryItem = await writeEbayLinkOrSkip(ebayListingIdToStore, sku, title, () => prisma.item.create({
           data: {
             title: title.slice(0, 255),
             description: description.slice(0, 2000),
@@ -6968,7 +6987,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             condition,
             embedding: [],  // populated later when item is indexed for search
           }
-        });
+        }));
+        if (!createdInventoryItem) { skipped++; continue; } // linked to another item already (2026-11-05 unique index)
         imported++;
       }
 
@@ -7131,7 +7151,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             // active-listings call), so it should not sit on the review queue.
             if (importCanPublish && existing.draftStatus !== 'PUBLISHED') backfill.draftStatus = 'PUBLISHED'; // 2026-10-23: verify email to publish
             if (Object.keys(backfill).length > 0) {
-              await prisma.item.update({ where: { id: existing.id }, data: backfill });
+              // backfill may carry ebayListingId (SKU -> numeric ItemID); a listing linked to another item is skipped, not fatal.
+              await writeEbayLinkOrSkip(ebayItemId, sku, titleRaw, () => prisma.item.update({ where: { id: existing.id }, data: backfill }));
             }
             skipped++;
             continue;
@@ -7149,7 +7170,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             reason: itemIdFromFasSku(sku) ? 'fas_sku_no_matching_item_for_organizer_created_new_inventory_item' : 'created_new_inventory_item_no_match',
           });
 
-          await prisma.item.create({
+          const createdTradingItem = await writeEbayLinkOrSkip(ebayItemId, sku, titleRaw, () => prisma.item.create({
             data: {
               title: titleRaw.slice(0, 255),
               description,
@@ -7176,7 +7197,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               ebayShippingClassification: classifyEbayShipping(ebayCategory || null, ebayCategoryTags),
               embedding: [],  // populated later when item is indexed for search
             }
-          });
+          }));
+          if (!createdTradingItem) { skipped++; continue; } // linked to another item already (2026-11-05 unique index)
           imported++;
           totalFetched++;
         }

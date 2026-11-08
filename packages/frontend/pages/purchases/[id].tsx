@@ -6,17 +6,16 @@
  * Accessible via: /purchases/[purchaseId]
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { AUCTION_BUYER_PREMIUM_RATE, AUCTION_BUYER_PREMIUM_LABEL } from '../../lib/platformFees';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import Head from 'next/head';
 import Skeleton from '../../components/Skeleton';
 import { getItemImageUrl } from '../../lib/imageUtils';
-import CheckoutModal from '../../components/CheckoutModal';
 
 const PurchaseConfirmationPage = () => {
   const router = useRouter();
@@ -42,51 +41,15 @@ const PurchaseConfirmationPage = () => {
     }
   }, [user, authLoading, purchaseId, router]);
 
-  // Stripe dead-link fix (2026-09-09, findasale-dev BUG MODE): this page is where
-  // jobs/auctionJob.ts's "Complete Payment" winner email now points a Stripe-only auction
-  // winner (previously pointed at /shopper/purchases, which is not a real route and 404'd --
-  // CheckoutModal.tsx's purchaseId-resume branch, GET /stripe/pending-payment/:purchaseId,
-  // was fully functional server-side but had no caller). A purchase that loads here still
-  // PENDING on Stripe means the winner hasn't paid yet, so the checkout modal auto-opens.
-  // Square is excluded: a Square-onboarded organizer's auction winner goes straight to
-  // Square's own hosted checkout link and never reaches this page at all.
-  const queryClient = useQueryClient();
-  const [showCheckout, setShowCheckout] = useState(false);
-  // Scoped to AUCTION items specifically (not "any PENDING Stripe purchase"): a normal
-  // fixed-price online checkout also reads PENDING here for a few seconds after a buyer
-  // pays -- CheckoutModal.tsx's handleDone redirects an authenticated buyer straight to this
-  // page the instant stripe.confirmPayment() resolves client-side, but the DB row only flips
-  // to PAID once stripeController.ts's payment_intent.succeeded webhook lands, which can lag
-  // behind that redirect. Auto-opening a resume-payment modal in that window would ask a buyer
-  // who just paid to pay again. Auction items have no such race: the ONLY way a winner reaches
-  // this page is via the emailed "Complete Payment" link (jobs/auctionJob.ts), sent before the
-  // winner has paid anything at all, so PENDING here always means payment is genuinely owed.
-  const isPendingStripePayment =
-    !!purchase &&
-    purchase.item?.listingType === 'AUCTION' &&
-    purchase.status === 'PENDING' &&
-    purchase.processor !== 'SQUARE' &&
-    !!purchase.stripePaymentIntentId;
-  // No-processor fix (2026-09-16, findasale-dev -- claude_docs/STATE.md Blocked Queue P0
-  // "Stripe-only auction winners may have NO working way to pay"): a PENDING auction Purchase
-  // with NO stripePaymentIntentId and NOT Square means the organizer has no working payment
-  // processor at all (Stripe's platform account is permanently closed -- see ADR-121 -- and
-  // this organizer hasn't completed Square onboarding). isPendingStripePayment above is
-  // correctly false for this case (there is no real checkout to resume), but until this fix
-  // that meant a winner landing here saw only a bare "Pending" badge with no explanation at
-  // all. Mirrors services/auctionService.ts's manual-close-path copy ("Contact the organizer
-  // to complete payment.") instead of inventing new wording.
+  // A PENDING auction purchase that is not on Square can no longer be paid online: Stripe is retired
+  // (owner decision 2026-11-04), so a Stripe-era winner who never paid, and a winner whose organizer has
+  // no Square account, both get the same honest "contact the organizer" message. Square-onboarded
+  // organizers' winners go straight to Square's hosted checkout link and never reach this state.
   const isPendingNoProcessor =
     !!purchase &&
     purchase.item?.listingType === 'AUCTION' &&
     purchase.status === 'PENDING' &&
-    purchase.processor !== 'SQUARE' &&
-    !purchase.stripePaymentIntentId;
-  useEffect(() => {
-    if (isPendingStripePayment) {
-      setShowCheckout(true);
-    }
-  }, [isPendingStripePayment]);
+    purchase.processor !== 'SQUARE';
 
   if (authLoading || isLoading) {
     return (
@@ -233,19 +196,6 @@ const PurchaseConfirmationPage = () => {
               Purchase confirmed
             </p>
             {getStatusBadge()}
-            {isPendingStripePayment && (
-              <div className="mt-4 max-w-sm mx-auto p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
-                  Payment still needed to secure this item.
-                </p>
-                <button
-                  onClick={() => setShowCheckout(true)}
-                  className="w-full py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded"
-                >
-                  Complete Payment
-                </button>
-              </div>
-            )}
             {isPendingNoProcessor && (
               <div className="mt-4 max-w-sm mx-auto p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <p className="text-sm text-amber-800 dark:text-amber-200">
@@ -441,24 +391,6 @@ const PurchaseConfirmationPage = () => {
         </div>
       </div>
 
-      {isPendingStripePayment && showCheckout && (
-        <CheckoutModal
-          purchaseId={String(purchaseId)}
-          itemTitle={item?.title || 'Item'}
-          listingType={item?.listingType}
-          organizerName={organizer?.businessName}
-          saleId={purchase.saleId ?? undefined}
-          onClose={() => setShowCheckout(false)}
-          onSuccess={() => {
-            setShowCheckout(false);
-            // Re-fetch so the status badge / CTA flip from PENDING to PAID immediately --
-            // the payment_intent.succeeded webhook (stripeController.ts) marks the Purchase
-            // PAID asynchronously, so this may briefly still read PENDING; the user's own
-            // in-modal success screen already confirmed the charge went through.
-            queryClient.invalidateQueries({ queryKey: ['purchase', purchaseId] });
-          }}
-        />
-      )}
     </>
   );
 };

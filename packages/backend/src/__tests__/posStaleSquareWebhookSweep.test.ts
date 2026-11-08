@@ -20,8 +20,6 @@ jest.mock('../lib/prisma', () => ({
   },
 }));
 jest.mock('../lib/notificationService', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('../utils/stripe', () => ({ getStripe: () => ({}) }));
-jest.mock('../services/stripeConnectService', () => ({ shouldUseDirectCharge: jest.fn() }));
 jest.mock('../services/posPaymentLinkRecorder', () => ({ recordPosPaymentLinkSale: jest.fn() }));
 jest.mock('../services/squareCheckoutLinkService', () => ({ getSquareOrderPaymentStatus: jest.fn(), deleteSquareCheckoutLink: jest.fn() }));
 jest.mock('../services/holdInvoiceSquareRelease', () => ({ prepareSquareInvoiceForRelease: jest.fn() }));

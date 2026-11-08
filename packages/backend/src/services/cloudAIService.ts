@@ -830,8 +830,12 @@ function buildWebDetectionContext(webMatch: { webEntities: string[]; bestGuessLa
 
 /** Options for analyzeItemImage / analyzeItemImages. */
 export interface AnalyzeItemOptions {
-  /** Re-analyze only: the item's existing title (stable shadow-pricing query). */
+  /** Re-analyze only: the item's existing title (stable shadow-pricing query; lot count and set names are kept from it). */
   priorTitle?: string | null;
+  /** Re-analyze only: the item's existing description (a "lot of two" stated only here is kept). */
+  priorDescription?: string | null;
+  /** Prefix for the one-line intake quality log, e.g. "item=abc123". */
+  logLabel?: string;
   /** Organizer-edited fields: the verify pass never changes these (organizer intent wins). */
   userEditedFields?: readonly string[] | null;
   /** The organizer set or confirmed the package weight: the weight estimate is not clamped. */
@@ -850,7 +854,11 @@ const INTAKE_FACT_GUARDRAILS = `Fact rules (known mistakes to avoid):
 - Tags describe this item itself (what it is, brand, material, era, style), never a different device it is used with (blank CD-R discs are not "DVD Writer" or "Optical Drive").
 - Category follows what the item IS: store fixtures and hardware (racks, hangers, brackets, mannequins) are never "Clothing, Shoes & Accessories".
 - Records: when a photo shows the disc, say so; never write that the vinyl is "not visually confirmed" if it is visible.
-- The description must never start with stray numbers, list markers or symbols.`;
+- The description must never start with stray numbers, list markers or symbols.
+- Years: a year in the title and in the description must be the same year, read from the item itself (card front or back, copyright line, label, coin date). Never write one year in the title and a different year in the description.
+- Trading cards: the set name AND any subset or insert name printed on the card (for example "EX2000", "Xpress", "Pro Motion", "Highlights", "Gold Rookie") are required in the title, after the brand and year. Never drop one that is printed.
+- Lots: when the photos show more than one item sold together, the title says so with the count ("Lot of 2 ...") and the description says how many are included.
+- Titles never repeat a word ("Baseball Card Card").`;
 
 /** Full Vision OCR block as a verbatim spelling reference (empty when Vision read nothing). */
 function buildOcrContext(ocrFullText?: string | null): string {
@@ -1294,6 +1302,9 @@ async function runIntakeQualitySafely(
       objectLabels: ctx.objectLabels,
       userEditedFields: ctx.options?.userEditedFields ?? null,
       organizerWeightSet: ctx.options?.organizerWeightSet === true,
+      priorTitle: ctx.options?.priorTitle ?? null,
+      priorDescription: ctx.options?.priorDescription ?? null,
+      logLabel: ctx.options?.logLabel,
     });
     if (review.appliedCorrections.some((c) => c.field === 'title' || c.field === 'description')) {
       normalizeTaggedText(result, '[cloudAI] verify');
@@ -1609,7 +1620,7 @@ export async function analyzeItemImages(
   );
 
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
-  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch, ebayMatch, options?.priorTitle, ocrFullText);
+  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch, ebayMatch, options?.priorTitle, ocrFullText, options?.priorDescription);
   if (ocrIsbn) result.ocrIsbn = ocrIsbn; // ADR-089: thread OCR-derived ISBN onto the analysis result
   // FCC ID: the deterministic OCR-regex value wins over the model-read value when they disagree.
   if (ocrFccId) {
@@ -1689,6 +1700,26 @@ function buildRoleContextPrompt(clusterPhotos?: ClusterPhoto[]): string {
   return `\n\n=== PHOTO ROLE CONTEXT ===\n${roleContexts.join('\n')}\nUse role-based context above. Prioritize signals from specialized photos (BACK_STAMP for brand, DETAIL_DAMAGE for condition) over generic labels. If a photo role contradicts visual evidence, note internally but don't let role classification bias analysis of what is actually visible.`;
 }
 
+/**
+ * Multi-photo package estimate sanitizer (2026-11-05): keeps estimatedWeightOz / estimatedDimensionsIn /
+ * estimatedPackageType only when packageConfidence >= 0.5 and the weight is a positive number (same rule as the
+ * single-photo path). Mutates and returns `parsed`. Exported for tests.
+ */
+export function normalizeMultiImagePackageEstimate<T extends Pick<AITagResult, 'estimatedWeightOz' | 'estimatedDimensionsIn' | 'estimatedPackageType' | 'packageConfidence'>>(parsed: T): T {
+  const conf = typeof parsed.packageConfidence === 'number' ? parsed.packageConfidence : parseFloat(String(parsed.packageConfidence ?? ''));
+  const weight = typeof parsed.estimatedWeightOz === 'number' ? parsed.estimatedWeightOz : parseFloat(String(parsed.estimatedWeightOz ?? ''));
+  if (!Number.isFinite(conf) || conf < 0.5 || !Number.isFinite(weight) || weight <= 0) {
+    parsed.estimatedWeightOz = undefined;
+    parsed.estimatedDimensionsIn = undefined;
+    parsed.estimatedPackageType = undefined;
+    if (!Number.isFinite(conf)) parsed.packageConfidence = undefined;
+    return parsed;
+  }
+  parsed.packageConfidence = conf;
+  parsed.estimatedWeightOz = weight;
+  return parsed;
+}
+
 async function getHaikuAnalysisMultiImage(
   imageBase64Array: string[],
   mimeTypes: string[],
@@ -1700,7 +1731,8 @@ async function getHaikuAnalysisMultiImage(
   webMatch?: { webEntities: string[]; bestGuessLabels: string[] } | null,
   ebayMatch?: EbayImageMatch | null,
   priorTitle?: string | null,
-  ocrFullText?: string | null
+  ocrFullText?: string | null,
+  priorDescription?: string | null
 ): Promise<AITagResult> {
   const labelContext =
     objectLabels.length > 0 || detectedText.length > 0
@@ -1734,6 +1766,14 @@ async function getHaikuAnalysisMultiImage(
   const multiImagePrompt = imageCount > 1
     ? `You are analyzing ${imageCount} photos. These are usually different angles of the SAME single item — but they may instead show the multiple matching pieces of ONE set or lot sold together (for example, each photo a different club in a matched golf set, or different pieces of one dish set). Decide from the images which case applies before cataloging.`
     : 'You are analyzing a photo of an item.';
+  // 2026-11-05: photo count + what a second photo usually is (card test: "back not photographed" with 2 photos).
+  const photoOrderNote = imageCount > 1
+    ? `\n\nPhotos: there are ${imageCount} photos, in order (photo 1 to photo ${imageCount}). A second photo is very often the back of the same card, label or packaging, or a second item of a lot. Look at every photo before writing that a view is missing: never write that the back is "not photographed", "not provided" or "not shown" when one of the ${imageCount} photos shows it, and read the set name, year and card number from the back when the front does not show them.`
+    : '';
+  // 2026-11-05: re-analyze keeps what the earlier listing got right (lot count, set name) unless the photos contradict it.
+  const priorListingNote = (priorTitle && priorTitle.trim()) || (priorDescription && priorDescription.trim())
+    ? `\n\nEarlier listing for this same item: title "${String(priorTitle ?? '').slice(0, 200)}"${priorDescription ? `, description "${String(priorDescription).slice(0, 400)}"` : ''}. It may contain spelling mistakes, so take names and spellings from the printed text, but if it states a lot or count ("Lot", "lot of two", "set of 3", "x2") keep that count, and keep any set or subset name it has, unless the photos clearly show otherwise.`
+    : '';
 
   try {
     const systemPrompt = `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} secondary-sale marketplace (estate sales, yard sales, auctions, flea markets, consignment).${labelContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}
@@ -1759,7 +1799,7 @@ ${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`
     // Add text prompt at the end
     contentArray.push({
       type: 'text',
-      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}${ocrContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}${roleContext}
+      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${photoOrderNote}${priorListingNote}${labelContext}${ocrContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}${roleContext}
 
 Analyze and respond with ONLY valid JSON (no markdown, no explanation).
 
@@ -1781,6 +1821,7 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
 Color: State the item's own actual/dominant surface color as a short common color word or phrase (e.g. "black", "navy blue", "brushed silver") in the "color" field — describe the ITEM's own color, never the background, backdrop, or photo lighting/reflections. Omit color (leave it null) if the item's true color is unclear, multi-colored or patterned in a way that doesn't reduce to one word, or occluded — do not guess.
 Record identity: ONLY if the item is a vinyl record, CD or cassette, fill "recordIdentity" from text printed on the cover, spine, back or center label: artist (performer as printed; "Various" allowed), releaseTitle (the album/single title as printed, not your listing title), label (record label as printed), catalogNumber (exactly as printed, e.g. "SD 7293"), year (only if a date is printed, e.g. a (P)/(C) line), format (LP | 7in | 10in | 12in_single | CD | Cassette | Box | Other), script (latin | cjk | cyrillic | other: the dominant script of the printed title). catalogNumber, label and year must be literally visible -- never recall them from memory; use null for anything not visible. For every other kind of item set "recordIdentity" to null.
 Trading card: ONLY if the photo(s) show a single collectible trading card (Magic: The Gathering, Pokemon, Yu-Gi-Oh!, Disney Lorcana, One Piece, a sports card, or another card game), fill the "card" object; for every other item set "card" to null. Fields: game (MTG | POKEMON | YUGIOH | LORCANA | ONE_PIECE | OTHER; use OTHER for sports cards and any other card game), cardName (as printed), setName and setCode (only if printed on the card), collectorNumber (as printed, e.g. "138/195"), language (en | es | fr | de | it | pt | ja | ko | ru | zhs | zht), finish (NONFOIL | FOIL | ETCHED | HOLO | REVERSE_HOLO, only if clearly visible). Report a field ONLY if it is printed or clearly readable on the card; never guess a set or collector number from memory, use null instead. Then EITHER (ungraded card) set "suggestedCardCondition" to NM | LP | MP | HP | DMG judged from visible edge and corner wear, whitening, scratches, creases and bends (NM = no visible wear, LP = light wear, MP = moderate wear, HP = heavy wear, DMG = tears, water damage, heavy creasing or writing). Be conservative: when unsure between two conditions pick the WORSE one, and use null if the photos cannot show the card's surface and edges well. OR (card inside a graded slab) set "grader" (PSA | BGS | BVG | BCCG | CGC | SGC | TAG | CSG | HGA | ISA | OTHER), "grade" (the number on the label, e.g. "9" or "9.5") and "certNumber", each read from the slab label only, and leave "suggestedCardCondition" null. For a card, "suggestedConditionGrade" is ignored.
+Shipping package: Estimate the PACKED shipping weight (item + box + padding) in ounces for EVERYTHING shown as one listing (all pieces of a lot together), and the packed box outer dimensions (length, width, height) in inches. Use every photo (size cues, backs, labels) to judge size. Pick the eBay packageType enum that best fits: PACKAGE_THICK_ENVELOPE (thin/flat <12oz, e.g. a single trading card in a toploader), MAILING_BOX (most boxed items), LARGE_PACKAGE (over ~18in any side or heavy), USPS_FLAT_RATE_ENVELOPE (documents/flat). Rate packageConfidence 0.0-1.0 on how sure you are of weight + dimensions. If packageConfidence is below 0.5 (you cannot reasonably estimate size/weight), set estimatedWeightOz, estimatedDimensionsIn, and estimatedPackageType to null; do not guess.
 
 {
   ${INTAKE_PRINTED_TEXT_JSON}
@@ -1799,7 +1840,11 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
   "brand": null,
   "color": null,
   "card": null,
-  "recordIdentity": null
+  "recordIdentity": null,
+  "estimatedWeightOz": 24,
+  "estimatedDimensionsIn": { "length": 10, "width": 8, "height": 6 },
+  "estimatedPackageType": "MAILING_BOX",
+  "packageConfidence": 0.7
 }`,
     });
 
@@ -1807,7 +1852,7 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
       'https://api.anthropic.com/v1/messages',
       {
         model: ANTHROPIC_MODEL,
-        max_tokens: 1000, // ADR-132: +100 headroom for the optional recordIdentity object; +100 for the optional card object; 2026-11-05: +400 for printedText and fuller category facts
+        max_tokens: 1100, // ADR-132: +100 headroom for the optional recordIdentity object; +100 for the optional card object; 2026-11-05: +400 for printedText and fuller category facts, +100 for the package estimate
         messages: [
           {
             role: 'user',
@@ -1862,6 +1907,10 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
     }
 
     // FCC ID: keep only a well-formed model-read value (6-19 alphanumerics with a letter and a digit); anything else is dropped.
+    // 2026-11-05: multi-photo packed-weight estimate, same refuse-to-fill rule as the single-photo path (below 0.5
+    // confidence nothing is kept). Callers persist it to aiPackageWeightOz only (never the organizer's packageWeightOz),
+    // and the intake quality layer clamps it to the category weight bounds.
+    normalizeMultiImagePackageEstimate(parsed);
     parsed.fccId = normalizeFccIdStrict(parsed.fccId) ?? undefined;
     await finalizePricing(parsed, { priorTitle });
     // ADR ROUND 3 (2026-08-29): pass eBay's listing-title majority consensus alongside

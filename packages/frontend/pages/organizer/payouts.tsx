@@ -1,12 +1,12 @@
 /**
  * V2: Organizer Payouts Page
  *
- * Displays available + pending Stripe balance, lets organizers:
- * - Change their automatic payout schedule (daily / weekly / monthly / manual)
- * - Trigger an on-demand payout (standard or instant)
+ * Shows how payouts work for the organizer's payment processor (Square settles to the bank on its own
+ * schedule), the cash fee balance, the earnings breakdown and refund history. The old Stripe balance,
+ * payout-schedule and on-demand payout controls were removed with Stripe (retired 2026-11-04).
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
@@ -18,35 +18,25 @@ import Link from 'next/link';
 import { calculateInclusiveCommission, formatInclusiveFeeRate, describeInclusiveRates, MINIMUM_TRANSACTION_FEE_LABEL } from '../../lib/platformFees';
 type Interval = 'daily' | 'weekly' | 'monthly' | 'manual';
 
-const INTERVAL_LABELS: Record<Interval, string> = {
-  daily: 'Daily',
-  weekly: 'Weekly',
-  monthly: 'Monthly',
-  manual: 'Manual (on-demand only)',
-};
-
 const OrganizerPayoutsPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
-  const [payoutAmount, setPayoutAmount] = useState('');
-  const [payoutMethod, setPayoutMethod] = useState<'standard' | 'instant'>('standard');
-  const [selectedInterval, setSelectedInterval] = useState<Interval | null>(null);
   const [refundModalItem, setRefundModalItem] = useState<EarningsItem | null>(null);
   const [refundError, setRefundError] = useState('');
 
   // ─── Data fetching ───────────────────────────────────────────────────────────
 
-  const { data: balance, isLoading: balanceLoading, isError: balanceError } = useQuery({
-    queryKey: ['stripe-balance'],
+  const { data: balance, isLoading: balanceLoading } = useQuery({
+    queryKey: ['payout-balance'],
     queryFn: async () => {
       const res = await api.get('/stripe/balance');
-      // Stripe-to-Square changeover fix (2026-09-09): `processor`/`message` added so a
-      // Square-onboarded organizer gets an honest explanation instead of Stripe-only numbers.
+      // The server answers processor 'SQUARE' with an explanatory message (Square has no on-demand
+      // balance API for a connected app), or 400 when no processor is connected yet.
       return res.data as {
-        processor: 'STRIPE' | 'SQUARE';
+        processor: 'SQUARE';
         available: number | null;
         pending: number | null;
         message?: string;
@@ -55,12 +45,12 @@ const OrganizerPayoutsPage = () => {
     enabled: !!user?.id,
   });
 
-  const { data: schedule, isLoading: scheduleLoading, isError: scheduleError } = useQuery({
+  const { data: schedule, isLoading: scheduleLoading } = useQuery({
     queryKey: ['payout-schedule'],
     queryFn: async () => {
       const res = await api.get('/stripe/payout-schedule');
       return res.data as {
-        processor: 'STRIPE' | 'SQUARE';
+        processor: 'SQUARE';
         interval: Interval | null;
         weeklyAnchor: string | null;
         monthlyAnchor: number | null;
@@ -161,50 +151,13 @@ const OrganizerPayoutsPage = () => {
     staleTime: 5 * 60_000,
   });
 
-  useEffect(() => {
-    if (schedule?.interval && selectedInterval === null) setSelectedInterval(schedule.interval);
-  }, [schedule]);
-
   // ─── Mutations ───────────────────────────────────────────────────────────────
-
-  const updateScheduleMutation = useMutation({
-    mutationFn: (interval: Interval) => api.patch('/stripe/payout-schedule', { interval }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payout-schedule'] });
-      showToast('Payout schedule updated', 'success');
-    },
-    onError: (err: any) => {
-      showToast(err.response?.data?.message || 'Failed to update schedule', 'error');
-    },
-  });
-
-  const createPayoutMutation = useMutation({
-    mutationFn: () =>
-      api.post('/stripe/payout', {
-        amount: parseFloat(payoutAmount),
-        method: payoutMethod,
-      }),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ['stripe-balance'] });
-      queryClient.invalidateQueries({ queryKey: ['earnings-breakdown'] });
-      const { amount, method, arrivalDate } = res.data;
-      const arrival = arrivalDate ? new Date(arrivalDate).toLocaleDateString() : 'soon';
-      showToast(
-        `$${amount.toFixed(2)} ${method} payout initiated. Expected ${arrival}`,
-        'success'
-      );
-      setPayoutAmount('');
-    },
-    onError: (err: any) => {
-      showToast(err.response?.data?.message || 'Failed to create payout', 'error');
-    },
-  });
 
   const refundMutation = useMutation({
     mutationFn: (purchaseId: string) => api.post(`/stripe/refund/${purchaseId}`),
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['earnings-breakdown'] });
-      queryClient.invalidateQueries({ queryKey: ['stripe-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['payout-balance'] });
       // Without this, the refunded purchase vanishes from Earnings Breakdown (correct,
       // that list is status:'PAID' only) but does NOT appear in Refund History until its
       // 2-minute staleTime lapses or the page is manually refreshed: the UI would silently
@@ -240,29 +193,6 @@ const OrganizerPayoutsPage = () => {
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
-  const handleScheduleSave = () => {
-    if (!selectedInterval) return;
-    updateScheduleMutation.mutate(selectedInterval);
-  };
-
-  const handlePayoutSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amount = parseFloat(payoutAmount);
-    if (isNaN(amount) || amount <= 0) {
-      showToast('Enter a valid payout amount', 'error');
-      return;
-    }
-    const availableAfterFee = Math.max(0, (balance?.available ?? 0) - (earnings?.cashFeeBalance ?? 0));
-    if (amount > availableAfterFee) {
-      showToast(
-        `Amount exceeds available balance after cash fee deduction ($${availableAfterFee.toFixed(2)})`,
-        'error'
-      );
-      return;
-    }
-    createPayoutMutation.mutate();
-  };
-
   // ─── Helper: Check if cash fee is stale (> 30 days) ────────────────────────
 
   const isCashFeeStale = (): boolean => {
@@ -277,15 +207,11 @@ const OrganizerPayoutsPage = () => {
 
   if (authLoading) return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">Loading…</div>;
 
-  const currentInterval = selectedInterval ?? schedule?.interval ?? 'daily';
-  const scheduleChanged = schedule && selectedInterval !== null && selectedInterval !== schedule.interval;
   const cashFeeBalance = earnings?.cashFeeBalance ?? 0;
-  // Stripe-to-Square changeover fix (2026-09-09): balance/schedule responses both carry
-  // `processor` once loaded -- either is a reliable source since both come from the same
-  // organizer. Square has no on-demand balance/schedule/payout equivalent (see
-  // payoutController.ts's file-header note), so isSquareOnly gates the Stripe-only controls
-  // below to an honest explanatory message instead of Stripe-specific numbers/forms.
-  const processor: 'STRIPE' | 'SQUARE' | null = balance?.processor ?? schedule?.processor ?? null;
+  // Balance/schedule responses both carry `processor` once loaded. Square has no on-demand
+  // balance/schedule/payout equivalent (see payoutController.ts's file-header note), so the page
+  // explains that instead. Anything else means no processor is connected yet.
+  const processor: 'SQUARE' | null = balance?.processor ?? schedule?.processor ?? null;
   const isSquareOnly = processor === 'SQUARE';
 
   return (
@@ -309,7 +235,7 @@ const OrganizerPayoutsPage = () => {
         <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
 
           {/* Error banner */}
-          {(balanceError || scheduleError || earningsError) && (
+          {earningsError && (
             <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 p-4 text-sm text-red-700 dark:text-red-400">
               Something went wrong loading your payout data. Please refresh to try again.
             </div>
@@ -330,29 +256,30 @@ const OrganizerPayoutsPage = () => {
             </div>
           )}
 
-          {/* Balance card */}
+          {/* Payouts card */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
             <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">
-              {isSquareOnly ? 'Square Payouts' : 'Stripe Balance'}
+              {isSquareOnly ? 'Square Payouts' : 'Payouts'}
             </h2>
-            {balanceLoading ? (
-              <p className="text-gray-400 text-sm">Loading balance…</p>
+            {balanceLoading || scheduleLoading ? (
+              <p className="text-gray-400 text-sm">Loading payout details…</p>
             ) : isSquareOnly ? (
-              <p className="text-sm text-gray-600 dark:text-gray-300">{balance?.message}</p>
+              <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                <p>{balance?.message}</p>
+                {schedule?.message && <p>{schedule.message}</p>}
+              </div>
             ) : (
-              <div className="flex gap-8">
-                <div>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                    ${(balance?.available ?? 0).toFixed(2)}
-                  </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Available</p>
-                </div>
-                <div>
-                  <p className="text-3xl font-bold text-gray-500 dark:text-gray-400">
-                    ${(balance?.pending ?? 0).toFixed(2)}
-                  </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Pending</p>
-                </div>
+              <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                <p>
+                  Card payments on FindA.Sale run through Square. Connect your Square account to take card
+                  payments; Square then pays your sales out to your bank automatically.
+                </p>
+                <Link
+                  href="/organizer/settings?tab=payments"
+                  className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                  Connect Square
+                </Link>
               </div>
             )}
           </div>
@@ -398,156 +325,6 @@ const OrganizerPayoutsPage = () => {
               </div>
             </div>
           )}
-
-          {/* Payout schedule */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
-              Automatic Payout Schedule
-            </h2>
-            {!isSquareOnly && (
-              <p className="text-xs text-gray-400 mb-4">
-                How often Stripe automatically sends your available balance to your bank.
-                Choose <strong>Manual</strong> to only get paid when you request it below.
-              </p>
-            )}
-
-            {scheduleLoading ? (
-              <p className="text-gray-400 text-sm">Loading schedule…</p>
-            ) : isSquareOnly ? (
-              <p className="text-sm text-gray-600 dark:text-gray-300">{schedule?.message}</p>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 mb-4">
-                  {(Object.keys(INTERVAL_LABELS) as Interval[]).map((interval) => (
-                    <button
-                      key={interval}
-                      onClick={() => setSelectedInterval(interval)}
-                      className={`py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                        currentInterval === interval
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-blue-400'
-                      }`}
-                    >
-                      {INTERVAL_LABELS[interval]}
-                    </button>
-                  ))}
-                </div>
-
-                {scheduleChanged && (
-                  <button
-                    onClick={handleScheduleSave}
-                    disabled={updateScheduleMutation.isPending}
-                    className="bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
-                    {updateScheduleMutation.isPending ? 'Saving…' : 'Save schedule'}
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Manual payout */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
-              Request a Payout
-            </h2>
-            {isSquareOnly ? (
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                On-demand payouts aren't available through FindA.Sale for Square accounts. Square
-                settles funds to your bank automatically. Check your Square Dashboard for your
-                payout schedule and history.
-              </p>
-            ) : (
-              <>
-            <p className="text-xs text-gray-400 mb-4">
-              Send funds from your available balance to your bank right now.
-              Instant payouts (1–30 min) require an eligible debit card on file in Stripe.
-            </p>
-
-            <form onSubmit={handlePayoutSubmit} className="space-y-4">
-              {/* Amount */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Amount (USD)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                  <input
-                    type="number"
-                    min="1"
-                    step="0.01"
-                    value={payoutAmount}
-                    onChange={(e) => setPayoutAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full pl-7 pr-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                   aria-label="0.00" />
-                </div>
-                {balance && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const afterFee = Math.max(0, (balance.available ?? 0) - cashFeeBalance);
-                      setPayoutAmount(afterFee.toFixed(2));
-                    }}
-                    className="text-xs text-blue-600 hover:underline mt-1"
-                  >
-                    Use full available balance after fees (${
-                      Math.max(0, (balance.available ?? 0) - cashFeeBalance).toFixed(2)
-                    })
-                  </button>
-                )}
-              </div>
-
-              {/* Cash fee deduction info: shown only if balance > 0 */}
-              {cashFeeBalance > 0 && (
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 p-3 space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-amber-800">Cash fee deduction:</span>
-                    <span className="font-semibold text-amber-900">-${cashFeeBalance.toFixed(2)}</span>
-                  </div>
-                  {payoutAmount && (
-                    <div className="flex justify-between text-sm border-t border-amber-200 pt-1 mt-1">
-                      <span className="text-amber-800 font-semibold">Net payout:</span>
-                      <span className="font-semibold text-amber-900">
-                        ${Math.max(0, parseFloat(payoutAmount) - cashFeeBalance).toFixed(2)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Method */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Method</label>
-                <div className="flex gap-3">
-                  {(['standard', 'instant'] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setPayoutMethod(m)}
-                      className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                        payoutMethod === m
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-blue-400'
-                      }`}
-                    >
-                      {m === 'standard' ? 'Standard (1–5 days)' : 'Instant (1–30 min)'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={createPayoutMutation.isPending || !payoutAmount}
-                className="w-full bg-green-600 text-white text-sm font-medium py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-              >
-                {createPayoutMutation.isPending ? 'Initiating payout…' : 'Request payout'}
-              </button>
-            </form>
-              </>
-            )}
-          </div>
 
           {/* Earnings Breakdown: Feature #9 */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">

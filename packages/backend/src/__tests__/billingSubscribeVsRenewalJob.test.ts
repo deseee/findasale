@@ -56,7 +56,6 @@ jest.mock('square', () => ({ SquareError: class SquareError extends Error {} }))
 jest.mock('node-cron', () => ({ __esModule: true, default: { schedule: jest.fn() } }));
 jest.mock('../utils/cronGuard', () => ({ cronGuard: (_o: any, fn: any) => fn }));
 jest.mock('../utils/square', () => ({ getSquarePlatformClient: jest.fn() }));
-jest.mock('../utils/stripe', () => ({ getStripe: () => ({}) }));
 jest.mock('../lib/notificationService', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../lib/syncTier', () => ({ syncTier: jest.fn(), notifyAutoMarkdownsPaused: jest.fn() }));
 jest.mock('../services/tierGraceService', () => ({

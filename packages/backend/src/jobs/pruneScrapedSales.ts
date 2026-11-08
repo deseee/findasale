@@ -11,9 +11,9 @@
  * SAFETY (data-sensitive — read before editing):
  * - Predicate is narrow and keep-if-claimed: only status=ENDED AND
  *   organizer.isClaimed=false AND organizer.isUnmanagedListing=true AND aged past cutoff.
- * - AffiliateLink.sale is the ONLY onDelete:Restrict relation on Sale; it is deleted
- *   first inside each batch transaction so the Sale delete never blocks. Every other
- *   Sale relation is onDelete:Cascade or SetNull (verified against schema.prisma).
+ * - AffiliateLink.sale is onDelete:Restrict; it is deleted first inside each batch
+ *   transaction so the Sale delete never blocks. HoldInvoice/SaleSettlement/SaleTransaction
+ *   are onDelete:Restrict too (2026-11-05): sales holding any are excluded by prunableWhere.
  * - Recurring cron is gated by PRUNE_ENABLED and capped at RECURRING_MAX_DELETES so a
  *   predicate regression can never empty the table in one run.
  */
@@ -74,6 +74,13 @@ function prunableWhere(cutoff: Date) {
     status: 'ENDED',
     endDate: { lt: cutoff },
     organizer: { is: { isClaimed: false, isUnmanagedListing: true } },
+    // 2026-11-05 (schema review #3/#4): HoldInvoice, SaleSettlement and SaleTransaction are ON DELETE RESTRICT on Sale
+    // now. A scraped, unclaimed sale should never have any, but if one does it is skipped (kept), never cascade-deleted,
+    // and it can never fail the whole batch transaction.
+    holdInvoices: { none: {} },
+    settlement: { is: null },
+    transactions: { none: {} },
+    donations: { none: {} }, // SaleDonation.sale has been onDelete:Restrict since before this change; same skip
   };
 }
 

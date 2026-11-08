@@ -210,7 +210,8 @@ export async function reanalyzeItem(
     // query only; the regenerated title is still what Re-analyze writes.
     // 2026-11-05: organizer-edited fields are passed so the verify pass never auto-corrects them.
     result = await analyzeItemImages(buffers, mimeTypes, undefined, undefined, {
-      ...(usingTestImages ? {} : { priorTitle: item.title }),
+      ...(usingTestImages ? {} : { priorTitle: item.title, priorDescription: item.description }),
+      logLabel: `reanalyze item=${itemId} apply=${apply}`,
       userEditedFields: item.userEditedFields ?? [],
       organizerWeightSet: item.packageConfirmedByOrganizer === true || (item.userEditedFields ?? []).includes('packageWeightOz'),
     });
@@ -331,6 +332,14 @@ export async function reanalyzeItem(
     appliedData.upc = result.upc;
   }
   if (typeof result.confidence === 'number') appliedData.aiConfidence = result.confidence;
+  // 2026-11-05: the packed-weight estimate (multi-photo prompt now asks for it; already clamped to the category weight
+  // bounds by the intake quality layer). Stored the same way rapidfire/batch store it: the AI estimate columns only,
+  // never packageWeightOz, so an organizer-set or confirmed weight is never overwritten. Skipped for test-image runs.
+  if (!usingTestImages && result.estimatedWeightOz != null && result.packageConfidence != null && Number.isFinite(Number(result.estimatedWeightOz))) {
+    appliedData.aiPackageWeightOz = Math.round(Number(result.estimatedWeightOz));
+    if (result.estimatedDimensionsIn && typeof result.estimatedDimensionsIn === 'object') appliedData.aiPackageDimsJson = result.estimatedDimensionsIn;
+    appliedData.aiPackageConfidence = result.packageConfidence;
+  }
   // Mark tagged so the review card renders the confidence chip after re-analysis.
   appliedData.isAiTagged = true;
   // Price intentionally excluded — organizer pricing always wins.

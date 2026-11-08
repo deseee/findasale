@@ -1,4 +1,5 @@
 // V3: UGC Missing-listing bounties
+import { gateCardCharge, linesFromItemPrices, CardPaymentBlockedError } from '../services/restrictedItem/cardPaymentGate'; // 2026-11-06 restricted-item card gate
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
@@ -41,6 +42,7 @@ import { withdrawReverbListingIfExists } from '../services/marketplace/reverbCon
 import { endEbayListingIfExists } from './ebayController';
 import { isHttpUrl } from '../utils/safeLinkUrl';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
+import { createOrFindExisting } from '../utils/uniqueViolation';
 
 
 /**
@@ -1030,6 +1032,18 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
 
       // Idempotency-key length note (Square caps at 45 chars, see squarePaymentService.ts) --
       // hashed, not the literal `bounty-${submissionId}-${userId}` string the Stripe branch below uses.
+      // Restricted-item card gate (2026-11-06): single item, card takes all of it or none.
+      {
+        const gate = await gateCardCharge({
+          processor: 'SQUARE',
+          organizerId: submission.item.sale!.organizerId,
+          lines: [{ itemId: submission.itemId, amountCents: priceCents }],
+          cardChargeCents: priceCents,
+          context: { path: 'square.online.bounty', buyerUserId: userId, sessionRef: submissionId },
+        });
+        if (!gate.ok) return res.status(gate.status).json(gate.body);
+      }
+
       const idempotencyKey = buildSquareIdempotencyKey(['bounty', submissionId, userId]);
 
       // Cash-fee-debt recoupment (2026-09-12): pad this card sale's appFeeMoney with whatever
@@ -1106,7 +1120,9 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
       // status is 'PAID' immediately (not 'PENDING' like the Stripe branch) because Square's
       // CreatePayment above is synchronous -- a successful chargeResult means the charge is
       // already done, there is no separate client-side confirmation step to wait on.
-      const squarePurchase = await prisma.purchase.create({
+      // 2026-11-05 (schema review #2): (squarePaymentId, itemId) is unique. A replayed request for the same Square payment
+      // finds the row already recorded and answers with it instead of a 500 (and never takes a second unit of stock).
+      const squareRecorded = await createOrFindExisting(() => prisma.purchase.create({
         data: {
           userId,
           itemId: submission.itemId,
@@ -1128,7 +1144,23 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
           status: 'PAID',
           buyerCardFingerprint: chargeResult.cardFingerprint ?? undefined,
         },
-      });
+      }), () => prisma.purchase.findFirst({ where: { squarePaymentId: chargeResult.paymentId, itemId: submission.itemId } }));
+      const squarePurchase = squareRecorded.row;
+      if (!squareRecorded.created) {
+        console.warn(`[completeBountyPurchase][square] Purchase for Square payment ${chargeResult.paymentId} item ${submission.itemId} already recorded (${squarePurchase.id}); answering as a replay.`);
+        return res.json({
+          squarePaymentId: chargeResult.paymentId,
+          amount: priceCents,
+          currency: 'usd',
+          submissionId: squareUpdatedSubmission.id,
+          bountyId: submission.bountyId,
+          purchaseId: squarePurchase.id,
+          status: squareUpdatedSubmission.status,
+          xpDeducted: XP_BOUNTY_COST,
+          organizerXpAwarded: XP_ORGANIZER_REWARD,
+          processor: 'SQUARE',
+        });
+      }
 
       // Fingerprint hygiene (2026-09-30): a card sale with no fingerprint bypasses dedup / self-dealing checks; structured warn so it is greppable.
       if (!chargeResult.cardFingerprint) {

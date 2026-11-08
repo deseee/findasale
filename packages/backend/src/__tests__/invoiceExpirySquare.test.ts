@@ -25,10 +25,6 @@ jest.mock('../services/holdInvoicePaymentRecorder', () => ({
 }));
 jest.mock('../services/crewInvasionRedemptionService', () => ({ releaseCrewInvasionRedemptionsForInvoice: jest.fn() }));
 jest.mock('../lib/notificationService', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('../utils/expireCheckoutSession', () => ({
-  expireCheckoutSessionSafely: jest.fn().mockResolvedValue({ stillPayable: false, state: 'expired' }),
-  retrieveCheckoutSessionAcrossAccounts: jest.fn(),
-}));
 const mockGate = jest.fn();
 const mockRecordFromGate = jest.fn();
 jest.mock('../services/holdInvoiceSquareRelease', () => ({
@@ -37,7 +33,6 @@ jest.mock('../services/holdInvoiceSquareRelease', () => ({
 }));
 
 import { prisma } from '../lib/prisma';
-import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession';
 import { releaseCrewInvasionRedemptionsForInvoice } from '../services/crewInvasionRedemptionService';
 import { reclaimExpiredInvoices } from '../jobs/invoiceExpiryJob';
 
@@ -95,7 +90,6 @@ describe('invoiceExpiryJob: Square invoices', () => {
     expect(order).toEqual(['gate', 'tx:flip']);
     expect(tx.holdInvoice.updateMany.mock.calls[0][0].data).toEqual({ status: 'EXPIRED', reservationId: null });
     expect(releaseCrewInvasionRedemptionsForInvoice).toHaveBeenCalledWith('inv_sq');
-    expect(expireCheckoutSessionSafely).not.toHaveBeenCalled(); // no Stripe session on a Square invoice
   });
 
   it('a Square invoice that was PAID is recorded and never expired', async () => {

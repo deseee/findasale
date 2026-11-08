@@ -13,6 +13,13 @@
  *     and the shopper gets plain words whether the refund went through or needs doing by hand
  *   - a lot with no pack size (or a plain item) is not handled here, so the old refusal path keeps its behavior
  */
+// Restricted-item card gate (2026-11-06): this suite tests the controller's own money flow, so the gate (which has its own
+// suites under services/restrictedItem/__tests__) is stubbed to "card allowed". The real module is kept for the error class.
+jest.mock('../services/restrictedItem/cardPaymentGate', () => ({
+  ...jest.requireActual('../services/restrictedItem/cardPaymentGate'),
+  gateCardCharge: jest.fn(async () => ({ ok: true, decision: { allCardAllowed: true } })),
+  linesFromItemPrices: jest.fn(async () => []),
+}));
 jest.mock('../lib/prisma', () => {
   const { PackFakeDb } = require('./__fixtures__/bulkLotPackFakes');
   return { prisma: new PackFakeDb() };

@@ -5,8 +5,8 @@
  * must keep it for good.
  *
  * Proves: the restore runs once per expired invoice, AFTER the revert transaction committed; it does
- * not run when the flip lost the race (another path already settled the invoice) or when Stripe shows
- * the invoice was actually paid (stranded-PAID reconcile); and a Stripe-backed invoice is restored too.
+ * not run when the flip lost the race (another path already settled the invoice); and a historical
+ * Stripe-session invoice is left untouched (Stripe retired 2026-11-04, it cannot be verified).
  */
 
 const order: string[] = [];
@@ -20,22 +20,13 @@ jest.mock('../lib/prisma', () => ({
     $transaction: jest.fn(),
   },
 }));
-jest.mock('../services/holdInvoicePaymentRecorder', () => ({
-  markHoldInvoicePaid: jest.fn().mockResolvedValue({ recorded: true, alreadyPaid: false }),
-}));
 jest.mock('../services/crewInvasionRedemptionService', () => ({
   releaseCrewInvasionRedemptionsForInvoice: jest.fn(),
 }));
 jest.mock('../lib/notificationService', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('../utils/expireCheckoutSession', () => ({
-  expireCheckoutSessionSafely: jest.fn().mockResolvedValue({ stillPayable: false, state: 'expired' }),
-  retrieveCheckoutSessionAcrossAccounts: jest.fn(),
-}));
 
 import { prisma } from '../lib/prisma';
-import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder';
 import { releaseCrewInvasionRedemptionsForInvoice } from '../services/crewInvasionRedemptionService';
-import { expireCheckoutSessionSafely, retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSession';
 import { reclaimExpiredInvoices } from '../jobs/invoiceExpiryJob';
 
 const db: any = prisma;
@@ -76,16 +67,6 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
-// Stripe branches of these jobs are gated on isStripePlatformClosed(process.env) now that the Stripe
-// platform account is shut down (STRIPE_PLATFORM_CLOSED defaults to closed). These tests exercise the
-// legacy Stripe branches with a mocked Stripe client, so they opt out of the gate explicitly.
-const __prevStripeClosed = process.env.STRIPE_PLATFORM_CLOSED;
-beforeAll(() => { process.env.STRIPE_PLATFORM_CLOSED = 'false'; });
-afterAll(() => {
-  if (__prevStripeClosed === undefined) delete process.env.STRIPE_PLATFORM_CLOSED;
-  else process.env.STRIPE_PLATFORM_CLOSED = __prevStripeClosed;
-});
-
 describe('invoiceExpiryJob: crew redemption restore', () => {
   it('restores the member\'s redemption once, after the revert transaction committed (no-session invoice)', async () => {
     db.holdInvoice.findMany.mockResolvedValue([invoice()]);
@@ -97,30 +78,17 @@ describe('invoiceExpiryJob: crew redemption restore', () => {
     expect(order).toEqual(['tx:flip', 'tx:commit', 'release']);
   });
 
-  it('restores it for a Stripe-backed invoice whose Checkout Session simply expired unpaid', async () => {
+  it('leaves a historical Stripe-session invoice untouched (Stripe retired: cannot verify it, no restore)', async () => {
     db.holdInvoice.findMany.mockResolvedValue([invoice({ stripeSessionId: 'cs_1' })]);
-    (retrieveCheckoutSessionAcrossAccounts as jest.Mock).mockResolvedValue({ status: 'expired', payment_status: 'unpaid' });
-    db.$transaction.mockImplementation(async (cb: any) => cb(txWith(1)));
     await reclaimExpiredInvoices();
-    expect(release).toHaveBeenCalledWith('inv_1');
-    expect(expireCheckoutSessionSafely).toHaveBeenCalledTimes(1);
+    expect(db.$transaction).not.toHaveBeenCalled();
+    expect(release).not.toHaveBeenCalled();
   });
 
   it('does NOT restore when the flip lost the race (another path already settled the invoice)', async () => {
     db.holdInvoice.findMany.mockResolvedValue([invoice()]);
     db.$transaction.mockImplementation(async (cb: any) => cb(txWith(0)));
     await reclaimExpiredInvoices();
-    expect(release).not.toHaveBeenCalled();
-  });
-
-  it('does NOT restore a PAID invoice: Stripe shows it paid, so it is reconciled and the redemption stays used', async () => {
-    db.holdInvoice.findMany.mockResolvedValue([invoice({ stripeSessionId: 'cs_paid' })]);
-    (retrieveCheckoutSessionAcrossAccounts as jest.Mock).mockResolvedValue({
-      status: 'complete', payment_status: 'paid', payment_intent: 'pi_1', amount_total: 2520,
-    });
-    await reclaimExpiredInvoices();
-    expect(markHoldInvoicePaid).toHaveBeenCalledWith('inv_1', { processor: 'STRIPE', externalPaymentId: 'pi_1' }, { source: 'reconcile' });
-    expect(db.$transaction).not.toHaveBeenCalled();
     expect(release).not.toHaveBeenCalled();
   });
 

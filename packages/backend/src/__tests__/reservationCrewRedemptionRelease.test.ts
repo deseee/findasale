@@ -33,11 +33,6 @@ jest.mock('../services/crewInvasionRedemptionService', () => ({
   countCrewDiscountEligibleShoppers: (...a: any[]) => mockCountEligible(...a),
 }));
 
-var mockExpire = jest.fn();
-jest.mock('../utils/expireCheckoutSession', () => ({
-  expireCheckoutSessionSafely: (...a: any[]) => mockExpire(...a),
-  retrieveCheckoutSessionAcrossAccounts: jest.fn(),
-}));
 var mockCreateLink = jest.fn();
 jest.mock('../controllers/posController', () => ({ createPaymentLinkInternal: (...a: any[]) => mockCreateLink(...a) }));
 // Money review P1-13 (2026-09-29): CHECKOUT_LINK claims each item through commitItemSale before creating the link.
@@ -98,7 +93,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   order.length = 0;
   mockReleaseForInvoice.mockImplementation(async () => { order.push('release'); return 1; });
-  mockExpire.mockResolvedValue({ stillPayable: false, state: 'EXPIRED' });
   mockPrisma.$transaction.mockImplementation(async (cb: any) => { const r = await cb(txMock()); order.push('tx:commit'); return r; });
   jest.spyOn(console, 'log').mockImplementation(() => {});
   jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -147,25 +141,13 @@ describe('releaseInvoice: crew redemption restore', () => {
     expect(mockReleaseForInvoice).not.toHaveBeenCalled();
   });
 
-  it('does not restore when Stripe says the session was already paid (409, payment kept)', async () => {
+  it('a historical Stripe-session invoice is released like any other (Stripe retired, nothing to expire)', async () => {
     mockPrisma.itemReservation.findUnique.mockResolvedValue(reservationRow(invoice({ stripeSessionId: 'cs_1' })));
     mockPrisma.organizer.findUnique.mockResolvedValue(null);
-    mockExpire.mockResolvedValue({ stillPayable: false, state: 'PAID' });
     const res = makeRes();
     await releaseInvoice(req(), res);
-    expect(res.status).toHaveBeenCalledWith(409);
-    expect(mockReleaseForInvoice).not.toHaveBeenCalled();
-    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
-  });
-
-  it('does not restore when the payment link could not be closed (502, request left in place)', async () => {
-    mockPrisma.itemReservation.findUnique.mockResolvedValue(reservationRow(invoice({ stripeSessionId: 'cs_1' })));
-    mockPrisma.organizer.findUnique.mockResolvedValue(null);
-    mockExpire.mockResolvedValue({ stillPayable: true, state: 'OPEN' });
-    const res = makeRes();
-    await releaseInvoice(req(), res);
-    expect(res.status).toHaveBeenCalledWith(502);
-    expect(mockReleaseForInvoice).not.toHaveBeenCalled();
+    expect(mockReleaseForInvoice).toHaveBeenCalledWith('inv_1');
+    expect(order).toEqual(['tx:cancel', 'tx:commit', 'release']);
   });
 });
 

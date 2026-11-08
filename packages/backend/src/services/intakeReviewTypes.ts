@@ -10,7 +10,7 @@
 import type { CategoryFamily } from './intakeCategoryFamilies';
 
 export type IntakeNoteSeverity = 'high' | 'medium' | 'low' | 'info';
-export type IntakeNoteSource = 'verify' | 'consistency' | 'facts' | 'photos' | 'weight' | 'routing';
+export type IntakeNoteSource = 'verify' | 'consistency' | 'facts' | 'photos' | 'weight' | 'routing' | 'preservation';
 
 export interface IntakeReviewNote {
   /** Stable machine code, e.g. LOT_COUNT_MISMATCH, MISSING_PHOTO, VERIFY_SUGGESTION. */
@@ -31,7 +31,15 @@ export interface AppliedIntakeCorrection {
   to: unknown;
   reason: string;
   confidence: number;
-  source: 'verify' | 'weight';
+  /** verify = Haiku verify pass; weight = weight bounds; consistency/preservation = deterministic fixes (duplicate words,
+   *  lot count or set name kept from the earlier listing, false "back not photographed" sentence removed). */
+  source: 'verify' | 'weight' | 'consistency' | 'preservation';
+}
+
+/** Token usage of the verify pass call (from the Anthropic response). */
+export interface VerifyPassUsage {
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export type VerifyPassStatus = 'ran' | 'disabled' | 'gated' | 'failed' | 'not-run';
@@ -48,6 +56,10 @@ export interface IntakeReview {
   /** Marketplaces this kind of item sells best on (collectibles: eBay). Advisory only. */
   preferredMarketplaces: string[];
   verifyPass: VerifyPassStatus;
+  /** Why the verify pass did not run: disabled, no api key, cost ceiling, daily cap, error, no images, skipped. */
+  verifySkipReason?: string | null;
+  /** Verify pass token usage, when it ran and the response carried usage. */
+  verifyUsage?: VerifyPassUsage | null;
 }
 
 /** Pass-1 structured verbatim transcription of printed text (labels, packaging, credits). */

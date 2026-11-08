@@ -44,7 +44,7 @@ on:
 jobs:
   scrape:
     name: License & Registry Phase 2 Batch
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180 # bumped from 60 (2026-08-24): today's run got cancelled mid-batch
     # (Illinois alone wrote 4,271 rows before the old 60-min ceiling hit), stranding Texas/
     # NewYork's portion of the run before they were ever reached -- see STATE.md Blocked Queue
@@ -52,13 +52,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
         run: corepack enable
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'pnpm'

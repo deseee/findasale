@@ -1,10 +1,9 @@
 /**
  * Legacy Stripe cart-checkout webhook fee restatement (2026-09-30): the cart_checkout branch resolves the fee with
  * resolveReportingFeeRate (era taken from the Checkout Session's created time), not the legacy flat
- * getPlatformFeeRate. Pure function checks plus a source check that the branch is wired that way.
+ * getPlatformFeeRate. Pure function checks (the Stripe webhook itself was removed with Stripe on 2026-11-04;
+ * resolveReportingFeeRate still restates historical rows in reports).
  */
-import fs from 'fs';
-import path from 'path';
 import { resolveReportingFeeRate, getPlatformFeeRate, getInclusivePlatformFeeRate, INCLUSIVE_FEE_MODEL_EFFECTIVE_AT } from '../utils/feeCalculator';
 
 const unix = (d: Date) => Math.floor(d.getTime() / 1000);
@@ -25,22 +24,5 @@ describe('cart checkout fee: era from session.created', () => {
     for (const tier of ['SIMPLE', 'PRO', 'TEAMS'] as const) {
       expect(resolveReportingFeeRate(tier, d, 'ONLINE')).toBe(getInclusivePlatformFeeRate(tier, 'ONLINE'));
     }
-  });
-});
-
-describe('stripeController cart_checkout wiring', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'stripeController.ts'), 'utf8');
-  const start = src.indexOf('const cartFeeRate = resolveReportingFeeRate(');
-
-  it('computes cartFeeRate with resolveReportingFeeRate from session.created', () => {
-    expect(start).toBeGreaterThan(0);
-    const call = src.slice(start, start + 400);
-    expect(call).toContain('session.created');
-    expect(call).toContain("'ONLINE'");
-  });
-
-  it('no longer feeds the legacy getPlatformFeeRate into the cart rows', () => {
-    const branch = src.slice(start, start + 6000);
-    expect(branch).not.toMatch(/getPlatformFeeRate\(/);
   });
 });

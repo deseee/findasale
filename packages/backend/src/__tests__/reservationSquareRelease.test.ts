@@ -42,11 +42,6 @@ jest.mock('../services/crewInvasionRedemptionService', () => ({
   releaseCrewInvasionRedemptionsForInvoice: (...a: any[]) => mockReleaseForInvoice(...a),
   countCrewDiscountEligibleShoppers: jest.fn(),
 }));
-var mockExpire = jest.fn();
-jest.mock('../utils/expireCheckoutSession', () => ({
-  expireCheckoutSessionSafely: (...a: any[]) => mockExpire(...a),
-  retrieveCheckoutSessionAcrossAccounts: jest.fn(),
-}));
 jest.mock('../controllers/posController', () => ({ createPaymentLinkInternal: jest.fn() }));
 jest.mock('../services/itemSaleGuard', () => {
   class ItemAlreadyCommittedError extends Error {}

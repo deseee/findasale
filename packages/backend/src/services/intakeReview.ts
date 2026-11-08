@@ -5,12 +5,17 @@
  * standard intake pipeline (rapidfire, batch analyze, re-analyze, analyze-photo) gets it:
  *   1. category family detection (intakeCategoryFamilies)
  *   2. Haiku verify pass, high-confidence corrections applied to non-organizer fields (intakeVerifyPass)
- *   3. deterministic consistency checks (intakeConsistencyChecks)
+ *   2b. deterministic fixes on non-organizer fields: duplicate adjacent title words, a lot count or set name the earlier
+ *       listing had (intakePreservation), a false "back not photographed" sentence when the item has 2+ photos
+ *   3. deterministic consistency checks (intakeConsistencyChecks, including years)
  *   4. category required facts + required photos
  *   5. packed-weight sanity bounds (AI estimate clamped, organizer weights never touched)
  *   6. marketplace fit (collectibles -> eBay)
  * The result is an IntakeReview attached to the tag result and stored on Item.catalogSuggestions.intakeReview by
  * the callers that persist tagging (no schema migration). Never throws.
+ *
+ * Observability: one "[intakeQuality]" log line per item (verify ran/skipped + reason, corrections applied vs noted,
+ * deterministic fixes, check flags, verify token usage).
  */
 import {
   detectCategoryFamily,
@@ -20,7 +25,8 @@ import {
   weightBoundsFor,
   type CategoryFamily,
 } from './intakeCategoryFamilies';
-import { extractCounts, runConsistencyChecks } from './intakeConsistencyChecks';
+import { dedupeAdjacentWords, extractCounts, runConsistencyChecks, stripPhotoAbsenceClaims } from './intakeConsistencyChecks';
+import { lotSignal, preserveLotCount, preserveSetNames } from './intakePreservation';
 import { applyVerifyCorrections, runVerifyPass, type VerifiableResult } from './intakeVerifyPass';
 import type { AppliedIntakeCorrection, IntakeReview, IntakeReviewNote, VerifyPassStatus } from './intakeReviewTypes';
 
@@ -31,7 +37,7 @@ export const SHARP_PHOTO_MIN_QUALITY = 0.6;
 
 export interface IntakeQualityResult extends VerifiableResult {
   recordIdentity?: { format?: unknown } | null;
-  card?: { grader?: unknown } | null | unknown;
+  card?: { grader?: unknown; setName?: unknown } | null | unknown;
   intakeReview?: IntakeReview;
 }
 
@@ -49,6 +55,167 @@ export interface IntakeQualityInput {
   organizerWeightSet?: boolean;
   /** Test hook / callers that already ran the verify pass elsewhere. */
   skipVerify?: boolean;
+  /** Re-analyze / recheck: the item's title and description before this run (lot count and set names are kept from them). */
+  priorTitle?: string | null;
+  priorDescription?: string | null;
+  /** Total photos the item has when fewer are passed in. Defaults to imageBase64Array.length. */
+  totalPhotoCount?: number;
+  /** Prefix for the one-line log ("item=abc123"). */
+  logLabel?: string;
+}
+
+/** Counts used for the one-line log and the recheck summary. */
+export interface IntakeQualityStats {
+  verifyApplied: number;
+  verifyNoted: number;
+  fixes: number;
+  flags: number;
+}
+
+/** Summarizes a review for logs and API responses. Exported for tests and the recheck endpoint. */
+export function intakeReviewStats(review: IntakeReview): IntakeQualityStats {
+  return {
+    verifyApplied: review.appliedCorrections.filter((c) => c.source === 'verify').length,
+    verifyNoted: review.notes.filter((n) => n.code === 'VERIFY_SUGGESTION').length,
+    fixes: review.appliedCorrections.filter((c) => c.source === 'consistency' || c.source === 'preservation' || c.source === 'weight').length,
+    flags: review.notes.filter((n) => n.source !== 'verify' && n.severity !== 'info').length,
+  };
+}
+
+/** The one "[intakeQuality]" log line. Exported for tests. */
+export function intakeQualityLogLine(review: IntakeReview, label?: string): string {
+  const st = intakeReviewStats(review);
+  const verify = review.verifyPass === 'ran' ? 'ran' : `skipped(${review.verifySkipReason || review.verifyPass})`;
+  const tokens = review.verifyUsage ? ` tokens=${review.verifyUsage.inputTokens}/${review.verifyUsage.outputTokens}` : '';
+  const fixed = review.appliedCorrections.length > 0 ? ` fixed=[${[...new Set(review.appliedCorrections.map((c) => `${c.source}:${c.field}`))].join(',')}]` : '';
+  return `[intakeQuality]${label ? ` ${label}` : ''} family=${review.family ?? 'none'} verify=${verify} applied=${st.verifyApplied} noted=${st.verifyNoted} fixes=${st.fixes} flags=${st.flags}${tokens}${fixed}`;
+}
+
+function isLocked(userEditedFields: readonly string[] | null | undefined, field: string): boolean {
+  return (userEditedFields || []).includes(field);
+}
+
+/**
+ * Deterministic fixes on fields the organizer has not edited (mutates `result`): duplicate adjacent title words, a lot
+ * count and set names the earlier listing or printed text had, and a "back not photographed" sentence when the item has
+ * 2+ photos. Locked fields get a note instead. Exported for tests.
+ */
+export function applyDeterministicFixes(
+  result: IntakeQualityResult,
+  ctx: {
+    family: CategoryFamily | null;
+    userEditedFields?: readonly string[] | null;
+    priorTitle?: string | null;
+    priorDescription?: string | null;
+    photoCount: number;
+  }
+): { applied: AppliedIntakeCorrection[]; notes: IntakeReviewNote[] } {
+  const applied: AppliedIntakeCorrection[] = [];
+  const notes: IntakeReviewNote[] = [];
+  const titleLocked = isLocked(ctx.userEditedFields, 'title');
+  const descLocked = isLocked(ctx.userEditedFields, 'description');
+  const fix = (field: 'title' | 'description', to: string, reason: string, source: 'consistency' | 'preservation', code: string, message: string) => {
+    const from = result[field];
+    if (typeof to !== 'string' || !to.trim() || to === from) return;
+    result[field] = to;
+    applied.push({ field, from: from ?? null, to, reason, confidence: 1, source });
+    notes.push({ code, severity: 'info', source, field, message, current: from ?? null, suggested: to });
+  };
+
+  // 1. Duplicate adjacent words ("Baseball Card Card").
+  try {
+    if (!titleLocked) {
+      const evidence = [result.detectedPrintedText, ...(result.printedText?.other || []), ...(result.printedText?.credits || [])];
+      const d = dedupeAdjacentWords(result.title, evidence);
+      if (d.removed.length > 0) {
+        fix('title', d.title, `repeated word "${d.removed[0]}"`, 'consistency', 'TITLE_DUPLICATE_FIXED', `Removed the repeated word "${d.removed[0]}" from the title.`);
+      }
+    }
+  } catch { /* never block tagging */ }
+
+  // 2. Lot / count kept from the earlier listing.
+  try {
+    if (ctx.priorTitle || ctx.priorDescription) {
+      const lot = preserveLotCount({
+        priorTitle: ctx.priorTitle,
+        priorDescription: ctx.priorDescription,
+        title: String(result.title ?? ''),
+        description: String(result.description ?? ''),
+        locked: { title: titleLocked, description: descLocked },
+      });
+      const phrase = lot.priorCount != null ? `a lot of ${lot.priorCount}` : 'a lot';
+      if (lot.countChanged) {
+        notes.push({
+          code: 'LOT_COUNT_CHANGED',
+          severity: 'high',
+          source: 'preservation',
+          field: 'title',
+          message: `The earlier listing was ${phrase}, but the new text says ${lot.newCount}. Count what is included and fix the title and description.`,
+          current: lot.newCount,
+          suggested: lot.priorCount,
+        });
+      } else if (lot.dropped) {
+        if (lot.title) fix('title', lot.title, `earlier listing was ${phrase}`, 'preservation', 'LOT_COUNT_KEPT', `The earlier listing was ${phrase}, so the count was kept in the title.`);
+        if (lot.description) fix('description', lot.description, `earlier listing was ${phrase}`, 'preservation', 'LOT_COUNT_KEPT', `The earlier listing was ${phrase}, so the count was kept in the description.`);
+        const titleMissing = !lotSignal(result.title).isLot;
+        const descMissing = !lotSignal(result.description).isLot;
+        if (titleMissing || descMissing) {
+          notes.push({
+            code: 'LOT_COUNT_DROPPED',
+            severity: 'high',
+            source: 'preservation',
+            field: titleMissing ? 'title' : 'description',
+            message: `The earlier listing was ${phrase}, but the new ${titleMissing ? 'title' : 'description'} reads like a single item. Check the count before listing.`,
+            suggested: lot.priorCount,
+          });
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 3. Set / subset names (trading cards).
+  try {
+    if (ctx.family === 'TRADING_CARD') {
+      const card = result.card && typeof result.card === 'object' ? (result.card as { setName?: unknown }) : null;
+      const set = preserveSetNames({
+        priorTitle: ctx.priorTitle,
+        printedText: result.printedText,
+        detectedPrintedText: result.detectedPrintedText,
+        cardSetName: typeof card?.setName === 'string' ? card.setName : null,
+        title: String(result.title ?? ''),
+        description: result.description,
+        brand: result.brand,
+        locked: titleLocked,
+      });
+      if (set.title) {
+        fix('title', set.title, `set name ${set.restored.join(', ')} kept`, 'preservation', 'SET_NAME_KEPT', `Kept the set name ${set.restored.map((r) => `"${r}"`).join(', ')} in the title.`);
+      }
+      const notRestored = set.dropped.filter((d) => !set.restored.includes(d));
+      if (notRestored.length > 0) {
+        notes.push({
+          code: 'SET_NAME_DROPPED',
+          severity: 'medium',
+          source: 'preservation',
+          field: 'title',
+          message: `The title no longer names the set ${notRestored.map((r) => `"${r}"`).join(', ')}. Buyers search for set names.`,
+          suggested: notRestored.join(', '),
+        });
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 4. "Back not photographed" while the item has 2+ photos.
+  try {
+    if (ctx.photoCount >= 2 && !descLocked) {
+      const stripped = stripPhotoAbsenceClaims(result.description);
+      if (stripped) {
+        fix('description', stripped, `the item has ${ctx.photoCount} photos`, 'consistency', 'PHOTO_CLAIM_REMOVED',
+          `Removed a sentence saying a view was not photographed: the item has ${ctx.photoCount} photos. Check that one shows the back.`);
+      }
+    }
+  } catch { /* ignore */ }
+
+  return { applied, notes };
 }
 
 function familyOf(result: IntakeQualityResult, labels?: string[]): CategoryFamily | null {
@@ -141,23 +308,33 @@ export function photoNotes(
   if (!spec) return [];
   const notes: IntakeReviewNote[] = [];
   const missing = new Set<string>();
-  if (args.verifyStatus === 'ran') {
-    for (const id of args.missingShots) missing.add(id);
-  }
   // Deterministic floor: a shot can never be present when there are fewer photos than it needs.
   for (const shot of spec.requiredShots) {
     if (args.photoCount < shot.minPhotos) missing.add(shot.id);
   }
+  const verifyClaimed = new Set(args.verifyStatus === 'ran' ? args.missingShots : []);
   for (const shot of spec.requiredShots) {
-    if (!missing.has(shot.id)) continue;
-    notes.push({
-      code: 'MISSING_PHOTO',
-      severity: 'high',
-      source: 'photos',
-      field: 'photos',
-      message: `Add a photo of ${shot.label}. Buyers of a ${spec.label.toLowerCase()} expect it.`,
-      current: shot.id,
-    });
+    if (missing.has(shot.id)) {
+      notes.push({
+        code: 'MISSING_PHOTO',
+        severity: 'high',
+        source: 'photos',
+        field: 'photos',
+        message: `Add a photo of ${shot.label}. Buyers of a ${spec.label.toLowerCase()} expect it.`,
+        current: shot.id,
+      });
+    } else if (verifyClaimed.has(shot.id)) {
+      // Enough photos exist for this shot: the verify pass may have missed it (photo 2 is often the back), so ask the
+      // organizer to check instead of stating it is missing.
+      notes.push({
+        code: 'CHECK_PHOTO',
+        severity: 'medium',
+        source: 'photos',
+        field: 'photos',
+        message: `Check that one of the ${args.photoCount} photos clearly shows ${shot.label}. If not, add one.`,
+        current: shot.id,
+      });
+    }
   }
   if (spec.needsSharpPhotos) {
     const scores = (args.qualityScores || []).filter((s): s is number => typeof s === 'number' && s > 0);
@@ -182,7 +359,10 @@ export async function runIntakeQuality(result: IntakeQualityResult, input: Intak
   const notes: IntakeReviewNote[] = [];
   const appliedCorrections: AppliedIntakeCorrection[] = [];
   let verifyStatus: VerifyPassStatus = 'not-run';
+  let verifySkipReason: string | null = input.skipVerify ? 'skipped' : null;
+  let verifyUsage: IntakeReview['verifyUsage'] = null;
   let missingShots: string[] = [];
+  const photoCount = Math.max(input.imageBase64Array?.length ?? 0, input.totalPhotoCount ?? 0);
   let photosUnclear = false;
   let family: CategoryFamily | null = null;
   let blockAutoPublish = false;
@@ -197,8 +377,13 @@ export async function runIntakeQuality(result: IntakeQualityResult, input: Intak
         pass1: result,
         ocrText: input.ocrText,
         family,
+        priorTitle: input.priorTitle ?? null,
+        priorDescription: input.priorDescription ?? null,
+        totalPhotoCount: photoCount,
       });
       verifyStatus = verify.status;
+      verifySkipReason = verify.status === 'ran' ? null : verify.skipReason ?? verify.status;
+      verifyUsage = verify.usage ?? null;
       missingShots = verify.missingShots;
       photosUnclear = verify.photosUnclear;
       if (verify.corrections.length > 0) {
@@ -208,6 +393,17 @@ export async function runIntakeQuality(result: IntakeQualityResult, input: Intak
         family = familyOf(result, input.objectLabels) ?? family;
       }
     }
+
+    // 2b. deterministic fixes (non-organizer fields only)
+    const fixes = applyDeterministicFixes(result, {
+      family,
+      userEditedFields: input.userEditedFields,
+      priorTitle: input.priorTitle,
+      priorDescription: input.priorDescription,
+      photoCount,
+    });
+    appliedCorrections.push(...fixes.applied);
+    notes.push(...fixes.notes);
 
     // 3. deterministic consistency checks
     const consistency = runConsistencyChecks({
@@ -219,6 +415,7 @@ export async function runIntakeQuality(result: IntakeQualityResult, input: Intak
       detectedPrintedText: result.detectedPrintedText,
       printedText: result.printedText,
       ocrText: input.ocrText,
+      photoCount,
     });
     notes.push(...consistency.notes);
     blockAutoPublish = consistency.blockAutoPublish;
@@ -240,7 +437,7 @@ export async function runIntakeQuality(result: IntakeQualityResult, input: Intak
 
     // 4b. required photos / sharpness
     notes.push(...photoNotes(family, {
-      photoCount: input.imageBase64Array.length,
+      photoCount,
       verifyStatus,
       missingShots,
       photosUnclear,
@@ -277,8 +474,13 @@ export async function runIntakeQuality(result: IntakeQualityResult, input: Intak
     appliedCorrections,
     preferredMarketplaces,
     verifyPass: verifyStatus,
+    verifySkipReason,
+    verifyUsage,
   };
   result.intakeReview = review;
+  try {
+    console.log(intakeQualityLogLine(review, input.logLabel));
+  } catch { /* logging never breaks tagging */ }
   return review;
 }
 

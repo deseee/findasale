@@ -322,6 +322,8 @@ model User {
   @@index([roles]) // Sentry slow User SELECT: role-filtered user lookups (roles array GIN index)
   @@index([role]) // Sentry NODEJS-49: leaderboard cron getShopperLeaderboard WHERE role='USER' seq scan 1220ms on 83k rows
   @@index([huntPassBillingProcessor, huntPassExpiry]) // squareBillingChargeJob.ts's daily Hunt Pass due-for-charge scan
+  @@index([stripeCustomerId]) // 2026-11-05 schema review #11/#12
+  @@index([huntPassStripeSubscriptionId]) // 2026-11-05 schema review #11/#12
 }
 
 
@@ -436,6 +438,13 @@ model Organizer {
   squareRefreshTokenEncrypted      String?
   squareTokenExpiresAt             DateTime?
   removeWatermarkEnabled          Boolean                        @default(false) // PRO: remove FindA.Sale watermark from exports
+  // Organizer card-payment suspension (2026-11-06, Finix restricted-item gate). Admin-only
+  // (PATCH /api/admin/organizers/:organizerId/card-suspension). While cardPaymentsSuspendedAt is set, every card path
+  // for this organizer is refused by services/restrictedItem/cardPaymentGate.ts and the items go to cash. Never set by
+  // an organizer request. Each set/clear writes a RestrictedItemAuditLog row.
+  cardPaymentsSuspendedAt         DateTime?
+  cardPaymentsSuspendedReason     String?
+  cardPaymentsSuspendedById       String?
   // Feature #603 (2026-08-05): platform-wide default best-offer thresholds. Suggested
   // pre-fill for the per-item eBay best-offer PERCENTAGE fields on the edit-item form
   // (Item.bestOfferAutoAcceptAmt/bestOfferMinimumAmt are DOLLAR amounts -- these two
@@ -730,8 +739,6 @@ model Organizer {
   @@index([directoryStatus])
   @@index([suppressOutreach])
   @@index([claimStatus])
-  @@index([isClaimed]) // leadScoringService nightly batch filter — fixes Sentry FINDASALE-NODEJS-1G
-  @@index([isUnmanagedListing]) // leadScoringService + admin queries — fixes Sentry FINDASALE-NODEJS-1G
   @@index([isHiddenFromDirectory]) // Public directory queries filter on this flag
   @@index([esnOrgId])
   @@index([dedupeKey])
@@ -747,7 +754,6 @@ model Organizer {
   @@index([isUnmanagedListing, createdAt]) // Sentry NODEJS-1P: adminController organizer findMany WHERE isUnmanagedListing=false ORDER BY createdAt DESC (real-organizers + recent additions)
   @@index([createdAt]) // Sentry NODEJS-1P: adminController recentAdditions ORDER BY createdAt DESC on large organizer table
   @@index([directoryConfidenceScore]) // Feature #458: minConfidence filter on public sale search
-  @@index([contactEmail]) // Sentry slow query fix 2026-05-30: emailDiscoveryJob WHERE contactEmail IS NULL AND website IS NOT NULL (1020ms)
   @@index([isClaimed, isUnmanagedListing]) // Sentry slow query fix 2026-05-30: OR predicate on isClaimed/isUnmanagedListing prevents individual index use (1460ms)
   @@index([isUnmanagedListing, isStateLicensed]) // Sentry slow query fix 2026-06-06: websiteEnrichmentJob WHERE isUnmanagedListing=true AND isStateLicensed=true AND website IS NULL (1159ms)
   @@index([contactEmail, isUnmanagedListing]) // Sentry NODEJS-38: emailDiscoveryJob WHERE contactEmail IS NULL AND website IS NOT NULL AND isUnmanagedListing (composite replaces two single-column indexes)
@@ -757,6 +763,9 @@ model Organizer {
   @@index([emailDiscoveryConfidence]) // Sentry NODEJS-2N: outreachEmailsCron WHERE emailDiscoveryConfidence >= 0.5 seq scan on Organizer
   @@index([emailDiscoveredAt]) // Sentry NODEJS-48: outreachEmailsCron WHERE emailDiscoveredAt >= 7d ago — 98 of 83k rows, seq scan 253ms S1046
   @@index([payoutsFlaggedForReview]) // S1198: fast admin-queue filtering for bank-fingerprint-flagged organizers
+  @@index([squareMerchantId]) // 2026-11-05 schema review #11/#12: webhook/OAuth lookups by Square merchant
+  @@index([stripeConnectId]) // 2026-11-05 schema review #11/#12
+  @@index([stripeSubscriptionId]) // 2026-11-05 schema review #11/#12
 }
 
 // Feature #354: OrganizerHours — business hours per day of week
@@ -800,7 +809,6 @@ model ApiKey {
   updatedAt  DateTime  @updatedAt
 
   @@index([userId])
-  @@index([keyHash])
   @@map("api_keys")
 }
 
@@ -863,7 +871,6 @@ model EbayConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([organizerId])
   @@index([lastRefreshedAt])
 }
 
@@ -922,7 +929,6 @@ model EbayPolicyMapping {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([organizerId])
 }
 
 // Phase 2c: Profile Showcase Slots — user-pinned haul posts on profile
@@ -937,7 +943,6 @@ model UserShowcase {
   updatedAt  DateTime  @updatedAt
 
   @@unique([userId, slotIndex])
-  @@index([userId])
 }
 
 // Phase 2a Social Retention: Explorer's Guild — Crew Creation
@@ -970,7 +975,6 @@ model CrewMember {
   joinedAt DateTime @default(now())
 
   @@unique([crewId, userId])
-  @@index([crewId])
   @@index([userId])
 }
 
@@ -990,7 +994,6 @@ model CrewInvasionCode {
   redemptions CrewInvasionRedemption[]
 
   @@unique([saleId, crewId])
-  @@index([saleId])
   @@index([crewId])
 }
 
@@ -1032,7 +1035,6 @@ model UserRoleSubscription {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, role]) // One subscription per role per user
-  @@index([userId])
   @@index([role])
 }
 
@@ -1063,7 +1065,6 @@ model RoleConsent {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([subscriptionId])
 }
 
 // Bring-Your-Own-Rails (BYOR, 2026-09-06) -- organizer keeps using their own payment method
@@ -1345,20 +1346,15 @@ model Sale {
   @@index([organizerId, status, endDate]) // Feature #249: Concurrent Sales Gate optimization
   @@index([locationId]) // #311: Multi-Location filter
   @@index([vendorBoothId]) // ADR vendor-booth-sale-onboarding-gate (2026-09-25)
-  @@index([status, endDate]) // Sentry P0: public feed filter (published + not-ended sales)
   @@index([status, endDate, lat, lng]) // Sentry NODEJS-10: discoveryService bounding box query (6298ms, 49x)
   @@index([city, status, endDate]) // Sentry P0: geo-filtered feed performance
-  @@index([status, startDate]) // Sentry P0: upcoming sales ordering
   @@index([sourceUrl]) // Sentry P0: scraper deduplication queries
   @@index([createdAt]) // Sentry NODEJS-2K: adminController sale.count WHERE createdAt >= 7d ago (sparklines + new sales)
   @@index([status, markdownEnabled, startDate]) // Sentry NODEJS-2J: markdownCron findMany WHERE status=PUBLISHED AND markdownEnabled=true AND startDate <= now
   @@index([organizerId, startDate]) // Sentry slow query A: Review JOIN Sale WHERE Sale.organizerId + ORDER BY startDate
   @@index([status, startDate, endDate]) // Sentry slow query B: full-table scan Sale WHERE status + date range filters
-  @@index([organizerId, status]) // Sentry slow query fix 2026-05-30: COUNT Sale WHERE organizerId + status (1577ms) — dedicated composite for count queries
   @@index([lastScrapedAt]) // Sentry slow query fix 2026-05-30: scraper deduplication queries + UPDATE lastScrapedAt WHERE id (4225ms) — helps scraper dedup; UPDATE latency may need VACUUM ANALYZE for table bloat
-  @@index([city]) // Sentry slow query fix 2026-05-30: Sale SELECT (6298ms) — ILIKE city queries; note leading-wildcard ILIKE won't use index, but prefix matches benefit
   @@index([status, isInventoryContainer, endDate]) // Sentry NODEJS-3E: search.ts COUNT WHERE status=PUBLISHED AND isInventoryContainer=false AND endDate >= now (missing covering index)
-  @@index([sourceName]) // Sentry slow query: SELECT Sale WHERE scrapedMetadata JSON path + sourceName (1115ms, 6x) — sourceName filter enables partition pruning before GIN eval
   @@index([sourceName, sourceUrlFetchFailedAt]) // Enrichment re-selection: exclude permanently-failed source URLs per source
   @@index([saleType, city, state]) // Sentry NODEJS-3F/2T/10: RETAIL dedup findFirst WHERE saleType+city+state — 138-row bitmap scan becomes index seek
 }
@@ -1381,8 +1377,6 @@ model SourcebookEntry {
   @@unique([saleId, authorId])
   @@unique([organizerId, authorId])
   @@index([authorId, createdAt])
-  @@index([saleId])
-  @@index([organizerId])
 }
 
 // Reverse-Image Product Index — pgvector MVP (ADR 2026-07-01)
@@ -1666,8 +1660,8 @@ model Item {
   isHighValueLocked               Boolean                 @default(false) // Organizer locked decision, respect it
   saleTransactions                SaleTransaction[]
   // Feature #244 Phase 2: eBay listing tracking
-  ebayListingId                   String? // eBay listing ID after successful publish; used for Phase 3 sync
-  ebayOfferId                     String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale
+  ebayListingId                   String? // eBay listing ID after successful publish; used for Phase 3 sync. Unique when set: raw partial index Item_ebayListingId_unique (z20261105000100) -- one eBay listing belongs to one item
+  ebayOfferId                     String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale. Unique when set: raw partial index Item_ebayOfferId_unique (z20261105000100)
   // Feature #XXX: Shopify Cross-Listing
   shopifyListing                  ShopifyListing?
   // Curio (2026-08-28): inverse relation -- set when a CurioScan is converted to this Item
@@ -1804,7 +1798,7 @@ model Item {
   // SERVER-OWNED ONLY -- never add to any client-facing update whitelist; written
   // exclusively by itemStockService.sellItemUnits().
   stockTotal                      Int?                    @default(1) // Total independently-sellable units across ALL channels. null/1 = single-unit (today's behavior, unchanged). Organizer-editable.
-  stockSold                       Int                     @default(0) // Units sold so far across ALL channels. SERVER-OWNED -- see comment above.
+  stockSold                       Int                     @default(0) // Units sold so far across ALL channels. SERVER-OWNED -- see comment above. CHECK Item_stockSold_check (z20261105000300): stockSold >= 0 AND (stockTotal IS NULL OR stockSold <= stockTotal), checked per statement -- never decrement-then-floor
   // ADR ebay-multiquantity (2026-06-16): track eBay multi-quantity listing units.
   // NOTE: distinct from `quantity` above (which means "set of N sold as one lot").
   ebayQuantityAvailable           Int? // total units on the eBay listing (null/1 = single-unit)
@@ -1860,6 +1854,28 @@ model Item {
   // ADR-134 (2026-10-03): 1:1 card record. Relation only, no new Item column.
   card                            ItemCard?
 
+  // Restricted-item card blocking (2026-11-06, Finix restricted-item gate). See
+  // services/restrictedItem/restrictedItemClassifier.ts (deterministic keywords + category, no model calls) and
+  // services/restrictedItem/cardPaymentGate.ts. SERVER-OWNED: no organizer request handler may write any of these
+  // (NO-MASS-ASSIGNMENT; lib/prisma.ts strips these keys from every Prisma Item write -- only the raw-SQL writers in
+  // services/restrictedItem/ set them). Effective class = restrictedClassOverride when an admin set one, else the stored
+  // class, which an automatic reclassification may RAISE but never LOWER (the ratchet); only an admin override can lower
+  // or clear it. restrictedClassifiedAt is set NULL by the database trigger
+  // "Item_restricted_class_invalidate" whenever title/description/category/tags/brand/ebayCategoryName change, from ANY
+  // writer that did not classify in the same statement, so a stale row is reclassified at payment time (the gate) or by
+  // packages/backend/scripts/backfillRestrictedItemClass.ts. Every change of restrictedClass is
+  // written to RestrictedItemAuditLog by the trigger "Item_restricted_class_audit" (same transaction as the change).
+  restrictedClass                 RestrictedItemClass     @default(NONE)
+  restrictedClassAuto             RestrictedItemClass     @default(NONE) // latest classifier output, before override/ratchet
+  restrictedClassSource           String? // CREATE | UPDATE | GATE | BACKFILL | ADMIN_OVERRIDE -- what last set restrictedClass
+  restrictedClassActorId          String? // User id of the admin behind an ADMIN_OVERRIDE change; null for automatic changes
+  restrictedClassifiedAt          DateTime? // null = never classified or inputs changed since (stale)
+  restrictedClassifierVersion     String?
+  restrictedClassOverride         RestrictedItemClass? // admin-only; may raise a class or clear it (NONE). null = no override
+  restrictedClassOverrideReason   String?
+  restrictedClassOverrideById     String?
+  restrictedClassOverrideAt       DateTime?
+
   // ADR-136 (2026-10-05, #659): count-based bulk lot record. Relation only, no new Item column. The card count
   // is Item.stockTotal / Item.stockSold and the price per 1,000 cards is Item.price (see ADR-136 section 2).
   bulkLot                         ItemBulkLot?
@@ -1881,7 +1897,6 @@ model Item {
   @@index([ebayListingId])
   @@index([isLegendary, legendaryVisibleAt]) // Phase 2b: Legendary early access query optimization
   @@index([locationId]) // #311: Multi-Location filter
-  @@index([consignorId]) // #309: Consignor item lookup
   @@index([consignorId, status, unclaimedNotifiedAt]) // consignmentUnclaimedItemsJob.ts (2026-09-25): daily sweep for unclaimed consigned items
   @@index([consignorId, status, pickupWindowStartedAt]) // consignorExpiryNoticeJob.ts (2026-09-25): daily sweep for RETURN-disposition pickup-window reminders
   @@index([consignorId, status, relistCapFlaggedAt]) // consignmentUnclaimedItemsJob.ts (2026-09-25): daily sweep for RELIST-disposition relist-cap decisions
@@ -1889,12 +1904,14 @@ model Item {
   @@index([boothCartTransactionId]) // 2026-07-28: cart-scoped reservation lookup (resolveBoothLegItems / cancelBoothCart)
   @@index([tagColor]) // #310: Discount rule color tag lookup
   @@index([shippingMarginRiskTier]) // ADR-103 Phase 5: "listings at risk of eating margin on shipping" dashboard query
-  @@index([saleId])
   @@index([saleId, status]) // Sentry slow query: SELECT Item WHERE saleId+status (1351ms) — public item browse + POS organizer item search with optional status filter
   @@index([saleId, markdownTierApplied]) // ADR markdown-tier-mercari-pricing-renewal-coordination (2026-09-27): repoints the old [saleId, markdownApplied] index (Sentry slow query: markdownCron findMany WHERE saleId+markdownApplied=false) at the new tier field markdownCron.ts now filters/orders on -- same query shape, same purpose (eliminates per-sale full scans in markdown job)
   @@index([organizerId, markdownApplied, markdownPhysicallyAppliedAt]) // Physical Markdown Alert List (2026-09-25): staff "needs re-tagging" queue query
   @@index([status, ebayNextRenewalAt]) // ADR ebay-renewal-forecasting (2026-09-15): forecast cron + insertions-forecast endpoint query pattern -- AVAILABLE items with an upcoming eBay GTC renewal date
   @@index([discogsMatchStatus]) // ADR-132: "Discogs: needs your pick" filter
+  @@index([sourceItemId]) // 2026-11-05 schema review #11/#12: import dedup
+  @@index([organizerId, status]) // 2026-11-05 schema review #11/#12
+  @@index([restrictedClassifiedAt]) // 2026-11-06 restricted-item backfill: stale rows (null) are picked up in batches
 }
 
 // ADR ebay-multiquantity (2026-06-16): idempotent ledger of eBay unit sales.
@@ -2003,6 +2020,8 @@ model Favorite {
 
   @@unique([userId, saleId])
   @@unique([userId, itemId])
+  @@index([itemId]) // 2026-11-05 schema review #11/#12
+  @@index([saleId]) // 2026-11-05 schema review #11/#12
 }
 
 model Bid {
@@ -2039,7 +2058,7 @@ model Purchase {
   id                     String                @id @default(cuid())
   amount                 Float
   platformFeeAmount      Float?
-  status                 String                @default("PENDING") // PENDING, PAID, REFUNDED, FAILED, DISPUTED, REFUNDING (refundService.ts TOCTOU claim), DISPUTE_LOST (2026-08-08 dispute clawback)
+  status                 String                @default("PENDING") // PENDING, PAID, REFUNDED, FAILED, DISPUTED, REFUNDING (refundService.ts TOCTOU claim), DISPUTE_LOST (2026-08-08 dispute clawback), REFUND_FAILED, VOID_DUPLICATE (ops-only). Enforced by CHECK Purchase_status_check (z20261105000300) -- add a new value there first.
   userId                 String? // Nullable: POS walk-in buyers have no FindA.Sale account
   user                   User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   itemId                 String?
@@ -2051,8 +2070,9 @@ model Purchase {
   // matches this model's own chargeType/discountType convention -- no Prisma enum.
   processor               String                @default("STRIPE") // 'STRIPE' | 'SQUARE'
   squarePaymentId         String? // Square Payment.id -- not unique alone, same multi-item-cart
-  // reasoning as stripePaymentIntentId; needs the same compound partial-unique-index
-  // treatment (see migration 20260907_square_migration_wave0_schema) once real rows exist.
+  // reasoning as stripePaymentIntentId. Unique per (squarePaymentId, itemId) through the raw partial index
+  // Purchase_squarePaymentId_itemId_unique (migration 20260907010000_square_migration_wave0_schema, re-asserted
+  // IF NOT EXISTS in z20261105000100_unique_idempotency_keys) -- see the note above @@index([stripePaymentIntentId]).
   // Square PaymentLink checkout (2026-09-09): mirrors the POS QR payment-link flow's move
   // from Stripe Payment Links to Square Payment Links -- see
   // claude_docs/feature-notes/square-changeover-remaining-work-scoping-2026-09-09.md.
@@ -2070,8 +2090,10 @@ model Purchase {
   buyerCardFingerprint   String? // Stripe card fingerprint captured post-payment (guest + authenticated) — powers cross-purchase collusion detection that does not depend on a User relation (S1072 Finding #4 guest-checkout gap)
   isTestTransaction      Boolean               @default(false)
   // #561 offline POS cash-checkout queuing: client-generated UUID set at queue-time.
-  // NOT @unique — one offline cart submission legitimately produces multiple Purchase
-  // rows (one per item) sharing the SAME clientTransactionId. Dedup via findMany, not a constraint.
+  // NOT @unique alone — one offline cart submission legitimately produces multiple Purchase
+  // rows (one per item) sharing the SAME clientTransactionId. Unique per (clientTransactionId, itemId)
+  // through the raw partial index Purchase_clientTransactionId_itemId_unique (2026-11-05,
+  // z20261105000100_unique_idempotency_keys); writers treat a P2002 there as "already recorded".
   clientTransactionId    String?
   // Outward Email Automations: shopper review-ask idempotency guard
   reviewAskSentAt        DateTime? // When the post-purchase "rate the organizer" email was sent
@@ -2281,11 +2303,14 @@ model Purchase {
   // every real multi-item sale in that window (P2002 on the 2nd+ item) -- do not
   // reintroduce a single-column unique constraint here. Prisma @@unique cannot express a
   // partial index, so it is intentionally NOT declared here; this @@index remains for lookups.
+  // The Square sibling follows the same pattern (2026-11-05 schema review #2), all raw SQL, all partial:
+  //   Purchase_squarePaymentId_itemId_unique      (squarePaymentId, itemId)     WHERE squarePaymentId IS NOT NULL
+  //   Purchase_clientTransactionId_itemId_unique  (clientTransactionId, itemId) WHERE clientTransactionId IS NOT NULL
+  // Writers treat a P2002 on any of them as "already recorded" (backend utils/uniqueViolation.ts), never a 500.
   @@index([stripePaymentIntentId])
   @@index([isTestTransaction])
   @@index([userId])
   @@index([itemId])
-  @@index([saleId])
   @@index([affiliateLinkId])
   @@index([clientTransactionId])
   @@index([boothCartTransactionId])
@@ -2293,6 +2318,8 @@ model Purchase {
   @@index([chargeType])
   @@index([squarePaymentId])
   @@index([squarePaymentLinkId])
+  @@index([saleId, status, createdAt]) // 2026-11-05 schema review #11/#12: per-sale earnings/reporting (replaces @@index([saleId]), a strict prefix)
+  @@index([refundedAt]) // 2026-11-05 schema review #11/#12: refund history
 }
 
 model SaleSubscriber {
@@ -2416,7 +2443,6 @@ model Review {
   moderationStatus String       @default("APPROVED") // #116: 'PENDING' | 'APPROVED' | 'REJECTED'
   createdAt        DateTime     @default(now())
 
-  @@index([saleId]) // Sentry P1 FINDASALE-NODEJS-1Q: JOIN on Review.saleId → Sale was doing full table scan (17s query)
   @@index([moderationStatus])
   @@index([userId]) // dedup findFirst({ where: { userId, saleId } }) in createReview
   @@index([saleId, moderationStatus, createdAt(sort: Desc)]) // getSaleReviews hot path: WHERE saleId+moderationStatus ORDER BY createdAt DESC
@@ -2581,6 +2607,9 @@ model PointsTransaction {
   expiresAt   DateTime? // Phase 2a: For boost window expiration
   holdUntil   DateTime? // P0 Exploit Fix: XP not spendable until this time (72h for purchases, 30d for HP churn)
   description String?
+  // 2026-11-05 schema review #9: optional idempotency key for awards that must happen once per business event (e.g.
+  // "PURCHASE_COMPLETED:<purchaseId>"). xpService.awardXp treats a P2002 on it as "already awarded" (no second XP).
+  idempotencyKey String?  @unique
   createdAt   DateTime  @default(now())
 
   @@index([userId, type])
@@ -2606,6 +2635,7 @@ model Conversation {
   updatedAt     DateTime  @updatedAt
 
   @@unique([shopperUserId, organizerId, saleId])
+  @@index([organizerId, lastMessageAt(sort: Desc)]) // 2026-11-05 schema review #11/#12: organizer inbox newest-first
 }
 
 model Message {
@@ -2620,9 +2650,9 @@ model Message {
   isRead         Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
-  @@index([conversationId])
   @@index([senderId])
   @@index([itemId])                                                                   // NEW (ADR-097)
+  @@index([conversationId, createdAt]) // 2026-11-05 schema review #11/#12: thread in order (replaces @@index([conversationId]), a strict prefix)
 }
 
 // Phase 17: Shopper follows an organizer
@@ -2638,6 +2668,7 @@ model Follow {
   createdAt   DateTime  @default(now())
 
   @@unique([userId, organizerId])
+  @@index([organizerId]) // 2026-11-05 schema review #11/#12: follower fan-out by organizer
 }
 
 // Phase 21: Item reservation/hold system
@@ -2655,8 +2686,7 @@ model ShopifyListing {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  @@index([itemId])
-  @@index([organizerId])
+  @@unique([organizerId, shopifyProductId]) // 2026-11-05 schema review #8: one Shopify product maps to one item per organizer
   @@index([status])
 }
 
@@ -2735,7 +2765,7 @@ model HoldInvoice {
   // skipped for a null shopperUserId, and the guest gets their only record via the
   // Square Checkout receipt + this invoice's own confirmation email.
   shopperUserId         String?
-  shopper User? @relation("ShopperInvoices", fields: [shopperUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  shopper User? @relation("ShopperInvoices", fields: [shopperUserId], references: [id], onDelete: SetNull, onUpdate: NoAction) // 2026-11-05 schema review: invoice kept when the shopper account is deleted
   guestEmail            String? // Set only when shopperUserId is null -- the emailed recipient's address
   guestName             String? // Set only when shopperUserId is null -- organizer-entered recipient name (optional)
   // Recipient contact + shipping (2026-09-16, same dispatch as the guest fields above):
@@ -2764,9 +2794,9 @@ model HoldInvoice {
   shippingZip           String?
   shippingCountry       String?  @default("US")
   organizerUserId       String
-  organizer User @relation("OrganizerInvoices", fields: [organizerUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  organizer User @relation("OrganizerInvoices", fields: [organizerUserId], references: [id], onDelete: Restrict, onUpdate: NoAction) // 2026-11-05 schema review: ledger row survives its parent
   saleId                String
-  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Restrict, onUpdate: NoAction) // 2026-11-05 schema review: ledger row survives its parent
   stripeSessionId       String?          @unique // Stripe Checkout session ID
   stripePaymentIntentId String?          @unique // Stripe payment intent ID
   // Square migration (2026-09-07, Wave 0): no Square equivalent to stripeSessionId exists
@@ -2820,7 +2850,6 @@ model HoldInvoice {
   @@index([expiresAt])
   @@index([cartSessionId])
   @@index([stripeAccountId])
-  @@index([squarePaymentLinkId])
 }
 
 // Feature #121: Sale Check-in — per-shopper GPS-based validation for hold rank enforcement
@@ -3093,6 +3122,7 @@ model Notification {
 
   @@index([userId, read])
   @@index([createdAt])
+  @@index([userId, createdAt(sort: Desc)]) // 2026-11-05 schema review #11/#12: inbox newest-first
 }
 
 // Feature: Abandoned Checkout Recovery — track in-progress payment intents for recovery emails
@@ -3181,7 +3211,6 @@ model FeedbackSuppression {
   suppressedAt DateTime @default(now())
 
   @@unique([userId, surveyType])
-  @@index([userId])
 }
 
 // Beta Invite Code System — Patrick controls organizer access during beta
@@ -3291,7 +3320,6 @@ model UnsubscribeToken {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([token])
   @@index([userId])
 }
 
@@ -3408,7 +3436,7 @@ model Coupon {
   maxDiscountAmount  Float? // cap for PERCENT coupons; null = uncapped
   status             String              @default("ACTIVE") // "ACTIVE" | "USED" | "EXPIRED"
   sourcePurchaseId   String? // which purchase earned this coupon
-  redeemedPurchaseId String? // which purchase this was applied to
+  redeemedPurchaseId String?             @unique // which purchase this was applied to (2026-11-05 schema review #9: at most one coupon per purchase)
   expiresAt          DateTime
   usedAt             DateTime?
   createdAt          DateTime            @default(now())
@@ -3420,7 +3448,6 @@ model Coupon {
   xpTier             String? // "DOLLAR_OFF_TEN" | "ONE_FIFTY_OFF_TWENTY" | "FIVE_OFF_FIFTY" (null for organizer coupons)
 
   @@index([userId, status])
-  @@index([code])
 }
 
 // Phase 2a: Rarity Boost — shopper spends 15 XP to boost legendary find odds for a specific sale
@@ -3451,7 +3478,6 @@ model SaleWaitlist {
   createdAt DateTime @default(now())
 
   @@unique([saleId, userId])
-  @@index([saleId])
 }
 
 // Sale Reminders — email reminders for upcoming sales
@@ -3467,7 +3493,6 @@ model SaleReminder {
   createdAt    DateTime  @default(now())
 
   @@unique([userId, saleId, reminderType])
-  @@index([userId])
   @@index([saleId])
 }
 
@@ -3516,7 +3541,6 @@ model ReferralReward {
   fraudSignals      ReferralFraudSignal[]
 
   @@unique([referrerId, referredUserId])
-  @@index([referrerId])
   @@index([referredUserId])
   @@index([awardedAt])
   @@index([deferredUntil])
@@ -3585,7 +3609,6 @@ model ReferrerReputationScore {
   score            Float    @default(1.0) // Score 0.0-1.0; multiplied against tranche XP awards
   lastUpdatedAt    DateTime @default(now())
 
-  @@index([referrerId])
 }
 
 // #18: Post Performance Analytics — track social link clicks with UTM parameters
@@ -3674,7 +3697,6 @@ model WishlistAlert {
   updatedAt      DateTime  @updatedAt
 
   @@index([userId, isActive])
-  @@index([userId])
 }
 
 // Feature #32: Smart Follow — shoppers following organizers for sale notifications
@@ -3689,7 +3711,7 @@ model SmartFollow {
   createdAt   DateTime  @default(now())
 
   @@unique([userId, organizerId])
-  @@index([userId])
+  @@index([organizerId]) // 2026-11-05 schema review #11/#12
 }
 
 // Feature #29: Shopper Loyalty Passport — stamp tracking and milestones
@@ -3703,7 +3725,6 @@ model ShopperStamp {
   createdAt DateTime @default(now())
 
   @@unique([userId, type])
-  @@index([userId])
 }
 
 model StampMilestone {
@@ -3716,7 +3737,6 @@ model StampMilestone {
   seenAt    DateTime? // Sale Passport (2026-09-29): null = milestone toast not yet shown to the shopper
 
   @@unique([userId, milestone])
-  @@index([userId])
 }
 
 // Sale Passport (2026-09-29, feature #29 rebuild): one row per dated, place-aware stamp earned.
@@ -3807,7 +3827,6 @@ model WorkspaceMember {
 
   @@unique([workspaceId, organizerId])
   @@unique([workspaceId, userId])
-  @@index([workspaceId])
   @@index([organizerId])
   @@index([userId])
 }
@@ -3822,7 +3841,6 @@ model WorkspaceInvite {
   expiresAt   DateTime
   workspace   OrganizerWorkspace @relation("WorkspaceInvites", fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  @@index([inviteToken])
   @@index([inviteEmail])
   @@index([workspaceId])
 }
@@ -3865,7 +3883,6 @@ model ChallengeProgress {
   updatedAt   DateTime  @updatedAt
 
   @@unique([userId, challengeId, objectiveId])
-  @@index([userId, challengeId])
 }
 
 model ChallengeBadge {
@@ -3876,7 +3893,6 @@ model ChallengeBadge {
   earnedAt    DateTime @default(now())
 
   @@unique([userId, challengeId])
-  @@index([userId])
 }
 
 // Feature #45: Collector Passport — identity-based collection tracking
@@ -3903,7 +3919,6 @@ model CollectorPassport {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([userId])
 }
 
 // Feature #47: UGC Photo Tags — user-generated content with tagging and moderation
@@ -3948,7 +3963,6 @@ model UGCPhotoLike {
   createdAt DateTime @default(now())
 
   @@unique([userId, photoId])
-  @@index([userId])
   @@index([photoId])
 }
 
@@ -3964,7 +3978,6 @@ model UGCPhotoReaction {
 
   @@unique([userId, photoId, type])
   @@index([photoId])
-  @@index([userId])
 }
 
 // Feature #39: Photo Op Stations — branded selfie spots for sales
@@ -4044,7 +4057,6 @@ model UserAchievement {
   achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Restrict)
 
   @@unique([userId, achievementId])
-  @@index([userId])
 }
 
 model VisitStreak {
@@ -4057,7 +4069,6 @@ model VisitStreak {
   updatedAt           DateTime @updatedAt
   user User @relation("UserStreak", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([userId])
 }
 
 model PasskeyCredential {
@@ -4130,7 +4141,6 @@ model FraudSignal {
 
   @@unique([userId, itemId, signalType])
   @@index([saleId])
-  @@index([userId])
   @@index([confidenceScore])
   @@index([reviewOutcome])
   @@index([reviewedByAdminId])
@@ -4377,7 +4387,6 @@ model TrailStop {
   photos   TrailPhoto[]
 
   @@unique([trailId, order])
-  @@index([trailId])
   @@index([stopType])
 }
 
@@ -4470,7 +4479,6 @@ model TrailCompletion {
   updatedAt DateTime @updatedAt
 
   @@unique([trailId, userId])
-  @@index([trailId])
   @@index([userId])
   @@index([completedAt])
 }
@@ -4505,7 +4513,6 @@ model TrailHighlight {
   createdAt DateTime      @default(now())
 
   @@unique([trailId, itemId])
-  @@index([trailId])
   @@index([itemId])
 }
 
@@ -4523,7 +4530,6 @@ model ItemValuation {
   generatedAt     DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@index([itemId])
   @@index([generatedAt])
 }
 
@@ -4550,7 +4556,6 @@ model ItemTypology {
   classifiedAt DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@index([itemId])
   @@index([primaryCategory])
 }
 
@@ -4684,7 +4689,6 @@ model ItemCompLookup {
   compsFound               Int       @default(0) // how many actual comps were found
   dataFreshness            DateTime? // last updated
 
-  @@index([itemId])
   @@index([fetchedAt])
   @@index([source])
 }
@@ -4707,7 +4711,6 @@ model PricingSourceConfig {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  @@index([sourceId])
   @@index([tier, enabled])
 }
 
@@ -4768,7 +4771,6 @@ model PricingComp {
 
   @@unique([sourceId, externalListingId])
   @@index([itemId])
-  @@index([sourceId])
   @@index([saleDate])
   @@index([expireAt])
 }
@@ -4817,7 +4819,6 @@ model CurioScan {
 
   @@index([userId])
   @@index([createdAt])
-  @@index([convertedToItemId])
 }
 
 // Google Trends + eBay momentum signals
@@ -4853,7 +4854,6 @@ model CategoryDepreciation {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  @@index([category])
 }
 
 model EncyclopediaReference {
@@ -4884,7 +4884,6 @@ model EncyclopediaVote {
   updatedAt DateTime @updatedAt
 
   @@unique([entryId, userId])
-  @@index([entryId])
   @@index([userId])
 }
 
@@ -4904,7 +4903,6 @@ model OrganizerReputation {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@index([organizerId])
 }
 
 // Feature #54: Crowdsourced Appraisal API — Sprint 1
@@ -4956,7 +4954,6 @@ model AppraisalResponse {
   updatedAt       DateTime         @updatedAt
 
   @@unique([requestId, responderId])
-  @@index([requestId])
   @@index([responderId])
 }
 
@@ -4973,7 +4970,6 @@ model AppraisalConsensus {
   responseCount   Int              @default(0)
   completedAt     DateTime         @default(now())
 
-  @@index([requestId])
 }
 
 model AppraisalAIRequest {
@@ -5074,7 +5070,6 @@ model AffiliateReferral {
   updatedAt DateTime @updatedAt
 
   @@unique([referrerId, referredUserId])
-  @@index([referrerId])
   @@index([referredUserId])
   @@index([referralCode])
   @@index([status])
@@ -5148,7 +5143,6 @@ model BrandFollow {
   updatedAt   DateTime @updatedAt
 
   @@unique([userId, brandName])
-  @@index([userId])
 }
 
 // Platform Safety #94: Same-IP Bidder Detection
@@ -5179,7 +5173,6 @@ model CheckoutEvidence {
   acknowledgmentText String // Buyer's confirmation text (e.g., "I understand the buyer premium...")
   createdAt          DateTime  @default(now())
 
-  @@index([purchaseId])
   @@index([checkoutTimestamp])
 }
 
@@ -5191,7 +5184,6 @@ model PlatformMetrics {
   transactionCount Int      @default(0)
   updatedAt        DateTime @updatedAt
 
-  @@index([monthYear])
 }
 
 // Feature #84: Approach Notes — notification log for day-of sale alerts to shoppers
@@ -5211,7 +5203,7 @@ model PushNotificationLog {
 model SaleSettlement {
   id                           String        @id @default(cuid())
   saleId                       String        @unique
-  sale                         Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sale                         Sale          @relation(fields: [saleId], references: [id], onDelete: Restrict) // 2026-11-05 schema review: ledger row survives its parent
   lifecycleStage               String        @default("LEAD") // LEAD|CONTRACTED|PREP|LIVE|POST_SALE|CLOSED
   settledAt                    DateTime?
   totalRevenue                 Decimal       @default(0)
@@ -5236,7 +5228,6 @@ model SaleSettlement {
   expenses                     SaleExpense[]
   clientPayout                 ClientPayout?
 
-  @@index([saleId])
   @@index([lifecycleStage])
   @@index([clientPayoutStatus])
 }
@@ -5264,7 +5255,7 @@ model SaleExpense {
 model ClientPayout {
   id                String         @id @default(cuid())
   settlementId      String         @unique
-  settlement        SaleSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  settlement        SaleSettlement @relation(fields: [settlementId], references: [id], onDelete: Restrict) // 2026-11-05 schema review: ledger row survives its parent
   clientName        String
   clientEmail       String?
   clientPhone       String?
@@ -5285,7 +5276,6 @@ model ClientPayout {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @default(now())
 
-  @@index([settlementId])
   @@index([status])
 }
 
@@ -5293,7 +5283,7 @@ model ClientPayout {
 model SaleTransaction {
   id            String   @id @default(cuid())
   saleId        String
-  sale          Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sale          Sale     @relation(fields: [saleId], references: [id], onDelete: Restrict) // 2026-11-05 schema review: ledger row survives its parent
   buyerId       String?
   buyer         User?    @relation(fields: [buyerId], references: [id], onDelete: SetNull)
   itemId        String?
@@ -5304,6 +5294,9 @@ model SaleTransaction {
   source        String   @default("ONLINE") // ONLINE|IN_PERSON|POS
   status        String   @default("COMPLETED") // COMPLETED|REFUNDED|PENDING
   timestamp     DateTime @default(now())
+  // 2026-11-05 schema review #9: the Purchase this row mirrors, when it mirrors one -- at most one row per purchase.
+  // No writer exists in the backend today; any future writer must set it and treat a P2002 as already recorded.
+  purchaseId    String?  @unique
   createdAt     DateTime @default(now())
 
   @@index([saleId, timestamp])
@@ -5434,8 +5427,6 @@ model POSPaymentLink {
   @@index([organizerId, status])
   @@index([saleId])
   @@index([stripeAccountId])
-  @@index([squarePaymentLinkId])
-  @@index([squareOrderId])
 }
 
 model POSPaymentRequest {
@@ -5493,7 +5484,6 @@ model POSPaymentRequest {
   @@index([organizerUserId, saleId])
   @@index([shopperUserId, status])
   @@index([status, expiresAt])
-  @@index([stripePaymentIntentId])
   @@index([isSplitPayment])
 }
 
@@ -5566,7 +5556,6 @@ model WorkspacePermission {
   updatedAt   DateTime           @updatedAt
 
   @@unique([workspaceId, role, action])
-  @@index([workspaceId, role])
 }
 
 // ADR cashier-discretionary-discount (2026-09-25): per-hub, per-cashier permission to
@@ -5595,7 +5584,6 @@ model CashierDiscretionGrant {
 
   @@unique([hubId, cashierTeamMemberId])
   @@unique([hubId, cashierBoothId])
-  @@index([hubId])
 }
 
 // WorkspaceRoleTemplate — predefined role templates for quick setup
@@ -5607,7 +5595,6 @@ model WorkspaceRoleTemplate {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([name])
 }
 
 // TeamMember — organizer team member linked to a WorkspaceMember
@@ -5630,7 +5617,6 @@ model TeamMember {
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
 
-  @@index([workspaceMemberId])
 }
 
 // TeamMemberAvailability — one-to-one link to TeamMember
@@ -5656,7 +5642,6 @@ model TeamMemberAvailability {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  @@index([teamMemberId])
 }
 
 // TeamMemberPerformance — one-to-many link to TeamMember
@@ -5673,7 +5658,6 @@ model TeamMemberPerformance {
   updatedAt      DateTime   @updatedAt
 
   @@unique([teamMemberId, period])
-  @@index([teamMemberId, period])
 }
 
 // WorkspaceSettings — workspace-level configuration
@@ -5727,7 +5711,6 @@ model WorkspaceSettings {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  @@index([workspaceId])
 }
 
 // WorkspaceSalesActivity — activity log for sales within a workspace
@@ -5760,7 +5743,6 @@ model WorkspaceSaleChat {
   updatedAt   DateTime               @updatedAt
 
   @@unique([workspaceId, saleId])
-  @@index([workspaceId, saleId])
 }
 
 // WorkspaceChatMessage — individual messages in a workspace sale chat
@@ -5774,7 +5756,6 @@ model WorkspaceChatMessage {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
-  @@index([chatId])
   @@index([organizerId])
   @@index([chatId, createdAt])
 }
@@ -5832,7 +5813,6 @@ model WorkspaceRevenueSnapshot {
   updatedAt      DateTime           @updatedAt
 
   @@unique([workspaceId, date])
-  @@index([workspaceId, date])
 }
 
 // WorkspaceAlert — alerts and notifications for the workspace
@@ -5850,7 +5830,6 @@ model WorkspaceAlert {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
-  @@index([workspaceId])
   @@index([workspaceId, severity])
   @@index([saleId])
 }
@@ -5938,7 +5917,6 @@ model ApiUsageLog {
   updatedAt          DateTime @updatedAt
 
   @@unique([service, dateKey])
-  @@index([service])
   @@index([dateKey])
 }
 
@@ -5958,7 +5936,6 @@ model SaleAssignment {
   updatedAt    DateTime   @updatedAt
 
   @@unique([saleId, teamMemberId])
-  @@index([saleId])
   @@index([teamMemberId])
 }
 
@@ -5978,7 +5955,6 @@ model PrepTask {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  @@index([saleId])
   @@index([saleId, done])
   @@index([assigneeId])
 }
@@ -6069,9 +6045,10 @@ model Consignor {
   updatedAt         DateTime           @updatedAt
 
   @@index([workspaceId])
-  @@index([portalToken])
   @@index([payoutsFlaggedForReview]) // S1198: fast admin-queue filtering
   @@index([userId])
+  @@index([stripeAccountId]) // 2026-11-05 schema review #11/#12
+  @@index([squareAccountId]) // 2026-11-05 schema review #11/#12
 }
 
 // Consignor Self-Serve Intake (2026-09-25): a prospective consignor's public-form
@@ -6152,14 +6129,13 @@ model ConsignorAgreementVersion {
   createdAt       DateTime           @default(now())
 
   @@unique([workspaceId, version])
-  @@index([workspaceId])
 }
 
 // #309: Payout record — created when organizer runs a payout for a consignor
 model ConsignorPayout {
   id                String                    @id @default(cuid())
   consignorId       String
-  consignor         Consignor                 @relation(fields: [consignorId], references: [id], onDelete: Cascade)
+  consignor         Consignor                 @relation(fields: [consignorId], references: [id], onDelete: Restrict) // 2026-11-05 schema review: ledger row survives its parent
   saleId            String? // null = all-sales payout
   sale              Sale?                     @relation("ConsignorPayouts", fields: [saleId], references: [id], onDelete: SetNull)
   totalSales        Decimal                   @db.Decimal(10, 2) // sum of sold item prices for this consignor
@@ -6212,7 +6188,7 @@ model ConsignorSettlementBatch {
   saleId                String?
   sale                  Sale?              @relation("SaleSettlementBatches", fields: [saleId], references: [id], onDelete: SetNull)
   workspaceId           String
-  workspace             OrganizerWorkspace @relation("WorkspaceSettlementBatches", fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace             OrganizerWorkspace @relation("WorkspaceSettlementBatches", fields: [workspaceId], references: [id], onDelete: Restrict) // 2026-11-05 schema review: ledger row survives its parent
   status                String             @default("DRAFT") // DRAFT | APPROVED | PARTIALLY_PAID | PAID | CANCELLED. Legacy values still readable: PROCESSING | PARTIAL | COMPLETED | FAILED
   totalGross            Decimal            @default(0) @db.Decimal(10, 2) // sum of item prices across all consignors in this run
   totalConsignorPayouts Decimal            @default(0) @db.Decimal(10, 2) // sum of consignor shares owed in this run
@@ -6247,7 +6223,7 @@ model ConsignorPayoutItem {
   payoutId            String
   payout              ConsignorPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
   consignorId         String
-  consignor           Consignor       @relation(fields: [consignorId], references: [id], onDelete: Cascade)
+  consignor           Consignor       @relation(fields: [consignorId], references: [id], onDelete: Restrict) // 2026-11-05 schema review: ledger row survives its parent
   workspaceId         String
   saleId              String? // Item.saleId at snapshot time (null for consignment inventory)
   itemId              String?
@@ -6328,7 +6304,6 @@ model DiscountRule {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  @@index([workspaceId])
   @@index([workspaceId, tagColor]) // for fast rule lookup at item-list time
 }
 
@@ -6378,7 +6353,6 @@ model MarkdownCycle {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  @@index([organizerId])
   @@index([saleId])
   @@index([organizerId, isActive])
 }
@@ -6399,7 +6373,6 @@ model MarkdownCycleStep {
   updatedAt    DateTime      @updatedAt
 
   @@unique([cycleId, stepOrder])
-  @@index([cycleId])
 }
 
 model QRScannerEvent {
@@ -6519,7 +6492,6 @@ model DirectoryClaimEmail {
   trackingPixelId String?   @unique
   trackingToken   String?   @unique
 
-  @@index([organizerId])
   @@index([organizerId, sentAt]) // Sentry slow query fix 2026-05-30: SELECT WHERE organizerId ORDER BY sentAt DESC (2113ms) — composite for sort elimination
   @@index([status, nextAttemptAt])
   @@index([emailAddress])
@@ -6641,7 +6613,6 @@ model SaleShareLink {
   updatedAt      DateTime             @updatedAt
 
   @@unique([saleId, userId])
-  @@index([code])
   @@index([userId])
 }
 
@@ -6656,7 +6627,6 @@ model SaleShareLinkClick {
   createdAt   DateTime      @default(now())
 
   @@unique([shareLinkId, clickerId])
-  @@index([shareLinkId])
 }
 
 // Feature: Shopper Organizer Introduction — tracks when a shopper introduces an organizer to FindA.Sale
@@ -6673,7 +6643,6 @@ model ShopperOrganizerIntroduction {
   qualityAt    DateTime? // Set when one-time quality tier XP is awarded
 
   @@unique([shopperId, organizerId])
-  @@index([shopperId])
   @@index([organizerId])
   @@index([introducedAt])
 }
@@ -6725,7 +6694,6 @@ model OutreachAuditLog {
 
   organizer Organizer @relation("OutreachAuditLogs", fields: [organizerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([organizerId])
   @@index([createdAt])
   @@index([organizerId, event])
 }
@@ -6949,9 +6917,8 @@ enum MarketplaceJobPlatform {
   // truth in sync with the value that already exists in production.
   GUMTREE_AU
   // 2026-08-18 (S-CROSSLISTER-ESTATE-VERTICAL-RESEARCH batch 4): Poshmark/Mercari/Vinted/Grailed
-  // content-script crosslisting. NOT yet applied to Railway -- Patrick must run the
-  // `ALTER TYPE ... ADD VALUE IF NOT EXISTS` DDL below (same pattern as Gumtree AU) before any
-  // markListed call for these platforms will persist server-side.
+  // content-script crosslisting. In migration 20260818130100_add_marketplace_job_platform_values
+  // (ADD VALUE IF NOT EXISTS) and confirmed present in production 2026-11-05.
   POSHMARK
   MERCARI
   VINTED
@@ -7442,7 +7409,6 @@ model SocialAccount {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
-  @@index([platform])
 }
 
 /// One row per (approved content item -> one target platform). A single markdown
@@ -7866,12 +7832,11 @@ model VendorBooth {
   cashierDiscretionGrants CashierDiscretionGrant[] @relation("BoothCashierDiscretionGrants")
 
   @@unique([hubId, boothNumber])
-  @@index([hubId])
   @@index([status])
-  @@index([boothToken])
   @@index([userId])
   @@index([stripeAccountId])
   @@index([payoutsFlaggedForReview]) // S1198: fast admin-queue filtering
+  @@index([squareAccountId]) // 2026-11-05 schema review #11/#12
 }
 
 // Records one roaming/multi-booth cart transaction as a header row. Individual Purchase
@@ -7881,7 +7846,7 @@ model VendorBooth {
 model BoothCartTransaction {
   id    String  @id @default(cuid())
   hubId String
-  hub   SaleHub @relation("HubCartTransactions", fields: [hubId], references: [id], onDelete: Cascade)
+  hub   SaleHub @relation("HubCartTransactions", fields: [hubId], references: [id], onDelete: Restrict) // 2026-11-05 schema review: ledger row survives its parent
 
   // Who rang this up — exactly one of these two is set (enforced app-level, not DB-level)
   cashierTeamMemberId String?
@@ -8073,8 +8038,6 @@ model BoothCartLeg {
 
   @@index([cartTransactionId])
   @@index([vendorBoothId])
-  @@index([stripePaymentIntentId])
-  @@index([squarePaymentId])
   @@index([status])
   @@index([stripeTransferId])
   @@index([hubOwnerTransferFailedAt])
@@ -8101,7 +8064,7 @@ model VendorBoothSettlementBatch {
 model VendorBoothPayout {
   id                String                      @id @default(cuid())
   vendorBoothId     String
-  vendorBooth       VendorBooth                 @relation(fields: [vendorBoothId], references: [id], onDelete: Cascade)
+  vendorBooth       VendorBooth                 @relation(fields: [vendorBoothId], references: [id], onDelete: Restrict) // 2026-11-05 schema review: ledger row survives its parent
   settlementBatchId String?
   settlementBatch   VendorBoothSettlementBatch? @relation(fields: [settlementBatchId], references: [id], onDelete: SetNull)
 
@@ -8165,7 +8128,7 @@ model VendorBoothPayout {
 model HubOwnerShareManualPayout {
   id              String   @id @default(cuid())
   hubId           String
-  hub             SaleHub  @relation("HubHubOwnerSharePayouts", fields: [hubId], references: [id], onDelete: Cascade)
+  hub             SaleHub  @relation("HubHubOwnerSharePayouts", fields: [hubId], references: [id], onDelete: Restrict) // 2026-11-05 schema review: ledger row survives its parent
   organizerId     String   // the hub owner being paid -- denormalized off hub.organizerId for query convenience, matches VendorBoothPayout's own precedent of storing what it needs directly
   amountCents     Int      // sum of the legs this payout closes out
   method          String   // CASH|CHECK|VENMO|ACH|OTHER -- same free-text vocabulary as VendorBoothPayout.method
@@ -8190,7 +8153,7 @@ model HubOwnerShareManualPayout {
 model VendorBoothFeeCharge {
   id                    String      @id @default(cuid())
   vendorBoothId         String
-  vendorBooth           VendorBooth @relation(fields: [vendorBoothId], references: [id], onDelete: Cascade)
+  vendorBooth           VendorBooth @relation(fields: [vendorBoothId], references: [id], onDelete: Restrict) // 2026-11-05 schema review: ledger row survives its parent
   hubId                 String
   periodStart           DateTime
   periodEnd             DateTime
@@ -8228,11 +8191,9 @@ model VendorBoothFeeCharge {
   // One charge per booth per period -- the cron's own idempotent claim, independent of the
   // Stripe-level idempotencyKey used on the actual charge/transfer calls.
   @@unique([vendorBoothId, periodStart, periodEnd])
-  @@index([vendorBoothId])
   @@index([hubId])
   @@index([status])
   @@index([stripeTransferId])
-  @@index([squarePaymentId])
   @@index([nextRetryAt]) // the daily retry sweep's own query
 }
 
@@ -8328,7 +8289,6 @@ model UspsZoneChartEntry {
   fetchedAt  DateTime @default(now())
 
   @@id([originZip3, destZip3])
-  @@index([originZip3])
 }
 // ============================================================================
 // Universal Crosslister -- Official-API Tier (2026-08-18)
@@ -8396,7 +8356,6 @@ model MarketplaceAccount {
   etsyShopSettings      EtsyShopSettings?
 
   @@unique([organizerId, platform])
-  @@index([organizerId])
   @@index([platform, status])
 }
 
@@ -8444,7 +8403,7 @@ model EtsyListing {
   itemId            String    @unique   // NO FK on purpose (section 3, rule 1)
   organizerId       String
   shopId            String
-  etsyListingId     String?
+  etsyListingId     String?   // Unique when set: raw partial index EtsyListing_etsyListingId_unique (z20261105000100)
   state             String    @default("PREPARING") // PREPARING | DRAFT_PENDING | DRAFT_READY | PUBLISHING | ACTIVE | ENDED | SOLD | FAILED | ORPHANED
   failedStep        String?   // CREATE | IMAGES | PUBLISH | UPDATE | DELETE
   lastErrorMessage  String?
@@ -8769,7 +8728,6 @@ model BulkLotRefund {
   createdAt       DateTime @default(now())
 
   @@unique([purchaseId, idempotencyKey])
-  @@index([purchaseId])
   @@index([itemId])
 }
 
@@ -9188,7 +9146,7 @@ model ItemKitComponent {
   id              String   @id @default(cuid())
   kitItemId       String
   componentItemId String
-  quantity        Int      @default(1)
+  quantity        Int      @default(1) // CHECK ItemKitComponent_quantity_check (z20261105000300): quantity > 0
   createdAt       DateTime @default(now())
   kitItem         Item     @relation("KitItemComponents", fields: [kitItemId], references: [id], onDelete: Cascade)
   componentItem   Item     @relation("KitComponentItem", fields: [componentItemId], references: [id], onDelete: NoAction)
@@ -9210,4 +9168,45 @@ model ItemPackageChangeLog {
 
   @@index([itemId, changedAt])
   @@index([changedAt])
+}
+
+// Restricted-item card blocking (2026-11-06). Card processors can refuse whole product classes (Finix: weapons, firearm
+// items, knives, coins/bullion/precious metals, jewelry). Per-processor blocked classes live in
+// services/restrictedItem/cardProcessorRules.ts, not in the database.
+enum RestrictedItemClass {
+  NONE
+  WEAPON
+  FIREARM_RELATED
+  KNIFE
+  COIN_BULLION_PRECIOUS_METAL
+  JEWELRY
+}
+
+// Restricted-item audit log (2026-11-06). Append-only. Holds (a) every change of Item.restrictedClass, written by the
+// database trigger "Item_restricted_class_audit" so no writer can skip it, (b) every payment-time block or card/cash
+// split decision made by services/restrictedItem/cardPaymentGate.ts, and (c) every admin override and organizer
+// card-suspension set/clear. NEVER holds card data (no PAN, token, fingerprint, nonce or source id). No foreign keys on
+// purpose: history outlives deleted items/organizers, and the trigger insert must never fail on a missing parent.
+model RestrictedItemAuditLog {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  createdAt        DateTime @default(now())
+  kind             String // CLASSIFICATION_CHANGE | PAYMENT_BLOCK | PAYMENT_SPLIT | ADMIN_OVERRIDE | SUSPENSION_SET | SUSPENSION_CLEARED
+  itemId           String?
+  organizerId      String?
+  oldClass         String?
+  newClass         String?
+  source           String? // classification source, or the payment path (e.g. 'square.online.single')
+  actorUserId      String? // admin for overrides/suspension; null for automatic changes
+  processor        String? // FINIX | SQUARE | ...
+  itemIds          String[] @default([])
+  classes          String[] @default([])
+  buyerUserId      String?
+  sessionRef       String? // request/cart/invoice/link reference -- never a card token
+  cardAmountCents  Int?
+  cashAmountCents  Int?
+  detail           Json?
+
+  @@index([itemId, createdAt])
+  @@index([organizerId, createdAt])
+  @@index([kind, createdAt])
 }

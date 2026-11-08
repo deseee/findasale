@@ -6,17 +6,16 @@
  * NOT EXECUTED when written (no jest or tsc in the build sandbox). Run
  * `pnpm --filter backend test consignorSettlementController` before merging.
  *
- * Runs against the in-memory fake in __fixtures__/fakeLedgerDb.ts. Emails, the legacy Stripe rail
- * and the agreement renderer are jest mocks: no real transaction, email or network call is made.
- * The headline assertions: TEAMS gate on every handler, foreign ids are 404, approving a run
- * never touches payConsignorViaACH or the legacy payout email, and a consignor is only emailed
+ * Runs against the in-memory fake in __fixtures__/fakeLedgerDb.ts. Emails and the agreement renderer
+ * are jest mocks: no real transaction, email or network call is made. The headline assertions: TEAMS
+ * gate on every handler, foreign ids are 404, approving a run never sends the legacy payout email
+ * (the legacy Stripe ACH rail was removed 2026-11-04), and a consignor is only emailed
  * when the organizer opted in AND the email actually went out.
  */
 jest.mock('../lib/prisma', () => {
   const { createFakeDb } = require('./__fixtures__/fakeLedgerDb');
   return { prisma: createFakeDb() };
 });
-jest.mock('../services/stripeConnectService', () => ({ payConsignorViaACH: jest.fn() }));
 jest.mock('../services/consignorEmailService', () => ({
   sendConsignorPayout: jest.fn(),
   sendConsignorStatement: jest.fn(),
@@ -28,7 +27,6 @@ import { prisma } from '../lib/prisma';
 import * as ledger from '../services/consignorLedgerService';
 import * as settle from '../controllers/consignorSettlementController';
 import * as consignorCtl from '../controllers/consignorController';
-import { payConsignorViaACH } from '../services/stripeConnectService';
 import { sendConsignorPayout, sendConsignorStatement, sendConsignorPaymentRecorded } from '../services/consignorEmailService';
 import { renderConsignorAgreementForConsignor } from '../services/consignorAgreementService';
 
@@ -39,7 +37,6 @@ const D = fake.D;
 const mStatement = sendConsignorStatement as jest.Mock;
 const mRecorded = sendConsignorPaymentRecorded as jest.Mock;
 const mLegacyEmail = sendConsignorPayout as jest.Mock;
-const mAch = payConsignorViaACH as jest.Mock;
 
 let ws: { userId: string; organizerId: string; workspaceId: string };
 let sale: any;
@@ -105,7 +102,6 @@ beforeEach(() => {
   mStatement.mockReset().mockResolvedValue({ sent: true });
   mRecorded.mockReset().mockResolvedValue({ sent: true });
   mLegacyEmail.mockReset().mockResolvedValue(undefined);
-  mAch.mockReset();
   (renderConsignorAgreementForConsignor as jest.Mock).mockReset().mockResolvedValue(null);
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -336,7 +332,6 @@ describe('approve never moves money and emails only on opt-in', () => {
     const res = await call(settle.approveConsignorSettlementBatch, { params: { batchId: batch.id }, body: {} });
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ status: 'APPROVED', noop: false, statements: [] });
-    expect(mAch).not.toHaveBeenCalled();
     expect(mLegacyEmail).not.toHaveBeenCalled();
     expect(mStatement).not.toHaveBeenCalled();
     expect(mRecorded).not.toHaveBeenCalled();
@@ -382,11 +377,11 @@ describe('approve never moves money and emails only on opt-in', () => {
     expect(eventsOf(p1.id, 'STATEMENT_SENT')).toHaveLength(1);
   });
 
-  it('the legacy Stripe approve is not reachable through any exported route handler', async () => {
+  it('the legacy Stripe approve handler is gone (Stripe retired 2026-11-04)', async () => {
     const { batch } = await seedRun();
     await call(settle.approveConsignorSettlementBatch, { params: { batchId: batch.id }, body: { sendStatements: true } });
-    expect(mAch).not.toHaveBeenCalled();
-    expect(typeof settle.legacyStripeApproveConsignorSettlementBatch).toBe('function'); // kept, not removed
+    expect((settle as Record<string, unknown>).legacyStripeApproveConsignorSettlementBatch).toBeUndefined();
+    expect((settle as Record<string, unknown>).liveTransfersEnabled).toBeUndefined();
   });
 });
 
@@ -401,7 +396,6 @@ describe('mark-paid, undo, hold, release, void handlers', () => {
     expect(res.body.notification).toEqual({ requested: false });
     expect(res.body.payout).toMatchObject({ id: pid, status: 'PAID', method: 'CHECK', paidReference: '1042', netPayout: '25.00', paidAmount: '25.00' });
     expect(mRecorded).not.toHaveBeenCalled();
-    expect(mAch).not.toHaveBeenCalled();
   });
 
   it('mark-paid with notifyConsignor true sends one payment-recorded email with the real period and amount', async () => {
@@ -591,7 +585,6 @@ describe('runPayout (POST /api/consignors/:id/payout) through the ledger', () =>
     expect(Array.isArray(res.body.excluded)).toBe(true);
     expect(mRecorded).not.toHaveBeenCalled();
     expect(mLegacyEmail).not.toHaveBeenCalled();
-    expect(mAch).not.toHaveBeenCalled();
     expect(fake.store.consignorPayoutItem).toHaveLength(2);
   });
 

@@ -37,11 +37,6 @@ jest.mock('../services/crewInvasionRedemptionService', () => ({
   countCrewDiscountEligibleShoppers: (...a: any[]) => mockCountEligible(...a),
 }));
 
-var mockExpire = jest.fn();
-jest.mock('../utils/expireCheckoutSession', () => ({
-  expireCheckoutSessionSafely: (...a: any[]) => mockExpire(...a),
-  retrieveCheckoutSessionAcrossAccounts: jest.fn(),
-}));
 var mockCreateLink = jest.fn();
 jest.mock('../controllers/posController', () => ({ createPaymentLinkInternal: (...a: any[]) => mockCreateLink(...a) }));
 // Money review P1-13 (2026-09-29): CHECKOUT_LINK claims each item through commitItemSale before creating the link.

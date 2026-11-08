@@ -184,15 +184,15 @@ export async function reopenAttestedSale(itemId: string, opts: SaleReopenOptions
       },
       data: {
         status: 'AVAILABLE',
-        stockSold: { decrement: REOPEN_UNITS },
-        ebayQuantitySold: { decrement: REOPEN_UNITS }, // the same units off the eBay counter (floored below), not a reset
         lastSoldVia: null,
         ...organizerEditStampAlways(),
       },
     });
     if (updated.count === 0) throw new Error('REOPEN_RACE');
-    // Floor both counters at zero (a legacy SOLD item whose ledger was never incremented would otherwise go to -1).
-    await tx.$executeRaw`UPDATE "Item" SET "stockSold" = GREATEST("stockSold", 0), "ebayQuantitySold" = GREATEST("ebayQuantitySold", 0) WHERE "id" = ${itemId} AND ("stockSold" < 0 OR "ebayQuantitySold" < 0)`;
+    // Give the unit back on both counters (the same units off the eBay counter, not a reset), floored at zero in ONE statement:
+    // a legacy SOLD item whose ledger was never incremented would otherwise go to -1, and since 2026-11-05 (schema review #7)
+    // Item_stockSold_check rejects a negative stockSold even for a moment, so decrement-then-floor is no longer possible.
+    await tx.$executeRaw`UPDATE "Item" SET "stockSold" = GREATEST("stockSold" - ${REOPEN_UNITS}::int, 0), "ebayQuantitySold" = GREATEST("ebayQuantitySold" - ${REOPEN_UNITS}::int, 0) WHERE "id" = ${itemId}`;
     return true;
   }).catch((err: any) => {
     if (err?.message === 'REOPEN_RACE') return false;

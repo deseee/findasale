@@ -26,7 +26,6 @@ interface PricingTier {
   description: string;
   featured: boolean;
   features: string[];
-  stripePrice: string | null;
 }
 
 // Fee figures come from lib/platformFees so this page cannot drift from the real rates.
@@ -42,7 +41,6 @@ const TIERS: PricingTier[] = [
     period: `Free, ${describeInclusiveRates('SIMPLE')} when items sell`,
     description: 'Perfect for trying FindA.Sale',
     featured: false,
-    stripePrice: null,
     features: [
       'Photo to listing: snap, confirm, publish',
       'Unlimited items per sale, 5 photos each',
@@ -63,7 +61,6 @@ const TIERS: PricingTier[] = [
     period: 'per month',
     description: 'For organizers running multiple sales who want to save hours of manual work.',
     featured: true,
-    stripePrice: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || 'price_1TDUQsLTUdEUnHOTzG6cVDwu',
     features: [
       'Everything in Simple, plus:',
       '3 concurrent sales, unlimited items each',
@@ -87,7 +84,6 @@ const TIERS: PricingTier[] = [
     period: 'per month',
     description: 'For organizers who need unlimited sales and teams running sales at multiple locations.',
     featured: false,
-    stripePrice: process.env.NEXT_PUBLIC_STRIPE_TEAMS_PRICE_ID || 'price_1TDUQtLTUdEUnHOTCEoNL6oz',
     features: [
       'Everything in Pro, plus:',
       'Unlimited sales*, Unlimited Items*',

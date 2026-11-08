@@ -6,7 +6,7 @@ on:
 jobs:
   scrape:
     name: California Phase 2 Pawnbroker Scraper
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # CA dataset is expected to be large (5,000–10,000 records).
     # Current scraper is in STUB MODE until a live CA DOJ endpoint is confirmed.
     # When live: per-run cap of 2,000 records with cursor pagination means multiple
@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 

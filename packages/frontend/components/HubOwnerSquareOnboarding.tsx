@@ -3,7 +3,7 @@
  * Shown on the Vendor Booths admin page so a hub-owning Organizer can complete
  * Square onboarding specifically in the context of "you own a hub with vendor
  * booths and need to be able to receive hub owner revenue-share / booth-fee
- * payouts." Mirrors ACHPayoutButton.tsx's status-fetch + onboard-link pattern
+ * payouts." Status-fetch + onboard-link pattern
  * (same shape: GET status, POST onboard, window.open the returned URL).
  *
  * Stripe onboarding removed 2026-09-09 -- the Stripe platform account is
@@ -30,7 +30,7 @@ interface HubOwnerSquareStatus {
   squareMerchantId: string | null;
 }
 
-const HubOwnerStripeOnboarding: React.FC = () => {
+const HubOwnerSquareOnboarding: React.FC = () => {
   // Square is the sole processor for hub-owner payouts. Stripe onboarding removed
   // 2026-09-09 -- the Stripe platform account is permanently closed. Supersedes the
   // 2026-09-07 "Stripe stays available" decision.
@@ -110,4 +110,4 @@ const HubOwnerStripeOnboarding: React.FC = () => {
   );
 };
 
-export default HubOwnerStripeOnboarding;
+export default HubOwnerSquareOnboarding;

@@ -1,6 +1,7 @@
 import { ExplorerRank, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { createNotification } from './notificationService';
+import { isUniqueViolation } from '../utils/uniqueViolation'; // 2026-11-05: PointsTransaction.idempotencyKey
 
 /**
  * XP Service — Single source of truth for all Explorer's Guild XP logic
@@ -326,6 +327,9 @@ export async function awardXp(
     // (cap-clamped awards, or a custom formula like Treasure Hunt scan). When
     // false/omitted, awardXp() applies the standard 1.5x Hunt Pass multiplier automatically.
     preMultipliedHuntPassXp?: boolean;
+    // 2026-11-05 (schema review #9): PointsTransaction.idempotencyKey (unique). An award whose key already exists is
+    // "already awarded": no second ledger row and no second guildXp increment; awardXp returns null.
+    idempotencyKey?: string;
   }
 ): Promise<{ newXp: number; newRank: ExplorerRank; xpAwarded: number; rankIncreased: boolean } | null> {
   try {
@@ -347,20 +351,30 @@ export async function awardXp(
       finalAmount = Math.round(amount * 1.5);
     }
 
-    // Add transaction record
-    await prisma.pointsTransaction.create({
-      data: {
-        userId,
-        type,
-        points: finalAmount,
-        saleId: context?.saleId,
-        itemId: context?.itemId,
-        purchaseId: context?.purchaseId, // P0 Exploit Fix
-        couponId: context?.couponId,
-        description: context?.description,
-        holdUntil: context?.holdUntil, // P0 Exploit Fix
-      },
-    });
+    // Add transaction record. It is written BEFORE the guildXp increment below, so a duplicate idempotency key stops the
+    // award before any XP moves.
+    try {
+      await prisma.pointsTransaction.create({
+        data: {
+          userId,
+          type,
+          points: finalAmount,
+          saleId: context?.saleId,
+          itemId: context?.itemId,
+          purchaseId: context?.purchaseId, // P0 Exploit Fix
+          couponId: context?.couponId,
+          description: context?.description,
+          holdUntil: context?.holdUntil, // P0 Exploit Fix
+          ...(context?.idempotencyKey ? { idempotencyKey: context.idempotencyKey } : {}),
+        },
+      });
+    } catch (ledgerErr) {
+      if (context?.idempotencyKey && isUniqueViolation(ledgerErr, ['idempotencyKey'])) {
+        console.log(`[xpService] ${type} already awarded for key ${context.idempotencyKey}; skipping duplicate award.`);
+        return null;
+      }
+      throw ledgerErr;
+    }
 
     // Calculate expiry window (365 days from now for D-XP-002)
     const now = new Date();

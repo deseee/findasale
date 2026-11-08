@@ -26,11 +26,6 @@ jest.mock('../services/squareBillingService', () => ({
 jest.mock('../lib/notificationService', () => ({
   createNotification: jest.fn().mockResolvedValue({}),
 }));
-jest.mock('../utils/stripe', () => ({
-  getStripe: jest.fn(() => ({
-    subscriptions: { update: jest.fn().mockResolvedValue({ current_period_end: 1893456000 }) },
-  })),
-}));
 jest.mock('../lib/prisma', () => ({
   prisma: {
     user: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
@@ -196,6 +191,40 @@ describe('POST /streaks/resume-huntpass (undo)', () => {
     const res2 = mockRes();
     await resume(req(), res2);
     expect(res2.status).toHaveBeenCalledWith(400);
+    expect(db.user.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('legacy Stripe-billed Hunt Pass (Stripe retired 2026-11-04)', () => {
+  const cancel = handlerFor('/cancel-huntpass', 'post');
+  const resume = handlerFor('/resume-huntpass', 'post');
+  const legacy = (over: any = {}) => ({
+    huntPassBillingProcessor: null,
+    huntPassActive: true,
+    huntPassExpiry: future,
+    huntPassCancelAtPeriodEnd: false,
+    huntPassStripeSubscriptionId: 'sub_legacy',
+    ...over,
+  });
+
+  it('cancel is recorded in the database only and confirmed with the existing end date', async () => {
+    db.user.findUnique.mockResolvedValue(legacy());
+    const res = mockRes();
+    await cancel(req(), res);
+    expect(db.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'u1', huntPassActive: true, huntPassCancelAtPeriodEnd: false },
+      data: { huntPassCancelAtPeriodEnd: true },
+    });
+    expect(res.json.mock.calls[0][0]).toMatchObject({ cancelAtPeriodEnd: true, alreadyCancelled: false, expiresAt: future.toISOString() });
+    expect(createNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('resume refuses with HUNT_PASS_RESUBSCRIBE_REQUIRED because the pass can never renew', async () => {
+    db.user.findUnique.mockResolvedValue(legacy({ huntPassCancelAtPeriodEnd: true }));
+    const res = mockRes();
+    await resume(req(), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json.mock.calls[0][0].code).toBe('HUNT_PASS_RESUBSCRIBE_REQUIRED');
     expect(db.user.updateMany).not.toHaveBeenCalled();
   });
 });

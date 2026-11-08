@@ -1,4 +1,10 @@
 /**
+ * STRIPE RETIRED (owner decision 2026-11-04): the Stripe webhook handler (and the Stripe client mock this
+ * suite used to drive it) were deleted with the rest of the Stripe code. What remains here is processor-
+ * agnostic: the auction buyer-premium lock, the organizer-facing fee reporting and getEarningsBreakdown,
+ * all of which still read historical Stripe-era rows. The file keeps its name because CI lists it.
+ */
+/**
  * RUNNER CONVERSION NOTE (2026-08-16) -- read before editing.
  *
  * This file was STRUCTURALLY DEAD from the day it was written until 2026-08-16. It had never
@@ -55,33 +61,6 @@
 
 import { prisma } from '../lib/prisma';
 
-// ── Stripe mock ───────────────────────────────────────────────────────────────
-// jest.hoisted ensures mock fn references are available when jest.mock factory runs
-var mockAccountsCreate         = jest.fn();
-var mockAccountLinksCreate     = jest.fn();
-var mockLoginLinkCreate        = jest.fn();
-var mockPaymentIntentsCreate   = jest.fn();
-var mockPaymentIntentsRetrieve = jest.fn();
-var mockWebhooksConstruct      = jest.fn();
-var mockRefundsCreate          = jest.fn();
-
-jest.mock('../utils/stripe', () => ({
-  getStripe: jest.fn(() => ({
-    accounts: {
-      create: mockAccountsCreate,
-      createLoginLink: mockLoginLinkCreate,
-    },
-    accountLinks: { create: mockAccountLinksCreate },
-    paymentIntents: {
-      create: mockPaymentIntentsCreate,
-      retrieve: mockPaymentIntentsRetrieve,
-    },
-    webhooks: { constructEvent: mockWebhooksConstruct },
-    refunds: { create: mockRefundsCreate },
-  })),
-  default: jest.fn(),
-}));
-
 // ── Receipt-email mock ────────────────────────────────────────────────────────
 // RAIL CORRECTION (2026-08-17): this mocked `resend` directly, but stripeController's
 // sendReceiptEmail (line 225) calls `transactionalEmailService.emails.send(...)`. Mocking
@@ -97,9 +76,6 @@ jest.mock('../lib/transactionalEmailService', () => ({
 }));
 
 // ── Import controllers AFTER mocks are hoisted ────────────────────────────────
-import {
-  webhookHandler,
-} from '../controllers/stripeController';
 import { getEarningsBreakdown } from '../controllers/payoutController';
 import { saleCreateSchema, saleUpdateSchema } from '../controllers/saleController';
 import {
@@ -153,8 +129,6 @@ describe('Stripe Connect + Fee Capture E2E', () => {
   let testAuctionItem: any;
 
   beforeAll(async () => {
-    process.env.STRIPE_SECRET_KEY     = 'sk_test_fake_stripe_e2e';
-    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_fake_stripe_e2e';
     process.env.SMTP_USERNAME        = 'test_smtp_user_stripe_e2e';
     process.env.SES_FROM_EMAIL     = 'receipts@finda.sale';
     process.env.FRONTEND_URL          = 'http://localhost:3000';
@@ -280,208 +254,10 @@ describe('Stripe Connect + Fee Capture E2E', () => {
     if (testOrganizerUser) await prisma.user.delete({ where: { id: testOrganizerUser.id } }).catch(() => {});
     if (testShopper)     await prisma.user.delete({ where: { id: testShopper.id } }).catch(() => {});
 
-    delete process.env.STRIPE_SECRET_KEY;
-    delete process.env.STRIPE_WEBHOOK_SECRET;
     delete process.env.SMTP_USERNAME;
     delete process.env.SES_FROM_EMAIL;
     delete process.env.FRONTEND_URL;
     console.log('✓ Stripe E2E test data cleaned up');
-  });
-
-  // ── webhookHandler — payment_intent.succeeded ─────────────────────────────
-
-  describe('webhookHandler — payment_intent.succeeded', () => {
-    const WEBHOOK_PI_ID = 'pi_webhook_succeeded_e2e';
-
-    beforeAll(async () => {
-      // Seed a PENDING purchase to be resolved by the webhook
-      await prisma.purchase.create({
-        data: {
-          userId:                testShopper.id,
-          itemId:                testItem.id,
-          saleId:                testSale.id,
-          amount:                100.00,
-          platformFeeAmount:     5.00,
-          stripePaymentIntentId: WEBHOOK_PI_ID,
-          status:                'PENDING',
-        },
-      });
-
-      mockResendSend.mockClear();
-
-      // Fire the webhook
-      mockWebhooksConstruct.mockReturnValueOnce({
-        id:   'evt_test_succeeded_e2e',
-        type: 'payment_intent.succeeded',
-        data: {
-          object: {
-            id:       WEBHOOK_PI_ID,
-            metadata: {
-              itemId: testItem.id,
-              saleId: testSale.id,
-              userId: testShopper.id,
-            },
-          },
-        },
-      });
-
-      const req: any = {
-        headers: { 'stripe-signature': 'sig_test_succeeded' },
-        body:    Buffer.from('{}'),
-      };
-      await webhookHandler(req, makeMockRes());
-    });
-
-    afterAll(async () => {
-      await prisma.purchase.deleteMany({
-        where: { stripePaymentIntentId: WEBHOOK_PI_ID },
-      }).catch(() => {});
-      // Item was marked SOLD by the webhook; restore for any subsequent tests
-      await prisma.item.update({
-        where: { id: testItem.id },
-        data:  { status: 'AVAILABLE' },
-      }).catch(() => {});
-    });
-
-    it('should update Purchase status to PAID', async () => {
-      const purchase = await prisma.purchase.findFirst({
-        where: { stripePaymentIntentId: WEBHOOK_PI_ID },
-      });
-      expect(purchase?.status).toBe('PAID');
-      console.log('✓ Purchase status updated to PAID');
-    });
-
-    it('should update Item status to SOLD', async () => {
-      const item = await prisma.item.findUnique({ where: { id: testItem.id } });
-      expect(item?.status).toBe('SOLD');
-      console.log('✓ Item status updated to SOLD');
-    });
-
-    it('should send a receipt email to the shopper via Resend', () => {
-      expect(mockResendSend).toHaveBeenCalled();
-      const emailPayload = mockResendSend.mock.calls[0][0];
-      expect(emailPayload.to).toBe(testShopper.email);
-      expect(emailPayload.subject).toContain(testItem.title);
-      console.log(`✓ Receipt email sent to ${testShopper.email} for "${testItem.title}"`);
-    });
-
-    it('should return { received: true }', () => {
-      // Verify the webhook handler's response contract by firing a second event
-      mockWebhooksConstruct.mockReturnValueOnce({
-        id:   'evt_test_succeeded_dup_check_e2e',
-        type: 'payment_intent.succeeded',
-        data: { object: { id: 'pi_no_db_match', metadata: {} } },
-      });
-      const res = makeMockRes();
-      const req: any = {
-        headers: { 'stripe-signature': 'sig_test' },
-        body:    Buffer.from('{}'),
-      };
-      return webhookHandler(req, res).then(() => {
-        expect(res.json).toHaveBeenCalledWith({ received: true });
-      });
-    });
-  });
-
-  // ── webhookHandler — payment_intent.payment_failed ────────────────────────
-
-  describe('webhookHandler — payment_intent.payment_failed', () => {
-    const WEBHOOK_PI_ID = 'pi_webhook_failed_e2e';
-
-    beforeAll(async () => {
-      await prisma.purchase.create({
-        data: {
-          userId:                testShopper.id,
-          itemId:                testAuctionItem.id,
-          saleId:                testAuctionSale.id,
-          amount:                200.00,
-          platformFeeAmount:     14.00,
-          stripePaymentIntentId: WEBHOOK_PI_ID,
-          status:                'PENDING',
-        },
-      });
-    });
-
-    afterAll(async () => {
-      await prisma.purchase.deleteMany({
-        where: { stripePaymentIntentId: WEBHOOK_PI_ID },
-      }).catch(() => {});
-    });
-
-    it('should update Purchase status to FAILED', async () => {
-      mockWebhooksConstruct.mockReturnValueOnce({
-        id:   'evt_test_failed_e2e',
-        type: 'payment_intent.payment_failed',
-        data: { object: { id: WEBHOOK_PI_ID } },
-      });
-
-      const req: any = {
-        headers: { 'stripe-signature': 'sig_test_failed' },
-        body:    Buffer.from('{}'),
-      };
-      const res = makeMockRes();
-
-      await webhookHandler(req, res);
-
-      const purchase = await prisma.purchase.findFirst({
-        where: { stripePaymentIntentId: WEBHOOK_PI_ID },
-      });
-      expect(purchase?.status).toBe('FAILED');
-      expect(res.json).toHaveBeenCalledWith({ received: true });
-      console.log('✓ Purchase status updated to FAILED');
-    });
-  });
-
-  // ── webhookHandler — invalid signature ────────────────────────────────────
-
-  describe('webhookHandler — invalid signature', () => {
-    it('should return 400 when Stripe signature verification fails', async () => {
-      mockWebhooksConstruct.mockImplementationOnce(() => {
-        throw new Error('Webhook signature verification failed');
-      });
-
-      const req: any = {
-        headers: { 'stripe-signature': 'bad-sig' },
-        body:    Buffer.from('{}'),
-      };
-      const res = makeMockRes();
-
-      await webhookHandler(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      console.log('✓ 400 returned for invalid webhook signature');
-    });
-  });
-
-  // ── webhookHandler — unhandled event types ────────────────────────────────
-
-  describe('webhookHandler — unhandled event types', () => {
-    /**
-     * ⚠️  These events reach the `default` branch and are only logged.
-     *     Consider adding handlers before production launch:
-     *
-     *     charge.refunded     — update Purchase to REFUNDED if refund is Stripe-initiated
-     *     transfer.created    — record payout confirmation for organizer audit trail
-     *     account.updated     — respond to Connect account deauthorization or restrictions
-     */
-    it('should return { received: true } without crashing for an unhandled event type', async () => {
-      mockWebhooksConstruct.mockReturnValueOnce({
-        id:   'evt_test_unhandled_e2e',
-        type: 'charge.refunded',
-        data: { object: { id: 'ch_test_unhandled' } },
-      });
-
-      const req: any = {
-        headers: { 'stripe-signature': 'sig_test_unhandled' },
-        body:    Buffer.from('{}'),
-      };
-      const res = makeMockRes();
-
-      await webhookHandler(req, res);
-
-      expect(res.json).toHaveBeenCalledWith({ received: true });
-      console.log('✓ Unhandled event type (charge.refunded) acknowledged without crashing');
-    });
   });
 
   // ── organizer-facing fee reporting — commission only, premium stripped ───────────────────

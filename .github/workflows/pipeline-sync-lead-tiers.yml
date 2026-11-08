@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Trigger sync-lead-tier-groups job

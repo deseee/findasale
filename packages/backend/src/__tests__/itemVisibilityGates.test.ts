@@ -27,7 +27,6 @@ jest.mock('axios', () => ({
 }));
 jest.mock('../services/cloudAIService', () => ({ analyzeItemImage: jest.fn(), isCloudAIAvailable: () => false }));
 jest.mock('../lib/aiTagsQuotaTracker', () => ({ checkAiTagQuota: jest.fn(), incrementAiTagCount: jest.fn() }));
-jest.mock('../utils/expireCheckoutSession', () => ({ retrieveCheckoutSessionAcrossAccounts: jest.fn() }));
 jest.mock('../services/ebayRateEstimateService', () => ({ classifyPackageSurchargeTrigger: () => 'SAFE' }));
 jest.mock('../utils/ebayShippingClassifier', () => ({ classifyEbayShipping: () => null }));
 jest.mock('../services/achievementService', () => ({ checkAndAward: () => Promise.resolve() }));

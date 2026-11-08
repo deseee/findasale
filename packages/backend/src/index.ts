@@ -33,12 +33,6 @@ for (const envPath of possiblePaths) {
 
 if (!envLoaded) {
   console.warn('⚠️  No .env file loaded, checking environment variables directly');
-  // Check if critical env vars are set
-  if (process.env.STRIPE_SECRET_KEY) {
-    console.log('✅ STRIPE_SECRET_KEY found in environment');
-  } else {
-    console.log('❌ STRIPE_SECRET_KEY not found in environment');
-  }
 }
 
 // C1: Fail fast if JWT_SECRET is missing — prevents silent use of fallback secret in production
@@ -56,18 +50,8 @@ if (!process.env.EBAY_PROXY_SECRET) {
   console.warn('[ebay] EBAY_PROXY_SECRET is not set: the eBay proxy (/api/proxy/ebay on Vercel) refuses requests without it, so eBay calls routed through the proxy will fail until it is set on Vercel and Railway.');
 }
 
-// P0-2: STRIPE_SECRET_KEY check. 2026-09-29: payments run on Square and Stripe is closed by default
-// (STRIPE_PLATFORM_CLOSED only reopens it when explicitly 'false'), so a missing key is a hard exit
-// only when Stripe is enabled; while it is closed we log one warning and keep booting. The decision
-// lives in utils/stripeBootConfig.ts (pure, unit tested).
-import { evaluateStripeBootConfig } from './utils/stripeBootConfig';
-const stripeBoot = evaluateStripeBootConfig(process.env);
-if (stripeBoot.action === 'exit') {
-  console.error(stripeBoot.message);
-  process.exit(1);
-} else if (stripeBoot.action === 'warn') {
-  console.warn(`⚠️  ${stripeBoot.message}`);
-}
+// Stripe is retired (owner decision 2026-11-04). No STRIPE_* setting is read at boot any more; the
+// retired Stripe endpoints answer 410 STRIPE_RETIRED (see the stripeUnavailableGuard block below).
 
 import * as Sentry from '@sentry/node';
 import express from 'express';
@@ -88,8 +72,7 @@ import extensionRoutes from './routes/extension'; // ADR-084: Marketplace Autofi
 import favoriteRoutes from './routes/favorites';
 import userRoutes from './routes/users';
 import stripeRoutes from './routes/stripe';
-import { stripeUnavailableGuard, isStripeNotConfiguredError } from './utils/stripe'; // 2026-09-29: lazy Stripe client, 503 instead of a crash when no key is set
-import stripeConnectRoutes from './routes/stripeConnect';
+import { stripeUnavailableGuard, isStripeRetiredError } from './utils/stripe'; // Stripe retired 2026-11-04: 410 STRIPE_RETIRED for every old Stripe endpoint
 import squareConnectRoutes from './routes/squareConnect'; // Square migration (2026-09-07, Wave 1 #2): Connect-equivalent onboarding
 import squarePaymentRoutes from './routes/squarePayment'; // Square migration Wave 1 #1 (Checkout, 2026-09-07)
 import squareRoutes from './routes/square';           // Square migration Wave 1 #5: webhooks
@@ -146,7 +129,7 @@ import hubRoutes from './routes/hubs';                  // Feature #40+#44: Sale
 import vendorBoothRoutes from './routes/vendorBooth';    // Vendor Booth Payments (2026-07-07, ADR-015/016/017): flea market multi-booth checkout
 import voiceRoutes from './routes/voice';                // Feature #42: Voice-to-tag extraction
 import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
-import billingRoutes from './routes/billing';             // #65 Sprint 2: Stripe billing endpoints
+import billingRoutes from './routes/billing';             // #65 Sprint 2: organizer billing endpoints (Square)
 import pointsRoutes from './routes/points';                    // XP tracking: sale visits
 import consignorRoutes from './routes/consignors';       // Feature #309: Consignor Portal & Payouts
 import consignorIntakeRoutes from './routes/consignorIntake';       // Consignor Self-Serve Intake (2026-09-25)
@@ -264,7 +247,7 @@ import './jobs/presaleSneakPeekJob'; // Feature #409: Pre-sale sneak peek email 
 import './jobs/reputationJob'; // Phase 22: Creator Tier Program — weekly tier recalculation
 import './jobs/reservationExpiryJob'; // Phase 21: Expire stale holds every 30 min
 import './jobs/invoiceExpiryJob'; // S1179 fix: reclaim abandoned HoldInvoice rows (ADR-098 INVOICE_ISSUED stuck-item gap) every 10 min
-import './jobs/purchaseExpiryJob'; // S1187 fix: Stripe-verified reclaim of stuck PENDING Purchase rows (missed/never-fired webhook) every 10 min
+import './jobs/purchaseExpiryJob'; // S1187 fix: processor-verified (Square) reclaim of stuck PENDING Purchase rows (missed/never-fired webhook) every 10 min
 // posPaymentRequestExpiryJob removed (Stripe-removal pass, 2026-09-27): the Stripe Terminal
 // in-person card-payment flow it guarded (POSPaymentRequest.stripePaymentIntentId) was removed
 // 2026-09-12, so its Stripe verification call could never succeed going forward -- it had been
@@ -272,7 +255,8 @@ import './jobs/purchaseExpiryJob'; // S1187 fix: Stripe-verified reclaim of stuc
 // stuck rows that predate that removal. Patrick's decision: kill the auto revert. Those 3
 // pre-existing PENDING/expired/no-PI POSPaymentRequest rows are no longer checked by anything
 // and will sit in the DB permanently -- a separate DB cleanup decision, not done here.
-import './jobs/deadInvoicePaidSweepJob'; // P0 (2026-08-17): hourly sweep for money captured against a CANCELLED/EXPIRED HoldInvoice -- nothing else ever revisits a dead invoice
+// deadInvoicePaidSweepJob removed with Stripe (2026-11-04): it only asked Stripe about dead invoices' Checkout
+// Sessions. Square payments on a dead invoice are resolved by holdInvoicePaymentRecorder.ts.
 import './jobs/curatorEmailJob'; // Phase 30: Weekly curator email digest — Mondays 8 AM
 import './jobs/reverseAuctionJob'; // CD2 Phase 4: Daily price drop processing
 import './jobs/organizerWeeklyDigestJob'; // Organizer weekly performance digest — Mondays 8 AM
@@ -389,7 +373,6 @@ app.use(
   helmet({
     // CSP is handled by Next.js headers config; keep it loose here for the API
     contentSecurityPolicy: false,
-    // Allow Stripe iframes on the frontend
     crossOriginEmbedderPolicy: false,
   })
 );
@@ -612,32 +595,23 @@ const contactLimiter = rateLimit({
   message: { error: 'Too many messages sent. Please wait before trying again.' },
 });
 
-// Raw body middleware for Stripe and eBay webhooks (must come before json parser)
 // eBay routes: express.raw() consumes the stream before global express.json() can attempt it,
 // preventing the "stream is not readable" Sentry error when eBay closes the connection early.
 // handleEbayAccountDeletion and handleEbayNotification ignore req.body, so raw buffer is fine.
-app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
-app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
-// 2026-09-29: Stripe-only webhooks answer 503 STRIPE_NOT_CONFIGURED when no STRIPE_SECRET_KEY is set
-// (Stripe is closed; the server boots without a key) instead of crashing inside the handler.
-// 2026-11-04 (security #80/#141): the guard now also answers 410 STRIPE_RETIRED whenever
-// STRIPE_PLATFORM_CLOSED is in effect (the default), even if a stale key is still set. The single
-// /api/stripe/webhook endpoint is both the platform and the Stripe Connect webhook (it verifies with
-// either secret), so this covers the Connect deliveries too.
+//
+// Stripe is retired (owner decision 2026-11-04: "Nobody should be using Stripe anymore for anything,
+// period."). Every old Stripe endpoint below answers 410 STRIPE_RETIRED so old clients and Stripe's own
+// webhook retries get a clean answer. Their handlers were deleted; nothing behind these lines calls Stripe.
+// The non-Stripe routes that still live under /api/stripe (cash register, payouts view, earnings,
+// refunds, shipping labels) stay open.
 app.use('/api/stripe/webhook', stripeUnavailableGuard);
 app.use('/api/billing/webhook', stripeUnavailableGuard);
-// The remaining Stripe-calling payment routes (PaymentIntent resume/recovery). Every Stripe
-// PaymentIntent / Checkout Session creation route was already deleted on 2026-09-12.
+app.use('/api/billing/portal', stripeUnavailableGuard);
 app.use('/api/stripe/pending-payment', stripeUnavailableGuard);
 app.use('/api/stripe/recover-payment-intent', stripeUnavailableGuard);
-// Stripe Connect account creation / onboarding links (they create or migrate Stripe accounts).
-app.use('/api/stripe-connect/onboard', stripeUnavailableGuard);
+app.use('/api/stripe-connect', stripeUnavailableGuard);
 app.use('/api/organizers/me/stripe/start-standard-migration', stripeUnavailableGuard);
 app.use('/api/organizers/me/hub-owner/stripe/onboard', stripeUnavailableGuard);
-// 2026-11-04: the Stripe Connect status/return reads answer the same 410 STRIPE_RETIRED while the platform is
-// closed (Stripe is fully retired). They used to call Stripe or report a stale Stripe account state.
-app.use('/api/stripe-connect/return', stripeUnavailableGuard);
-app.use('/api/stripe-connect/status', stripeUnavailableGuard);
 app.use('/api/organizers/me/hub-owner/stripe/status', stripeUnavailableGuard);
 app.use('/api/square/webhook', express.raw({ type: 'application/json' })); // Square migration Wave 1 #5: HMAC signature check needs the exact raw body
 app.use('/api/ebay/account-deletion', express.raw({ type: '*/*' }));
@@ -810,7 +784,6 @@ app.use('/api/pricing', pricingRoutes);                 // Phase S574: Multi-sou
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/stripe', stripeRoutes);
-app.use('/api/stripe-connect', stripeConnectRoutes);
 app.use('/api/square-connect', squareConnectRoutes);
 app.use('/api/square-payment', squarePaymentRoutes); // Square migration Wave 1 #1 (Checkout, 2026-09-07) -- separate mount point, never shares a prefix with /api/stripe
 app.use('/api/square', squareRoutes);                   // Square migration Wave 1 #5: webhooks
@@ -873,7 +846,7 @@ app.use('/api/tags', tagRouter);                                 // Sprint 3: Ta
 app.use(hubRoutes);                                              // Feature #40+#44: Sale Hubs & Neighborhood Sale Day
 app.use(vendorBoothRoutes);                                      // Vendor Booth Payments (2026-07-07): flea market multi-booth checkout
 app.use('/api/voice', voiceRoutes);                              // Feature #42: Voice-to-tag extraction
-app.use('/api/billing', billingRoutes);                          // #65 Sprint 2: Stripe billing endpoints
+app.use('/api/billing', billingRoutes);                          // #65 Sprint 2: organizer billing endpoints (Square)
 app.use('/api/points', pointsRoutes);                       // XP tracking: sale visits
 app.use('/api/consignors', consignorRoutes);                     // Feature #309: Consignor Portal & Payouts
 app.use('/api/consignor-intake', consignorIntakeRoutes);         // Consignor Self-Serve Intake (2026-09-25): link mgmt, public submit, review queue
@@ -1075,9 +1048,9 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
     console.error('Global error handler: response already sent, suppressing duplicate response');
     return;
   }
-  // 2026-09-29: a legacy Stripe path called with no STRIPE_SECRET_KEY is a clear, non-secret 503.
-  if (isStripeNotConfiguredError(err)) {
-    res.status(503).json({ code: 'STRIPE_NOT_CONFIGURED', message: 'Stripe is not configured on this server. Payments run on Square.' });
+  // Stripe retired (2026-11-04): a code path that used to call Stripe refuses with a clear 410.
+  if (isStripeRetiredError(err)) {
+    res.status(410).json({ code: err.code, message: err.message });
     return;
   }
   const status = (err as any).status || (err as any).statusCode || 500;

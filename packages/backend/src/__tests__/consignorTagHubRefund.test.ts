@@ -1,13 +1,12 @@
 /**
  * Refund of a consignor price tag sold at the HUB register (refundService.executeVerifiedRefund).
- * NOT EXECUTED when written (jest cannot run on the authoring device); CI is the first real run.
  *
  * A hub tag is minted with BOTH consignorId and vendorBoothId (the booth of the organizer who printed it), so it refunds like any consigned
- * hub item:
- *   - the refund goes to the BOOTH's own Stripe account as a Direct-charge refund with the application fee reversed
- *   - the hub owner's revenue-share Transfer is reversed pro rata on the booth leg
- *   - the item is NEVER put back to AVAILABLE and its stock is never given back (it stays SOLD / stockSold 1); the refunded Purchase is what
- *     the consignor ledger excludes
+ * hub item. Since Stripe was retired (owner decision 2026-11-04) executeVerifiedRefund completes only cash / manual rows (card tags paid on
+ * Square refund through squareRefundService):
+ *   - a historical Stripe booth-leg tag purchase is refused with STRIPE_CLOSED_MANUAL_REFUND_REQUIRED, nothing claimed
+ *   - a cash hub tag is refunded, the vendor is told, and the item is NEVER put back to AVAILABLE nor its stock given back (it stays SOLD /
+ *     stockSold 1); the refunded Purchase is what the consignor ledger excludes
  * Same mocking style as refundServiceSplitGuard.test.ts.
  */
 jest.mock('@sentry/node', () => ({ captureException: jest.fn(), captureMessage: jest.fn() }));
@@ -17,24 +16,16 @@ jest.mock('../lib/prisma', () => ({
     itemReservation: { updateMany: jest.fn() },
     item: { updateMany: jest.fn() },
     organizer: { updateMany: jest.fn() },
-    boothCartLeg: { findUnique: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
     user: { findUnique: jest.fn() },
     $executeRaw: jest.fn().mockResolvedValue(0), // guarded 0 -> 1 in-stock status flip after a refund
   },
 }));
 // Single-inventory-number work: refunds/sold-elsewhere fire a background syncItemStock; this suite does not exercise it.
 jest.mock('../services/inventoryStockSync', () => ({ syncItemStock: jest.fn(async () => ({ outcomes: [] })) }));
-const mockRefundsCreate = jest.fn();
-jest.mock('../utils/stripe', () => ({
-  getStripe: () => ({ refunds: { create: (...a: any[]) => mockRefundsCreate(...a) } }),
-  isStripeNotConfiguredError: () => false,
-}));
 const mockNotifyVendorRefunded = jest.fn().mockResolvedValue(undefined);
 jest.mock('../services/vendorBoothSaleNotificationService', () => ({
   notifyVendorBoothSaleRefunded: (...a: any[]) => mockNotifyVendorRefunded(...a),
 }));
-const mockSettleReversal = jest.fn().mockResolvedValue(undefined);
-jest.mock('../controllers/vendorBoothCartController', () => ({ settleHubOwnerReversalForLeg: (...a: any[]) => mockSettleReversal(...a) }));
 jest.mock('../lib/transactionalEmailService', () => ({
   transactionalEmailService: { emails: { send: jest.fn().mockResolvedValue(undefined) } },
 }));
@@ -53,16 +44,17 @@ function hubTagPurchase(over: Record<string, any> = {}) {
     amount: 5,
     status: 'PAID',
     createdAt: new Date(),
-    stripePaymentIntentId: 'pi_booth_leg',
-    stripeAccountId: 'acct_v',
-    chargeType: 'DIRECT',
+    processor: 'CASH',
+    stripePaymentIntentId: 'cash_booth_leg',
+    stripeAccountId: null,
+    chargeType: null,
     boothCartTransactionId: 'cart1',
     cashLegAmount: null,
     platformFeeAmount: null,
     bulkQuantity: null,
     user: null,
     sale: null,
-    item: { title: 'Consigned tag $5.00', vendorBooth: { id: 'boothV', stripeAccountId: 'acct_v', stripeAccountType: 'standard', vendorName: 'Vera Vintage' } },
+    item: { title: 'Consigned tag $5.00', vendorBooth: { id: 'boothV', stripeAccountId: null, stripeAccountType: null, vendorName: 'Vera Vintage' } },
     ...over,
   };
 }
@@ -73,29 +65,30 @@ beforeEach(() => {
   db.purchase.update.mockResolvedValue({});
   db.itemReservation.updateMany.mockResolvedValue({ count: 0 });
   db.item.updateMany.mockResolvedValue({ count: 1 });
-  db.boothCartLeg.findUnique.mockResolvedValue({ id: 'leg1', hubOwnerShareAmount: 1.25, amountCents: 500 });
-  db.boothCartLeg.updateMany.mockResolvedValue({ count: 1 });
-  db.boothCartLeg.update.mockResolvedValue({});
-  mockRefundsCreate.mockResolvedValue({ id: 're_1' });
 });
 
 describe('executeVerifiedRefund, consignor tag minted at the hub register', () => {
-  it('refunds on the BOOTH\'s own Stripe account with the application fee reversed', async () => {
+  it('refuses a historical Stripe booth-leg tag purchase (Stripe retired) without claiming it', async () => {
+    db.purchase.findUnique.mockResolvedValue(
+      hubTagPurchase({ processor: 'STRIPE', stripePaymentIntentId: 'pi_booth_leg', stripeAccountId: 'acct_v', chargeType: 'DIRECT' })
+    );
+    let caught: any;
+    try {
+      await executeVerifiedRefund('ptag1', 5, 'organizer');
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(RefundError);
+    expect(caught.statusCode).toBe(409);
+    expect(caught.details).toMatchObject({ code: 'STRIPE_CLOSED_MANUAL_REFUND_REQUIRED' });
+    expect(db.purchase.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refunds a cash hub tag and tells the vendor', async () => {
     db.purchase.findUnique.mockResolvedValue(hubTagPurchase());
     const out = await executeVerifiedRefund('ptag1', 5, 'organizer');
     expect(out.refundedAmount).toBe(5);
-    expect(mockRefundsCreate).toHaveBeenCalledTimes(1);
-    const [params, opts] = mockRefundsCreate.mock.calls[0];
-    expect(params).toMatchObject({ amount: 500, refund_application_fee: true });
-    expect(opts).toMatchObject({ stripeAccount: 'acct_v' });
-  });
-
-  it('reverses the hub owner\'s revenue-share Transfer on the booth leg, pro rata', async () => {
-    db.purchase.findUnique.mockResolvedValue(hubTagPurchase());
-    await executeVerifiedRefund('ptag1', 5, 'organizer');
-    // $1.25 hub-side cut on a $5.00 leg, whole leg refunded: all 125 cents come back
-    expect(db.boothCartLeg.update).toHaveBeenCalledWith({ where: { id: 'leg1' }, data: { hubOwnerReversalOwedCents: { increment: 125 } } });
-    expect(mockSettleReversal).toHaveBeenCalledWith('leg1');
+    expect(mockNotifyVendorRefunded).toHaveBeenCalledWith('ptag1');
   });
 
   it('never returns the tag item to AVAILABLE or gives back its stock', async () => {
@@ -107,21 +100,5 @@ describe('executeVerifiedRefund, consignor tag minted at the hub register', () =
     for (const call of db.item.updateMany.mock.calls) {
       expect(call[0].data?.status).toBeUndefined();
     }
-  });
-
-  it('refuses (and releases the REFUNDING claim) when the tag\'s booth has no Stripe account on file', async () => {
-    db.purchase.findUnique.mockResolvedValue(
-      hubTagPurchase({ item: { title: 'Consigned tag $5.00', vendorBooth: { id: 'boothV', stripeAccountId: null, stripeAccountType: null, vendorName: 'Vera Vintage' } } })
-    );
-    let caught: any;
-    try {
-      await executeVerifiedRefund('ptag1', 5, 'organizer');
-    } catch (e) {
-      caught = e;
-    }
-    expect(caught).toBeInstanceOf(RefundError);
-    expect(caught.statusCode).toBe(400);
-    expect(mockRefundsCreate).not.toHaveBeenCalled();
-    expect(db.purchase.updateMany).toHaveBeenLastCalledWith({ where: { id: 'ptag1', status: 'REFUNDING' }, data: { status: 'PAID' } });
   });
 });

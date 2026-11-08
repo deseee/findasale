@@ -1,6 +1,7 @@
 /**
- * Feature #309 "item sold" consignor email math (services/consignorItemSoldPayout.ts, wired into
- * controllers/stripeController.ts's payment_intent.succeeded item-sold block, 2026-09-29).
+ * Feature #309 "item sold" consignor email math (services/consignorItemSoldPayout.ts, 2026-09-29). Its
+ * only caller was the Stripe payment_intent.succeeded webhook, removed with Stripe on 2026-11-04; the
+ * helper and its math stay for the Square wiring.
  *
  * NOT EXECUTED when written (no runnable jest in the environment). Run
  *   pnpm --filter backend test -- consignorItemSoldPayout
@@ -23,8 +24,6 @@ jest.mock('../lib/prisma', () => ({
 }));
 jest.mock('../services/commissionTierService', () => ({ DEFAULT_LADDER: [] }));
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { Decimal } from '@prisma/client/runtime/library';
 import { prisma } from '../lib/prisma';
 import { getConsignorItemSoldPayout } from '../services/consignorItemSoldPayout';
@@ -97,19 +96,5 @@ describe('getConsignorItemSoldPayout', () => {
   it('returns null when the consignor row no longer exists', async () => {
     db.consignor.findUnique.mockResolvedValue(null);
     expect(await getConsignorItemSoldPayout({ id: 'i', price: 10, consignorId: 'gone' })).toBeNull();
-  });
-});
-
-describe('stripeController wiring (source contract)', () => {
-  const src = fs.readFileSync(path.join(__dirname, '../controllers/stripeController.ts'), 'utf8');
-
-  it('no longer computes the consignor net with the inverse 100 - commissionRate math', () => {
-    expect(src).not.toMatch(/100\s*-\s*Number\(consignor\.commissionRate\)/);
-  });
-
-  it("takes the consignor from the sold item's own consignorId through the shared payout helper", () => {
-    expect(src).toMatch(/getConsignorItemSoldPayout/);
-    expect(src).toMatch(/soldItem\.consignorId/);
-    expect(src).not.toMatch(/saleData\?\.items\?\.\[0\]/);
   });
 });

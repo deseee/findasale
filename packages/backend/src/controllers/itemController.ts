@@ -20,7 +20,6 @@ import { fireWebhooks } from '../services/webhookService'; // X1
 import { dispatchApiTierAutoFanout } from '../services/marketplace/autoFanoutDispatcher'; // ADR-DRAFT approve-to-autolist-fanout
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService'; // CB5
 import { checkAiTagQuota, incrementAiTagCount } from '../lib/aiTagsQuotaTracker';
-import { retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSession'; // Hold-to-Pay checkout URL live-lookup
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
 import { pushEvent } from '../services/liveFeedService'; // Feature #70: Live Sale Feed
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
@@ -77,6 +76,7 @@ import { getPinnedCardCategory, isPinnedCardCategoryId, standardEnvelopePriceCro
 import { normalizeCondition, normalizeGrade, type ConditionGrade } from '../utils/conditionMapping'; // 2026-10-04 (U4): one condition vocabulary; coerces legacy values, never 400s on them
 import { pushItemToEbay, computeEbayPushFields, buildEbayPlan, buildExtensionPlan, EBAY_CONTENT_FIELDS, EBAY_PUSH_FIELDS, type EbayPushField, type MarketplacePlan } from '../services/ebayItemPushService'; // 2026-10-04 (U1/U2): structured, recorded eBay push extracted from updateItem
 import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: a local category/tags/photos edit must survive the next import
+import { readIntakeReview } from '../services/intakeReview'; // 2026-11-05: trimmed Listing check notes on the Add Items review list
 import { loadShadowPricingByItemId, shadowDtoFromCompRow, isAudioFormatItem } from '../services/shadowPricingStore'; // shadow mode (2026-10-11): model price + market estimate side by side (read-only)
 import { listedExtensionPlatformsByItemId, getItemMarketplaceStatus, getFailedPushCountsByItemId, getNeedsInfoPushCodesByItemId, ITEM_STATUS_SELECT, EXTENSION_PLATFORMS } from '../services/itemMarketplaceStatusService'; // 2026-10-04 (U3): newest-row-wins listing status shared by the Add Items list and GET /items/:id/marketplace-status
 import { NOT_INFORMATIONAL_PUSH_WHERE, INFORMATIONAL_ONLY_PUSH_WHERE } from '../lib/ebayPushInformational';
@@ -933,29 +933,10 @@ export async function buildHoldFieldsForViewer(
   }
 
   if (viewer.viewerUserId && viewer.viewerUserId === reservation.userId) {
-    // P0 fix (2026-08-23, live $0.50 Hold-to-Pay test): this used to return no checkout
-    // URL at all -- item.invoiceCheckoutUrl was a phantom frontend field the backend never
-    // populated, so HoldInvoiceStatusCard's "Complete Payment" button silently no-opped for
-    // every shopper who wasn't reading the raw Stripe link out of their invoice email. The
-    // Session URL is never persisted (HoldInvoice only stores stripeSessionId), so retrieve
-    // it live -- reusing the same platform-then-connected-account fallback helper the
-    // expiry/dead-invoice jobs already rely on for Direct-charge sessions. Only attempted
-    // while the invoice is still PENDING; a PAID/EXPIRED/CANCELLED session isn't payable
-    // and isn't worth a Stripe round-trip on every page view.
-    let invoiceCheckoutUrl: string | null = null;
-    if (reservation.invoice?.stripeSessionId && reservation.invoice.status === 'PENDING') {
-      try {
-        const session = await retrieveCheckoutSessionAcrossAccounts(
-          reservation.invoice.stripeSessionId,
-          reservation.invoice.stripeAccountId
-        );
-        invoiceCheckoutUrl = session.url ?? null;
-      } catch (err: any) {
-        console.warn(
-          `[getItemById] Failed to retrieve checkout session for invoice checkout URL (item=${reservation.id}): ${err?.message ?? err}`
-        );
-      }
-    }
+    // The old live lookup of a Stripe Checkout Session URL was removed with Stripe (2026-11-04): a
+    // historical Stripe session has no payable URL any more. The field stays in the response (null) so
+    // the frontend contract is unchanged.
+    const invoiceCheckoutUrl: string | null = null;
     // Bug fix (2026-08-30, Patrick: bundled Hold-to-Pay invoice email link only showed
     // this item's own price, not the real bundled total shown on the actual Stripe
     // checkout -- e.g. a 2-item $1.50 invoice showed "Amount Due $0.75" on the item
@@ -3483,7 +3464,8 @@ export const markItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
 
     // stockSold: 1 (2026-10-13, single inventory number): this path is single-unit only (see the v1 restriction above), so a sold
     // item has nothing left in stock; commitItemSale alone never touched the ledger.
-    await prisma.item.update({ where: { id }, data: { lastSoldVia: 'OFF_PLATFORM_MANUAL', stockSold: 1, ...organizerEditStampAlways() } }); // B6: organizer action
+    // 2026-11-05 (schema review #7): capped at stockTotal so an item already at 0 in stock (stockTotal 0) cannot break Item_stockSold_check.
+    await prisma.item.update({ where: { id }, data: { lastSoldVia: 'OFF_PLATFORM_MANUAL', stockSold: Math.min(1, item.stockTotal ?? 1), ...organizerEditStampAlways() } }); // B6: organizer action
     recomputeKitsForComponents(prisma as any, [id]).catch((err: unknown) => console.warn(`[markSoldOffPlatform] kit recompute failed for item ${id}:`, (err as Error)?.message));
 
     // P1 fix (2026-09-08, Patrick-reported): this off-platform (BYOR) sold handler is the ONLY
@@ -5135,6 +5117,25 @@ export const releaseAnalysis = async (req: AuthRequest, res: Response) => {
   }
 };
 
+/**
+ * 2026-11-05: the stored intake review (catalogSuggestions.intakeReview) trimmed for the Add Items review list: notes
+ * (code, severity, field, message, current, suggested), blockAutoPublish and the verify status. Null when absent.
+ */
+export function trimIntakeReviewForList(catalogSuggestions: unknown): {
+  notes: Array<{ code: string; severity: string; field?: string; message: string; current?: string | number | null; suggested?: string | number | null }>;
+  blockAutoPublish: boolean;
+  verifyPass: string | null;
+  generatedAt: string | null;
+} | null {
+  const review = readIntakeReview(catalogSuggestions);
+  if (!review) return null;
+  const notes = review.notes
+    .filter((n) => n && typeof n.message === 'string')
+    .slice(0, 20)
+    .map((n) => ({ code: n.code, severity: n.severity, field: n.field, message: n.message, current: n.current ?? null, suggested: n.suggested ?? null }));
+  return { notes, blockAutoPublish: review.blockAutoPublish === true, verifyPass: review.verifyPass ?? null, generatedAt: review.generatedAt ?? null };
+}
+
 // Sprint 1: Listing Health Score + getDraftItemsBySaleId with health computation
 // Used by the review-before-publish page. Requires organizer ownership of the sale.
 export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => {
@@ -5262,6 +5263,9 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         // Trading card record (null for non-cards): lets the review screen ask the card condition scale
         // (NM/LP/MP/HP/DMG) instead of the generic S/A/B/C/D grade. Condition fields only, no lockedFields/dedupKey.
         card: { select: { game: true, conditionCode: true, grader: true, grade: true } },
+        // 2026-11-05: read only to return the trimmed "Listing check" notes (intakeReview) below; the rest of the JSON
+        // (enrichment and card suggestions) is not sent to the page.
+        catalogSuggestions: true,
       },
       orderBy: { createdAt: 'desc' },
       skip: (pageNum - 1) * limitNum,
@@ -5407,8 +5411,10 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     const shadowPricingByItemId = await loadShadowPricingByItemId(itemIds);
 
     // Sprint 1: Compute health score for each item
-    const itemsWithHealth = items.map(item => ({
+    const itemsWithHealth = items.map(({ catalogSuggestions, ...item }) => ({
       ...item,
+      // 2026-11-05: "Listing check" notes for the review card (trimmed; null when the item has none).
+      intakeReview: trimIntakeReviewForList(catalogSuggestions),
       inStock: inStockOf(item), // 2026-10-13: the one in-stock number (stockTotal / stockSold stay for compatibility)
       healthScore: computeHealthScore({
         photoUrls: item.photoUrls,

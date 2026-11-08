@@ -13,10 +13,9 @@ import { withdrawReverbListingIfExists } from '../services/marketplace/reverbCon
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { createNotification } from '../lib/notificationService';
-import { shouldUseDirectCharge } from './stripeConnectService'; // Direct-charges migration (2026-08-08)
-import { getStripe } from '../utils/stripe'; // S-POS-QR-DOUBLE-CHARGE (2026-09-02): deactivate the Payment Link post-completion
 import { deleteSquareCheckoutLink } from './squareCheckoutLinkService'; // Square changeover Wave S2 #4 follow-up (2026-09-09): processor-aware post-record deactivation
 import { accrueSplitCashLegOnce, allocateCentsProportionally } from './cashFeeService'; // Split tender on the QR payment link (2026-09-29): idempotent cash-leg commission accrual + per-row cash-leg allocation, both inside this recorder's own transaction
+import { isPurchaseKeyViolation } from '../utils/uniqueViolation'; // 2026-11-05: P2002 on a Purchase key = already recorded
 import { computeOversoldSettlement, settleOversoldPayment, notifyOversoldSettlement, type OversoldSettlement } from './oversoldPaymentRefundService'; // 2026-09-30 payment review finding 2: refund the card share of any paid item that could not be fulfilled (oversold), instead of leaving captured money behind an alert
 
 import {
@@ -26,8 +25,6 @@ import {
   formatTagTitle,
   isConsignorTagError,
 } from './consignorTagService'; // 2026-10-06: consignor price tags minted inside the COMPLETED-flip transaction
-
-const stripe = () => getStripe();
 
 /**
  * posPaymentLinkRecorder.ts — ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
@@ -43,8 +40,10 @@ const stripe = () => getStripe();
  *      status !== 'COMPLETED'; the flip to COMPLETED happens FIRST so a concurrent
  *      webhook/reconciler tx re-reading the row sees COMPLETED and no-ops.
  *   2. Purchase rows key on stripePaymentIntentId + itemId, protected by the compound
- *      partial unique (stripePaymentIntentId, itemId); a race that reaches the insert is
- *      caught per-item as P2002 and treated as already-recorded.
+ *      partial unique (stripePaymentIntentId, itemId) / (squarePaymentId, itemId); a race that
+ *      reaches the insert rolls the transaction back with P2002, and the catch around $transaction
+ *      answers already-recorded (2026-11-05; a P2002 aborts a Postgres transaction, so it cannot be
+ *      skipped per item inside it).
  *
  * Real PaymentIntent id (fixed 2026-08-26): stripePaymentIntentId is now the REAL Stripe
  * PaymentIntent id (`pi_...`), passed in by the caller via opts.externalPaymentId (renamed
@@ -139,15 +138,9 @@ export async function recordPosPaymentLinkSale(
   const oversoldItemIds: string[] = [];
   let purchaseIds: string[] = [];
   let didRecord = false;
-  // S-POS-QR-DOUBLE-CHARGE (2026-09-02): captured inside the tx below so the
-  // post-tx Payment Link deactivation call (outside the tx, fire-and-forget) uses
-  // the SAME Direct-vs-Destination routing decision this recording pass already made,
-  // rather than recomputing it a second time.
-  let recordedStripeAccountId: string | null = null;
-  let recordedUseDirect = false;
   // payment_received notification fix (2026-09-16): captured inside the tx for use by
   // the fire-and-forget organizer notification below, same capture-inside-tx/use-outside
-  // idiom already used for recordedStripeAccountId/recordedUseDirect above.
+  // idiom.
   let recordedSaleId: string | null = null;
   let recordedAmountCents = 0;
   let recordedItemTitles: string[] = [];
@@ -207,26 +200,13 @@ export async function recordPosPaymentLinkSale(
     const posOrganizerTier = posOrganizerLookup?.organizer?.subscriptionTier ?? null;
     const posFeeRate = getInclusivePlatformFeeRate(posOrganizerTier as SubscriptionTier, 'ONLINE');
 
-    // Stripe account snapshot (2026-08-20 migration: 20260820190000_add_pos_payment_
-    // link_stripe_account_snapshot): prefer the value pinned on the link itself at
-    // creation time. Only a pre-migration row (chargeType NULL) recomputes the SAME
-    // live-Stripe-eligibility + allowlist check (posController.createPaymentLinkInternal
-    // already ran it once when the Payment Link itself was created) -- mirrors
-    // holdInvoicePaymentRecorder.ts's identical chargeType-NULL fallback shape. The
-    // recompute path can still disagree with the original decision if eligibility or the
-    // allowlist changed in the window between link creation and completion; the pinned
-    // path (the common case going forward) cannot.
+    // Historical Stripe account snapshot (2026-08-20 migration: 20260820190000_add_pos_payment_
+    // link_stripe_account_snapshot). Only a historical Stripe link can carry chargeType DIRECT; the value
+    // pinned on the link at creation time is copied onto the Purchase rows for history. Stripe is retired
+    // (2026-11-04), so there is no live eligibility check any more: a link without a pinned chargeType is
+    // never treated as a Direct charge.
     const posStripeConnectId = fresh.stripeAccountId ?? posOrganizerLookup?.organizer?.stripeConnectId ?? null;
-    let posUseDirect: boolean;
-    if (fresh.chargeType) {
-      posUseDirect = fresh.chargeType === 'DIRECT';
-    } else {
-      posUseDirect = !!(posOrganizerLookup?.organizerId && posStripeConnectId
-        ? await shouldUseDirectCharge(posOrganizerLookup.organizerId, posStripeConnectId)
-        : false);
-    }
-    recordedStripeAccountId = posStripeConnectId;
-    recordedUseDirect = posUseDirect;
+    const posUseDirect = fresh.chargeType === 'DIRECT';
 
     // SPLIT TENDER (2026-09-29): for a cash + card split link, `fresh.amount` is the CARD amount
     // actually charged through the hosted checkout; `fresh.cashAmountCents` is the cash the
@@ -307,10 +287,9 @@ export async function recordPosPaymentLinkSale(
           recordedItemTitles.push(formatTagTitle(tagLine.priceCents));
         } catch (purchaseErr: any) {
           if (purchaseErr.code === 'P2002') {
-            console.warn(`[pos-record/${source}] Tag Purchase already exists for item ${minted.itemId} on link ${fresh.id} — treating as already recorded.`);
-          } else {
-            throw purchaseErr;
+            console.warn(`[pos-record/${source}] Tag Purchase already exists for item ${minted.itemId} on link ${fresh.id} — rolling back this attempt as already recorded.`);
           }
+          throw purchaseErr; // 2026-11-05: a P2002 aborts the transaction; answered as already-recorded around $transaction
         }
       }
       return ids;
@@ -545,13 +524,13 @@ export async function recordPosPaymentLinkSale(
           createdPurchaseIds.push(purchase.id);
           recordedItemTitles.push(lotLineById.has(item.id) ? `${item.title} (${formatCardCount(lotLineById.get(item.id)!.cards)} cards)` : item.title);
         } catch (purchaseErr: any) {
-          // Compound partial unique (stripePaymentIntentId, itemId) backstop: a
-          // webhook/reconciler race that both reach the insert can't double-create.
+          // Compound partial unique (stripePaymentIntentId|squarePaymentId, itemId) backstop: a
+          // webhook/reconciler race that both reach the insert can't double-create. 2026-11-05: a P2002
+          // aborts this Postgres transaction, so it is re-thrown and answered as already-recorded around $transaction.
           if (purchaseErr.code === 'P2002') {
-            console.warn(`[pos-record/${source}] Purchase already exists for item ${item.id} on link ${fresh.id} — treating as already recorded.`);
-          } else {
-            throw purchaseErr;
+            console.warn(`[pos-record/${source}] Purchase already exists for item ${item.id} on link ${fresh.id} — rolling back this attempt as already recorded.`);
           }
+          throw purchaseErr;
         }
       }
       if (tagLines.length > 0) {
@@ -614,10 +593,9 @@ export async function recordPosPaymentLinkSale(
         });
       } catch (purchaseErr: any) {
         if (purchaseErr.code === 'P2002') {
-          console.warn(`[pos-record/${source}] Misc-charge Purchase already exists for link ${fresh.id} — treating as already recorded.`);
-        } else {
-          throw purchaseErr;
+          console.warn(`[pos-record/${source}] Misc-charge Purchase already exists for link ${fresh.id} — rolling back this attempt as already recorded.`);
         }
+        throw purchaseErr; // 2026-11-05: a P2002 aborts the transaction; answered as already-recorded around $transaction
       }
       if (tagLines.length > 0) {
         const tagPurchaseIds = await recordTagRows(
@@ -633,6 +611,12 @@ export async function recordPosPaymentLinkSale(
     }
   });
   } catch (recordErr) {
+    if (isPurchaseKeyViolation(recordErr)) {
+      // 2026-11-05 (schema review #2): this payment's Purchase row(s) already exist, so a concurrent webhook / reconcile run
+      // recorded the sale. This attempt rolled back entirely (including its COMPLETED flip): report it as already completed.
+      console.warn(`[pos-record/${source}] Link ${posPaymentLink.id}: payment already recorded (Purchase unique key); treating as already completed.`);
+      return { recorded: false, alreadyCompleted: true, purchaseIds: [], oversoldItemIds: [] };
+    }
     // A consignor tag could not be minted (or its stored lines were damaged) AFTER the payment was captured. The transaction rolled
     // back, so nothing is recorded and no item was taken. Refund the whole payment through the shared oversold settlement (same refund
     // service, kill switch and idempotency key as an oversold item), park the link as CANCELLED so no retry re-records it, and tell the organizer.
@@ -730,15 +714,9 @@ export async function recordPosPaymentLinkSale(
           });
         return;
       }
-      stripe()
-        .paymentLinks.update(
-          posPaymentLink.stripePaymentLinkId!,
-          { active: false },
-          recordedUseDirect && recordedStripeAccountId ? { stripeAccount: recordedStripeAccountId } : undefined
-        )
-        .catch((err: any) => {
-          console.warn(`[pos-record/${source}] Failed to deactivate Stripe Payment Link ${posPaymentLink.stripePaymentLinkId} after recording sale (link ${posPaymentLink.id}) -- link may still be technically payable a second time until it expires:`, err?.message ?? err);
-        });
+      // Stripe is retired (2026-11-04): a historical Stripe link cannot be deactivated from here (its
+      // Stripe account is closed, so it cannot be paid again either). Nothing to call.
+      console.warn(`[pos-record/${source}] Link ${posPaymentLink.id} is a historical ${posPaymentLink.processor ?? 'STRIPE'} link; Stripe is retired, so no deactivation call is made.`);
     });
   }
 

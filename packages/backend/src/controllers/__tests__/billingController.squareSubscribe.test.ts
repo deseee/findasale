@@ -29,7 +29,6 @@ jest.mock('../../lib/prisma', () => ({
     userRoleSubscription: { upsert: (...a: any[]) => mockRoleSubUpsert(...a) },
   },
 }));
-jest.mock('../../utils/stripe', () => ({ getStripe: () => ({}) }));
 jest.mock('../../lib/syncTier', () => ({ syncTier: jest.fn() }));
 jest.mock('../../services/tierGraceService', () => ({
   calculateDowngradeDelta: jest.fn(),

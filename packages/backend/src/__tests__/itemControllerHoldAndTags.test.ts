@@ -15,7 +15,6 @@
 const mockPrisma: any = { item: { findUnique: jest.fn() } };
 const mockAxiosGet = jest.fn();
 const mockAnalyze = jest.fn();
-const mockRetrieveSession = jest.fn();
 const mockIncrement = jest.fn();
 
 jest.mock('../index', () => ({ prisma: mockPrisma }));
@@ -29,9 +28,6 @@ jest.mock('../services/cloudAIService', () => ({
 jest.mock('../lib/aiTagsQuotaTracker', () => ({
   checkAiTagQuota: jest.fn().mockResolvedValue({ exceeded: false, used: 0, limit: 100, remaining: 100 }),
   incrementAiTagCount: (...a: unknown[]) => mockIncrement(...a),
-}));
-jest.mock('../utils/expireCheckoutSession', () => ({
-  retrieveCheckoutSessionAcrossAccounts: (...a: unknown[]) => mockRetrieveSession(...a),
 }));
 [
   'csv-parse', '../middleware/auth', '../utils/markdownSticker', '../utils/cloudinaryWatermark', 'cloudinary',
@@ -77,7 +73,6 @@ describe('buildHoldFieldsForViewer: invoice total for the holding shopper', () =
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockRetrieveSession.mockResolvedValue({ url: 'https://pay.example/cs_1' });
     jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
@@ -85,7 +80,7 @@ describe('buildHoldFieldsForViewer: invoice total for the holding shopper', () =
     const out: any = await buildHoldFieldsForViewer(reservation(), holder);
     expect(out.invoiceTotalAmount).toBe(13.5);
     expect(out.invoiceItemCount).toBe(1);
-    expect(out.invoiceCheckoutUrl).toBe('https://pay.example/cs_1');
+    expect(out.invoiceCheckoutUrl).toBeNull(); // Stripe retired 2026-11-04: no live Stripe session URL lookup
     expect(out.reservedBy).toBe('u1');
   });
 

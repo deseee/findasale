@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { countUserLedgerBlockers, describeUserLedgerBlockers } from '../services/ledgerDeletionGuards'; // 2026-11-05: ledger FKs are RESTRICT
 import { AuthRequest } from '../middleware/auth';
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth';
 import { isAdminViewer } from '../utils/saleStaffAccess';
@@ -885,18 +886,8 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
     }
     // If user logged in via OAuth (no password), skip password verification
 
-    // Cancel Stripe subscription if user is an organizer with active subscription
-    if (req.user.organizer && req.user.organizer.stripeSubscriptionId) {
-      try {
-        const { getStripe } = require('../utils/stripe');
-        const stripe = getStripe();
-        await stripe.subscriptions.cancel(req.user.organizer.stripeSubscriptionId);
-        console.info(`[Account Deletion] Cancelled Stripe subscription ${req.user.organizer.stripeSubscriptionId} for user ${req.user.id}`);
-      } catch (stripeError: any) {
-        console.error(`[Account Deletion] Failed to cancel Stripe subscription:`, stripeError);
-        // Log but continue with deletion — Stripe can be cleaned up separately if needed
-      }
-    }
+    // No processor subscription to cancel here: organizer plans bill through Square from FindA.Sale's own
+    // scheduler (deleting the organizer row stops it), and Stripe is retired (2026-11-04).
 
     // Guard: several models point at User/Organizer with onDelete: Restrict by
     // deliberate design (see schema.prisma migration 20260604200000_schema_fk_cascade_restrict —
@@ -953,6 +944,9 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
     if (affiliateReferralCount > 0) blockers.push(`${affiliateReferralCount} affiliate referral${affiliateReferralCount === 1 ? '' : 's'}`);
     if (referralRewardCount > 0) blockers.push(`${referralRewardCount} referral reward${referralRewardCount === 1 ? '' : 's'}`);
     if (creatorConversionCount > 0) blockers.push(`${creatorConversionCount} creator commission record${creatorConversionCount === 1 ? '' : 's'}`);
+    // 2026-11-05 (schema review #3/#4): HoldInvoice.organizerUserId and the consignor ledger (reached through
+    // Organizer -> OrganizerWorkspace -> Consignor) are ON DELETE RESTRICT now, so they block a hard delete too.
+    blockers.push(...describeUserLedgerBlockers(await countUserLedgerBlockers(req.user.id, req.user.organizer?.id)));
 
     if (blockers.length > 0) {
       const blockerList =

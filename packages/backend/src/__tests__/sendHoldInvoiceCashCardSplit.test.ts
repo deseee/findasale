@@ -63,10 +63,6 @@ jest.mock('../lib/notificationService', () => ({
 jest.mock('../lib/transactionalEmailService', () => ({
   transactionalEmailService: { emails: { send: jest.fn().mockResolvedValue(undefined) } },
 }));
-jest.mock('../services/stripeConnectService', () => ({
-  shouldUseDirectCharge: jest.fn().mockResolvedValue(false),
-  getAccountStatus: jest.fn().mockResolvedValue({ chargesEnabled: true }),
-}));
 
 // -- Imports AFTER the mocks --------------------------------------------------------------
 import { sendHoldInvoice } from '../controllers/posController';

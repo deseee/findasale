@@ -162,10 +162,13 @@ describe('reopenAttestedSale: FB_NATIVE', () => {
     const arg = mockPrisma.item.updateMany.mock.calls[0][0];
     expect(arg.where).toEqual({ id: 'item1', status: 'SOLD', lastSoldVia: 'FB_NATIVE', OR: [{ stockTotal: null }, { stockTotal: { lte: 1 } }] });
     // Gives back only the cancelled unit (a decrement, never "stockSold = 0"), and the same unit off the eBay counter.
-    expect(arg.data).toMatchObject({ status: 'AVAILABLE', stockSold: { decrement: 1 }, ebayQuantitySold: { decrement: 1 }, lastSoldVia: null });
-    // Both counters are floored at zero afterwards, in the same transaction.
+    expect(arg.data).toMatchObject({ status: 'AVAILABLE', lastSoldVia: null });
+    // Both counters give back one unit, floored at zero, in ONE statement in the same transaction (2026-11-05: Item_stockSold_check
+    // forbids even a transient negative stockSold).
+    expect(arg.data.stockSold).toBeUndefined();
     expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1);
-    expect(mockPrisma.$executeRaw.mock.calls[0][0].join('?')).toContain('GREATEST("stockSold", 0)');
+    expect(mockPrisma.$executeRaw.mock.calls[0][0].join('?')).toContain('GREATEST("stockSold" - ?::int, 0)');
+    expect(mockPrisma.$executeRaw.mock.calls[0][1]).toBe(1);
     await new Promise((r) => setImmediate(r)); // the stock sync is fire-and-forget
     expect(mockSyncStock).toHaveBeenCalledWith('item1', 'reopen');
     expect(arg.data.price).toBeUndefined(); // never touches a price

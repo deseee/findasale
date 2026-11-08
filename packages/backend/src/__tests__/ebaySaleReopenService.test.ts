@@ -57,9 +57,12 @@ describe('reopenEbayCancelledSale: only the cancelled orders\' units come back',
     expect(r.ok).toBe(true);
     const arg = mockPrisma.item.updateMany.mock.calls[0][0];
     expect(arg.where).toEqual({ id: 'item1', status: 'SOLD', lastSoldVia: 'EBAY', OR: [{ stockTotal: null }, { stockTotal: { lte: 1 } }] });
-    expect(arg.data).toMatchObject({ status: 'AVAILABLE', stockSold: { decrement: 1 }, ebayQuantitySold: { decrement: 1 }, lastSoldVia: null });
+    expect(arg.data).toMatchObject({ status: 'AVAILABLE', lastSoldVia: null });
+    // 2026-11-05: the units come back in ONE floored statement (Item_stockSold_check forbids a transient negative).
+    expect(arg.data.stockSold).toBeUndefined();
     expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1);
-    expect(mockPrisma.$executeRaw.mock.calls[0][0].join('?')).toContain('GREATEST("stockSold", 0)');
+    expect(mockPrisma.$executeRaw.mock.calls[0][0].join('?')).toContain('GREATEST("stockSold" - ?::int, 0)');
+    expect(mockPrisma.$executeRaw.mock.calls[0][1]).toBe(1);
     await new Promise((res) => setImmediate(res));
     expect(mockSyncStock).toHaveBeenCalledWith('item1', 'reopen');
   });
@@ -70,7 +73,8 @@ describe('reopenEbayCancelledSale: only the cancelled orders\' units come back',
       { ebayOrderId: 'o1', ebayLineItemId: 'l1', quantitySold: 1 },
     ]);
     await reopenEbayCancelledSale('item1', OPTS);
-    expect(mockPrisma.item.updateMany.mock.calls[0][0].data.stockSold).toEqual({ decrement: 2 });
+    expect(mockPrisma.$executeRaw.mock.calls[0][1]).toBe(2); // units given back on stockSold
+    expect(mockPrisma.$executeRaw.mock.calls[0][2]).toBe(2); // and on ebayQuantitySold
   });
 
   it('still refuses a multi-unit item (stockTotal > 1) before writing anything', async () => {

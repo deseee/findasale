@@ -63,7 +63,7 @@ concurrency:
 jobs:
   enrich:
     name: Overture Enrichment
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Sharded 2026-08-11 -- see header comment above. 240 (raised from 120 on
     # 2026-07-22) was confirmed insufficient by the 2026-08-06 run (run_id
     # 31086260328: ran the full 240:00, killed mid-Stage-B, still processing).
@@ -83,13 +83,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
         run: corepack enable
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'pnpm'

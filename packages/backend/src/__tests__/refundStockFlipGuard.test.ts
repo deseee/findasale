@@ -5,6 +5,7 @@
  * The status flip is one guarded raw UPDATE that only fires when this refund's unit is what took the item from 0 to 1 in stock
  * (stockSold now exactly COALESCE(stockTotal, 1) - 1). A manually SOLD multi-unit item that still showed units left is therefore
  * never reopened by an unrelated old refund. KIT and CONSIGNOR_TAG stay excluded. Same mocking style as consignorTagHubRefund.test.ts.
+ * Uses a cash-recorded purchase: since Stripe was retired (2026-11-04) executeVerifiedRefund only completes cash / manual rows.
  */
 jest.mock('@sentry/node', () => ({ captureException: jest.fn(), captureMessage: jest.fn() }));
 jest.mock('../lib/prisma', () => ({
@@ -16,11 +17,6 @@ jest.mock('../lib/prisma', () => ({
     user: { findUnique: jest.fn() },
     $executeRaw: jest.fn(),
   },
-}));
-const mockRefundsCreate = jest.fn();
-jest.mock('../utils/stripe', () => ({
-  getStripe: () => ({ refunds: { create: (...a: any[]) => mockRefundsCreate(...a) } }),
-  isStripeNotConfiguredError: () => false,
 }));
 jest.mock('../services/vendorBoothSaleNotificationService', () => ({ notifyVendorBoothSaleRefunded: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../lib/transactionalEmailService', () => ({ transactionalEmailService: { emails: { send: jest.fn().mockResolvedValue(undefined) } } }));
@@ -41,7 +37,7 @@ const flush = async () => { for (let i = 0; i < 20; i++) await new Promise((r) =
 
 function purchase(over: Record<string, any> = {}) {
   return {
-    id: 'p1', userId: 'u1', itemId: 'item1', amount: 10, status: 'PAID', createdAt: new Date(), stripePaymentIntentId: 'pi_1',
+    id: 'p1', userId: 'u1', itemId: 'item1', amount: 10, status: 'PAID', createdAt: new Date(), stripePaymentIntentId: 'cash_1', processor: 'CASH',
     stripeAccountId: null, chargeType: null, boothCartTransactionId: null, cashLegAmount: null, platformFeeAmount: null,
     bulkQuantity: null, user: null, sale: null, item: { title: 'Lamp', vendorBooth: null }, ...over,
   };
@@ -54,7 +50,6 @@ beforeEach(() => {
   db.itemReservation.updateMany.mockResolvedValue({ count: 0 });
   db.item.updateMany.mockResolvedValue({ count: 1 });
   db.$executeRaw.mockResolvedValue(1);
-  mockRefundsCreate.mockResolvedValue({ id: 're_1' });
 });
 
 describe('executeVerifiedRefund: the SOLD -> AVAILABLE flip only fires when the refund freed stock from 0', () => {

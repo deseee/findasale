@@ -25,7 +25,7 @@ import {
   trackAICall,
 } from '../lib/aiCostTracker';
 import { getCategoryFamilySpec, type CategoryFamily } from './intakeCategoryFamilies';
-import type { AppliedIntakeCorrection, IntakeReviewNote, PrintedTextTranscription, VerifyPassStatus } from './intakeReviewTypes';
+import type { AppliedIntakeCorrection, IntakeReviewNote, PrintedTextTranscription, VerifyPassStatus, VerifyPassUsage } from './intakeReviewTypes';
 
 /** Pass-1 fields the verify pass may check and correct. */
 export interface VerifiableResult {
@@ -56,6 +56,10 @@ export interface VerifyPassOutput {
   missingShots: string[];
   /** Model says at least one photo is too blurry/dark to read fine detail. */
   photosUnclear: boolean;
+  /** Why the pass did not run (status other than 'ran'): disabled, no api key, cost ceiling, daily cap, no images, error: ... */
+  skipReason?: string;
+  /** Token usage reported by the API when the pass ran. */
+  usage?: VerifyPassUsage | null;
 }
 
 export function isVerifyPassEnabled(): boolean {
@@ -271,6 +275,11 @@ export interface RunVerifyPassArgs {
   /** Vision OCR text for the item (tokens or full block). */
   ocrText?: string | null;
   family: CategoryFamily | null;
+  /** Re-analyze / recheck: the listing as it was before this run (may carry a lot count or set name pass 1 dropped). */
+  priorTitle?: string | null;
+  priorDescription?: string | null;
+  /** Total photos the item has (the call may send fewer, capped by AI_VERIFY_MAX_IMAGES). */
+  totalPhotoCount?: number;
 }
 
 /** Builds the verify prompt. Exported for tests. */
@@ -294,14 +303,25 @@ export function buildVerifyPrompt(args: Omit<RunVerifyPassArgs, 'imageBase64Arra
     : '\nSet "missingShots" to [].';
   const facts = spec ? `\nFor this kind of item the description must state: ${spec.requiredFacts.map((f) => f.promptHint).join('; ')}. If one of these is wrong in the description, correct the description; if it cannot be read from the photos, the description should say so.` : '';
   const ocr = args.ocrText ? `\nText read from the photos by OCR (verbatim, use as spelling evidence): ${String(args.ocrText).slice(0, 1200)}` : '';
+  const total = Math.max(imageCount, args.totalPhotoCount ?? imageCount);
+  const photos = total > 1
+    ? `\nPhotos: you are given ${imageCount} photo(s)${total > imageCount ? ` of the ${total} the item has` : ''}, in order (photo 1 to photo ${imageCount}). A second photo is very often the back of the same card or label, or a second item of a lot. Look at every photo before deciding a view is missing. The description must never say a view (for example the back of a card) is "not photographed", "not provided" or "not shown" when one of the photos shows it; if it does, correct the description.`
+    : '\nPhotos: you are given 1 photo.';
+  const priorText = [args.priorTitle, args.priorDescription].filter((t): t is string => typeof t === 'string' && t.trim().length > 0);
+  const prior = priorText.length > 0
+    ? `\nEarlier listing for this same item (written or checked before): title "${String(args.priorTitle ?? '').slice(0, 200)}"${args.priorDescription ? `, description "${String(args.priorDescription).slice(0, 400)}"` : ''}. If it states a lot or count ("Lot", "lot of two", "set of 3", "x2"), the draft must keep that count unless the photos clearly show a different number. If it names a set or subset that the photos support, the draft must keep it.`
+    : '';
   return `You are checking a draft listing for an item at a secondary sale (yard sales, auctions, flea markets, consignment). Compare every field of the draft with what is actually visible in the ${imageCount} photo(s) and the printed text, and report fields that are wrong.${ocr}
 
 Draft (JSON): ${pass1Json}
-${facts}${shots}
+${photos}${prior}${facts}${shots}
 
 Check, field by field:
 - Printed text: brand, model numbers, catalog numbers, credits/names and titles must be spelled EXACTLY as printed on the item. Never "correct" a printed spelling to a more familiar word and never invent text.
-- Counts: the number of pieces in the title and description must match the number of pieces you can see. If packaging prints a different number than what is present, the description must say so.
+- Counts: the number of pieces in the title and description must match the number of pieces you can see. If packaging prints a different number than what is present, the description must say so. A lot stays a lot: never turn a lot of several items into a single item.
+- Years: every year in the title, the description and the tags must be the same year, read from the item itself (the card front or back, the copyright line, the label). If the title and the description disagree, correct the one that does not match what is printed.
+- Set names: for trading cards the set name AND any subset or insert name printed on the card (for example "EX2000", "Xpress", "Pro Motion", "Highlights") belong in the title. Never drop one that is printed or that the draft or earlier listing already had.
+- Duplicate words: the title must not repeat a word ("Card Card").
 - Condition: NEW only when there is evidence it is sealed or unused (factory seal, tags attached). Torn or opened packaging, wear, or "used" wording means USED. The description must not contradict the condition.
 - Facts: US coins are silver only by date and mint (dimes, quarters and halves dated 1964 or earlier are 90% silver; 1965-1970 halves are 40% silver; Eisenhower dollars are copper-nickel clad unless S mint silver issues; cents are never silver). A reproduction or replica is never "Antiques". Tags must describe the item itself, never a related device it is used with.
 - Weight: estimatedWeightOz is the packed shipping weight in ounces; correct it only if it is clearly implausible for what is shown.
@@ -317,25 +337,25 @@ If everything is right, return {"corrections":[],"missingShots":[],"photosUnclea
  * kill switch is off, the API key is missing, the monthly AI cost ceiling is reached or the daily call cap is used up.
  */
 export async function runVerifyPass(args: RunVerifyPassArgs): Promise<VerifyPassOutput> {
-  const empty = (status: VerifyPassStatus): VerifyPassOutput => ({ status, corrections: [], missingShots: [], photosUnclear: false });
+  const empty = (status: VerifyPassStatus, skipReason: string): VerifyPassOutput => ({ status, corrections: [], missingShots: [], photosUnclear: false, skipReason, usage: null });
   try {
-    if (!isVerifyPassEnabled()) return empty('disabled');
+    if (!isVerifyPassEnabled()) return empty('disabled', 'disabled');
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return empty('disabled');
-    if (!Array.isArray(args.imageBase64Array) || args.imageBase64Array.length === 0) return empty('not-run');
+    if (!apiKey) return empty('disabled', 'no api key');
+    if (!Array.isArray(args.imageBase64Array) || args.imageBase64Array.length === 0) return empty('not-run', 'no images');
     if (await isAICostCeilingExceeded()) {
       console.warn('[intakeVerify] AI cost ceiling exceeded, skipping verify pass');
-      return empty('gated');
+      return empty('gated', 'cost ceiling');
     }
     if (!(await isAIDailyCallCapAvailable())) {
       console.warn('[intakeVerify] AI daily call cap reached (AI_DAILY_CALL_CAP), skipping verify pass');
-      return empty('gated');
+      return empty('gated', 'daily cap');
     }
 
     const model = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
     const cap = verifyMaxImages();
     const images = args.imageBase64Array.slice(0, cap);
-    const prompt = buildVerifyPrompt(args, images.length);
+    const prompt = buildVerifyPrompt({ ...args, totalPhotoCount: args.totalPhotoCount ?? args.imageBase64Array.length }, images.length);
     const content: unknown[] = images.map((data, idx) => ({
       type: 'image',
       source: { type: 'base64', media_type: args.mimeTypes[idx] || 'image/jpeg', data },
@@ -353,6 +373,11 @@ export async function runVerifyPass(args: RunVerifyPassArgs): Promise<VerifyPass
     );
 
     const text: string = response?.data?.content?.[0]?.text ?? '';
+    const rawUsage = response?.data?.usage;
+    const usage: VerifyPassUsage | null =
+      rawUsage && Number.isFinite(Number(rawUsage.input_tokens)) && Number.isFinite(Number(rawUsage.output_tokens))
+        ? { inputTokens: Number(rawUsage.input_tokens), outputTokens: Number(rawUsage.output_tokens) }
+        : null;
     try {
       await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_verify_pass', model, response?.data?.usage, estimatedTokens + Math.ceil(text.length / 4) + 50);
       await trackAICall();
@@ -374,9 +399,10 @@ export async function runVerifyPass(args: RunVerifyPassArgs): Promise<VerifyPass
       corrections: normalizeCorrections(parsed.corrections),
       missingShots,
       photosUnclear: parsed.photosUnclear === true,
+      usage,
     };
   } catch (err) {
     console.warn('[intakeVerify] verify pass failed (pipeline continues with pass-1 result):', err instanceof Error ? err.message : err);
-    return empty('failed');
+    return empty('failed', `error: ${String(err instanceof Error ? err.message : err).slice(0, 120)}`);
   }
 }

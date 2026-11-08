@@ -775,12 +775,14 @@ export const deleteWorkspace = async (req: AuthRequest, res: Response) => {
 
     // Money trail guard (2026-10-06): the cascade removes Consignor rows (and their payouts), and Item.consignorId is SetNull, so a
     // workspace whose consignors have sold items, consignor price tags, payouts or payout lines must not be deleted.
-    const [consignorSoldItems, consignorPayouts, consignorPayoutLines] = await Promise.all([
+    // 2026-11-05 (schema review #4): ConsignorSettlementBatch.workspaceId is ON DELETE RESTRICT now, so settlement history blocks too.
+    const [consignorSoldItems, consignorPayouts, consignorPayoutLines, settlementBatches] = await Promise.all([
       prisma.item.count({ where: { consignor: { workspaceId }, OR: [{ status: 'SOLD' }, { listingType: 'CONSIGNOR_TAG' }] } }),
       prisma.consignorPayout.count({ where: { consignor: { workspaceId } } }),
       prisma.consignorPayoutItem.count({ where: { consignor: { workspaceId } } }),
+      prisma.consignorSettlementBatch.count({ where: { workspaceId } }),
     ]);
-    if (consignorSoldItems > 0 || consignorPayouts > 0 || consignorPayoutLines > 0) {
+    if (consignorSoldItems > 0 || consignorPayouts > 0 || consignorPayoutLines > 0 || settlementBatches > 0) {
       return res.status(409).json({
         message: 'This workspace has consignor sales or payouts on record and cannot be deleted. Archive the consignors instead so the money trail stays intact.',
         code: 'WORKSPACE_HAS_MONEY_TRAIL',

@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { gateCardCharge } from '../services/restrictedItem/cardPaymentGate'; // 2026-11-06 restricted-item card gate
 import { randomUUID } from 'crypto';
 import { AuthRequest } from '../middleware/auth';
 import { BoothAuthRequest } from '../middleware/requireBoothAuth';
@@ -7,7 +8,6 @@ import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-13
 import { BULK_LOT_MESSAGES, findBulkLotItemIds, isBulkLotError, parseBulkLineRequests, type BulkLotDb } from '../services/bulkLot/bulkLotService'; // ADR-136 Addendum B (#659): a hub cart takes lot lines (N cards) in bulkLines
 import { listCartLotLines, removeCartLotLines, reserveCartLotLines, settleCartLotLine, type CartLotDb } from '../services/bulkLot/bulkLotBoothCartService';
 import { assertLotLinesMatchPacks, loadLotPackSizes, packViewForRow, parsePackLineRequests, toCartLotRequests } from '../services/bulkLot/bulkLotPackService'; // ADR-136 Addendum E (#659): fixed-size packs in a hub cart
-import { getStripe } from '../utils/stripe';
 import { assertBoothCartCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard';
 import { endEbayListingIfExists } from './ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
@@ -39,6 +39,7 @@ import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S
 import { computeCashierDiscretionCap, resolveCashierDiscretion, isCashierDiscretionGrantedTo, CashierActorType } from '../services/cashierDiscretionService'; // ADR cashier-discretionary-discount (2026-09-25)
 import { resolveOrganizerSquareAccessToken } from '../services/squarePaymentService'; // 2026-09-16 fix: live Square OAuth scope check (ADR-123 §5 item 1/§9), see computeLegFeeSplit
 import { getSquareGrantedScopes, SQUARE_ADDITIONAL_RECIPIENTS_SCOPE } from '../services/squareConnectService'; // 2026-09-16 fix: same
+import { isPurchaseKeyViolation } from '../utils/uniqueViolation'; // 2026-11-05: P2002 on a Purchase key = already recorded
 import {
   resolveVendorBoothSquareAccessToken,
   SquareBoothOnboardingIncompleteError,
@@ -49,7 +50,6 @@ import {
   completeSquareBoothCartLeg,
 } from '../services/squareVendorBoothCartService'; // vendor-booth-cart-checkout dispatch (2026-09-07) -- Square-side sibling, see that file's header comment for the researched design
 
-const stripe = () => getStripe();
 
 // ADR-136 Addendum B (#659): thrown inside a lot-line transaction when the cart is no longer PENDING, so the whole transaction
 // (cards taken or returned) rolls back.
@@ -459,13 +459,13 @@ async function computeLegFeeSplit(params: {
     // was added (2026-09-07) now fails THIS pre-flight gate with a clear, actionable message
     // instead of reaching Square's real CreatePayment call and getting a generic decline
     // (resolveSquareAppFeeParams / authorizeSquareBoothCartLeg's existing catch block).
+    // Stripe is retired (2026-11-04): only a Square card leg can carry a revenue-share cut now. A non-Square
+    // card leg is always blocked (cash legs skip this gate via skipReadinessGate).
     const hubOwnerReady =
-      processor === 'SQUARE'
-        ? !!hubOwnerOrganizer && !!hubOwnerOrganizer.squareOnboarded && !!hubOwnerOrganizer.squareLocationId
-        : !!hubOwnerOrganizer &&
-          hubOwnerOrganizer.stripeAccountType === 'standard' &&
-          hubOwnerOrganizer.stripeOnboarded &&
-          !!hubOwnerOrganizer.stripeConnectId;
+      processor === 'SQUARE' &&
+      !!hubOwnerOrganizer &&
+      !!hubOwnerOrganizer.squareOnboarded &&
+      !!hubOwnerOrganizer.squareLocationId;
 
     if (!hubOwnerReady) {
       return {
@@ -473,7 +473,7 @@ async function computeLegFeeSplit(params: {
         reason:
           processor === 'SQUARE'
             ? "This hub's owner has not completed Square onboarding yet. Checkout is unavailable for booths with a revenue-share agreement until they do."
-            : "This hub's owner has not completed Stripe onboarding yet. Checkout is unavailable for booths with a revenue-share agreement until they do.",
+            : 'Card payments for booths with a revenue-share agreement run through Square. Connect Square to take this payment.',
       };
     }
 
@@ -523,207 +523,11 @@ async function computeLegFeeSplit(params: {
   };
 }
 
-/**
- * ADR-090 Phase 2: fire the platform -> hub-owner Transfer for one captured leg's
- * revenue-share slice. Atomic claim-before-Stripe-call (updateMany WHERE
- * stripeTransferId IS NULL) + a stable idempotencyKey, mirroring
- * stripeController.ts's createRefund claim pattern (PAID -> REFUNDING -> REFUNDED) —
- * deliberately NOT the consignorSettlementController.ts pattern, which is a plain
- * check-then-act read with no idempotencyKey at all (confirmed gap, ADR-090 §2).
- * 'CLAIMING' is the same in-flight sentinel value already used elsewhere in this
- * codebase (Organizer.pendingStripeMigrationAccountId) — refund-reversal logic must
- * check stripeTransferId is a real id (!== 'CLAIMING') before attempting a reversal.
- * Safe to call multiple times: no-ops once hubOwnerShareAmount is unset/zero or a
- * transfer already exists.
- */
-export async function transferHubOwnerShareForLeg(legId: string): Promise<void> {
-  const leg = await prisma.boothCartLeg.findUnique({
-    where: { id: legId },
-    include: { vendorBooth: { include: { hub: { include: { organizer: true } } } } },
-  });
-  if (!leg || !leg.hubOwnerShareAmount || Number(leg.hubOwnerShareAmount) <= 0) return;
-  if (leg.stripeTransferId) return; // already transferred (or a claim is already in flight)
-  // Defense-in-depth (hacker review, S1179 cash-rail dispatch): a CASH leg never had a
-  // real Stripe charge behind it, so a Transfer here would pay the hub owner real platform
-  // money for a sale that generated none. Currently the only caller is captureBoothCart's
-  // real-money finalize loop, but this guard makes it impossible by construction rather
-  // than merely true-by-convention if a future caller (reconciliation script, new feature)
-  // ever passes a cash leg's id here.
-  if (leg.rail === 'CASH') return;
-  // ADR-123 (2026-09-07, hub-owner-share settlement dispatch) SUPERSEDES the note this
-  // comment used to carry: as of this dispatch, a NEW SQUARE leg's hub-owner share is
-  // settled REAL-TIME via app_fee_allocations at authorize time (see
-  // authorizeBoothCartSquareLegs -> authorizeSquareBoothCartLeg's resolveSquareAppFeeParams
-  // in squareVendorBoothCartService.ts, and BoothCartLeg.hubOwnerShareSettledAt, set the
-  // moment that allocation succeeds). This function is called post-CAPTURE, so for any
-  // newly-authorized SQUARE leg it is now UNREACHABLE with real work to do -- the guard
-  // below still exists (Square genuinely has no merchant-to-merchant Transfer primitive, so
-  // a `stripe().transfers.create` call must never be reachable for a SQUARE leg) but only
-  // matters for ADR-123 §3.3's narrow, bounded fallback bucket: a leg captured BEFORE this
-  // ADR shipped (hubOwnerShareAmount set, hubOwnerShareSettledAt null, no allocation was
-  // ever made) or the rare case where an authorize-time allocation failed and the whole leg
-  // authorization was correctly failed instead of silently downgrading to a booth-only
-  // charge. Those bounded cases are resolved manually via the HubOwnerShareManualPayout
-  // flow (vendorBoothSettlementController.ts's recordHubOwnerShareManualPayout), reconciled
-  // via the query documented on BoothCartLeg.hubOwnerShareSettledAt in schema.prisma -- NOT
-  // by a recurring cron/sweep (ADR-123 §3.3 explicitly rejects a periodic sweep).
-  if (leg.processor === 'SQUARE') {
-    console.log(
-      `[transferHubOwnerShareForLeg] Leg ${legId} is a SQUARE leg with hubOwnerShareAmount=${leg.hubOwnerShareAmount} -- ` +
-        'no live Transfer attempted (Square has no merchant-to-merchant Transfer primitive). If this leg ' +
-        'predates ADR-123 or its authorize-time allocation failed, it falls into the bounded manual-payout ' +
-        'reconciliation bucket (ADR-123 §3.3/§4) rather than being auto-settled here.'
-    );
-    return;
-  }
-
-  const hubOwnerOrganizer = leg.vendorBooth.hub.organizer;
-  if (!hubOwnerOrganizer.stripeConnectId) {
-    console.error(
-      `[transferHubOwnerShareForLeg] Leg ${legId} has hubOwnerShareAmount but hub owner organizer ${hubOwnerOrganizer.id} has no stripeConnectId — cannot transfer. This should be unreachable (checkout already blocks this case) — flagging for manual reconciliation.`
-    );
-    return;
-  }
-
-  const claim = await prisma.boothCartLeg.updateMany({
-    where: { id: leg.id, stripeTransferId: null },
-    data: { stripeTransferId: 'CLAIMING' },
-  });
-  if (claim.count !== 1) return; // lost the race — another call already claimed/completed this transfer
-
-  const amountCents = Math.round(Number(leg.hubOwnerShareAmount) * 100);
-  try {
-    const transfer = await stripe().transfers.create(
-      {
-        amount: amountCents,
-        currency: 'usd',
-        destination: hubOwnerOrganizer.stripeConnectId,
-        description: `Hub owner revenue share: booth cart leg ${leg.id}`,
-        metadata: {
-          source: 'booth_cart_leg_hub_owner_share',
-          vendorBoothId: leg.vendorBoothId,
-          cartTransactionId: leg.cartTransactionId,
-          legId: leg.id,
-        },
-      },
-      { idempotencyKey: `hub-owner-transfer-${leg.id}` }
-    );
-    await prisma.boothCartLeg.update({
-      where: { id: leg.id },
-      data: { stripeTransferId: transfer.id, hubOwnerTransferFailedAt: null, hubOwnerTransferError: null },
-    });
-  } catch (err) {
-    // Release the claim so a future retry (e.g. a manual reconciliation re-run) isn't
-    // permanently blocked by the sentinel, AND durably record the failure in the same
-    // write. Before this, a failed Transfer left zero trace in the database -- an unpaid
-    // hub owner discoverable only by grepping logs. Now:
-    //   SELECT * FROM "BoothCartLeg"
-    //   WHERE "hubOwnerTransferFailedAt" IS NOT NULL AND "stripeTransferId" IS NULL;
-    await prisma.boothCartLeg
-      .updateMany({
-        where: { id: leg.id, stripeTransferId: 'CLAIMING' },
-        data: {
-          stripeTransferId: null,
-          hubOwnerTransferFailedAt: new Date(),
-          hubOwnerTransferError: String((err as any)?.message ?? err).slice(0, 500),
-        },
-      })
-      .catch((revertErr) =>
-        console.error(`[transferHubOwnerShareForLeg] Failed to release claim after Stripe error for leg ${legId}:`, revertErr)
-      );
-    console.error(`[transferHubOwnerShareForLeg] Stripe transfer failed for leg ${legId}:`, err);
-    throw err;
-  }
-
-  // P1 race close (2026-07-28): a refund may have landed while stripeTransferId still held
-  // 'CLAIMING' -- in that window the refund path could not reverse anything, so it recorded
-  // the obligation in hubOwnerReversalOwedCents instead. Now that a REAL tr_... id exists,
-  // drain it. Non-fatal: the Transfer itself already succeeded and must not be unwound here;
-  // the owed watermark stays on the row so a later refund or reconciliation run settles it.
-  await settleHubOwnerReversalForLeg(leg.id).catch((settleErr) =>
-    console.error(
-      `[transferHubOwnerShareForLeg] Transfer succeeded but post-transfer reversal settlement failed for leg ${legId} — hubOwnerReversalOwedCents remains outstanding:`,
-      settleErr
-    )
-  );
-}
-
-/**
- * P1 refund/transfer race fix (2026-07-28). Drain the outstanding hub-owner Transfer
- * reversal recorded on a leg (hubOwnerReversalOwedCents minus hubOwnerReversalDoneCents).
- *
- * Called from BOTH sides of the race: stripeController.createRefund (after it increments
- * the owed watermark) and transferHubOwnerShareForLeg (right after the real Transfer id
- * lands). Whichever finishes second is the one that actually moves money, so no ordering
- * of (capture, claim, transfer, refund) can leave the hub owner holding platform funds.
- *
- * Guarantees:
- *  - NEVER reverses a Transfer that does not exist: the Stripe call is gated on
- *    stripeTransferId being a real `tr_` id, which the 'CLAIMING' sentinel and null both
- *    fail. The existing guard is preserved, not weakened.
- *  - NEVER reverses twice: hubOwnerReversalDoneCents is advanced by a conditional
- *    updateMany keyed to the exact value observed (compare-and-swap -- the same idiom as
- *    the stripeTransferId IS NULL -> 'CLAIMING' claim above and the Purchase
- *    PAID -> REFUNDING claim in stripeController.ts). Exactly one concurrent caller wins;
- *    the losers see count 0 and return. The reversal amount is additionally clamped to the
- *    leg's total hub-owner share, and Stripe independently refuses reversals exceeding the
- *    Transfer amount.
- *  - Idempotency key is derived from the resulting cumulative watermark, so a retry of the
- *    same outstanding delta collapses to one reversal on Stripe's side.
- */
-export async function settleHubOwnerReversalForLeg(legId: string): Promise<void> {
-  const leg = await prisma.boothCartLeg.findUnique({
-    where: { id: legId },
-    select: {
-      id: true,
-      stripeTransferId: true,
-      hubOwnerShareAmount: true,
-      hubOwnerReversalOwedCents: true,
-      hubOwnerReversalDoneCents: true,
-    },
-  });
-  if (!leg) return;
-
-  // Phantom-reversal guard. null = never transferred; 'CLAIMING' = transfer in flight.
-  // Neither is a reversible Stripe object. The owed watermark simply stays on the row.
-  if (!leg.stripeTransferId || !leg.stripeTransferId.startsWith('tr_')) return;
-
-  const owedCents = leg.hubOwnerReversalOwedCents ?? 0;
-  const doneCents = leg.hubOwnerReversalDoneCents ?? 0;
-  const shareCents = Math.round(Number(leg.hubOwnerShareAmount ?? 0) * 100);
-  // Can never reverse more than was actually transferred.
-  const outstandingCents = Math.min(owedCents, shareCents) - doneCents;
-  if (outstandingCents <= 0) return;
-
-  const nextDoneCents = doneCents + outstandingCents;
-  const claim = await prisma.boothCartLeg.updateMany({
-    where: { id: leg.id, hubOwnerReversalDoneCents: leg.hubOwnerReversalDoneCents },
-    data: { hubOwnerReversalDoneCents: nextDoneCents },
-  });
-  if (claim.count !== 1) return; // lost the race — another settler owns this delta
-
-  try {
-    await stripe().transfers.createReversal(
-      leg.stripeTransferId,
-      { amount: outstandingCents },
-      { idempotencyKey: `hub-owner-reversal-${leg.id}-${nextDoneCents}` }
-    );
-  } catch (err) {
-    // Roll the watermark back so the obligation stays outstanding and retryable rather
-    // than being silently marked settled. Mirrors the claim-release above and the
-    // REFUNDING -> PAID revert in stripeController.createRefund.
-    await prisma.boothCartLeg
-      .updateMany({
-        where: { id: leg.id, hubOwnerReversalDoneCents: nextDoneCents },
-        data: { hubOwnerReversalDoneCents: leg.hubOwnerReversalDoneCents },
-      })
-      .catch((revertErr) =>
-        console.error(`[settleHubOwnerReversalForLeg] Failed to roll back reversal watermark for leg ${legId}:`, revertErr)
-      );
-    console.error(`[settleHubOwnerReversalForLeg] Stripe reversal failed for leg ${legId}:`, err);
-    throw err;
-  }
-}
+// transferHubOwnerShareForLeg / settleHubOwnerReversalForLeg (the Stripe platform -> hub-owner Transfer and
+// its refund reversal) were removed with Stripe on 2026-11-04. A Square leg's hub-owner share is settled at
+// authorize time through app_fee_allocations (ADR-123, squareVendorBoothCartService.ts); a leg that missed
+// that allocation goes through the manual HubOwnerShareManualPayout flow
+// (vendorBoothSettlementController.ts recordHubOwnerShareManualPayout).
 
 /**
  * Vendor Booth Payments — Roaming Multi-Booth Cart (2026-07-07)
@@ -1320,8 +1124,6 @@ export const setBoothCartItemDiscretion = async (req: BoothAuthRequest, res: Res
  * field was needed for it. `boothsRepresented` therefore can't change out from
  * under the guard's evaluation once charging starts.
  */
-
-const isTerminalSimulated = () => process.env.STRIPE_TERMINAL_SIMULATED === 'true';
 
 /**
  * The RESERVED items of ONE vendor booth that belong to THIS cart, and nothing else.
@@ -1970,6 +1772,39 @@ export const authorizeBoothCartSquareLegs = async (req: BoothAuthRequest, res: R
     // only one concurrent /square/authorize call can consume a given pending sourceId. A
     // losing racer sees squarePendingSourceId already null and 400s cleanly rather than
     // double-spending the same single-use token against Square twice.
+    // Restricted-item card gate (2026-11-06): BEFORE the one-shot card token is claimed, so a blocked cart keeps its token
+    // and the cashier can take the blocked items off (or ring them up in cash) and retry. A hub cart mixes several
+    // organizers' goods, so the gate runs once per item organizer, read from the database (Sale owner, else
+    // Item.organizerId), with that organizer's own suspension. Every item reserved to this cart is covered, whichever
+    // booth it sits in.
+    {
+      const cartItems = await prisma.item.findMany({
+        where: { boothCartTransactionId: cart.id, status: 'RESERVED' },
+        select: { id: true, price: true, organizerId: true, sale: { select: { organizerId: true } } },
+      });
+      const byOrganizer = new Map<string, Array<{ itemId: string; amountCents: number }>>();
+      for (const it of cartItems) {
+        const owner = it.sale?.organizerId ?? it.organizerId;
+        if (!owner) {
+          return res.status(409).json({ error: 'An item in this cart has no seller on record and cannot be paid by card.', code: 'CARD_PAYMENT_BLOCKED' });
+        }
+        const list = byOrganizer.get(owner) ?? [];
+        list.push({ itemId: it.id, amountCents: Math.max(0, Math.round((it.price ?? 0) * 100)) });
+        byOrganizer.set(owner, list);
+      }
+      for (const [ownerId, lines] of byOrganizer) {
+        const total = lines.reduce((sum, l) => sum + l.amountCents, 0);
+        const gate = await gateCardCharge({
+          processor: 'SQUARE',
+          organizerId: ownerId,
+          lines,
+          cardChargeCents: total,
+          context: { path: 'square.pos.boothCart', sessionRef: cart.id },
+        });
+        if (!gate.ok) return res.status(gate.status).json({ error: gate.body.message, ...gate.body });
+      }
+    }
+
     const claimedSourceId = cart.squarePendingSourceId;
     const claim = await prisma.boothCartTransaction.updateMany({
       where: { id: cart.id, squarePendingSourceId: claimedSourceId },
@@ -2228,6 +2063,11 @@ async function finalizeCartTagLine(
       return purchase.id;
     });
   } catch (err) {
+    if (isPurchaseKeyViolation(err)) {
+      // 2026-11-05 (schema review #2): a concurrent finalize already wrote this tag line's Purchase row for this payment.
+      console.warn(`[finalizeCapturedLegs] tag line (cart ${cartId}, nonce ${line.nonce}) already recorded; skipping.`);
+      return null;
+    }
     console.error(
       `[finalizeCapturedLegs] CONSIGNOR TAG MINT FAILED after capture (cart ${cartId}, nonce ${line.nonce}, ${line.priceCents} cents) -- writing an item-less Purchase row; ops must credit the consignor by hand:`,
       err
@@ -2461,7 +2301,13 @@ async function finalizeCapturedLegs(
         }
         generateReceipt(purchase.id).catch((err) => console.error('[receipt] Failed to generate receipt:', err));
       } catch (err: any) {
-        console.error(`[finalizeCapturedLegs] Failed to finalize item ${item.id}:`, err);
+        if (isPurchaseKeyViolation(err)) {
+          // 2026-11-05 (schema review #2): this item already has its Purchase row for this leg's payment (a retried or concurrent
+          // finalize). Already recorded, not a failure; the create threw before any stock was taken.
+          console.warn(`[finalizeCapturedLegs] item ${item.id} already recorded for cart ${cart.id}; skipping.`);
+        } else {
+          console.error(`[finalizeCapturedLegs] Failed to finalize item ${item.id}:`, err);
+        }
       }
     }
   }
@@ -2633,18 +2479,10 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
         }
         continue;
       }
-      if (isTerminalSimulated() && leg.rail === 'TERMINAL') {
-        // Simulated readers auto-succeed; trust the recorded status.
-        if (leg.status !== 'REQUIRES_CAPTURE') notReady.push(leg.vendorBoothId);
-        continue;
-      }
-      try {
-        const pi = await stripe().paymentIntents.retrieve(leg.stripePaymentIntentId!, { stripeAccount: leg.stripeAccountId });
-        if (pi.status !== 'requires_capture') notReady.push(leg.vendorBoothId);
-      } catch (err) {
-        console.error(`[captureBoothCart] Failed to retrieve leg ${leg.id} for re-verification:`, err);
-        notReady.push(leg.vendorBoothId);
-      }
+      // A historical Stripe leg (any non-SQUARE card leg) cannot be verified or captured: Stripe is
+      // retired (2026-11-04). Report it as not ready so nothing is captured half-way.
+      console.error(`[captureBoothCart] Leg ${leg.id} is a historical Stripe leg; Stripe is retired, so it cannot be captured.`);
+      notReady.push(leg.vendorBoothId);
     }
     if (notReady.length > 0) {
       await releaseCaptureLock();
@@ -2667,10 +2505,9 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
           // used (cached, so no second token resolve for a leg re-verified this same request).
           const boothAccessToken = await resolveCachedSquareBoothToken(leg.vendorBoothId);
           await completeSquareBoothCartLeg(boothAccessToken, leg.squarePaymentId!);
-        } else if (isTerminalSimulated() && leg.rail === 'TERMINAL') {
-          await stripe().paymentIntents.capture(leg.stripePaymentIntentId!);
         } else {
-          await stripe().paymentIntents.capture(leg.stripePaymentIntentId!, {}, { stripeAccount: leg.stripeAccountId });
+          // Unreachable: the re-verify loop above refuses every non-SQUARE leg (Stripe retired).
+          throw new Error('Stripe is retired; this leg cannot be captured.');
         }
         await prisma.boothCartLeg.update({ where: { id: leg.id }, data: { status: 'CAPTURED' } });
         captured.push(leg);
@@ -2697,18 +2534,14 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
     const purchaseIds = await finalizeCapturedLegs(cart, captured);
     lockedCartId = null; // terminal state reached -- no lock left to release
 
-    // ADR-090 Phase 2: fire the hub-owner Transfer for each captured leg carrying a
-    // revenue-share slice. Runs once per LEG (not per item/Purchase row) -- the
-    // application_fee_amount and its resulting hub-owner cut were computed once per
-    // leg at authorize time. Best-effort/non-blocking: a Transfer failure here must
-    // never roll back an already-captured payment: the shopper was already charged and
-    // items already marked SOLD. Failures are logged for manual reconciliation -- no
-    // automated retry endpoint exists yet. NEVER called from captureBoothCartCash --
-    // see finalizeCapturedLegs' own comment for why a CASH leg must never reach this.
+    // Hub-owner revenue share: a Square leg's share was already settled at authorize time through
+    // app_fee_allocations (ADR-123). A leg carrying a share that was never settled (it predates ADR-123, or
+    // its allocation failed) falls into the bounded manual-payout reconciliation bucket (ADR-123 §3.3/§4).
     for (const leg of captured) {
-      if (!leg.hubOwnerShareAmount || Number(leg.hubOwnerShareAmount) <= 0) continue;
-      await transferHubOwnerShareForLeg(leg.id).catch((err) =>
-        console.error(`[captureBoothCart] Hub-owner Transfer failed for leg ${leg.id} — flagged for manual reconciliation:`, err)
+      if (!leg.hubOwnerShareAmount || Number(leg.hubOwnerShareAmount) <= 0 || leg.hubOwnerShareSettledAt) continue;
+      console.log(
+        `[captureBoothCart] Leg ${leg.id} carries hubOwnerShareAmount=${leg.hubOwnerShareAmount} with no authorize-time allocation -- ` +
+          'it falls into the manual hub-owner payout reconciliation bucket (ADR-123 §3.3/§4).'
       );
     }
 

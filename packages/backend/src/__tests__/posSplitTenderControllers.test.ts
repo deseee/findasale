@@ -30,6 +30,13 @@
  *     - cash >= total -> 400 CASH_COVERS_TOTAL
  */
 
+// Restricted-item card gate (2026-11-06): this suite tests the controller's own money flow, so the gate (which has its own
+// suites under services/restrictedItem/__tests__) is stubbed to "card allowed". The real module is kept for the error class.
+jest.mock('../services/restrictedItem/cardPaymentGate', () => ({
+  ...jest.requireActual('../services/restrictedItem/cardPaymentGate'),
+  gateCardCharge: jest.fn(async () => ({ ok: true, decision: { allCardAllowed: true } })),
+  linesFromItemPrices: jest.fn(async () => []),
+}));
 jest.mock('../lib/prisma', () => {
   const p: any = {
     sale: { findUnique: jest.fn() },
@@ -56,7 +63,6 @@ jest.mock('../services/squarePosPaymentAdapter', () => ({
   createAndCapturePayment: (...a: any[]) => mockCreateAndCapturePayment(...a),
   createAndCaptureSandboxPayment: jest.fn(),
 }));
-jest.mock('../services/stripePosPaymentAdapter', () => ({}));
 jest.mock('../utils/posAuth', () => ({
   resolveOrganizerOrTeamMember: (...a: any[]) => mockResolveOrganizer(...a),
 }));
@@ -130,6 +136,12 @@ const organizer = {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  // resetAllMocks wiped the restricted-item gate stub (2026-11-06): restore "card allowed".
+  {
+    const gateMod = jest.requireMock('../services/restrictedItem/cardPaymentGate') as { gateCardCharge: jest.Mock; linesFromItemPrices: jest.Mock };
+    gateMod.gateCardCharge.mockResolvedValue({ ok: true, decision: { allCardAllowed: true } });
+    gateMod.linesFromItemPrices.mockResolvedValue([]);
+  }
   mockResolveOrganizer.mockResolvedValue(organizer);
   mockResolveDiscount.mockResolvedValue({ ok: true, discountAmountCents: 0 });
   mockWouldExceedCap.mockResolvedValue(false);

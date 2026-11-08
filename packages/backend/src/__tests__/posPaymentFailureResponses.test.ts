@@ -157,7 +157,7 @@ describe('posPaymentController wiring', () => {
     expect(src).not.toMatch(/error:\s*(sandboxResult|result)\.message/);
     expect(src).not.toMatch(/json\(\{\s*message:\s*(sandboxResult|result)\.message/);
   });
-  it('uses the helper on all five adapter failure sites', () => {
-    expect((src.match(/posPaymentFailureBody\(/g) ?? []).length).toBe(5);
+  it('uses the helper on all four adapter failure sites (the Stripe confirm site was removed 2026-11-04)', () => {
+    expect((src.match(/posPaymentFailureBody\(/g) ?? []).length).toBe(4);
   });
 });

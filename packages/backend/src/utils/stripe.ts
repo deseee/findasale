@@ -1,102 +1,40 @@
-import Stripe from 'stripe';
 import type { Request, Response, NextFunction } from 'express';
-import { isStripePlatformClosed } from './stripeBootConfig';
 
 /**
- * Thrown by getStripe() when STRIPE_SECRET_KEY is missing (2026-09-29). Stripe is closed and the
- * server boots without a key, so a legacy Stripe path that is really called must fail cleanly:
- * status/statusCode 503 and a stable code, which the global error handler in index.ts turns into a
- * clear 503 JSON body instead of a generic 500. The message keeps its original wording.
+ * Stripe is retired on FindA.Sale (owner decision 2026-11-04: "Nobody should be using Stripe anymore
+ * for anything, period. The keys have been turned off."). Payments run on Square.
+ *
+ * This module no longer builds a Stripe client and the backend no longer imports the `stripe` SDK.
+ * What is left is the answer old clients get when they call a retired Stripe endpoint:
+ * 410 STRIPE_RETIRED, plus a typed error for any code path that used to call Stripe and must now
+ * refuse cleanly instead.
+ *
+ * Historical Stripe data (Purchase.stripePaymentIntentId, Organizer.stripeCustomerId and the like)
+ * is still read for history, refund bookkeeping and reports; only the live Stripe API is gone.
  */
-export class StripeNotConfiguredError extends Error {
-  readonly status = 503;
-  readonly statusCode = 503;
-  readonly code = 'STRIPE_NOT_CONFIGURED';
-  constructor(
-    message = 'STRIPE_SECRET_KEY is not defined in environment variables. Set it in your .env file before initializing Stripe.'
-  ) {
+
+export const STRIPE_RETIRED_CODE = 'STRIPE_RETIRED';
+export const STRIPE_RETIRED_MESSAGE = 'Stripe is retired on FindA.Sale. Payments run on Square.';
+
+/** Thrown by a code path that used to call Stripe. The global error handler turns it into a 410. */
+export class StripeRetiredError extends Error {
+  readonly status = 410;
+  readonly statusCode = 410;
+  readonly code = STRIPE_RETIRED_CODE;
+  constructor(message = STRIPE_RETIRED_MESSAGE) {
     super(message);
-    this.name = 'StripeNotConfiguredError';
+    this.name = 'StripeRetiredError';
   }
 }
 
-export const isStripeNotConfiguredError = (err: unknown): err is StripeNotConfiguredError =>
-  !!err && typeof err === 'object' && (err as { code?: unknown }).code === 'STRIPE_NOT_CONFIGURED';
-
-export const isStripeConfigured = (): boolean => !!process.env.STRIPE_SECRET_KEY;
+export const isStripeRetiredError = (err: unknown): err is StripeRetiredError =>
+  !!err && typeof err === 'object' && (err as { code?: unknown }).code === STRIPE_RETIRED_CODE;
 
 /**
- * Express guard for Stripe-only endpoints (the Stripe webhooks and the remaining Stripe-calling
- * routes). Answers 410 STRIPE_RETIRED and does nothing while the Stripe platform is closed
- * (STRIPE_PLATFORM_CLOSED is anything but 'false', the default), 503 STRIPE_NOT_CONFIGURED when
- * Stripe is reopened but no key is set, and otherwise passes through untouched.
- *
- * Security fix (2026-11-04, findings #80/#141): this used to check only for a missing key. A key
- * left in the environment after Stripe was retired kept the webhook live, and with it the
- * connected-account metadata trust bugs. Retired means retired, key or no key.
+ * Express handler for every retired Stripe endpoint (the Stripe webhooks, the old Stripe payment,
+ * Connect onboarding and subscription routes). Always answers 410 STRIPE_RETIRED and never calls
+ * next(), so nothing behind it can run.
  */
-export const stripeUnavailableGuard = (_req: Request, res: Response, next: NextFunction): void => {
-  if (isStripePlatformClosed(process.env)) {
-    res.status(410).json({
-      code: 'STRIPE_RETIRED',
-      message: 'Stripe is retired on FindA.Sale. Payments run on Square.',
-    });
-    return;
-  }
-  if (isStripeConfigured()) {
-    next();
-    return;
-  }
-  res.status(503).json({
-    code: 'STRIPE_NOT_CONFIGURED',
-    message: 'Stripe is not configured on this server. Payments run on Square.',
-  });
+export const stripeUnavailableGuard = (_req: Request, res: Response, _next?: NextFunction): void => {
+  res.status(410).json({ code: STRIPE_RETIRED_CODE, message: STRIPE_RETIRED_MESSAGE });
 };
-
-let stripe: Stripe | null = null;
-let testStripeInstance: Stripe | null = null;
-
-// Stripe Partners program app info
-// When Stripe provides partner_id after acceptance, Patrick adds STRIPE_PARTNER_ID=pp_partner_XXXXX to Railway env
-const APP_INFO: Stripe.AppInfo = {
-  name: 'FindA.Sale',
-  version: '1.0.1',
-  url: 'https://finda.sale',
-  partner_id: process.env.STRIPE_PARTNER_ID,
-};
-
-export const getStripe = (): Stripe => {
-  if (!stripe) {
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-
-    if (!stripeKey) {
-      throw new StripeNotConfiguredError();
-    }
-
-    stripe = new Stripe(stripeKey, {
-      apiVersion: '2023-10-16',
-      appInfo: APP_INFO,
-      timeout: 20000, // 20s network timeout — don't hang a request thread on a stalled Stripe call
-      maxNetworkRetries: 2, // retry idempotent Stripe calls twice on network failure
-    });
-  }
-  return stripe;
-};
-
-export const getTestStripe = (): Stripe => {
-  const testKey = process.env.STRIPE_TEST_SECRET_KEY;
-  if (!testKey) {
-    return getStripe(); // pre-go-live fallback
-  }
-  if (!testStripeInstance) {
-    testStripeInstance = new Stripe(testKey, {
-      apiVersion: '2023-10-16',
-      appInfo: APP_INFO,
-      timeout: 20000,
-      maxNetworkRetries: 2,
-    });
-  }
-  return testStripeInstance;
-};
-
-export default getStripe;

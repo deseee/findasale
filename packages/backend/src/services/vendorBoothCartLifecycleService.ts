@@ -1,10 +1,7 @@
 import { prisma } from '../lib/prisma';
-import { getStripe } from '../utils/stripe';
 import { resolveVendorBoothSquareAccessToken, cancelSquareBoothCartLeg } from './squareVendorBoothCartService'; // vendor-booth-cart-checkout dispatch (2026-09-07)
 import { releaseAllCartLotLines, type CartLotDb } from './bulkLot/bulkLotBoothCartService'; // ADR-136 Addendum B (#659): a cancelled or abandoned cart gives its lot cards back
 
-const stripe = () => getStripe();
-const isTerminalSimulated = () => process.env.STRIPE_TERMINAL_SIMULATED === 'true';
 
 /**
  * vendorBoothCartLifecycleService.ts
@@ -59,10 +56,8 @@ export async function releasePendingCartHold(cart: { id: string; status: string 
     try {
       if (leg.processor === 'SQUARE') {
         // Square migration, vendor-booth-cart-checkout dispatch (2026-09-07): resolve THIS
-        // booth's own Square access token (mirrors the Stripe branch's per-leg
-        // { stripeAccount: leg.stripeAccountId } scoping -- Square's equivalent is scoping
-        // the entire client to that booth's own OAuth token, see
-        // squareVendorBoothCartService.ts's file header for the full contrast).
+        // booth's own Square access token (the client is scoped to that booth's own OAuth
+        // token, see squareVendorBoothCartService.ts's file header).
         const booth = await prisma.vendorBooth.findUnique({
           where: { id: leg.vendorBoothId },
           select: { id: true, userId: true, squareAccountId: true, squareOnboarded: true },
@@ -70,11 +65,9 @@ export async function releasePendingCartHold(cart: { id: string; status: string 
         if (!booth) throw new Error(`[releasePendingCartHold] Booth ${leg.vendorBoothId} not found for Square leg ${leg.id}`);
         const boothAccessToken = await resolveVendorBoothSquareAccessToken(booth);
         await cancelSquareBoothCartLeg(boothAccessToken, leg.squarePaymentId!);
-      } else if (isTerminalSimulated() && leg.rail === 'TERMINAL') {
-        await stripe().paymentIntents.cancel(leg.stripePaymentIntentId!);
-      } else {
-        await stripe().paymentIntents.cancel(leg.stripePaymentIntentId!, {}, { stripeAccount: leg.stripeAccountId });
       }
+      // A historical Stripe leg has nothing to cancel: Stripe is retired (2026-11-04) and its authorization
+      // can no longer be captured. The leg is simply marked CANCELED below.
       await prisma.boothCartLeg.update({ where: { id: leg.id }, data: { status: 'CANCELED' } });
       cancelledLegIds.push(leg.id);
     } catch (err) {

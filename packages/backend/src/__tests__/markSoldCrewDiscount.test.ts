@@ -14,6 +14,13 @@ var mockPrisma: any = {
   holdInvoice: { findFirst: jest.fn() },
   $transaction: jest.fn(),
 };
+// Restricted-item card gate (2026-11-06): this suite tests the controller's own money flow, so the gate (which has its own
+// suites under services/restrictedItem/__tests__) is stubbed to "card allowed". The real module is kept for the error class.
+jest.mock('../services/restrictedItem/cardPaymentGate', () => ({
+  ...jest.requireActual('../services/restrictedItem/cardPaymentGate'),
+  gateCardCharge: jest.fn(async () => ({ ok: true, decision: { allCardAllowed: true } })),
+  linesFromItemPrices: jest.fn(async () => []),
+}));
 jest.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
 
 var mockApplyCrew = jest.fn();

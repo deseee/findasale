@@ -13,7 +13,7 @@
  *   3. no PAID non-test Purchase exists for the item (it was not also sold on another FindA.Sale rail)
  *   4. single-unit item (stockTotal <= 1; ebayQuantityAvailable is only a mirror, 2026-10-13); multi-unit items are never auto-zeroed
  *   5. the item's eBay listing, or a relisted live listing whose SKU starts with FAS-<itemId>, is LIVE
- * Only the cancelled orders' units come back (stockSold / ebayQuantitySold decrement, floored at 0; never reset to 0).
+ * Only the cancelled orders' units come back (stockSold / ebayQuantitySold decrement, floored at 0 in one statement; never reset to 0).
  * The EbaySoldEvent ledger rows are KEPT (they are what stops the sold sync re-selling the same order).
  * No sold notification is fired. Returns a result object (never throws on a business-rule refusal).
  */
@@ -146,14 +146,14 @@ export async function reopenEbayCancelledSale(itemId: string, opts: ReopenOption
       where: { id: itemId, status: 'SOLD', lastSoldVia: 'EBAY', OR: [{ stockTotal: null }, { stockTotal: { lte: 1 } }] },
       data: {
         status: 'AVAILABLE',
-        stockSold: { decrement: unitsToGiveBack },
-        ebayQuantitySold: { decrement: unitsToGiveBack },
         lastSoldVia: null,
         ...(adoptedListingId ? { ebayListingId: adoptedListingId, ebayOfferId: adoptedOfferId ?? null } : {}),
       },
     });
     if (r.count > 0) {
-      await tx.$executeRaw`UPDATE "Item" SET "stockSold" = GREATEST("stockSold", 0), "ebayQuantitySold" = GREATEST("ebayQuantitySold", 0) WHERE "id" = ${itemId} AND ("stockSold" < 0 OR "ebayQuantitySold" < 0)`;
+      // 2026-11-05 (schema review #7): Item_stockSold_check (stockSold >= 0) is checked per statement, so the old
+      // "decrement, then floor at zero" pair could fail mid-transaction. Give the units back floored in ONE statement.
+      await tx.$executeRaw`UPDATE "Item" SET "stockSold" = GREATEST("stockSold" - ${unitsToGiveBack}::int, 0), "ebayQuantitySold" = GREATEST("ebayQuantitySold" - ${unitsToGiveBack}::int, 0) WHERE "id" = ${itemId}`;
     }
     return r;
   });

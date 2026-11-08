@@ -8,7 +8,9 @@
  *   - brand field empty while packaging shows one, or a near-miss spelling between brand and title
  *   - test / do-not-publish markers ("[price book test]", "Do not publish") -> block automatic publishing
  *   - stray leading numbers or symbols at the start of the description ("60. Vintage ...")
- *   - duplicated words in the title
+ *   - duplicated words in the title (adjacent repeats are also fixed by dedupeAdjacentWords, see intakeReview)
+ *   - years that disagree between title, description and printed text (2026-11-05 card test: title 1996, description 1995)
+ *   - a description that says a view is "not photographed" while the item has 2+ photos
  * Never throws (any internal error yields no notes for that check). Output goes into the intake review notes.
  */
 import type { IntakeReviewNote, PrintedTextTranscription } from './intakeReviewTypes';
@@ -23,6 +25,8 @@ export interface ConsistencyInput {
   printedText?: PrintedTextTranscription | null;
   /** Vision OCR text (joined), used as an extra count source. */
   ocrText?: string | null;
+  /** Number of photos the item has. Enables the "back not photographed" claim check when 2 or more. */
+  photoCount?: number;
 }
 
 export interface ConsistencyResult {
@@ -123,6 +127,126 @@ function editDistance(a: string, b: string): number {
 }
 
 const TITLE_STOPWORDS = new Set(['with', 'and', 'the', 'for', 'from', 'set', 'lot', 'vintage', 'new', 'used', 'of', 'a', 'in', 'on', 'to', 'or']);
+
+// ---- Years ----------------------------------------------------------------------------------------------------
+
+/**
+ * 4-digit years 1900-2099 in a piece of text. Decades ("1990s"), card numbers ("#1996"), serial numbering ("12/1999")
+ * and longer digit runs are not years. Exported for tests.
+ */
+export function extractYears(text: string | null | undefined): number[] {
+  if (!text) return [];
+  const out = new Set<number>();
+  try {
+    const re = /(?<![#\/\d.,$])\b(19\d{2}|20\d{2})\b(?!\s*'?s\b)(?![\d,])/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(String(text))) !== null) out.add(parseInt(m[1], 10));
+  } catch {
+    return [];
+  }
+  return [...out];
+}
+
+/** Printed-text years (structured transcription + literal printed text). OCR is left out: card backs list many seasons. */
+function printedYears(printedText?: PrintedTextTranscription | null, detectedPrintedText?: string | null): number[] {
+  const parts: string[] = [];
+  if (printedText) {
+    for (const v of [printedText.brand, ...(printedText.other || []), ...(printedText.catalogNumbers || []), ...(printedText.credits || [])]) {
+      if (typeof v === 'string') parts.push(v);
+    }
+  }
+  if (detectedPrintedText) parts.push(detectedPrintedText);
+  return [...new Set(parts.flatMap((p) => extractYears(p)))];
+}
+
+/** Year agreement notes: title vs description (high), title vs printed text (medium). Exported for tests. */
+export function yearConsistencyNotes(input: Pick<ConsistencyInput, 'title' | 'description' | 'printedText' | 'detectedPrintedText'>): IntakeReviewNote[] {
+  const notes: IntakeReviewNote[] = [];
+  try {
+    const t = extractYears(input.title);
+    const d = extractYears(input.description);
+    const p = printedYears(input.printedText, input.detectedPrintedText);
+    if (t.length > 0 && d.length > 0 && !t.some((y) => d.includes(y))) {
+      const printedPick = [...t, ...d].find((y) => p.includes(y));
+      notes.push({
+        code: 'YEAR_MISMATCH',
+        severity: 'high',
+        source: 'consistency',
+        field: 'description',
+        message: `The title says ${t.join(' or ')} but the description says ${d.join(' or ')}. Check the year printed on the item and use the same year in both.`,
+        current: d[0],
+        suggested: printedPick ?? t[0],
+      });
+    } else if (t.length > 0 && p.length > 0 && !t.some((y) => p.includes(y))) {
+      notes.push({
+        code: 'YEAR_NOT_PRINTED',
+        severity: 'medium',
+        source: 'consistency',
+        field: 'title',
+        message: `The title says ${t.join(' or ')} but the printed text shows ${p.join(' or ')}. Check which year is right.`,
+        current: t[0],
+        suggested: p[0],
+      });
+    }
+  } catch { /* never block tagging */ }
+  return notes;
+}
+
+// ---- Duplicate adjacent words ---------------------------------------------------------------------------------
+
+// Real names and phrases that repeat a word on purpose. Never "fixed".
+const REDUPLICATION_ALLOWLIST = new Set([
+  'bora', 'walla', 'duran', 'talk', 'mahi', 'baden', 'pago', 'sing', 'bye', 'chop', 'choo', 'tom', 'knock', 'cha', 'ta',
+  'tut', 'night', 'yum', 'boo', 'go', 'no', 'so', 'la', 'ha', 'pom', 'dum', 'rah', 'bon', 'can', 'tsk', 'ma', 'pa', 'tutu',
+  'new', 'que', 'sera', 'mau', 'beri', 'lulu', 'kum', 'chi', 'xo', 'aye', 'dee', 'muu',
+]);
+
+/**
+ * Removes a word repeated back to back in a title ("Baseball Card Card" -> "Baseball Card"). Numbers, known
+ * reduplicated names ("Bora Bora", "Duran Duran") and any doubled phrase that is printed on the item (evidence text)
+ * are left alone. Returns the cleaned title and the words removed. Pure; exported for tests.
+ */
+export function dedupeAdjacentWords(title: string | null | undefined, evidence: Array<string | null | undefined> = []): { title: string; removed: string[] } {
+  const original = String(title ?? '');
+  const removed: string[] = [];
+  try {
+    const evidenceText = evidence.filter((e): e is string => typeof e === 'string').join(' \n ').toLowerCase().replace(/\s+/g, ' ');
+    const fixed = original.replace(/\b([A-Za-z][A-Za-z']*)((?:\s+\1\b)+)/gi, (whole: string, word: string) => {
+      const lower = word.toLowerCase();
+      if (REDUPLICATION_ALLOWLIST.has(lower)) return whole;
+      if (evidenceText && evidenceText.includes(whole.toLowerCase().replace(/\s+/g, ' '))) return whole;
+      removed.push(word);
+      return word;
+    });
+    return { title: fixed.replace(/\s{2,}/g, ' ').trim(), removed };
+  } catch {
+    return { title: original, removed: [] };
+  }
+}
+
+// ---- "Not photographed" claims ------------------------------------------------------------------------------
+
+const PHOTO_CLAIM = /\b(back|reverse|rear|underside|bottom|label|other side)\b[^.;!?]{0,60}?\b(not|never|wasn'?t|isn'?t)\s+(photographed|provided|shown|pictured|included|visible|available|imaged)\b|\b(no|without)\s+(photo|photos|picture|image)\s+of\s+the\s+(back|reverse|rear|underside|bottom|label)\b|\b(back|reverse|rear)\s+(photo|image|picture)\s+(missing|not provided|not included)\b/i;
+
+/** True when the text claims a view of the item was not photographed. Exported for tests. */
+export function hasPhotoAbsenceClaim(text: string | null | undefined): boolean {
+  return typeof text === 'string' && PHOTO_CLAIM.test(text);
+}
+
+/**
+ * Drops the sentences that claim a view was not photographed. Used only when the item has 2 or more photos (the
+ * claim is then usually wrong: photo 2 is commonly the back). Returns null when nothing changes or nothing would be
+ * left. Pure; exported for tests.
+ */
+export function stripPhotoAbsenceClaims(description: string | null | undefined): string | null {
+  const text = String(description ?? '').trim();
+  if (!text || !hasPhotoAbsenceClaim(text)) return null;
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const kept = sentences.filter((sentence) => !hasPhotoAbsenceClaim(sentence));
+  const next = kept.join(' ').trim();
+  if (!next || next === text) return null;
+  return next;
+}
 
 export function runConsistencyChecks(input: ConsistencyInput): ConsistencyResult {
   const notes: IntakeReviewNote[] = [];
@@ -306,6 +430,23 @@ export function runConsistencyChecks(input: ConsistencyInput): ConsistencyResult
           current: dup[0],
         });
       }
+    }
+  } catch { /* ignore */ }
+
+  // 7. Years: title vs description vs printed text.
+  notes.push(...yearConsistencyNotes(input));
+
+  // 8. "Back not photographed" while the item has 2+ photos.
+  try {
+    const photoCount = input.photoCount ?? 0;
+    if (photoCount >= 2 && hasPhotoAbsenceClaim(description)) {
+      notes.push({
+        code: 'PHOTO_CLAIM_CHECK',
+        severity: 'medium',
+        source: 'consistency',
+        field: 'description',
+        message: `The description says a view was not photographed, but the item has ${photoCount} photos. Check the photos and fix the description.`,
+      });
     }
   } catch { /* ignore */ }
 

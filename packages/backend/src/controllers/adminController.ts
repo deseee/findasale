@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { countUserLedgerBlockers, describeUserLedgerBlockers } from '../services/ledgerDeletionGuards'; // 2026-11-05: ledger FKs are RESTRICT
 import { getMonthlyAICost, getMonthlyAICostFromLog, resetMonthlyAICost, getMonthlyWebDetectionCost, getEbayImageSearchUsage, getMonthlyGroundingCost } from '../lib/aiCostTracker';
 import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinaryUsage, resetTodayCloudinaryUsage } from '../lib/cloudinaryBandwidthTracker';
 import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
@@ -706,6 +707,16 @@ export const purgeUser = async (req: AuthRequest, res: Response) => {
       return res.status(409).json({
         message: `Cannot purge: ${affiliateLinkCount} AffiliateLink row(s) reference this account`,
         blockedBy: 'AffiliateLink',
+      });
+    }
+
+    // 2026-11-05 (schema review #3/#4): invoices and the consignor ledger are ON DELETE RESTRICT now; a purge must not
+    // cascade them away (and would hit a raw FK violation if it tried).
+    const ledgerBlockers = describeUserLedgerBlockers(await countUserLedgerBlockers(user.id, organizer?.id));
+    if (ledgerBlockers.length > 0) {
+      return res.status(409).json({
+        message: `Cannot purge: ${ledgerBlockers.join(', ')} reference this account`,
+        blockedBy: 'Ledger',
       });
     }
 

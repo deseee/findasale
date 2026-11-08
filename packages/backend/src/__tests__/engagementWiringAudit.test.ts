@@ -18,7 +18,6 @@ describe('purchase engagement wiring', () => {
     { file: 'controllers/squarePaymentController.ts', min: 2, why: 'single-item and cart checkout' },
     { file: 'controllers/squareWebhookController.ts', min: 2, why: 'payment link settlement and Square hold invoice' },
     { file: 'controllers/bountyController.ts', min: 1, why: 'Square bounty purchase' },
-    { file: 'controllers/stripeController.ts', min: 1, why: 'Stripe bounty branch' },
     { file: 'services/holdInvoicePaymentRecorder.ts', min: 1, why: 'hold invoice paid online' },
     { file: 'jobs/purchaseExpiryJob.ts', min: 1, why: 'stranded PAID reclaim' },
     { file: 'jobs/auctionJob.ts', min: 1, why: 'auction win created PAID' },

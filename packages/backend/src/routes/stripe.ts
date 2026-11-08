@@ -1,10 +1,5 @@
 import { Router } from 'express';
-import {
-  webhookHandler,
-  getPendingPayment,
-  createRefund,
-  recoverPaymentIntent,
-} from '../controllers/stripeController';
+import { createRefund } from '../controllers/refundController';
 import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout, getEarningsBreakdown, getRefundHistory, buyShippingLabel, markPickedUp } from '../controllers/payoutController';
 import { cashPayment } from '../controllers/cashPaymentController'; // moved 2026-09-09 (Square-changeover split-out) -- route path unchanged
 import { authenticate } from '../middleware/auth';
@@ -12,21 +7,14 @@ import { paymentLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
-// Buyer routes
-// Stripe removal (2026-09-12): single-item and cart checkout both moved to Square-only --
-// /create-payment-intent and /create-cart-checkout-session (and their stripeController.ts
-// handlers) are deleted outright. CheckoutModal.tsx and CartDrawer.tsx now show a
-// seller-not-ready message for any organizer without a live Square account instead of
-// calling either endpoint. getPendingPayment (auction-winner resume) and recoverPaymentIntent
-// (webhook failure recovery) still service historical Stripe-era rows and stay live.
-router.get('/pending-payment/:purchaseId', authenticate, getPendingPayment);
-// P2 Bug 2: Webhook failure recovery endpoint
-router.post('/recover-payment-intent', authenticate, paymentLimiter, recoverPaymentIntent);
+// Stripe is retired (owner decision 2026-11-04). This router keeps only the processor-agnostic endpoints
+// that historically live under the /api/stripe prefix. The old Stripe endpoints (/webhook,
+// /pending-payment, /recover-payment-intent) answer 410 STRIPE_RETIRED from index.ts and have no
+// handler here.
 
-// Organizer refund — live dual-processor dispatcher (Stripe- AND Square-processed purchases,
-// see stripeController.ts's createRefund purchase.processor branch); still called by
-// organizer/payouts.tsx, organizer/orders.tsx and admin/users/[id].tsx. NOT part of this
-// removal pass — flagged back to Patrick rather than deleted, see report.
+// Organizer / admin refund (controllers/refundController.ts). Square purchases refund through Square;
+// cash rows are recorded; historical Stripe card rows get STRIPE_CLOSED_MANUAL_REFUND_REQUIRED.
+// Called by organizer/payouts.tsx, organizer/orders.tsx, admin/users/[id].tsx and BulkLotFollowupPanel.tsx.
 router.post('/refund/:purchaseId', authenticate, createRefund);
 
 // Subscription checkout (#23: Pricing page) -- POST /checkout-session removed 2026-09-20,
@@ -47,10 +35,5 @@ router.post('/purchases/:id/mark-picked-up', authenticate, markPickedUp); // ADR
 // Terminal POS — hardware card-reader endpoints removed with Stripe (2026-09-12, Stripe-removal pass).
 // Cash payment recording is processor-agnostic and stays live.
 router.post('/terminal/cash-payment', authenticate, paymentLimiter, cashPayment);
-
-// Webhook — still imported/tested by src/__tests__/stripe.e2e.test.ts (BLOCKING CI suite,
-// .github/workflows/ci-typecheck.yml). NOT part of this removal pass — flagged back to
-// Patrick rather than deleted, see report.
-router.post('/webhook', webhookHandler);
 
 export default router;

@@ -1,4 +1,5 @@
 import { Response, Request } from 'express';
+import { gateCardCharge, linesFromItemPrices, CardPaymentBlockedError } from '../services/restrictedItem/cardPaymentGate'; // 2026-11-06 restricted-item card gate
 import { randomUUID } from 'crypto';
 import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
@@ -6,7 +7,6 @@ import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-13
 import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
 import { LOT_CHANNEL_MESSAGES } from '../services/bulkLot/bulkLotInvariants'; // ADR-136 Addendum B: a lot is held by card count (POST /api/bulk-lots/item/:itemId/hold), not as one item
 import { AuthRequest } from '../middleware/auth';
-import { retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSession'; // Cart drawer Pay Now link (2026-08-24)
 import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): payment-deadline notification-gap fixes
 import { getIO } from '../lib/socket';
 import { pushEvent } from '../services/liveFeedService';
@@ -36,10 +36,9 @@ import { createPaymentLinkInternal } from './posController'; // markSold settlem
 import { manuallyReclaimPosPaymentLink } from '../jobs/posStrandedSaleReconcileCron'; // Manual-reclaim P2 fix (2026-09-13): CHECKOUT_LINK 'reclaim invoice' override, reuses the cron's own paid-check + revert logic
 import { findHoldSettlementConflict, HoldSettlementConflictError } from '../services/holdSettlementGuard';
 import { invoiceableWhere, isInvoicedOrClaimed, InvoiceClaimLostError, releaseDeadInvoiceAnchors } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim; P0 (2026-08-17): dead-anchor release
-import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // Hold-to-Pay P1 (2026-08-17): released invoices left PAYABLE Stripe sessions live
 import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // P1 fix (2026-09-04, S-CARDING-INCIDENT-2026-09-03 follow-up): Hold-to-Pay invoicing never ran the shared Stripe-onboarding/sale-state gate
 import { createHoldInvoiceSquareCheckout, generateHoldInvoiceId } from '../services/holdInvoiceSquareCheckoutHelper'; // Square changeover Wave S2 #3 (2026-09-09): Hold-to-Pay invoice creation, Square branch
-import { deleteSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // orphaned-payable-link cleanup, Square counterpart of expireCheckoutSessionSafely below
+import { deleteSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // orphaned-payable-link cleanup
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // 2026-09-29 money review P1-13: CHECKOUT_LINK claims each item atomically BEFORE the payable link exists
 import { prepareSquareInvoiceForRelease, recordSquarePaidInvoiceFromGate } from '../services/holdInvoiceSquareRelease'; // 2026-09-29 money review P0-2: a Square invoice is paid-checked and its payment link cancelled BEFORE it is released
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // 2026-09-29 money review P0-2: a Square payment link found paid at release time is recorded, never released
@@ -1103,6 +1102,9 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           });
         } catch (stripeErr: any) {
           await revertCommittedLinkItems();
+          if (stripeErr instanceof CardPaymentBlockedError) {
+            return res.status(stripeErr.status).json(stripeErr.body);
+          }
           if (stripeErr instanceof SquareOnboardingIncompleteError) {
             return res.status(409).json({
               message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",
@@ -1985,21 +1987,13 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
   let holdIds: string[] = [];
   const claimedHoldIds: string[] = [];
 
-  // Orphaned-payable-session guard (P1, 2026-08-17). The Stripe Checkout Session is
-  // created BEFORE the HoldInvoice transaction below. If that transaction throws
-  // (P2002 on the unique reservationId anchor, a lost claim, a DB blip), the old code
-  // released the claim and returned an error while the Session stayed OPEN and
-  // PAYABLE -- a live payment link for an invoice that does not exist, against items
-  // that just went back on sale. Tracked at function scope (NOT inside the try, which
-  // is its own block scope -- the same mistake that produced a real CI compile error
-  // on claimedHoldIds) so the outer catch can close it. The account is tracked
-  // alongside the id because a Direct-charge Session lives on the connected account
-  // and cannot be expired with a platform-scoped call.
-  let createdStripeSessionId: string | null = null;
-  let createdStripeSessionAccount: string | null = null;
-  // Square counterpart of the two Stripe handles above -- set once createHoldInvoiceSquareCheckout
-  // returns a real payment link, cleared once the HoldInvoice transaction commits. See the outer
-  // catch below for the cleanup call (deleteSquareCheckoutLink), mirroring expireCheckoutSessionSafely.
+  // Orphaned-payable-link guard (P1, 2026-08-17). The Square payment link is created BEFORE the
+  // HoldInvoice transaction below. If that transaction throws (P2002 on the unique reservationId
+  // anchor, a lost claim, a DB blip), the link would stay payable for an invoice that does not
+  // exist. Tracked at function scope (NOT inside the try, which is its own block scope) so the outer
+  // catch can close it.
+  // Set once createHoldInvoiceSquareCheckout returns a real payment link, cleared once the HoldInvoice
+  // transaction commits. See the outer catch below for the cleanup call (deleteSquareCheckoutLink).
   let createdSquarePaymentLinkId: string | null = null;
   let createdSquareOrganizerId: string | null = null;
 
@@ -2243,6 +2237,22 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         : (allShopperHolds[0]?.item.title || 'FindA.Sale payment'))
         + (crewDiscountInfo ? ` (Crew Invasion ${crewDiscountInfo.discountPct}% off applied)` : '');
 
+      // Restricted-item card gate (2026-11-06): the whole invoice goes to the card link, so any blocked item refuses it
+      // with the per-item split; the claim is released like a failed link creation.
+      {
+        const gate = await gateCardCharge({
+          processor: 'SQUARE',
+          organizerId: organizer.id,
+          lines: await linesFromItemPrices(allShopperHolds.map((h) => h.itemId), Math.round(totalAmount * 100)),
+          cardChargeCents: Math.round(totalAmount * 100),
+          context: { path: 'square.online.holdInvoice', buyerUserId: reservation.user.id, sessionRef: holdInvoiceId },
+        });
+        if (!gate.ok) {
+          await releaseClaim();
+          return res.status(gate.status).json(gate.body);
+        }
+      }
+
       let squareResult;
       try {
         squareResult = await createHoldInvoiceSquareCheckout({
@@ -2271,8 +2281,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
       }
 
       // Record what we just created so a failure below (e.g. InvoiceClaimLostError -- a
-      // concurrent request won the claim race) can close it -- same orphaned-payable-link
-      // guard the Stripe branch already has via createdStripeSessionId, Square-flavored.
+      // concurrent request won the claim race) can close it (orphaned-payable-link guard).
       createdSquarePaymentLinkId = squareResult.paymentLinkId;
       createdSquareOrganizerId = organizer.id;
 
@@ -2333,8 +2342,6 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         return holdInvoice;
       });
 
-      createdStripeSessionId = null;
-      createdStripeSessionAccount = null;
       createdSquarePaymentLinkId = null;
       createdSquareOrganizerId = null;
       // The invoice now exists and carries the discounted total: the member's redemption stays
@@ -2424,9 +2431,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     // the platform's Stripe account is permanently closed -- there is no processor left to
     // create this hold invoice against. The Stripe Checkout Session path that used to live
     // here is guaranteed to fail against a dead account, so it is removed rather than left
-    // to hard-fail unpredictably. createdStripeSessionId stays null (its initial value,
-    // never reached this branch), so the catch block's Stripe-session-cleanup correctly
-    // no-ops, and releaseClaim() below still runs regardless of which branch failed.
+    // to hard-fail unpredictably. releaseClaim() below still runs regardless of which branch failed.
     throw new SquareOnboardingIncompleteError(organizer.id);
   } catch (error: any) {
     console.error('[hold-invoice] markSoldAndCreateInvoice error:', error);
@@ -2434,19 +2439,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     // transaction itself threw) so these holds aren't permanently stuck.
     await releaseClaim();
 
-    // P1 fix (2026-08-17): close the Checkout Session too. Reaching this catch after
-    // the Session was created means no HoldInvoice exists for it, the holds have just
-    // been un-claimed and the items are back in play -- leaving that link OPEN would
-    // let the shopper pay for an item nobody is tracking a payment for. Never allowed
-    // to mask the original error.
-    if (createdStripeSessionId) {
-      await expireCheckoutSessionSafely(createdStripeSessionId, {
-        stripeAccount: createdStripeSessionAccount,
-        context: `markSoldAndCreateInvoice orphan reservation=${req.params?.id}`,
-      }).catch(e => console.error('[hold-invoice] Failed to close orphaned checkout session:', e));
-    }
-
-    // Square counterpart of the Stripe orphan-session guard above: reaching this catch
+    // Orphaned payment link guard: reaching this catch
     // after a Square Payment Link was created (createdSquarePaymentLinkId set) but before
     // the HoldInvoice transaction committed means the link is live, payable, and orphaned
     // -- nothing in the DB points at it. Best-effort cleanup; never let this mask the
@@ -2926,55 +2919,10 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
       return res.status(409).json({ message: 'This payment request is no longer open, so there is nothing to cancel.' });
     }
 
-    // Cancel the Stripe Checkout session. Null-guarded: posController.sendHoldInvoice
-    // creates HoldInvoice rows with NO Stripe session at all ("simplified MVP" path), and
-    // posController.createCombinedInvoice omits one for a 100%-cash split.
-    //
-    // P1 fix (2026-08-17, live Chrome QA): this used to be a bare
-    // `stripe.checkout.sessions.expire()` in a try/catch that only console.warn'ed. It
-    // was observed failing with "No such checkout session" while the release went ahead
-    // anyway -- leaving the shopper's original payment link OPEN and PAYABLE for an
-    // invoice that had just been cancelled and items that had just gone back on sale.
-    // expireCheckoutSessionSafely retrieves before expiring (so a connected-account
-    // Session is found, and a terminal one is not mis-reported as an error) and alerts
-    // Sentry if a payable session survives. See utils/expireCheckoutSession.ts.
-    if (invoice.stripeSessionId) {
-      const closure = await expireCheckoutSessionSafely(invoice.stripeSessionId, {
-        // Stripe account + charge-shape snapshot (2026-08-18 migration): prefer the account
-        // pinned on the invoice at checkout-session-creation time -- it cannot drift, unlike
-        // the SALE's organizer's CURRENT stripeConnectId (below), which is wrong if the
-        // organizer re-onboarded or the Direct-charges allowlist changed since the session
-        // was created. NULL on pre-migration rows, where the old fallback still applies:
-        // the SALE's organizer, not the caller's Organizer row (identical value on the
-        // organizer arm; on the shopper arm the caller has no Organizer row at all, so
-        // reading it from the caller would send `undefined` -- see the include above).
-        stripeAccount: invoice.stripeAccountId ?? saleOrganizer?.stripeConnectId ?? null,
-        context: `releaseInvoice invoice=${invoice.id} actor=${isInvoiceShopper ? 'shopper' : 'organizer'}`,
-      });
+    // Stripe is retired (2026-11-04): a historical Stripe Checkout Session can no longer be paid (the
+    // Stripe account is closed), so there is nothing to expire or check before releasing.
 
-      // Resource-state gate: NEVER cancel an invoice the shopper has already paid.
-      // Doing so would hand the items back to RESERVED (and back on sale) after money
-      // changed hands. Stripe is the authority here, not our own PENDING flag -- the
-      // charge.succeeded webhook can legitimately be seconds behind, and this endpoint
-      // is exactly the window in which an organizer would click.
-      if (closure.state === 'PAID') {
-        console.warn(`[hold-invoice] releaseInvoice refused: invoice ${invoice.id} is already PAID at Stripe (session ${invoice.stripeSessionId}).`);
-        return res.status(409).json({
-          message: 'This payment has already gone through. Refund it from the sale\'s payments instead of cancelling the request.',
-        });
-      }
-
-      // A session we could not close is real money exposure, already reported to
-      // Sentry by the helper. Refuse rather than release the items alongside a live
-      // payment link -- the organizer can retry once Stripe is reachable.
-      if (closure.stillPayable) {
-        return res.status(502).json({
-          message: 'We could not cancel the payment link with our payment processor just now, so the request was left in place. Please try again in a moment.',
-        });
-      }
-    }
-
-    // Money review P0-2 (2026-09-29): Square counterpart of the Stripe block above. A Square
+    // Money review P0-2 (2026-09-29): a Square
     // invoice is a hosted Payment Link, and this endpoint used to flip it CANCELLED and return
     // the items to inventory without ever asking Square whether it was paid or cancelling the
     // link, so the shopper could still pay it afterwards. Paid: record the sale, refuse the
@@ -3342,31 +3290,10 @@ export const releaseInvoiceById = async (req: AuthRequest, res: Response) => {
 
     const saleOrganizer = invoice.sale?.organizer ?? null;
 
-    // Cancel the Stripe Checkout session, if one exists. Null-guarded: a 100%-cash split
-    // invoice (posController.createCombinedInvoice, cardAmountCents === 0) never creates
-    // one. Identical pattern to releaseInvoice above, including the already-PAID refusal
-    // and the stillPayable 502 refusal.
-    if (invoice.stripeSessionId) {
-      const closure = await expireCheckoutSessionSafely(invoice.stripeSessionId, {
-        stripeAccount: invoice.stripeAccountId ?? saleOrganizer?.stripeConnectId ?? null,
-        context: `releaseInvoiceById invoice=${invoice.id} actor=${isInvoiceShopper ? 'shopper' : 'organizer'}`,
-      });
+    // Stripe is retired (2026-11-04): a historical Stripe Checkout Session can no longer be paid, so there
+    // is nothing to expire or check before releasing.
 
-      if (closure.state === 'PAID') {
-        console.warn(`[hold-invoice] releaseInvoiceById refused: invoice ${invoice.id} is already PAID at Stripe (session ${invoice.stripeSessionId}).`);
-        return res.status(409).json({
-          message: "This payment has already gone through. Refund it from the sale's payments instead of cancelling the request.",
-        });
-      }
-
-      if (closure.stillPayable) {
-        return res.status(502).json({
-          message: 'We could not cancel the payment link with our payment processor just now, so the request was left in place. Please try again in a moment.',
-        });
-      }
-    }
-
-    // Money review P0-2 (2026-09-29): Square counterpart of the Stripe block above, same contract
+    // Money review P0-2 (2026-09-29): Square gate, same contract
     // as releaseInvoice (paid: record + 409; ambiguous: 502; only CLEAR proceeds to the flip).
     if (invoice.processor === 'SQUARE') {
       const squareContext = `releaseInvoiceById invoice=${invoice.id} actor=${isInvoiceShopper ? 'shopper' : 'organizer'}`;
@@ -3511,20 +3438,9 @@ export const getMyHoldsFull = async (req: AuthRequest, res: Response) => {
     // URL (never persisted, only stripeSessionId is) for any hold whose invoice is still
     // PENDING, so the drawer can render a real "Pay Now" link per hold.
     const response = await Promise.all(holds.map(async hold => {
-      let invoiceCheckoutUrl: string | null = null;
-      if (hold.invoice?.stripeSessionId && hold.invoice.status === 'PENDING') {
-        try {
-          const session = await retrieveCheckoutSessionAcrossAccounts(
-            hold.invoice.stripeSessionId,
-            hold.invoice.stripeAccountId
-          );
-          invoiceCheckoutUrl = session.url ?? null;
-        } catch (err: any) {
-          console.warn(
-            `[getMyHoldsFull] Failed to retrieve checkout session for hold ${hold.id}: ${err?.message ?? err}`
-          );
-        }
-      }
+      // Stripe is retired (2026-11-04): a historical Stripe Checkout Session has no payable URL any more.
+      // (Square invoice links are surfaced through the Square fields on the invoice, not here.)
+      const invoiceCheckoutUrl: string | null = null;
       return {
         id: hold.id,
         expiresAt: hold.expiresAt,

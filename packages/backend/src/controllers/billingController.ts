@@ -1,12 +1,8 @@
 import { Response } from 'express';
-import { SubscriptionTier } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
-import { getStripe } from '../utils/stripe';
 import { prisma } from '../lib/prisma';
-import { syncTier } from '../lib/syncTier';
 import {
   calculateDowngradeDelta,
-  triggerGracePeriod,
   clearGracePeriod
 } from '../services/tierGraceService';
 import { computeOrganizerEntitlement } from '../services/tierLapseService';
@@ -23,22 +19,9 @@ import { claimBillingCharge, completeBillingCharge, failBillingCharge, findRecen
 import { addDaysUtc, renewalPeriodKey } from '../utils/billingPeriod'; // 2026-09-30: every period / trial end is exact UTC-millisecond arithmetic, same as the renewal job
 import { dropUserSockets } from '../lib/dropUserSockets';
 
-// 2026-09-29: lazy. This used to call getStripe() at import time, which throws when
-// STRIPE_SECRET_KEY is missing and would crash the whole server at boot even though Stripe is closed
-// and payments run on Square. The proxy resolves the real client on first property access, so the
-// existing `stripe.subscriptions...` / `stripe.webhooks...` call sites are unchanged, and a legacy
-// path that is really called without a key throws StripeNotConfiguredError (503) at that moment.
-const stripe: ReturnType<typeof getStripe> = new Proxy({} as ReturnType<typeof getStripe>, {
-  get: (_target, prop) => (getStripe() as any)[prop],
-});
-
-// 2026-09-29: Stripe's platform account is permanently closed (see the removal note below), so
-// every Stripe API call for an organizer subscription fails. While this is true (the default),
-// cancel / undo-cancel / subscription-read for any organizer that is not billed through Square
-// work from the database only and never touch Stripe. The original Stripe branches stay in the
-// code below, untouched, and become reachable again only if STRIPE_PLATFORM_CLOSED is set to the
-// literal string 'false' (for example if a Stripe account is ever reopened).
-const STRIPE_PLATFORM_CLOSED = process.env.STRIPE_PLATFORM_CLOSED !== 'false';
+// Stripe is retired (owner decision 2026-11-04) and the backend no longer talks to Stripe. Every
+// organizer that is not billed through Square (including one still carrying a leftover Stripe
+// subscription id from before the switch) is served from the database only.
 
 function isPaidTierValue(tier: unknown): boolean {
   return tier === 'PRO' || tier === 'TEAMS';
@@ -91,330 +74,9 @@ async function scheduleCancellationFromDb(organizer: any): Promise<{ periodEnd: 
   return { periodEnd, alreadyScheduled: false };
 }
 
-// createCheckoutSession (dead Stripe subscription-checkout endpoint) removed 2026-09-20 --
-// zero live frontend callers (pricing.tsx redirects to the Square billing flow instead,
-// see createSquareBillingSubscription below), and Stripe's platform account is permanently
-// closed so this always failed Stripe-side if hit directly. Patrick's decision, in chat:
-// "theres no stripe at all get rid of it". `stripe` (getStripe()) stays imported -- still
-// used below by handleStripeWebhook/getSubscription/cancelSubscription/createBillingPortal
-// for existing legacy Stripe subscribers.
-
-/**
- * POST /api/billing/webhook
- * Handle Stripe webhook events (subscription lifecycle)
- * Feature #75: Tier Lapse State Logic integrated here
- */
-export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
-  // Hoisted to function scope so the terminal-state catch at the bottom can mark this
-  // event FAILED (mirrors stripeController.ts, where `event` is likewise in scope for
-  // the handler catch). Empty key = we threw before the event was even parsed.
-  let event: any;
-  let billingIdempotencyKey = '';
-  try {
-    const sig = req.headers['stripe-signature'] as string;
-    const webhookSecret = process.env.STRIPE_BILLING_WEBHOOK_SECRET;
-
-    if (!webhookSecret) {
-      console.error('STRIPE_BILLING_WEBHOOK_SECRET not set');
-      return res.status(500).json({ message: 'Webhook secret not configured' });
-    }
-
-    try {
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    } catch (err: any) {
-      console.error('Webhook signature verification failed:', err.message);
-      return res.status(400).json({ message: 'Webhook signature verification failed' });
-    }
-
-    // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151): namespace the
-    // idempotency key per endpoint so the billing webhook cannot claim (and lock out) a
-    // shared event.id that the POS recorder on /api/stripe/webhook also needs to process.
-    billingIdempotencyKey = `billing:${event.id}`;
-
-    // S1176: two-phase status (PENDING -> COMPLETED | FAILED), ported verbatim in shape
-    // from the proven POS implementation in stripeController.ts:763-802 / :2686-2698 so
-    // there is ONE idempotency idiom in this codebase. This handler previously wrote
-    // status:'COMPLETED' BEFORE running the switch below; if the switch then threw, the
-    // catch returned 500, Stripe retried, the retry hit the P2002 path, saw a COMPLETED
-    // row and returned 200 -- silently dropping the billing event forever (tier never
-    // synced, Hunt Pass never activated, grace period never cleared).
-    // INSERT-FIRST still preserves the P0 concurrent-duplicate race guard (first inserter wins).
-    try {
-      await prisma.processedWebhookEvent.create({
-        data: { eventId: billingIdempotencyKey, status: 'PENDING' },
-      });
-    } catch (e: any) {
-      if (e.code === 'P2002') {
-        // Row already exists -- inspect its status to decide what to do.
-        const existing = await prisma.processedWebhookEvent
-          .findUnique({ where: { eventId: billingIdempotencyKey } })
-          .catch(() => null);
-        if (existing?.status === 'COMPLETED') {
-          console.warn(`[billing-webhook] Duplicate event ${event.id} (type: ${event.type}) already COMPLETED -- skipping.`);
-          return res.json({ received: true, duplicate: true });
-        }
-        if (existing?.status === 'FAILED') {
-          // A prior attempt threw. Reset to PENDING and reprocess (fail-open retry).
-          console.warn(`[billing-webhook] Event ${event.id} (type: ${event.type}) previously FAILED -- reprocessing.`);
-          await prisma.processedWebhookEvent
-            .update({ where: { eventId: billingIdempotencyKey }, data: { status: 'PENDING' } })
-            .catch(() => {});
-          // fall through to reprocess below
-        } else {
-          // PENDING (or unreadable) -- another delivery is in flight; do not reprocess
-          // concurrently. Stripe's later retry will find COMPLETED or FAILED.
-          console.warn(`[billing-webhook] Event ${event.id} (type: ${event.type}) in-flight (PENDING) -- skipping concurrent reprocess.`);
-          return res.json({ received: true, duplicate: true });
-        }
-      } else {
-        // Other errors (e.g. P2011 — known ProcessedWebhookEvent schema/DB drift, see
-        // STATE.md Blocked Queue): log and continue rather than crashing the whole webhook.
-        // A broken idempotency check should never take down real event processing.
-        console.warn(`[billing-webhook] Failed to check idempotency for event ${event.id}:`, e);
-      }
-    }
-
-    switch (event.type) {
-      case 'customer.subscription.created': {
-        const subscription: any = event.data.object;
-        // Hunt Pass: shopper subscription — route by metadata before organizer path
-        if (subscription.metadata?.type === 'hunt_pass') {
-          const userId = subscription.metadata?.userId;
-          if (userId) {
-            const expiry = new Date(subscription.current_period_end * 1000);
-            await prisma.user.update({
-              where: { id: userId },
-              data: {
-                huntPassActive: true,
-                huntPassExpiry: expiry,
-                huntPassStripeSubscriptionId: subscription.id,
-                huntPassCancelledAt: null,
-              },
-            });
-            console.log(`[billing] Hunt Pass activated for user ${userId}, expires ${expiry.toISOString()}`);
-          }
-          break;
-        }
-        // Organizer subscription path
-        const priceId = subscription.items.data[0]?.price.id;
-        const organizerId = await getOrganizerIdFromStripeCustomer(subscription.customer);
-        if (organizerId) {
-          await syncTier(organizerId, subscription.status, priceId, subscription.id);
-        }
-        break;
-      }
-
-      case 'customer.subscription.updated': {
-        const subscription: any = event.data.object;
-        // Hunt Pass: refresh expiry on renewal or update
-        if (subscription.metadata?.type === 'hunt_pass') {
-          const userId = subscription.metadata?.userId;
-          if (userId && subscription.status === 'active') {
-            const expiry = new Date(subscription.current_period_end * 1000);
-            await prisma.user.update({
-              where: { id: userId },
-              data: {
-                huntPassActive: true,
-                huntPassExpiry: expiry,
-              },
-            });
-            console.log(`[billing] Hunt Pass renewed for user ${userId}, expires ${expiry.toISOString()}`);
-          }
-          break;
-        }
-        // Organizer subscription path
-        const priceId = subscription.items.data[0]?.price.id;
-        const organizerId = await getOrganizerIdFromStripeCustomer(subscription.customer);
-        if (organizerId) {
-          await syncTier(organizerId, subscription.status, priceId, subscription.id);
-
-          // Grace Period: If organizer re-upgrades during grace, restore all items
-          const organizer = await prisma.organizer.findUnique({
-            where: { id: organizerId }
-          });
-          if (
-            organizer?.graceEndAt &&
-            new Date() <= organizer.graceEndAt &&
-            subscription.status === 'active'
-          ) {
-            await clearGracePeriod(organizerId);
-            console.log(`[billing] Grace period cleared for organizer ${organizerId} after tier restoration`);
-          }
-        }
-        break;
-      }
-
-      case 'customer.subscription.deleted': {
-        const subscription: any = event.data.object;
-        // Hunt Pass: deactivate when subscription ends
-        if (subscription.metadata?.type === 'hunt_pass') {
-          const userId = subscription.metadata?.userId;
-          if (userId) {
-            await prisma.user.update({
-              where: { id: userId },
-              data: {
-                huntPassActive: false,
-                huntPassStripeSubscriptionId: null,
-                huntPassCancelledAt: new Date(),
-              },
-            });
-            console.log(`[billing] Hunt Pass deactivated for user ${userId}`);
-          }
-          break;
-        }
-        // Organizer subscription path
-        const organizerId = await getOrganizerIdFromStripeCustomer(subscription.customer);
-        if (organizerId) {
-          // Feature #75: Downgrade to SIMPLE tier on lapse, but keep User roles intact
-          // Do NOT remove ORGANIZER role — only downgrade subscription tier
-          await syncTier(organizerId, 'canceled', null, null); // null clears stripeSubscriptionId
-
-          // Record tier lapse timestamp for UserRoleSubscription
-          const user = await prisma.user.findFirst({
-            where: { organizer: { id: organizerId } },
-            select: { id: true }
-          });
-
-          if (user) {
-            await prisma.userRoleSubscription.updateMany({
-              where: { userId: user.id, role: 'ORGANIZER' },
-              data: {
-                tierLapsedAt: new Date(),
-                subscriptionTier: 'SIMPLE',
-              }
-            });
-            console.log(`[billing] Tier lapsed for organizer ${organizerId}, downgraded to SIMPLE`);
-          }
-        }
-        break;
-      }
-
-      case 'invoice.payment_failed': {
-        const invoice: any = event.data.object;
-        console.warn(`Payment failed for subscription ${invoice.subscription}`);
-        // Do NOT downgrade immediately — Stripe will retry with dunning
-        break;
-      }
-
-      case 'invoice.payment_succeeded': {
-        const invoice: any = event.data.object;
-        const subscription: any = await stripe.subscriptions.retrieve(invoice.subscription);
-        const priceId = subscription.items.data[0]?.price.id;
-        const organizerId = await getOrganizerIdFromStripeCustomer(invoice.customer);
-        if (organizerId) {
-          // Feature #75: Restore tier on payment recovery
-          await syncTier(organizerId, 'active', priceId, subscription.id);
-
-          // Clear tier lapse timestamp
-          const user = await prisma.user.findFirst({
-            where: { organizer: { id: organizerId } },
-            select: { id: true }
-          });
-
-          if (user) {
-            await prisma.userRoleSubscription.updateMany({
-              where: { userId: user.id, role: 'ORGANIZER' },
-              data: {
-                tierLapsedAt: null,
-                tierResumedAt: new Date(),
-              }
-            });
-            console.log(`[billing] Tier resumed for organizer ${organizerId}`);
-          }
-
-          // Grace Period: Clear grace if organizer re-upgrades during grace period
-          const organizer = await prisma.organizer.findUnique({
-            where: { id: organizerId }
-          });
-          if (organizer?.graceEndAt && new Date() <= organizer.graceEndAt) {
-            await clearGracePeriod(organizerId);
-            console.log(`[billing] Grace period cleared for organizer ${organizerId} after re-upgrade`);
-          }
-        }
-        break;
-      }
-
-      case 'checkout.session.completed': {
-        // Security: Card Fingerprint Deduplication (P1)
-        const session: any = event.data.object;
-        const customerId = session.customer;
-
-        if (customerId) {
-          try {
-            // Get customer metadata to find user ID
-            const customer = await stripe.customers.retrieve(customerId);
-            if (customer.deleted) break;
-            const userId = (customer.metadata?.userId) as string | undefined;
-
-            if (userId && session.payment_method) {
-              // Retrieve payment method to get card fingerprint
-              const paymentMethod = await stripe.paymentMethods.retrieve(session.payment_method);
-              const fingerprint = paymentMethod.card?.fingerprint;
-
-              if (fingerprint) {
-                // Check if 5+ other users have the same fingerprint
-                const otherUsersWithSameFingerprint = await prisma.user.count({
-                  where: {
-                    stripeCardFingerprint: fingerprint,
-                    id: { not: userId },
-                  },
-                });
-
-                if (otherUsersWithSameFingerprint >= 5) {
-                  // Flag user as fraud suspect
-                  await prisma.user.update({
-                    where: { id: userId },
-                    data: { fraudSuspect: true },
-                  });
-
-                  console.warn(
-                    `[FRAUD_DETECTION] User ${userId} flagged. Card fingerprint ${fingerprint} shared by ${otherUsersWithSameFingerprint} other accounts.`
-                  );
-                }
-
-                // Store fingerprint for future checks
-                await prisma.user.update({
-                  where: { id: userId },
-                  data: { stripeCardFingerprint: fingerprint },
-                });
-              }
-            }
-          } catch (err: any) {
-            console.error('[checkout] Failed to check card fingerprint:', err.message);
-            // Non-blocking — don't fail the webhook
-          }
-        }
-        break;
-      }
-
-      default:
-        break;
-    }
-
-    // Terminal state written only AFTER the switch completed successfully
-    // (mirrors stripeController.ts:2686-2689).
-    await prisma.processedWebhookEvent.update({
-      where: { eventId: billingIdempotencyKey },
-      data: { status: 'COMPLETED' },
-    }).catch((e) => console.warn(`[billing-webhook] Failed to mark event ${event.id} COMPLETED:`, e));
-    res.json({ received: true });
-  } catch (handlerErr: any) {
-    // Mark FAILED so Stripe's retry is allowed to REPROCESS (fail-open) instead of
-    // being short-circuited by a COMPLETED row that was never actually earned
-    // (mirrors stripeController.ts:2691-2698). Guarded because a throw before the
-    // signature was verified leaves no row to update.
-    if (billingIdempotencyKey) {
-      await prisma.processedWebhookEvent.update({
-        where: { eventId: billingIdempotencyKey },
-        data: { status: 'FAILED' },
-      }).catch((e) => console.warn(`[billing-webhook] Failed to mark event ${event?.id} FAILED:`, e));
-    }
-    console.error(`[billing-webhook] handler threw for event ${event?.id} type=${event?.type}`, handlerErr);
-    if (!res.headersSent) {
-      res.status(500).json({ message: 'Webhook processing failed' });
-    }
-  }
-};
+// The Stripe subscription webhook (handleStripeWebhook) and the Stripe Billing Portal (createBillingPortal)
+// were removed with the rest of Stripe on 2026-11-04. POST /api/billing/webhook and POST /api/billing/portal
+// answer 410 STRIPE_RETIRED from index.ts.
 
 /**
  * GET /api/billing/subscription
@@ -452,11 +114,10 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // 2026-09-29: not Square-billed and Stripe's platform account is closed (see
-    // STRIPE_PLATFORM_CLOSED above). An organizer with a leftover Stripe subscription id, or one
-    // who already scheduled a DB-only cancellation, is answered from the database only: no Stripe
-    // call, and the scheduled end date (billingCurrentPeriodEnd) is reported instead of null.
-    if (STRIPE_PLATFORM_CLOSED && (organizer.stripeSubscriptionId || organizer.subscriptionStatus === 'scheduled_for_cancellation')) {
+    // Not Square-billed. An organizer with a leftover Stripe subscription id (Stripe is retired), or one
+    // who already scheduled a DB-only cancellation, is answered from the database only, and the
+    // scheduled end date (billingCurrentPeriodEnd) is reported instead of null.
+    if (organizer.stripeSubscriptionId || organizer.subscriptionStatus === 'scheduled_for_cancellation') {
       return res.json({
         tier: organizer.subscriptionTier,
         status: organizer.subscriptionStatus,
@@ -469,45 +130,15 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    if (!organizer.stripeSubscriptionId) {
-      return res.json({
-        tier: organizer.subscriptionTier,
-        status: null,
-        currentPeriodEnd: null,
-        cancelAtPeriodEnd: false,
-        priceId: null,
-        billingInterval: null,
-        ...entitlementFields(organizer),
-      });
-    }
-
-    try {
-      const subscription: any = await stripe.subscriptions.retrieve(organizer.stripeSubscriptionId);
-      const priceData = subscription.items.data[0]?.price;
-      const priceId = priceData?.id;
-      const tier = getTierFromPriceId(priceId);
-
-      res.json({
-        tier,
-        status: subscription.status,
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        priceId,
-        billingInterval: priceData?.recurring?.interval || null,
-        ...entitlementFields(organizer),
-      });
-    } catch (stripeError) {
-      console.error('Failed to fetch subscription from Stripe, falling back to DB:', stripeError);
-      res.json({
-        tier: organizer.subscriptionTier,
-        status: organizer.subscriptionStatus,
-        currentPeriodEnd: organizer.billingCurrentPeriodEnd,
-        cancelAtPeriodEnd: organizer.subscriptionStatus === 'scheduled_for_cancellation',
-        priceId: null,
-        billingInterval: null,
-        ...entitlementFields(organizer),
-      });
-    }
+    return res.json({
+      tier: organizer.subscriptionTier,
+      status: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      priceId: null,
+      billingInterval: null,
+      ...entitlementFields(organizer),
+    });
   } catch (error) {
     console.error('Get subscription error:', error);
     res.status(500).json({ message: 'Failed to retrieve subscription' });
@@ -531,51 +162,22 @@ export const cancelSubscription = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
-    // 2026-09-29: DB-only cancel for every organizer that is not on a live Stripe subscription
-    // (Square-billed, or frozen on the closed Stripe account). The Stripe branch below used to be
-    // the only path for frozen organizers and always failed with a 500 (closed platform account).
-    // Same fields and messaging as cancelSquareBillingSubscription; no Stripe API call.
-    if (STRIPE_PLATFORM_CLOSED || organizer.billingProcessor === 'square') {
-      if (!isPaidTierValue(organizer.subscriptionTier)) {
-        return res.status(400).json({ message: 'No active subscription to cancel' });
-      }
-      const { periodEnd } = await scheduleCancellationFromDb(organizer);
-      return res.json({
-        tier: organizer.subscriptionTier,
-        status: 'scheduled_for_cancellation',
-        currentPeriodEnd: periodEnd,
-        cancelAtPeriodEnd: true,
-        priceId: null,
-        billingInterval: organizer.billingInterval,
-        billingProcessor: organizer.billingProcessor === 'square' ? 'square' : null,
-      });
-    }
-
-    if (!organizer.stripeSubscriptionId) {
+    // DB-only cancel for every organizer (Square-billed, or frozen on the retired Stripe account).
+    // Same fields and messaging as cancelSquareBillingSubscription; no processor API call.
+    if (!isPaidTierValue(organizer.subscriptionTier)) {
       return res.status(400).json({ message: 'No active subscription to cancel' });
     }
-
-    const subscription: any = await stripe.subscriptions.update(organizer.stripeSubscriptionId, {
-      cancel_at_period_end: true,
+    const { periodEnd } = await scheduleCancellationFromDb(organizer);
+    return res.json({
+      tier: organizer.subscriptionTier,
+      status: 'scheduled_for_cancellation',
+      currentPeriodEnd: periodEnd,
+      cancelAtPeriodEnd: true,
+      priceId: null,
+      billingInterval: organizer.billingInterval,
+      billingProcessor: organizer.billingProcessor === 'square' ? 'square' : null,
     });
 
-    await prisma.organizer.update({
-      where: { id: organizer.id },
-      data: { subscriptionStatus: 'scheduled_for_cancellation' },
-    });
-
-    const priceData = subscription.items.data[0]?.price;
-    const priceId = priceData?.id;
-    const tier = getTierFromPriceId(priceId);
-
-    res.json({
-      tier,
-      status: subscription.status,
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-      cancelAtPeriodEnd: subscription.cancel_at_period_end,
-      priceId,
-      billingInterval: priceData?.recurring?.interval || null,
-    });
   } catch (error) {
     console.error('Cancel subscription error:', error);
     res.status(500).json({ message: 'Failed to cancel subscription' });
@@ -588,8 +190,7 @@ export const cancelSubscription = async (req: AuthRequest, res: Response) => {
  * organizer back to 'active' (or 'trialing' when a trial is still running) and, for an organizer
  * that is not Square-billed, clears the period end that scheduleCancellationFromDb recorded (a
  * non-Square organizer has no real billing period, so that date only meant "cancellation date").
- * DB-only, no Stripe call, unless STRIPE_PLATFORM_CLOSED is 'false' and the organizer has a live
- * Stripe subscription (then the original Stripe cancel_at_period_end is reversed too).
+ * DB-only, no processor call.
  * AUTHZ/OWNERSHIP: organizer resolved only from req.user.id.
  */
 export const undoCancelSubscription = async (req: AuthRequest, res: Response) => {
@@ -614,9 +215,6 @@ export const undoCancelSubscription = async (req: AuthRequest, res: Response) =>
     }
 
     const isSquare = organizer.billingProcessor === 'square';
-    if (!STRIPE_PLATFORM_CLOSED && !isSquare && organizer.stripeSubscriptionId) {
-      await stripe.subscriptions.update(organizer.stripeSubscriptionId, { cancel_at_period_end: false });
-    }
 
     const restoredStatus = organizer.trialEndsAt && organizer.trialEndsAt.getTime() > now.getTime() ? 'trialing' : 'active';
     const updated = await prisma.organizer.update({
@@ -1085,44 +683,6 @@ export const cancelSquareBillingSubscription = async (req: AuthRequest, res: Res
 };
 
 /**
- * POST /api/billing/portal
- * Create a Stripe Billing Portal session for organizer account management
- */
-export const createBillingPortal = async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user?.id) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    const organizer = await prisma.organizer.findUnique({
-      where: { userId: req.user.id },
-    });
-
-    if (!organizer) {
-      return res.status(404).json({ message: 'Organizer profile not found' });
-    }
-
-    if (!organizer.stripeCustomerId) {
-      return res.status(400).json({ message: 'No Stripe customer found. Please subscribe first.' });
-    }
-
-    const session = await stripe.billingPortal.sessions.create({
-      customer: organizer.stripeCustomerId,
-      return_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/organizer/subscription`,
-    });
-
-    if (!session.url) {
-      return res.status(500).json({ message: 'Failed to create billing portal session' });
-    }
-
-    res.json({ url: session.url });
-  } catch (error) {
-    console.error('Billing portal session error:', error);
-    res.status(500).json({ message: 'Failed to create billing portal session' });
-  }
-};
-
-/**
  * GET /api/billing/downgrade-preview
  * Preview what changes when downgrading to SIMPLE.
  *
@@ -1190,67 +750,24 @@ export const confirmDowngrade = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer not found' });
     }
 
-    // 2026-09-29: DB-only path (Square-billed, or frozen on the closed Stripe account). Schedules
-    // the same cancel-at-period-end as POST /billing/cancel and does NOT start a grace period:
-    // under D1/D2 the plan stays fully active until the period ends and nothing is locked.
-    // (The Stripe branch below used to set graceEndAt first and then 500 on the closed account,
-    // leaving a grace marker behind with no cancellation scheduled.)
-    if (STRIPE_PLATFORM_CLOSED || organizer.billingProcessor === 'square') {
-      if (!isPaidTierValue(organizer.subscriptionTier)) {
-        return res.status(400).json({ message: 'No active subscription to downgrade' });
-      }
-      const { periodEnd } = await scheduleCancellationFromDb(organizer);
-      return res.json({
-        success: true,
-        message: `Downgrade scheduled. Your ${organizer.subscriptionTier} plan stays active until ${periodEnd.toISOString().slice(0, 10)}.`,
-        planEndsAt: periodEnd.toISOString(),
-      });
-    }
-
-    if (!organizer.stripeSubscriptionId) {
+    // DB-only path (Square-billed, or frozen on the retired Stripe account). Schedules the same
+    // cancel-at-period-end as POST /billing/cancel and does NOT start a grace period: under D1/D2 the
+    // plan stays fully active until the period ends and nothing is locked.
+    if (!isPaidTierValue(organizer.subscriptionTier)) {
       return res.status(400).json({ message: 'No active subscription to downgrade' });
     }
-
-    // Trigger grace period
-    const graceEndAt = await triggerGracePeriod(
-      organizer.id,
-      organizer.subscriptionTier || 'PRO'
-    );
-
-    // Cancel subscription at period end (not immediately)
-    await stripe.subscriptions.update(organizer.stripeSubscriptionId, {
-      cancel_at_period_end: true
-    });
-
+    const { periodEnd } = await scheduleCancellationFromDb(organizer);
     return res.json({
       success: true,
-      message: 'Downgrade scheduled. Your 7-day grace period has started.',
-      graceEndAt: graceEndAt.toISOString()
+      message: `Downgrade scheduled. Your ${organizer.subscriptionTier} plan stays active until ${periodEnd.toISOString().slice(0, 10)}.`,
+      planEndsAt: periodEnd.toISOString(),
     });
+
   } catch (err) {
     console.error('Confirm downgrade error:', err);
     return res.status(500).json({ message: 'Failed to schedule downgrade' });
   }
 };
-
-async function getOrganizerIdFromStripeCustomer(customerId: string): Promise<string | null> {
-  const organizer = await prisma.organizer.findFirst({
-    where: { stripeCustomerId: customerId },
-    select: { id: true },
-  });
-  return organizer?.id || null;
-}
-
-function getTierFromPriceId(priceId: string | null): SubscriptionTier {
-  if (!priceId) return 'SIMPLE';
-  const proMonthly = process.env.STRIPE_PRO_MONTHLY_PRICE_ID;
-  const proAnnual = process.env.STRIPE_PRO_ANNUAL_PRICE_ID;
-  const teamsMonthly = process.env.STRIPE_TEAMS_MONTHLY_PRICE_ID;
-  const teamsAnnual = process.env.STRIPE_TEAMS_ANNUAL_PRICE_ID;
-  if (priceId === proMonthly || priceId === proAnnual) return 'PRO' as SubscriptionTier;
-  if (priceId === teamsMonthly || priceId === teamsAnnual) return 'TEAMS' as SubscriptionTier;
-  return 'SIMPLE';
-}
 
 // ---------------------------------------------------------------------------
 // Bring-Your-Own-Rails (BYOR, 2026-09-06) -- opt-in + usage-visibility endpoints.

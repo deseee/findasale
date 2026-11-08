@@ -48,6 +48,7 @@
  * limit like concurrent sales, which this isn't).
  */
 
+import { gateCardCharge } from '../services/restrictedItem/cardPaymentGate'; // 2026-11-06 restricted-item card gate
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -373,6 +374,19 @@ export const createGuestInvoice = async (req: AuthRequest, res: Response) => {
     const squareDescription = lineItems && lineItems.length > 0
       ? `${normalizedTitle} + more`.slice(0, 200)
       : normalizedTitle;
+
+    // Restricted-item card gate (2026-11-06): a guest invoice has no catalog item (itemIds: []), so no item class
+    // applies; the gate still enforces the organizer card suspension on this card path.
+    {
+      const gate = await gateCardCharge({
+        processor: 'SQUARE',
+        organizerId: organizer.id,
+        lines: [{ itemId: null, amountCents: grandTotal }],
+        cardChargeCents: grandTotal,
+        context: { path: 'square.online.guestInvoice', buyerUserId: existingUser?.id ?? null, sessionRef: holdInvoiceId },
+      });
+      if (!gate.ok) return res.status(gate.status).json(gate.body);
+    }
 
     let squareResult;
     try {

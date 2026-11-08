@@ -43,7 +43,6 @@ export default function SubscriptionPage() {
   const [canceling, setCanceling] = useState(false);
   const [undoingCancel, setUndoingCancel] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [managingPlan, setManagingPlan] = useState(false);
   const [showDowngradePreview, setShowDowngradePreview] = useState(false);
   const [downgradePreview, setDowngradePreview] = useState<any>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -95,8 +94,8 @@ export default function SubscriptionPage() {
   const handleCancel = async () => {
     setCanceling(true);
     try {
-      // Square Plan B (2026-09-13): a Square-billed organizer cancels through the
-      // scheduler-owned endpoint, not the (dead) Stripe one.
+      // Square Plan B (2026-09-13): a Square-billed organizer cancels through the scheduler-owned
+      // endpoint; everyone else (including a leftover pre-Square plan) cancels in the database only.
       const endpoint = subscription?.billingProcessor === 'square' ? '/billing/square/cancel' : '/billing/cancel';
       const updated = await api.post(endpoint);
       setSubscription(updated.data);
@@ -142,23 +141,6 @@ export default function SubscriptionPage() {
       setSquareSetupError(err.response?.data?.message ?? 'Could not set up Square billing. Please try again.');
     } finally {
       setSettingUpSquare(false);
-    }
-  };
-
-  const handleManagePlan = async () => {
-    setManagingPlan(true);
-    try {
-      const data = await api.post('/billing/portal');
-      if (data.data?.url) {
-        window.location.href = data.data.url;
-      } else {
-        showToast('Failed to open billing portal', 'error');
-      }
-    } catch (error) {
-      console.error('Error accessing billing portal:', error);
-      showToast('Failed to access billing portal', 'error');
-    } finally {
-      setManagingPlan(false);
     }
   };
 
@@ -762,14 +744,6 @@ export default function SubscriptionPage() {
                         <a href="mailto:support@finda.sale" className="underline font-medium">support@finda.sale</a>.
                       </p>
                     </div>
-                  ) : subscription.billingInterval ? (
-                    <button
-                      onClick={handleManagePlan}
-                      disabled={managingPlan}
-                      className="block w-full text-center bg-sage-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-sage-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {managingPlan ? 'Opening Portal...' : 'Manage Plan'}
-                    </button>
                   ) : showSquareSetup ? (
                     <div className="space-y-3">
                       {squareSetupError && (

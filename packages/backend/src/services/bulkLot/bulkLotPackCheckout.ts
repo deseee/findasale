@@ -28,6 +28,7 @@ import crypto from 'crypto';
 import { SellUnitsInTx, bulkLotError, isBulkLotError, lockBulkSaleKey, sellBulkLinesInTransaction } from './bulkLotService';
 import type { PackPlan } from './bulkLotPackService';
 import { ApplicationFeeBreakdown, applyInclusiveFloor, calculateApplicationFee, cardLegFeeFits, MIN_CARD_SALE_CENTS, snapshotFromBreakdown } from '../../utils/feeCalculator';
+import { isPurchaseKeyViolation } from '../../utils/uniqueViolation'; // 2026-11-05: P2002 on a Purchase key = already recorded
 
 /** The platform minimum card sale ($0.99, Patrick 2026-10-12, MIN_CARD_SALE_CENTS). A pack under this cannot be sold online (Square's own floor is $0.50). */
 export const PACK_MIN_CHARGE_CENTS = MIN_CARD_SALE_CENTS;
@@ -264,6 +265,17 @@ export async function executePackCheckout(deps: PackCheckoutDeps, input: PackChe
       if (err.sameCharge) return { outcome: 'REPLAY', purchase: err.purchase };
       const refund = await deps.refund({ paymentId, amountCents: plan.cents, reason: 'DUPLICATE' });
       return { outcome: 'DUPLICATE_REFUNDED', purchase: err.purchase, paymentId, refund };
+    }
+    if (isPurchaseKeyViolation(err)) {
+      // 2026-11-05 (schema review #2): (clientTransactionId, itemId) / (squarePaymentId, itemId) are unique. Another attempt with this
+      // key committed first (nothing of this one was written): same answers as PackAlreadyRecorded above.
+      const winner = await db.purchase.findFirst({ where: { clientTransactionId: txnKey } }).catch(() => null);
+      if (winner) {
+        await deps.releaseDebt(debtAppliedCents);
+        if (winner.squarePaymentId === paymentId) return { outcome: 'REPLAY', purchase: winner };
+        const refund = await deps.refund({ paymentId, amountCents: plan.cents, reason: 'DUPLICATE' });
+        return { outcome: 'DUPLICATE_REFUNDED', purchase: winner, paymentId, refund };
+      }
     }
     if (isBulkLotError(err)) {
       await deps.releaseDebt(debtAppliedCents);

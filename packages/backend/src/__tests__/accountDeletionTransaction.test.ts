@@ -23,6 +23,11 @@ const mockPrisma: any = {
   organizer: { findUnique: jest.fn().mockResolvedValue(null) },
   organizerWorkspace: { count: jest.fn().mockResolvedValue(0) },
   vendorBooth: { count: jest.fn().mockResolvedValue(0) },
+  // 2026-11-05 (schema review #3/#4): ledger FKs are RESTRICT, so these block a hard delete too (services/ledgerDeletionGuards.ts).
+  holdInvoice: { count: jest.fn().mockResolvedValue(0) },
+  consignorPayout: { count: jest.fn().mockResolvedValue(0) },
+  consignorPayoutItem: { count: jest.fn().mockResolvedValue(0) },
+  consignorSettlementBatch: { count: jest.fn().mockResolvedValue(0) },
 };
 const mockHandOff = jest.fn(async (userId: string, _db: unknown) => { calls.push(`handoff:${userId}`); return { transferred: 0, decremented: 0 }; });
 
@@ -56,7 +61,7 @@ beforeEach(() => {
   mockPrisma.$transaction.mockImplementation(async (fn: (tx: any) => Promise<unknown>) => fn(mockTx));
   mockTx.user.delete.mockImplementation(async (args: any) => { calls.push(`tx.user.delete:${args.where.id}`); return {}; });
   mockHandOff.mockImplementation(async (userId: string) => { calls.push(`handoff:${userId}`); return { transferred: 0, decremented: 0 }; });
-  for (const m of ['sale', 'saleHub', 'treasureTrail', 'affiliateLink', 'dispute', 'appraisalAIRequest', 'affiliateReferral', 'referralReward', 'affiliateConversion', 'organizerWorkspace', 'vendorBooth']) {
+  for (const m of ['sale', 'saleHub', 'treasureTrail', 'affiliateLink', 'dispute', 'appraisalAIRequest', 'affiliateReferral', 'referralReward', 'affiliateConversion', 'organizerWorkspace', 'vendorBooth', 'holdInvoice', 'consignorPayout', 'consignorPayoutItem', 'consignorSettlementBatch']) {
     mockPrisma[m].count.mockResolvedValue(0);
   }
   mockPrisma.organizer.findUnique.mockResolvedValue(null);
@@ -98,6 +103,28 @@ describe('userController.deleteAccount', () => {
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it('blocks (400, nothing deleted) when the account is the organizer on an invoice or owns consignor ledger rows', async () => {
+    mockPrisma.holdInvoice.count.mockResolvedValue(2);
+    mockPrisma.consignorSettlementBatch.count.mockResolvedValue(1);
+    const res = mkRes();
+    await deleteAccount({ user: { id: 'u1', email: 'u1@example.com', password: null, organizer: { id: 'o1' } }, body: {} } as any, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    const msg = res.json.mock.calls[0][0].message;
+    expect(msg).toContain('2 invoices');
+    expect(msg).toContain('1 consignor settlement batch');
+    expect(mockPrisma.holdInvoice.count).toHaveBeenCalledWith({ where: { organizerUserId: 'u1' } });
+    expect(mockPrisma.consignorSettlementBatch.count).toHaveBeenCalledWith({ where: { workspace: { ownerId: 'o1' } } });
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('a shopper-only account (no organizer) only checks invoices it organized, never the consignor ledger', async () => {
+    const res = mkRes();
+    await deleteAccount(req(), res);
+    expect(mockPrisma.holdInvoice.count).toHaveBeenCalledWith({ where: { organizerUserId: 'u1' } });
+    expect(mockPrisma.consignorPayout.count).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
   it('does not delete the user when the crew handoff fails (500, nothing deleted)', async () => {
     mockHandOff.mockRejectedValueOnce(new Error('handoff failed'));
     const res = mkRes();
@@ -129,6 +156,16 @@ describe('adminController.purgeUser', () => {
     expect(calls).toEqual(['handoff:u9', 'tx.user.delete:u9']);
     expect(mockPrisma.user.delete).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, purgedUserId: 'u9' }));
+  });
+
+  it('blocks (409) when invoices or consignor payouts reference the account', async () => {
+    mockPrisma.consignorPayout.count.mockResolvedValue(3);
+    mockPrisma.organizer.findUnique.mockResolvedValue({ id: 'o9' });
+    const res = mkRes();
+    await purgeUser(req(), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ blockedBy: 'Ledger' }));
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('still blocks (409) when AffiliateLink rows reference the account', async () => {

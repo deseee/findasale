@@ -2,11 +2,8 @@ import cron from 'node-cron';
 import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
-import { getStripe } from '../utils/stripe';
-import { isStripePlatformClosed } from '../utils/stripeBootConfig'; // 2026-09-30: Stripe platform closed, Stripe branches make no API calls
 import { createNotification } from '../lib/notificationService';
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder';
-import { shouldUseDirectCharge } from '../services/stripeConnectService';
 import { getSquareOrderPaymentStatus, deleteSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // Square changeover Wave S3 (2026-09-09): POSPaymentLink reconciliation, Square branch
 import { prepareSquareInvoiceForRelease } from '../services/holdInvoiceSquareRelease'; // 2026-09-29 money review P0-2: a Square payment link is checked for payment and cancelled BEFORE its POS link row is flipped, same gate reservationController.releasePaymentLink uses
 import type { POSPaymentLink } from '@prisma/client';
@@ -54,9 +51,11 @@ import type { POSPaymentLink } from '@prisma/client';
  * Kill-switch: set POS_PAYMENT_LINK_EXPIRY_RECLAIM_DISABLED=1 to disable JUST this expiry
  * revert branch (rollback lever independent of POS_RECONCILE_DISABLED, which disables the
  * whole job including the paid-reconcile logic above).
+ *
+ * STRIPE RETIRED (owner decision 2026-11-04): this job makes no Stripe calls. Square links are
+ * reconciled as described above. A historical Stripe link can no longer be verified, so an in-window
+ * one is left untouched and only the local stale-row EXPIRED flip still applies to it.
  */
-
-const stripe = () => getStripe();
 
 /**
  * Shared EXPIRED-flip + item-revert + notify + best-effort Stripe-deactivate logic.
@@ -72,15 +71,6 @@ const stripe = () => getStripe();
 const reclaimExpiredPaymentLink = async (
   link: POSPaymentLink,
   reasonLabel: string,
-  // Direct-charge account-context fix (2026-08-20, S-QR-DIRECT-CHARGE-PRICE-MISMATCH
-  // follow-up): a Direct-charge organizer's Stripe Payment Link lives on their CONNECTED
-  // account, not the platform account -- the best-effort deactivate call below must be
-  // routed the same way the link was originally created, or Stripe rejects it with "No
-  // such payment link" (confirmed live in production for organizer
-  // cmnxueoas0005tfv8brnc0kky, 2026-08-20T18:16:07Z). Undefined = platform account
-  // (DESTINATION-charge / no-Connect links), matching every other call site's
-  // { stripeAccount } convention in this codebase.
-  stripeRequestOptions?: { stripeAccount: string },
   // Manual-reclaim P2 fix (2026-09-13): 'CANCELLED' lets manuallyReclaimPosPaymentLink
   // (below) reuse this exact same flip+revert+notify+deactivate sequence for an
   // organizer-initiated reclaim, distinct in the DB and in the shopper-facing
@@ -214,10 +204,8 @@ const reclaimExpiredPaymentLink = async (
         } else {
           console.warn(`[pos-reconcile] SQUARE-processor link ${link.id} has no squarePaymentLinkId -- cannot deactivate (non-fatal).`);
         }
-      } else if (!isStripePlatformClosed(process.env)) {
-        // Stripe platform closed (2026-09-30): no Stripe API call; the link row is already flipped locally.
-        await stripe().paymentLinks.update(link.stripePaymentLinkId!, { active: false }, stripeRequestOptions);
       }
+      // A historical Stripe link has nothing to deactivate (Stripe is retired); the row is flipped locally above.
     } catch (deactivateErr: any) {
       console.warn(`[pos-reconcile] Failed to deactivate payment link ${link.id} (non-fatal):`, deactivateErr?.message ?? deactivateErr);
     }
@@ -259,33 +247,6 @@ export const manuallyReclaimPosPaymentLink = async (
 
   const isSquareLink = link.processor === 'SQUARE';
 
-  // Same Direct-charge account-context resolution reconcileStrandedPosSales runs per
-  // link below -- duplicated rather than extracted so this manual path stays
-  // independently readable; it is the only other call site.
-  let stripeRequestOptions: { stripeAccount: string } | undefined;
-  if (!isSquareLink) {
-    if (link.chargeType) {
-      if (link.chargeType === 'DIRECT' && link.stripeAccountId) {
-        stripeRequestOptions = { stripeAccount: link.stripeAccountId };
-      }
-    } else {
-      try {
-        const linkOrganizer = await prisma.organizer.findUnique({
-          where: { id: link.organizerId },
-          select: { stripeConnectId: true },
-        });
-        if (linkOrganizer?.stripeConnectId) {
-          const linkUseDirect = await shouldUseDirectCharge(link.organizerId, linkOrganizer.stripeConnectId);
-          if (linkUseDirect) {
-            stripeRequestOptions = { stripeAccount: linkOrganizer.stripeConnectId };
-          }
-        }
-      } catch (routingErr: any) {
-        console.warn(`[pos-reconcile] manual-reclaim: failed to resolve Stripe account context for link=${link.id} (falling back to platform account):`, routingErr?.message ?? routingErr);
-      }
-    }
-  }
-
   try {
     if (isSquareLink) {
       if (!link.squareOrderId) {
@@ -299,18 +260,8 @@ export const manuallyReclaimPosPaymentLink = async (
         return { outcome: 'already_paid' };
       }
     } else {
-      if (isStripePlatformClosed(process.env)) {
-        // Stripe platform closed (2026-09-30): cannot verify a Stripe link, so never revert it blindly.
-        return { outcome: 'error', message: 'This payment link was created with a payment processor that is no longer available, so it cannot be verified or cancelled from here. Please contact support.' };
-      }
-      const sessions = await stripe().checkout.sessions.list(
-        { payment_link: link.stripePaymentLinkId!, limit: 5 },
-        stripeRequestOptions
-      );
-      const paidSession = sessions.data.find((s) => s.status === 'complete' && s.payment_status === 'paid');
-      if (paidSession) {
-        return { outcome: 'already_paid' };
-      }
+      // Stripe is retired (2026-11-04): a historical Stripe link cannot be verified, so never revert it blindly.
+      return { outcome: 'error', message: 'This payment link was created with a payment processor that is no longer available, so it cannot be verified or cancelled from here. Please contact support.' };
     }
   } catch (checkErr: any) {
     console.error(`[pos-reconcile] manual-reclaim: payment-status check failed for link=${link.id}:`, checkErr?.message ?? checkErr);
@@ -320,7 +271,6 @@ export const manuallyReclaimPosPaymentLink = async (
   const { flipped, revertedItemIds, gate } = await reclaimExpiredPaymentLink(
     link,
     'manually reclaimed by organizer via /organizer/holds',
-    stripeRequestOptions,
     'CANCELLED'
   );
 
@@ -372,10 +322,9 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
 
   console.log(`[pos-reconcile] Checking ${candidates.length} ACTIVE POS payment link(s) older than 10 min for stranded sales.`);
 
-  // Stripe platform permanently closed (2026-09-30): in-window STRIPE links cannot be verified, so they are
-  // left untouched with a single info log after the loop. SQUARE links and the local stale-row EXPIRED flip
-  // (which now skips the Stripe deactivate call) behave as before.
-  const stripeClosed = isStripePlatformClosed(process.env);
+  // Stripe is retired (2026-11-04): in-window historical STRIPE links cannot be verified, so they are left
+  // untouched with a single info log after the loop. SQUARE links and the local stale-row EXPIRED flip behave
+  // as before.
   let stripeSkippedClosed = 0;
 
   for (const link of candidates) {
@@ -385,38 +334,6 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
     // getSquareOrderPaymentStatus/deleteSquareCheckoutLink instead (mirrors
     // squareCheckoutLinkService.ts's own token-resolution-lives-inside-the-service design).
     const isSquareLink = link.processor === 'SQUARE';
-
-    // Direct-charge account-context fix (2026-08-20, updated same day once the
-    // stripeAccountId/chargeType columns landed -- 20260820190000_add_pos_payment_link_
-    // stripe_account_snapshot): prefer the value PINNED on the link at creation time.
-    // Only a pre-migration row (chargeType NULL) falls back to recomputing the same
-    // live-eligibility + allowlist check createPaymentLinkInternal ran originally --
-    // mirrors holdInvoicePaymentRecorder.ts's identical chargeType-NULL fallback shape.
-    // Fails closed to undefined (platform account) on any lookup error, mirroring
-    // shouldUseDirectCharge's own fail-closed contract.
-    let linkStripeRequestOptions: { stripeAccount: string } | undefined;
-    if (!isSquareLink) {
-      if (link.chargeType) {
-        if (link.chargeType === 'DIRECT' && link.stripeAccountId) {
-          linkStripeRequestOptions = { stripeAccount: link.stripeAccountId };
-        }
-      } else {
-        try {
-          const linkOrganizer = await prisma.organizer.findUnique({
-            where: { id: link.organizerId },
-            select: { stripeConnectId: true },
-          });
-          if (linkOrganizer?.stripeConnectId) {
-            const linkUseDirect = await shouldUseDirectCharge(link.organizerId, linkOrganizer.stripeConnectId);
-            if (linkUseDirect) {
-              linkStripeRequestOptions = { stripeAccount: linkOrganizer.stripeConnectId };
-            }
-          }
-        } catch (routingErr: any) {
-          console.warn(`[pos-reconcile] Failed to resolve Stripe account context for link=${link.id} (falling back to platform account):`, routingErr?.message ?? routingErr);
-        }
-      }
-    }
 
     if (link.createdAt < staleRowCutoff) {
       // Stale-row-cutoff fix (2026-08-07): previously this branch only logged and
@@ -434,14 +351,13 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
       if (process.env.POS_PAYMENT_LINK_EXPIRY_RECLAIM_DISABLED !== '1') {
         await reclaimExpiredPaymentLink(
           link,
-          `exceeded ${STALE_ROW_CUTOFF_DAYS}d stale-row cutoff (createdAt=${link.createdAt.toISOString()}) without ever resolving`,
-          linkStripeRequestOptions
+          `exceeded ${STALE_ROW_CUTOFF_DAYS}d stale-row cutoff (createdAt=${link.createdAt.toISOString()}) without ever resolving`
         );
       }
       continue;
     }
 
-    if (!isSquareLink && stripeClosed) {
+    if (!isSquareLink) {
       stripeSkippedClosed++;
       continue;
     }
@@ -476,8 +392,7 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
           ) {
             await reclaimExpiredPaymentLink(
               link,
-              `CHECKOUT_LINK Square payment link passed its own expiresAt (${linkExpiresAt.toISOString()}) with no paid Square order found (order state=${statusResult.state})`,
-              undefined
+              `CHECKOUT_LINK Square payment link passed its own expiresAt (${linkExpiresAt.toISOString()}) with no paid Square order found (order state=${statusResult.state})`
             );
           }
           continue;
@@ -519,103 +434,13 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
         }
         continue;
       }
-
-      const sessions = await stripe().checkout.sessions.list(
-        {
-          // Non-null assertion safe here: this line is only reached once isSquareLink has
-          // already continue'd above -- every STRIPE-processor row always has
-          // stripePaymentLinkId set (the column is nullable only to accommodate SQUARE rows,
-          // see schema.prisma's POSPaymentLink comment).
-          payment_link: link.stripePaymentLinkId!,
-          limit: 5,
-        },
-        linkStripeRequestOptions
-      );
-
-      const paidSession = sessions.data.find(
-        (s) => s.status === 'complete' && s.payment_status === 'paid'
-      );
-
-      if (!paidSession) {
-        // Reclaim-gap fix (2026-08-04): no paid session found -- check whether this
-        // link's own expiresAt (see header comment) has passed. If so, revert any of
-        // its items still stuck INVOICE_ISSUED via the shared reclaim helper below
-        // (also reused by the STALE_ROW_CUTOFF_DAYS branch above). See header comment
-        // for full rationale.
-        const nowTs = new Date();
-        const linkExpiresAt = link.expiresAt;
-        if (
-          linkExpiresAt &&
-          linkExpiresAt < nowTs &&
-          process.env.POS_PAYMENT_LINK_EXPIRY_RECLAIM_DISABLED !== '1'
-        ) {
-          await reclaimExpiredPaymentLink(
-            link,
-            `CHECKOUT_LINK payment link passed its own expiresAt (${linkExpiresAt.toISOString()}) with no paid Stripe session found`,
-            linkStripeRequestOptions
-          );
-        }
-        continue;
-      }
-
-      // Re-read the row immediately before recording to avoid racing the live webhook.
-      const fresh = await prisma.pOSPaymentLink.findUnique({ where: { id: link.id } });
-      if (!fresh || fresh.status === 'COMPLETED') continue;
-
-      // P0 fix (2026-08-26): pass the REAL Stripe PaymentIntent id through -- paidSession is
-      // already a real Stripe Checkout Session object fetched above via
-      // checkout.sessions.list(), no new Stripe API call needed. Same extraction idiom used
-      // in stripeController.ts's checkout.session.completed handler (payment_intent can come
-      // back either as a plain string id or an expanded object). Without this, recordPosPaymentLinkSale
-      // fell back to the synthetic `pos_<linkId>` placeholder, which broke refunds for every
-      // POS Payment Link sale recorded via this reconcile path.
-      const reconcilePaymentIntentId = typeof paidSession.payment_intent === 'string'
-        ? paidSession.payment_intent
-        : (paidSession.payment_intent as any)?.id ?? undefined;
-
-      // Square changeover Wave S1 (2026-09-09): generalized signature (processor + externalPaymentId), zero behavior change for this STRIPE reconcile path
-      const result = await recordPosPaymentLinkSale(fresh, {
-        source: 'reconcile',
-        sessionId: paidSession.id,
-        processor: 'STRIPE',
-        externalPaymentId: reconcilePaymentIntentId,
-      });
-
-      if (result.recorded) {
-        const amountDollars = (link.amount / 100).toFixed(2);
-        // Belt-and-suspenders: surface in monitoring even though it self-healed.
-        console.error(`[pos-reconcile] AUTO-RECORDED stranded sale link=${link.id} session=${paidSession.id} amount=$${amountDollars}`);
-
-        // Per-link organizer lookup (see note above) -- tolerate a missing/raced organizer
-        // without losing the auto-record or crashing the batch; just skip the notification.
-        const organizer = await prisma.organizer
-          .findUnique({ where: { id: link.organizerId }, select: { userId: true } })
-          .catch((e) => {
-            console.error(`[pos-reconcile] Organizer lookup failed for link=${link.id} organizerId=${link.organizerId}:`, e?.message ?? e);
-            return null;
-          });
-
-        if (organizer?.userId) {
-          await createNotification({
-            userId: organizer.userId,
-            type: 'POS_SALE_RECOVERED',
-            title: 'A POS sale was auto-recovered',
-            body: `A QR / payment-link sale of $${amountDollars} was captured by Stripe but not recorded at the moment of sale. FindA.Sale automatically reconciled and recorded it -- no action needed.`,
-            link: '/organizer/pos',
-            channel: 'OPERATIONAL',
-          }).catch((e) => console.error(`[pos-reconcile] Failed to notify organizer of recovered sale link=${link.id}:`, e));
-        }
-      } else if (!result.alreadyCompleted) {
-        // complete/paid at Stripe but recording did not take -- never silently lose it.
-        console.error(`[pos-reconcile] STRANDED-UNRECOVERED link=${link.id} session=${paidSession.id} -- session is complete/paid but recorder did not record; manual review needed.`);
-      }
     } catch (err: any) {
       console.error(`[pos-reconcile] STRANDED-UNRECOVERED link=${link.id} -- error while reconciling:`, err?.message ?? err);
     }
   }
 
   if (stripeSkippedClosed > 0) {
-    console.info(`[pos-reconcile] Stripe platform closed -- left ${stripeSkippedClosed} in-window Stripe payment link(s) untouched (no Stripe API calls).`);
+    console.info(`[pos-reconcile] Stripe is retired -- left ${stripeSkippedClosed} in-window historical Stripe payment link(s) untouched (no Stripe API calls).`);
   }
 };
 

@@ -11,12 +11,12 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { escapeHtml } from '../utils/htmlEscape'; // ADR-136 Addendum D: the customer name and item title in the receipt are typed by the organizer
-import { shouldUseDirectCharge } from './stripeConnectService'; // Purchase-row backfill (2026-08-09): recompute chargeType at payment-confirmation time, mirrors posPaymentLinkRecorder.ts
 import { accrueSplitCashLegOnce, allocateCentsProportionally } from './cashFeeService'; // 2026-09-29: cash-leg commission now accrues through the exactly-once CashFeeAccrual ledger (sourceType 'HOLD_INVOICE'), and per-row amounts/fees/cash legs are allocated in exact cents; mirrors posPaymentLinkRecorder.ts
 // 2026-09-29 money review P0-2: a captured Square payment on a dead invoice is recorded (items still available) or refunded, never left unresolved. The refund service is imported LAZILY (see refundOrEscalateDeadSquarePayment): it pulls in the Square token/crypto chain, which must not load for every caller of this recorder (Stripe webhook, tests) that never refunds.
 import { computeOversoldSettlement, settleOversoldPayment, notifyOversoldSettlement, type OversoldSettlement } from './oversoldPaymentRefundService'; // 2026-09-30 payment review finding 2: a paid item that could not be fulfilled (oversold) is refunded by its card share instead of only raising an alert
 import { findBulkLotItemIds } from './bulkLot/bulkLotService'; // ADR-136 Addendum B (#659): a bulk lot on a hold invoice is paid by the cards held for it, never sold as one unit
 import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
+import { isPurchaseKeyViolation } from '../utils/uniqueViolation'; // 2026-11-05: P2002 on a Purchase key = already recorded
 import { squareAppFeeNetOfProcessingCents } from '../utils/feeCalculator'; // 2026-10-12: record the app fee actually sent to Square (net of its processing cost)
 import { fireSquarePurchaseEngagement } from './squarePurchaseEngagementService'; // 2026-09-29 Sale Passport wiring: purchase XP, milestones, referral, badge, achievement and passport stamp for a Square-paid invoice (idempotent per payment, never throws)
 
@@ -76,18 +76,13 @@ import { fireSquarePurchaseEngagement } from './squarePurchaseEngagementService'
  * data already fetched/verified in this function (holdInvoice, bundledItems, the
  * paymentIntentId parameter). Idempotency mirrors posPaymentLinkRecorder.ts's second
  * layer: the compound partial unique index on (stripePaymentIntentId, itemId) backstops
- * the outer flip-guard above -- a P2002 on create is caught and treated as
- * already-recorded, never thrown. An item that hits InsufficientStockError in the stock
+ * the outer flip-guard above -- a P2002 on create rolls the transaction back and is answered as
+ * already-recorded by the catch around $transaction (2026-11-05), never surfaced as an error. An item that hits InsufficientStockError in the stock
  * loop below (oversold race) is excluded from Purchase creation, matching
  * posPaymentLinkRecorder.ts's oversoldItemIds handling (a real captured payment with no
  * deliverable item is a manual-refund-review case, not a fabricated fulfillment record).
- * HoldInvoice.chargeType/stripeAccountId (2026-08-18 migration) are preferred when present --
- * pinned at checkout-session-creation time, they cannot drift. Only pre-migration rows (both
- * columns NULL) fall back to recomputing DIRECT-vs-DESTINATION via shouldUseDirectCharge
- * against the sale's organizer -- same known edge case (can only disagree with the original
- * checkout-time decision if Stripe eligibility or the allowlist changed in between) still
- * accepted for the POS Payment Link path (posPaymentLinkRecorder.ts), which has no invoice-like
- * row to pin a snapshot onto.
+ * HoldInvoice.chargeType/stripeAccountId (2026-08-18 migration) are copied onto the Purchase rows when
+ * present (historical Stripe invoices only); Stripe is retired (2026-11-04), so nothing is recomputed.
  *
  * DEAD-INVOICE RESOLUTION (2026-09-29, money review P0-2): the "NO automatic refund" rule above
  * is superseded for SQUARE. A Square Payment Link can still be paid after its invoice was
@@ -940,24 +935,13 @@ export async function markHoldInvoicePaid(
       oversoldCtx.titles = oversoldRowIdx.map((idx) => bundledItems[idx].title);
     }
 
-    // Stripe account + charge-shape snapshot (2026-08-18 migration): prefer the value
-    // pinned on the invoice itself at checkout-session-creation time. Only a pre-migration
-    // row (chargeType NULL) falls back to recomputing it live against the sale's organizer.
+    // Historical Stripe account + charge-shape snapshot (2026-08-18 migration): only a historical Stripe
+    // invoice can carry chargeType DIRECT, and the value pinned on the invoice is copied onto the Purchase
+    // rows for history. Stripe is retired (2026-11-04): there is no live eligibility recompute any more,
+    // so an invoice without a pinned chargeType is never treated as a Direct charge.
     const saleOrganizerId = holdInvoice.sale?.organizerId ?? null;
-    let useDirect: boolean;
-    let chargeAccountId: string | null;
-    if (holdInvoice.chargeType) {
-      useDirect = holdInvoice.chargeType === 'DIRECT';
-      chargeAccountId = holdInvoice.stripeAccountId ?? null;
-    } else {
-      const saleOrganizer = saleOrganizerId
-        ? await tx.organizer.findUnique({ where: { id: saleOrganizerId }, select: { stripeConnectId: true } })
-        : null;
-      useDirect = !!(saleOrganizerId && saleOrganizer?.stripeConnectId
-        ? await shouldUseDirectCharge(saleOrganizerId, saleOrganizer.stripeConnectId)
-        : false);
-      chargeAccountId = useDirect ? saleOrganizer?.stripeConnectId ?? null : null;
-    }
+    const useDirect = holdInvoice.chargeType === 'DIRECT';
+    const chargeAccountId: string | null = useDirect ? holdInvoice.stripeAccountId ?? null : null;
 
     // Shipping passthrough (2026-09-16 follow-up, guest-invoice shipping/phone): a
     // guest-invoice organizer may have captured a real ship-to address on the invoice
@@ -1046,19 +1030,16 @@ export async function markHoldInvoicePaid(
         recordedPurchaseIds.push(createdPurchase.id);
         if (lotHoldForRow) await tx.bulkLotHold.updateMany({ where: { id: lotHoldForRow.id }, data: { purchaseId: createdPurchase.id } });
       } catch (purchaseErr: any) {
-        // Compound partial unique (stripePaymentIntentId, itemId) backstop -- mirrors
-        // posPaymentLinkRecorder.ts: a concurrent webhook/reconcile race that both reach
-        // this insert can't double-create a Purchase row for the same item + PaymentIntent.
-        // KNOWN GAP (Square changeover Wave S1, 2026-09-09, not fixed here): this backstop
-        // only covers stripePaymentIntentId -- a SQUARE-processor row has no matching unique
-        // index on squarePaymentId yet. Flagged for a follow-up schema change once Wave S2
-        // wires real Square traffic through this recorder; out of scope for this dispatch
-        // (no schema.prisma edits permitted).
+        // Compound partial unique backstops -- (stripePaymentIntentId, itemId) and, since migration
+        // 20260907010000_square_migration_wave0_schema, (squarePaymentId, itemId): a concurrent
+        // webhook/reconcile race that both reach this insert can't double-create a Purchase row for the
+        // same item + payment. 2026-11-05 (schema review #2): a P2002 ABORTS this Postgres transaction, so it
+        // can no longer be swallowed here (every later statement would fail with 25P02). It is re-thrown and
+        // the catch around $transaction answers "already recorded" (isPurchaseKeyViolation).
         if (purchaseErr.code === 'P2002') {
-          console.warn(`[hold-invoice/${source}] Purchase already exists for item ${bundledItem.id} on invoice ${invoiceId} — treating as already recorded.`);
-        } else {
-          throw purchaseErr;
+          console.warn(`[hold-invoice/${source}] Purchase already exists for item ${bundledItem.id} on invoice ${invoiceId} — rolling back this attempt as already recorded.`);
         }
+        throw purchaseErr;
       }
     }
 
@@ -1114,10 +1095,9 @@ export async function markHoldInvoicePaid(
         recordedPurchaseIds.push(aggregatePurchase.id);
       } catch (purchaseErr: any) {
         if (purchaseErr.code === 'P2002') {
-          console.warn(`[hold-invoice/${source}] Purchase already exists for invoice ${invoiceId} (no bundled items) — treating as already recorded.`);
-        } else {
-          throw purchaseErr;
+          console.warn(`[hold-invoice/${source}] Purchase already exists for invoice ${invoiceId} (no bundled items) — rolling back this attempt as already recorded.`);
         }
+        throw purchaseErr; // 2026-11-05: a P2002 aborts the transaction; handled as already-recorded around $transaction
       }
     }
 
@@ -1219,6 +1199,12 @@ export async function markHoldInvoicePaid(
     });
   });
   } catch (txErr) {
+    if (isPurchaseKeyViolation(txErr)) {
+      // 2026-11-05 (schema review #2): a Purchase row for this payment + item already exists, so another recorder
+      // (webhook redelivery, reconcile cron) already recorded this payment. Nothing from this attempt was committed.
+      console.warn(`[hold-invoice/${source}] Invoice ${invoiceId}: payment ${externalPaymentId ?? 'n/a'} already has its Purchase row(s); treating as already recorded.`);
+      return { recorded: false, alreadyPaid: true };
+    }
     if (txErr instanceof DeadInvoiceReviveAbort && externalPaymentId) {
       // An item was sold under the revive: the whole revive rolled back. Refund what was captured.
       await refundOrEscalateDeadSquarePayment({

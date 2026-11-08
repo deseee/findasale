@@ -5,7 +5,8 @@
  * non-fatal, leaving an expired-looking Square link payable. Square links now run the shared release
  * gate (services/holdInvoiceSquareRelease.ts, also used by reservationController.releasePaymentLink)
  * BEFORE the flip: PAID -> record the sale, skip the reclaim; RETRY -> leave the link ACTIVE;
- * CLEAR -> proceed. Stripe links are unchanged. The gate itself has its own suite (mocked here).
+ * CLEAR -> proceed. Historical Stripe links never reach the gate (Stripe retired 2026-11-04, no Stripe call).
+ * The gate itself has its own suite (mocked here).
  * Also covers the two refund sweeps the cron now runs, each individually try/caught.
  */
 
@@ -22,12 +23,6 @@ jest.mock('../lib/prisma', () => ({
   },
 }));
 jest.mock('../lib/notificationService', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
-const mockStripe = {
-  checkout: { sessions: { list: jest.fn() } },
-  paymentLinks: { update: jest.fn() },
-};
-jest.mock('../utils/stripe', () => ({ getStripe: () => mockStripe }));
-jest.mock('../services/stripeConnectService', () => ({ shouldUseDirectCharge: jest.fn().mockResolvedValue(false) }));
 const mockRecordSale = jest.fn();
 jest.mock('../services/posPaymentLinkRecorder', () => ({
   recordPosPaymentLinkSale: (...a: any[]) => mockRecordSale(...a),
@@ -97,8 +92,6 @@ beforeEach(() => {
   mockOrderStatus.mockResolvedValue({ ok: true, paid: false, state: 'OPEN', paymentId: null });
   mockDeleteLink.mockResolvedValue({ ok: true, cancelledOrderId: 'order_1' });
   mockRecordSale.mockResolvedValue({ recorded: true, alreadyCompleted: false });
-  mockStripe.checkout.sessions.list.mockResolvedValue({ data: [] });
-  mockStripe.paymentLinks.update.mockResolvedValue({});
   db.$transaction.mockImplementation(async (cb: any) => cb(txWith(1)));
   mockStuckRefunds.mockResolvedValue({ checked: 0, finalized: 0, revertedToPaid: 0, stillPending: 0, skipped: 0, errors: 0 });
   mockPosFulfillment.mockResolvedValue({ checked: 0, refunded: 0, pending: 0 });
@@ -107,15 +100,6 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
-// Stripe branches of these jobs are gated on isStripePlatformClosed(process.env) now that the Stripe
-// platform account is shut down (STRIPE_PLATFORM_CLOSED defaults to closed). These tests exercise the
-// legacy Stripe branches with a mocked Stripe client, so they opt out of the gate explicitly.
-const __prevStripeClosed = process.env.STRIPE_PLATFORM_CLOSED;
-beforeAll(() => { process.env.STRIPE_PLATFORM_CLOSED = 'false'; });
-afterAll(() => {
-  if (__prevStripeClosed === undefined) delete process.env.STRIPE_PLATFORM_CLOSED;
-  else process.env.STRIPE_PLATFORM_CLOSED = __prevStripeClosed;
-});
 
 describe('reclaimExpiredPaymentLink: Square release gate', () => {
   it('CLEAR: runs the gate BEFORE the flip, then flips the link to EXPIRED', async () => {
@@ -190,13 +174,20 @@ describe('reclaimExpiredPaymentLink: Square release gate', () => {
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
-  it('Stripe link: gate is never consulted, link flips and the Payment Link is deactivated as before', async () => {
+  it('in-window historical Stripe link (Stripe retired): gate never consulted, link left untouched', async () => {
     db.pOSPaymentLink.findMany.mockResolvedValue([stripeLink()]);
     await reconcileStrandedPosSales();
     expect(mockGate).not.toHaveBeenCalled();
     expect(mockOrderStatus).not.toHaveBeenCalled();
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('stale historical Stripe link (older than 7 days): flipped locally, no gate and no processor call', async () => {
+    db.pOSPaymentLink.findMany.mockResolvedValue([stripeLink({ createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) })]);
+    await reconcileStrandedPosSales();
+    expect(mockGate).not.toHaveBeenCalled();
+    expect(mockDeleteLink).not.toHaveBeenCalled();
     expect(db.$transaction).toHaveBeenCalledTimes(1);
-    expect(mockStripe.paymentLinks.update).toHaveBeenCalledWith('plink_1', { active: false }, undefined);
   });
 });
 

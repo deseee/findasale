@@ -3,10 +3,10 @@
  * purchase whose webhook was missed was flipped to PAID by the reclaim job but earned no purchase XP,
  * milestones, referral reward, badge, achievement or Sale Passport stamp.
  *
- * Proves: the Stripe reclaim and the Square reclaim each fire the shared engagement service ONCE per
- * payment group, for the first row that has a real shopper; a guest-only group fires nothing; a lost
- * race (webhook won, updateMany count 0), an abandoned PaymentIntent and a still-open Square order fire
- * nothing; and a failure scheduling the award never breaks the reclaim.
+ * Proves: the Square reclaim fires the shared engagement service ONCE per payment group, for the first
+ * row that has a real shopper; a guest-only group fires nothing; a still-open Square order fires nothing;
+ * a failure scheduling the award never breaks the reclaim; and (Stripe retired 2026-11-04) a historical
+ * Stripe PENDING row is left untouched with no Stripe call.
  */
 
 jest.mock('node-cron', () => ({ schedule: jest.fn() }));
@@ -18,11 +18,6 @@ jest.mock('../lib/prisma', () => ({
     item: { findMany: jest.fn() },
     sale: { findMany: jest.fn() },
   },
-}));
-const mockRetrieve = jest.fn();
-jest.mock('../utils/stripe', () => ({
-  getStripe: () => ({ paymentIntents: { retrieve: mockRetrieve } }),
-  getTestStripe: () => ({ paymentIntents: { retrieve: mockRetrieve } }),
 }));
 jest.mock('../lib/notificationService', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/squarePurchaseEngagementService', () => ({ fireSquarePurchaseEngagement: jest.fn() }));
@@ -61,16 +56,6 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
-// Stripe branches of these jobs are gated on isStripePlatformClosed(process.env) now that the Stripe
-// platform account is shut down (STRIPE_PLATFORM_CLOSED defaults to closed). These tests exercise the
-// legacy Stripe branches with a mocked Stripe client, so they opt out of the gate explicitly.
-const __prevStripeClosed = process.env.STRIPE_PLATFORM_CLOSED;
-beforeAll(() => { process.env.STRIPE_PLATFORM_CLOSED = 'false'; });
-afterAll(() => {
-  if (__prevStripeClosed === undefined) delete process.env.STRIPE_PLATFORM_CLOSED;
-  else process.env.STRIPE_PLATFORM_CLOSED = __prevStripeClosed;
-});
-
 describe('fireReclaimEngagement', () => {
   it('fires once, for the first row that has a shopper', () => {
     fireReclaimEngagement(['g1', 'p2', 'p3'], [null, 'u2', 'u3']);
@@ -89,47 +74,14 @@ describe('fireReclaimEngagement', () => {
   });
 });
 
-describe('reclaimStalePurchases, Stripe stranded-PAID', () => {
-  const twoRowCart = [
-    row({ id: 'p1', stripePaymentIntentId: 'pi_1', userId: 'u1', itemId: 'i1' }),
-    row({ id: 'p2', stripePaymentIntentId: 'pi_1', userId: 'u1', itemId: 'i2' }),
-  ];
-
-  it('awards engagement once for the whole cart after flipping it to PAID', async () => {
-    db.purchase.findMany.mockResolvedValue(twoRowCart);
-    mockRetrieve.mockResolvedValue({ status: 'succeeded' });
-    db.purchase.updateMany.mockResolvedValue({ count: 2 });
+describe('reclaimStalePurchases, historical Stripe rows (Stripe retired)', () => {
+  it('leaves a historical Stripe PENDING row untouched and awards nothing', async () => {
+    db.purchase.findMany.mockResolvedValue([
+      row({ id: 'p1', stripePaymentIntentId: 'pi_1', userId: 'u1', itemId: 'i1' }),
+      row({ id: 'p2', stripePaymentIntentId: 'pi_1', userId: 'u1', itemId: 'i2' }),
+    ]);
     await reclaimStalePurchases();
-    expect(db.purchase.updateMany).toHaveBeenCalledWith({
-      where: { stripePaymentIntentId: 'pi_1', status: 'PENDING' },
-      data: { status: 'PAID' },
-    });
-    expect(fire).toHaveBeenCalledTimes(1);
-    expect(fire).toHaveBeenCalledWith('p1');
-  });
-
-  it('awards nothing when the webhook won the race (updateMany count 0)', async () => {
-    db.purchase.findMany.mockResolvedValue(twoRowCart);
-    mockRetrieve.mockResolvedValue({ status: 'succeeded' });
-    db.purchase.updateMany.mockResolvedValue({ count: 0 });
-    await reclaimStalePurchases();
-    expect(fire).not.toHaveBeenCalled();
-  });
-
-  it('awards nothing for an abandoned PaymentIntent (flipped to FAILED)', async () => {
-    db.purchase.findMany.mockResolvedValue(twoRowCart);
-    mockRetrieve.mockResolvedValue({ status: 'canceled' });
-    db.purchase.updateMany.mockResolvedValue({ count: 2 });
-    await reclaimStalePurchases();
-    expect(db.purchase.updateMany.mock.calls[0][0].data).toEqual({ status: 'FAILED' });
-    expect(fire).not.toHaveBeenCalled();
-  });
-
-  it('awards nothing for a guest checkout (no userId on any row)', async () => {
-    db.purchase.findMany.mockResolvedValue([row({ id: 'p9', stripePaymentIntentId: 'pi_9', userId: null })]);
-    mockRetrieve.mockResolvedValue({ status: 'succeeded' });
-    db.purchase.updateMany.mockResolvedValue({ count: 1 });
-    await reclaimStalePurchases();
+    expect(db.purchase.updateMany).not.toHaveBeenCalled();
     expect(fire).not.toHaveBeenCalled();
   });
 });

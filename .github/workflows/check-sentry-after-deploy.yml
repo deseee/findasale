@@ -28,7 +28,7 @@ concurrency:
 jobs:
   sentry-regression-check:
     name: Check Sentry for new issues (30-min window)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Only run when CI passed — no point checking Sentry if the commit was already
     # known-broken. Also skip if SENTRY_TOKEN is not configured.
     if: ${{ github.event.deployment_status.state == 'success' && contains(github.event.deployment.environment, 'production') && startsWith(github.event.deployment.creator.login, 'railway') }}

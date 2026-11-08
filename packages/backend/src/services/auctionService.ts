@@ -1,4 +1,5 @@
 import { prisma } from '../index';
+import { gateCardCharge } from './restrictedItem/cardPaymentGate'; // 2026-11-06 restricted-item card gate
 import { createNotification } from './notificationService';
 import { sellItemUnits, InsufficientStockError } from './itemStockService';
 import { fanOutItemSoldWithdrawals } from './soldFanOutService'; // 2026-09-23: withdraw-on-sellout fan-out
@@ -240,7 +241,23 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
 
     // Create Square payment link OR Stripe checkout session
     let checkoutUrl: string | null = null;
+    // Restricted-item card gate (2026-11-06): a blocked lot gets no card link (same outcome as a non-Square organizer:
+    // the winner is notified without a pay link and the organizer collects in cash).
+    let auctionCardAllowed = true;
     if (organizerHasSquare) {
+      const gate = await gateCardCharge({
+        processor: 'SQUARE',
+        organizerId: item.sale!.organizerId,
+        lines: [{ itemId: item.id, amountCents: amountInCents }],
+        cardChargeCents: amountInCents,
+        context: { path: 'square.online.auctionClose', buyerUserId: winnerId, sessionRef: item.id },
+      });
+      if (!gate.ok) {
+        auctionCardAllowed = false;
+        console.warn(`[auction] item ${itemId}: card payment blocked by the restricted-item gate -- no checkout link.`);
+      }
+    }
+    if (organizerHasSquare && auctionCardAllowed) {
       const linkResult = await createSquareCheckoutLink({
         organizerId: item.sale!.organizerId,
         idempotencyKey: buildSquareIdempotencyKey(['auction-close-square', item.id]),

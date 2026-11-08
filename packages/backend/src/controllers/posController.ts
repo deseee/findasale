@@ -11,6 +11,7 @@
  * If markSoldAndCreateInvoice already exists in reservationController, that endpoint is used instead.
  */
 
+import { gateCardCharge, linesFromItemPrices, CardPaymentBlockedError } from '../services/restrictedItem/cardPaymentGate'; // 2026-11-06 restricted-item card gate
 import { Response } from 'express';
 import type { HoldInvoice, POSPaymentLink, Prisma } from '@prisma/client';
 import crypto from 'crypto';
@@ -168,6 +169,21 @@ export async function createPaymentLinkInternal(opts: {
   const platformFeeAmount = calculateInclusiveCommissionCents(amountCents, subscriptionTier as SubscriptionTier, 'ONLINE');
 
   const organizerHasSquare = squareOnboarded === true && !!squareMerchantId;
+
+  // Restricted-item card gate (2026-11-06): before the processor link is created. `amount` is the CARD amount (the cash
+  // leg was already taken out by the caller), so a cashier who moved blocked items to cash goes through. Lines are the
+  // items' DB prices plus one item-less remainder line. Throws CardPaymentBlockedError (409 body) for the callers.
+  if (organizerHasSquare) {
+    const linkTotalCents = amountCents + Math.max(0, Math.round(opts.cashAmountCents ?? 0));
+    const gate = await gateCardCharge({
+      processor: 'SQUARE',
+      organizerId,
+      lines: await linesFromItemPrices(itemIds, linkTotalCents),
+      cardChargeCents: amountCents,
+      context: { path: 'square.pos.paymentLink', sessionRef: saleId },
+    });
+    if (!gate.ok) throw new CardPaymentBlockedError(gate.body);
+  }
 
   let paymentLinkUrl: string;
   let processorFields: Record<string, any>;
@@ -811,6 +827,9 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
     } catch (stripeErr) {
       if (isBulkLotError(stripeErr)) {
         return res.status(stripeErr.status).json({ message: stripeErr.message, code: stripeErr.code });
+      }
+      if (stripeErr instanceof CardPaymentBlockedError) {
+        return res.status(stripeErr.status).json(stripeErr.body);
       }
       if (stripeErr instanceof PaymentLinkItemScopeError) {
         return res.status(404).json({ message: stripeErr.message, code: 'ITEM_NOT_FOUND' });
@@ -1480,6 +1499,23 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     const organizerHasSquare = organizer.squareOnboarded === true && !!organizer.squareMerchantId;
 
     if (organizerHasSquare) {
+      // Restricted-item card gate (2026-11-06): the card leg (cardAmountCents) must fit inside the card-allowed items;
+      // a cashier who already put the blocked items in the cash leg goes through. On a block, the claimed items are
+      // released exactly like a failed link creation.
+      {
+        const gate = await gateCardCharge({
+          processor: 'SQUARE',
+          organizerId: organizer.id,
+          lines: await linesFromItemPrices([reservation.itemId, ...mergedRealItemIds], grandTotal),
+          cardChargeCents: cardAmountCents,
+          context: { path: 'square.pos.holdInvoice', buyerUserId: reservation.userId, sessionRef: reservationId },
+        });
+        if (!gate.ok) {
+          await rollbackClaims();
+          return res.status(gate.status).json(gate.body);
+        }
+      }
+
       // Pre-generated so the SAME id can be embedded in the Square Payment Link's
       // paymentNote (Square has no way to backfill it after creation) -- see
       // holdInvoiceSquareCheckoutHelper.ts's header comment for the full rationale.

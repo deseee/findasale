@@ -274,6 +274,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       const intakeOptions = {
         userEditedFields: userEditedFields,
         organizerWeightSet: item.packageConfirmedByOrganizer === true || userEditedFields.includes('packageWeightOz'),
+        logLabel: `rapidfire item=${itemId}`,
       };
       try {
         aiResult = photoBuffers.length === 1

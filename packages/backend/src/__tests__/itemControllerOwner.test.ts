@@ -41,7 +41,6 @@ jest.mock('../lib/aiTagsQuotaTracker', () => ({
   checkAiTagQuota: jest.fn().mockResolvedValue({ exceeded: false, used: 0, limit: 100, remaining: 100 }),
   incrementAiTagCount: jest.fn(),
 }));
-jest.mock('../utils/expireCheckoutSession', () => ({ retrieveCheckoutSessionAcrossAccounts: jest.fn() }));
 jest.mock('../services/ebayRateEstimateService', () => ({ classifyPackageSurchargeTrigger: () => 'SAFE' }));
 jest.mock('../utils/ebayShippingClassifier', () => ({ classifyEbayShipping: () => null }));
 jest.mock('../services/achievementService', () => ({ checkAndAward: () => Promise.resolve() }));

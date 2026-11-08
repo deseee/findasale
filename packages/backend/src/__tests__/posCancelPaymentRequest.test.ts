@@ -14,7 +14,6 @@ jest.mock('@sentry/node', () => ({ captureException: jest.fn(), captureMessage: 
 jest.mock('../lib/socket', () => ({ getIO: jest.fn(() => ({ to: () => ({ emit: jest.fn() }) })) }));
 jest.mock('../lib/notificationService', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/squarePosPaymentAdapter', () => ({}));
-jest.mock('../services/stripePosPaymentAdapter', () => ({}));
 jest.mock('../services/squareRefundService', () => ({ refundFailedPosFulfillment: jest.fn() }));
 jest.mock('../services/squarePurchaseEngagementService', () => ({ fireSquarePurchaseEngagement: jest.fn() }));
 jest.mock('../services/posDiscountService', () => ({ resolvePosDiscount: jest.fn() }));

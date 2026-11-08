@@ -2,12 +2,9 @@ import cron from 'node-cron';
 import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
-import { isStripePlatformClosed } from '../utils/stripeBootConfig'; // 2026-09-30: Stripe platform closed, Stripe-session invoices cannot be verified
-import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): STRANDED-PAID reconcile backstop
 import { releaseCrewInvasionRedemptionsForInvoice } from '../services/crewInvasionRedemptionService'; // Crew Invasion per-member redemption (2026-09-29): an expired UNPAID discounted invoice gives the member's discount back
 import { prepareSquareInvoiceForRelease, recordSquarePaidInvoiceFromGate } from '../services/holdInvoiceSquareRelease'; // 2026-09-29 money review P0-2: a Square invoice is checked for payment and its payment link cancelled BEFORE it is expired
 import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): invoice_expired notification-gap fix
-import { expireCheckoutSessionSafely, retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSession'; // P1 (2026-08-17): expired invoices must not leave a PAYABLE Stripe session behind; P0 (2026-08-17): Direct-charge sessions live on the connected account
 
 /**
  * invoiceExpiryJob.ts
@@ -57,24 +54,9 @@ import { expireCheckoutSessionSafely, retrieveCheckoutSessionAcrossAccounts } fr
  * the invoice's status flip back too (so the row is retried next run instead
  * of being silently stranded EXPIRED with an unreverted item).
  *
- * Evidence-first Stripe verification (NOT a blind DB-status revert): two
- * confirmed, separate, pre-existing gaps mean HoldInvoice.status=PENDING
- * cannot be trusted alone to mean "definitely unpaid":
- *   (a) createCombinedInvoice's Stripe PaymentIntent metadata omits
- *       `invoiceId` (posController.ts, payment_intent_data.metadata only
- *       carries itemIds/shopperId/organizerId/saleId) -- so the
- *       charge.succeeded / charge.failed webhooks, which both key off
- *       `paymentIntent.metadata.invoiceId`, never fire for Open Cart flow
- *       invoices at all, paid or not.
- *   (b) an abandoned Stripe Checkout page (buyer never submits payment)
- *       never fires either webhook either -- this is the main case this job
- *       exists to catch.
- * So for any invoice with a stripeSessionId, this job asks Stripe directly
- * (`checkout.sessions.retrieve`) whether the session actually shows
- * paid/complete before reverting anything. If Stripe says paid, this job
- * does NOT revert -- it logs a STRANDED-PAID line for manual reconciliation
- * (same shape as posStrandedSaleReconcileCron.ts's STRANDED-UNRECOVERED
- * logging) instead of guessing.
+ * STRIPE RETIRED (owner decision 2026-11-04): this job makes no Stripe calls. A historical invoice
+ * with a stripeSessionId cannot be verified paid/unpaid any more, so it is left untouched (counted
+ * and logged) for manual review rather than reverted blindly.
  *
  * Invoices with NO stripeSessionId at all -- sendHoldInvoice's "simplified
  * for MVP -- no actual Stripe Checkout" invoices, and cash-only Open Cart
@@ -97,18 +79,6 @@ import { expireCheckoutSessionSafely, retrieveCheckoutSessionAcrossAccounts } fr
  * Kill-switch: set INVOICE_EXPIRY_RECLAIM_DISABLED=1 to make the job
  * early-return (rollback lever, matching posStrandedSaleReconcileCron.ts's
  * POS_RECONCILE_DISABLED convention).
- *
- * Payments fix (2026-08-03): the STRANDED-PAID branch below now actively
- * reconciles -- calling the shared markHoldInvoicePaid recorder
- * (holdInvoicePaymentRecorder.ts) instead of only logging for manual
- * follow-up, since createCombinedInvoice / markSoldAndCreateInvoice now
- * backfill paymentIntent.metadata.invoiceId so the PaymentIntent id read
- * off the Stripe session is enough to record the payment directly. A
- * separate kill-switch, INVOICE_PAID_RECONCILE_DISABLED=1, disables just
- * this reconcile call (falls back to log-only) without disabling the rest
- * of this job -- cheap, targeted rollback insurance for this one code path.
- * This branch firing at all means the webhook missed; that fact alone is
- * Sentry-alert-worthy regardless of whether the reconcile call succeeds.
  */
 
 /**
@@ -204,10 +174,9 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
     let strandedPaidCount = 0;
     let skippedNoSession = 0;
     let squareRetryLater = 0;
-    // Stripe platform permanently closed (2026-09-30): no Stripe API call is possible, so a
-    // Stripe-session invoice is left untouched (cannot verify paid/unpaid). Square rows and the
+    // Stripe is retired (2026-11-04): this job makes no Stripe calls. A historical Stripe-session invoice
+    // cannot be verified paid/unpaid, so it is left untouched for manual review. Square rows and the
     // non-Stripe branches below run exactly as before.
-    const stripeClosed = isStripePlatformClosed(process.env);
     let stripeSkippedClosed = 0;
 
     for (const invoice of candidates) {
@@ -247,70 +216,11 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
             continue;
           }
           console.log(`[invoiceExpiryJob] SQUARE-CLEAR invoice=${invoice.id} -- ${gate.detail}. Expiring.`);
-        } else if (invoice.stripeSessionId && stripeClosed) {
+        } else if (invoice.stripeSessionId) {
           stripeSkippedClosed++;
           continue;
-        } else if (invoice.stripeSessionId) {
-          // Evidence-first: ask Stripe directly rather than trusting our own
-          // PENDING status (see the two confirmed gaps in the header comment).
-          // P0 fix (2026-08-17): account-aware retrieve. This was
-          // `stripe().checkout.sessions.retrieve(id)` -- platform-scoped, no fallback -- so
-          // for an organizer routed by shouldUseDirectCharge (allowlist confirmed NON-EMPTY
-          // in Railway production this session) the Session lives on the CONNECTED account
-          // and this threw resource_missing on EVERY pass. The per-invoice catch below
-          // swallowed it as "will retry next run", forever: Direct-charge invoices were
-          // never reclaimed, and a Direct-charge invoice that WAS paid never reached the
-          // STRANDED-PAID reconcile branch below, so its items sat at INVOICE_ISSUED
-          // permanently with the payment unrecorded. The organizer's connectId was already
-          // being selected above and already used correctly by the expire call at the end
-          // of this loop -- it simply was never passed here. Shared helper so the
-          // platform-first / connected-fallback rule lives in exactly one place.
-          const session = await retrieveCheckoutSessionAcrossAccounts(
-            invoice.stripeSessionId,
-            invoice.stripeAccountId ?? invoice.sale?.organizer?.stripeConnectId ?? null
-          );
-          if (session.status === 'complete' && session.payment_status === 'paid') {
-            strandedPaidCount++;
-
-            // Payments fix (2026-08-03): actively reconcile via the shared recorder
-            // instead of only logging -- see holdInvoicePaymentRecorder.ts.
-            let reconcileOutcome = 'SKIPPED (INVOICE_PAID_RECONCILE_DISABLED=1)';
-            if (process.env.INVOICE_PAID_RECONCILE_DISABLED !== '1') {
-              const paymentIntentId = typeof session.payment_intent === 'string'
-                ? session.payment_intent
-                : (session.payment_intent as any)?.id ?? null;
-
-              if (paymentIntentId) {
-                try {
-                  // Square changeover Wave S1 (2026-09-09): generalized signature (processor + externalPaymentId), zero behavior change for this STRIPE reconcile path
-                  const result = await markHoldInvoicePaid(invoice.id, { processor: 'STRIPE', externalPaymentId: paymentIntentId }, { source: 'reconcile' });
-                  reconcileOutcome = result.recorded
-                    ? 'RECORDED'
-                    : (result.alreadyPaid ? 'ALREADY-PAID (no-op, webhook or a prior run beat this one)' : 'NOT-RECORDED');
-                } catch (recErr: any) {
-                  reconcileOutcome = `ERROR: ${recErr?.message ?? recErr}`;
-                  console.error(`[invoiceExpiryJob] Failed to reconcile STRANDED-PAID invoice=${invoice.id} session=${invoice.stripeSessionId}:`, recErr);
-                }
-              } else {
-                reconcileOutcome = 'SKIPPED (no PaymentIntent id on Stripe session)';
-              }
-            }
-
-            // This branch firing at all means the charge.succeeded webhook missed --
-            // that is the alert-worthy fact itself, regardless of reconcile outcome.
-            const strandedAmount = typeof session.amount_total === 'number' ? (session.amount_total / 100).toFixed(2) : 'unknown';
-            const strandedPaidMsg = `[invoiceExpiryJob] STRANDED-PAID invoice=${invoice.id} session=${invoice.stripeSessionId} amount=$${strandedAmount} -- Stripe shows this session paid/complete but our DB still had the invoice PENDING past its expiresAt (webhook missed). Reconcile outcome: ${reconcileOutcome}.`;
-            console.error(strandedPaidMsg);
-            try {
-              Sentry.captureMessage(strandedPaidMsg, 'error');
-            } catch {
-              // Sentry may not be initialized -- silently continue
-            }
-
-            continue;
-          }
         } else if (invoice.cartSessionId) {
-          // POS cart invoice with NO Stripe session -- a cash-only split
+          // POS cart invoice with NO card session -- a cash-only split
           // (createCombinedInvoice, cardAmountCents = 0, "Full payment collected at
           // POS"). The organizer may genuinely have taken the cash and handed the item
           // over, and HoldInvoice carries no cash-confirmation flag to check that
@@ -428,29 +338,6 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
           }).catch((err: unknown) => console.error(`[invoiceExpiryJob] Failed to create invoice_expired notification for invoice ${invoice.id}:`, err));
         }
 
-        // Stripe-side cancellation. Non-fatal to this job, but NOT best-effort-and-
-        // forget any more (P1, 2026-08-17): the items were just handed back to RESERVED,
-        // so a Checkout Session left OPEN is a live payment link against stock that is
-        // on sale again. expireCheckoutSessionSafely retrieves first (finding
-        // connected-account sessions, and treating an already-terminal session as the
-        // success it is rather than an error) and reports any session that survives
-        // still-payable to Sentry. Mirrors releaseInvoice, which uses the same helper.
-        // NOTE: the Stripe expires_at handed to Checkout is CLAMPED up to Stripe's
-        // 30-minute floor (utils/stripeCheckoutExpiry.ts), so a session can and does
-        // outlive its HoldInvoice.expiresAt by up to ~31 minutes -- "Stripe already
-        // auto-expired it" is not a safe assumption on this path.
-        // Null-guarded: the NO-SESSION-RECLAIM branch above now reaches this point too,
-        // and it has no session to close by definition.
-        if (invoice.stripeSessionId) {
-          const closure = await expireCheckoutSessionSafely(invoice.stripeSessionId, {
-            stripeAccount: invoice.stripeAccountId ?? invoice.sale?.organizer?.stripeConnectId ?? null,
-            context: `invoiceExpiryJob invoice=${invoice.id}`,
-          });
-          if (closure.stillPayable) {
-            console.error(`[invoiceExpiryJob] Invoice ${invoice.id} reverted but its Checkout Session ${invoice.stripeSessionId} is STILL PAYABLE (${closure.state}). Reported to Sentry.`);
-          }
-        }
-
         reclaimed++;
       } catch (err: any) {
         console.error(`[invoiceExpiryJob] Failed to reclaim invoice ${invoice.id} -- will retry next run:`, err?.message ?? err);
@@ -458,7 +345,7 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
     }
 
     if (stripeSkippedClosed > 0) {
-      console.info(`[invoiceExpiryJob] Stripe platform closed -- left ${stripeSkippedClosed} Stripe-session invoice(s) untouched (no Stripe API calls).`);
+      console.info(`[invoiceExpiryJob] Stripe is retired -- left ${stripeSkippedClosed} historical Stripe-session invoice(s) untouched for manual review (no Stripe API calls).`);
     }
 
     console.log(`[invoiceExpiryJob] Reclaimed ${reclaimed} expired invoice(s); ${strandedPaidCount} STRANDED-PAID (auto-reconciled where possible, see per-invoice logs + Sentry); skipped ${skippedNoSession} NO-SESSION (needs manual review); ${squareRetryLater} Square invoice(s) held back until Square can confirm the link is cancelled.`);
