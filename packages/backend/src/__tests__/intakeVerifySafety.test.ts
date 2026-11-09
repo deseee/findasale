@@ -191,8 +191,10 @@ describe('title corrections', () => {
   });
 
   it('Cirillo lot: "Lot of 2 ... 1997 Pinnacle Baseball Cards #48" applies (Card -> Cards is a plural, not a respelling)', () => {
+    // 2026-11-08: a lot may only be added when the earlier listing stated one (here: "Lot of two 1997 Pinnacle cards").
     const r = card({ title: 'Jeff Cirillo #48 Pinnacle Baseball Card' });
-    apply(r, [{ field: 'title', new: 'Lot of 2 Jeff Cirillo 1997 Pinnacle Baseball Cards #48', reason: 'two cards shown', confidence: 0.9 }]);
+    apply(r, [{ field: 'title', new: 'Lot of 2 Jeff Cirillo 1997 Pinnacle Baseball Cards #48', reason: 'two cards shown', confidence: 0.9 }],
+      { priorDescription: 'Lot of two 1997 Pinnacle cards' });
     expect(r.title).toBe('Lot of 2 Jeff Cirillo 1997 Pinnacle Baseball Cards #48');
     expect(spellingChanges('Baseball Card', 'Baseball Cards')).toEqual([]);
   });

@@ -46,6 +46,31 @@
     return (payload && payload.elMarker) ? document.querySelector('[data-fas-bridge-marker="' + payload.elMarker + '"]') : null;
   }
 
+  // 1.0.91: the display names of what the catalog has selected (department, category, sub-category), read from the
+  // component's own selected* / lastSelected* data. Strings only, at most 12, each at most 80 characters. Never throws.
+  function catalogSelectedNames(vm) {
+    const out = [];
+    try {
+      if (!vm) return out;
+      const keys = Object.keys(vm.$data || {}).concat(Object.keys(vm.$props || {}), ['selectedDepartment', 'selectedGroup', 'selectedCategory', 'selectedSubcategory', 'selectedSubCategory', 'lastSelectedCategoryData']);
+      const seen = {};
+      const push = (v) => { if (typeof v === 'string' && v.trim() && out.length < 12 && !seen[v]) { seen[v] = 1; out.push(v.trim().slice(0, 80)); } };
+      keys.forEach((k) => {
+        if (!/^(selected|lastSelected)/.test(k)) return;
+        const v = vm[k];
+        if (typeof v === 'string') { push(v); return; }
+        if (!v || typeof v !== 'object') return;
+        const list = Array.isArray(v) ? v.slice(0, 6) : [v];
+        list.forEach((o) => {
+          if (!o || typeof o !== 'object') { push(o); return; }
+          ['display', 'displayName', 'display_name', 'name', 'title', 'label'].forEach((f) => push(o[f]));
+          ['category', 'subcategory', 'sub_category', 'department'].forEach((f) => { const c = o[f]; if (c && typeof c === 'object') ['display', 'name', 'title', 'label'].forEach((g) => push(c[g])); });
+        });
+      });
+    } catch (e) { /* best-effort */ }
+    return out;
+  }
+
   function handleAction(action, payload) {
     if (action === 'openDropdown') {
       const el = resolveEl(payload);
@@ -71,7 +96,7 @@
     if (action === 'getCatalogCommitState') {
       const vm = findCatalogVm();
       const committed = !!(vm && (vm.selectedDepartment || vm.selectedGroup || vm.lastSelectedCategoryData));
-      return { committed: committed, catalogFound: !!vm };
+      return { committed: committed, catalogFound: !!vm, selectedNames: catalogSelectedNames(vm) };
     }
     if (action === 'closeVisibleModal') {
       let el = resolveEl(payload);

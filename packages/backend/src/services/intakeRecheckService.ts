@@ -2,7 +2,7 @@
  * intakeRecheckService.ts -- inventory recheck: run the intake quality layer over items that already exist (2026-11-05).
  *
  * Used by POST /api/internal/intake-recheck (secret-protected, routes/internal.ts). For each item it:
- *   - downloads the item's STORED photos (same SSRF guard as re-analyze), no new photos, no Vision call
+ *   - downloads the item's STORED photos (the same routine as re-analyze, utils/itemPhotoDownload), no new photos, no Vision call
  *   - uses the item's CURRENT fields as the pass-1 input (pass 1 is NOT re-run)
  *   - runs the Haiku verify pass + deterministic fixes and checks (services/intakeReview.ts), same model, same cost
  *     ceiling and daily call cap as tagging
@@ -21,9 +21,8 @@
  * Extension marketplaces (Poshmark, Mercari, Vinted, ...) keep the old text until the organizer updates them. Each item
  * summary reports where it is listed (listedOn) so the caller can see which listings now differ.
  */
-import axios from 'axios';
 import { prisma } from '../lib/prisma';
-import { isSafeFetchUrl, SAFE_FETCH_AXIOS_OPTIONS } from '../utils/safeFetchUrl';
+import { describePhotoFailures, downloadItemPhotos } from '../utils/itemPhotoDownload';
 import { computeAnthropicCostUsd } from '../lib/aiCostTracker';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker';
@@ -176,26 +175,11 @@ type RecheckItem = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function downloadPhotos(urls: string[]): Promise<{ images: string[]; mimeTypes: string[] }> {
-  const images: string[] = [];
-  const mimeTypes: string[] = [];
-  for (const url of urls.slice(0, 5)) {
-    if (!isSafeFetchUrl(url)) continue;
-    try {
-      const resp = await axios.get(url, {
-        ...SAFE_FETCH_AXIOS_OPTIONS,
-        responseType: 'arraybuffer',
-        timeout: 10000,
-        headers: { 'User-Agent': 'FindaSale-ImageTagger/1.0 (+https://finda.sale; secondary-sale item tagging)' },
-      });
-      const contentType = String(resp.headers?.['content-type'] || '').split(';')[0].trim();
-      images.push(Buffer.from(resp.data).toString('base64'));
-      mimeTypes.push(contentType.startsWith('image/') ? contentType : 'image/jpeg');
-    } catch (err) {
-      console.warn('[intakeRecheck] photo download failed:', err instanceof Error ? err.message : err);
-    }
-  }
-  return { images, mimeTypes };
+async function downloadPhotos(urls: string[]): Promise<{ images: string[]; mimeTypes: string[]; failure: string }> {
+  // Same routine as re-analyze (utils/itemPhotoDownload): eBay-imported items keep their photos on eBay's picture CDN,
+  // which the old copy of this loop refused without a log line ("photo download failed" on 51 of 212 items).
+  const d = await downloadItemPhotos(urls, { max: 5, logTag: '[intakeRecheck]' });
+  return { images: d.buffers.map((b) => b.toString('base64')), mimeTypes: d.mimeTypes, failure: describePhotoFailures(d.failures) };
 }
 
 function sameValue(a: unknown, b: unknown): boolean {
@@ -269,9 +253,9 @@ export async function runIntakeRecheck(params: IntakeRecheckParams): Promise<Int
         summaries.push({ ...base, status: 'skipped', reason: 'no photos' });
         continue;
       }
-      const { images, mimeTypes } = await downloadPhotos(item.photoUrls);
+      const { images, mimeTypes, failure } = await downloadPhotos(item.photoUrls);
       if (images.length === 0) {
-        summaries.push({ ...base, status: 'skipped', reason: 'photo download failed' });
+        summaries.push({ ...base, status: 'skipped', reason: `photo download failed${failure ? `: ${failure}` : ''}` });
         continue;
       }
       const edited = item.userEditedFields ?? [];

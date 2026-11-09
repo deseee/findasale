@@ -145,7 +145,8 @@ export function normalizeTaggedText<R extends { title?: string | null; descripti
   // known acronyms and an all-caps brand are kept.
   if (typeof r.title === 'string') {
     const brand = (result as { brand?: unknown }).brand;
-    r.title = normalizeTitleCaps(r.title, [typeof brand === 'string' ? brand : null]);
+    const printed = (result as { detectedPrintedText?: unknown }).detectedPrintedText;
+    r.title = normalizeTitleCaps(r.title, [typeof brand === 'string' ? brand : null], { printedText: [typeof printed === 'string' ? printed : null] });
   }
   if (typeof r.description === 'string') r.description = normalizeTextField(r.description, `${context} description`);
   return result;

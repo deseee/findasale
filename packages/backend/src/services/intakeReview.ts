@@ -134,10 +134,15 @@ export function applyDeterministicFixes(
     }
   } catch { /* never block tagging */ }
 
-  // 1b. ALL-CAPS name words ("Paulo O'NEILL") -> Title Case. Codes with digits, known acronyms and an all-caps brand stay.
+  // 1b. ALL-CAPS name words ("Paulo O'NEILL") -> Title Case. Codes with digits, known acronyms, an all-caps brand and
+  //     words already in caps in the earlier title stay.
   try {
     if (!titleLocked && typeof result.title === 'string') {
-      const t = normalizeTitleCaps(result.title, [typeof result.brand === 'string' ? result.brand : null]);
+      // Only words newly put in caps are converted: a word already in caps in the earlier title ("MVS", "THERM-X-TROL")
+      // stays, and short words / hyphen trademarks printed in caps on the item stay.
+      const pt = result.printedText;
+      const printed = [result.detectedPrintedText, pt?.brand, ...(pt?.modelNumbers || []), ...(pt?.catalogNumbers || []), ...(pt?.other || [])];
+      const t = normalizeTitleCaps(result.title, [typeof result.brand === 'string' ? result.brand : null], { priorText: [ctx.priorTitle], printedText: printed });
       if (t !== result.title) {
         fix('title', t, 'all-caps words', 'consistency', 'TITLE_CAPS_FIXED', 'Changed ALL-CAPS words in the title to Title Case.');
       }
@@ -398,7 +403,12 @@ export async function runIntakeQuality(result: IntakeQualityResult, input: Intak
       missingShots = verify.missingShots;
       photosUnclear = verify.photosUnclear;
       if (verify.corrections.length > 0) {
-        const merged = applyVerifyCorrections(result, verify.corrections, { userEditedFields: input.userEditedFields, ocrText: input.ocrText });
+        const merged = applyVerifyCorrections(result, verify.corrections, {
+          userEditedFields: input.userEditedFields,
+          ocrText: input.ocrText,
+          priorTitle: input.priorTitle ?? null,
+          priorDescription: input.priorDescription ?? null,
+        });
         appliedCorrections.push(...merged.applied);
         notes.push(...merged.notes);
         family = familyOf(result, input.objectLabels) ?? family;

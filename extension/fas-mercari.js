@@ -3771,10 +3771,18 @@
   }
 
   // Pure. Returns { kind: 'removed' | 'sold' | 'live_own' | 'live_other' | 'unknown', detail }.
-  function mercClassifyItemLookup(httpStatus, nextData, id) {
+  // 1.0.91: pageTitle (the page's <title>) is extra evidence. Mercari's gone page is titled "410 -- Not Available | Mercari"
+  // (live 2026-11-08, m36344835016, a listing that had sold); a 404/410 with that title is gone even when its __NEXT_DATA__
+  // carries no gqlErrorCode. A bare 410 without the title or the error code is still not trusted.
+  function mercClassifyItemLookup(httpStatus, nextData, id, pageTitle) {
     const pp = nextData && nextData.props && nextData.props.pageProps && typeof nextData.props.pageProps === 'object' ? nextData.props.pageProps : null;
     const gql = pp ? String(pp.gqlErrorCode || '') : '';
     if (/^(ItemNotAvailableException|RecordNotFoundException|ItemNotFoundException)$/.test(gql)) return { kind: 'removed', detail: gql };
+    const notAvailablePage = /\bnot available\b/i.test(String(pageTitle || '')) && /mercari/i.test(String(pageTitle || ''));
+    const statusFromPage = pp && Number.isFinite(Number(pp.statusCode)) ? Number(pp.statusCode) : null;
+    if (notAvailablePage && (httpStatus === 404 || httpStatus === 410 || statusFromPage === 404 || statusFromPage === 410 || /\b(404|410)\b/.test(String(pageTitle || '')))) {
+      return { kind: 'removed', detail: 'not_available_page' };
+    }
     if (!pp) return { kind: 'unknown', detail: 'no_next_data_http_' + httpStatus };
     if (gql) return { kind: 'unknown', detail: 'gql:' + gql };
     if (!(httpStatus >= 200 && httpStatus < 300)) return { kind: 'unknown', detail: 'http_' + httpStatus };
@@ -3797,10 +3805,57 @@
       const res = await fetch('/us/item/' + encodeURIComponent(id) + '/', { credentials: 'include', headers: { 'Accept': 'text/html' } });
       let html = '';
       try { html = await res.text(); } catch (e) { html = ''; }
-      return { ok: true, status: res.status, nextData: mercParseNextData(html) };
+      const tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+      return { ok: true, status: res.status, nextData: mercParseNextData(html), pageTitle: tm ? tm[1].replace(/\s+/g, ' ').trim().slice(0, 200) : '' };
     } catch (e) {
       return { ok: false, error: String((e && e.message) || e).slice(0, 120) };
     }
+  }
+
+  // A listing that is already gone on Mercari. 'removed': recorded as removed (the normal delete message with a note), or
+  // listing_not_found on a verify run. 'sold': the existing permanent already_sold_on_mercari_archive_only skip (verify runs:
+  // listing_not_found, the listing is not live). Never a "please remove it yourself" warning.
+  function mercRemReportGone(item, verdict) {
+    mercRemClearMarker();
+    try { sessionStorage.removeItem('fasMercDeleteTargetId'); } catch (e) {}
+    if (item.reason === 'RESYNC_VERIFY') {
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'listing_not_found', verifyOnly: true, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+      return;
+    }
+    if (verdict && verdict.kind === 'sold') {
+      mercRemReportResult(item, 'blocked_sold_mercari');
+      return;
+    }
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px"><b>' + escapeHtml(item.title) + '</b> was already removed on Mercari -- recorded as removed.</div>');
+    try {
+      chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'MERCARI', itemId: item.id, note: 'already removed on Mercari', continueUrl: MERCARI_REMOVAL_CONTINUE_URL });
+    } catch (e) {}
+  }
+
+  // 1.0.91: on an item detail page whose title did not match, first ask whether the listing is simply gone (live 2026-11-08:
+  // m36344835016 showed Mercari's "410 -- Not Available" page because it had sold, and the owner was told to remove it
+  // himself). Only for the listing this queue entry points at (its stored id, or the id the listings-page scan picked), never
+  // for whatever other item page the tab happens to be on. Reads the open page first (its __NEXT_DATA__ and <title>), then
+  // the same id lookup the id-first path uses. Returns the verdict when the listing is removed or sold, else null.
+  async function mercDetailPageGoneVerdict(item, hereItemId, targetId, doc) {
+    const known = [mercRemovalListingId(item), targetId ? String(targetId).toLowerCase() : null].filter(Boolean);
+    if (!hereItemId || known.indexOf(hereItemId) < 0) return null;
+    let verdict = { kind: 'unknown', detail: 'not_read' };
+    try {
+      const d = doc || document;
+      const el = d.getElementById ? d.getElementById('__NEXT_DATA__') : null;
+      let nd = null;
+      try { nd = el ? JSON.parse(el.textContent || '') : null; } catch (e) { nd = null; }
+      const pp = nd && nd.props && nd.props.pageProps;
+      const st = pp && Number.isFinite(Number(pp.statusCode)) ? Number(pp.statusCode) : 200;
+      verdict = mercClassifyItemLookup(st, nd, hereItemId, d.title);
+    } catch (e) { verdict = { kind: 'unknown', detail: 'page_read_failed' }; }
+    if (verdict.kind !== 'removed' && verdict.kind !== 'sold') {
+      const look = await mercLookupItemById(hereItemId);
+      if (look && look.ok) verdict = mercClassifyItemLookup(look.status, look.nextData, hereItemId, look.pageTitle);
+    }
+    console.log('[FAS Mercari] removal: detail page ' + hereItemId + ' did not match the title; listing check -> ' + verdict.kind + ' (' + verdict.detail + ')');
+    return verdict.kind === 'removed' || verdict.kind === 'sold' ? verdict : null;
   }
 
   // Returns true when this run is fully handled (reported, or navigated to the edit page); false = fall back to the flow below.
@@ -3814,19 +3869,10 @@
       console.log('[FAS Mercari] removal: listing id check failed (' + look.error + ') -- falling back to the page/title checks.');
       return false;
     }
-    const verdict = mercClassifyItemLookup(look.status, look.nextData, id);
+    const verdict = mercClassifyItemLookup(look.status, look.nextData, id, look.pageTitle);
     console.log('[FAS Mercari] removal: listing id ' + id + ' -> ' + verdict.kind + ' (' + verdict.detail + ')');
     if (verdict.kind === 'removed') {
-      mercRemClearMarker();
-      try { sessionStorage.removeItem('fasMercDeleteTargetId'); } catch (e) {}
-      if (verifyOnly) {
-        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'listing_not_found', verifyOnly: true, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
-        return true;
-      }
-      overlay('<b>FindA.Sale</b><div style="margin-top:6px"><b>' + escapeHtml(item.title) + '</b> was already removed on Mercari -- recorded as removed.</div>');
-      try {
-        chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'MERCARI', itemId: item.id, note: 'already removed on Mercari', continueUrl: MERCARI_REMOVAL_CONTINUE_URL });
-      } catch (e) {}
+      mercRemReportGone(item, verdict);
       return true;
     }
     if (verdict.kind === 'live_own') {
@@ -3922,6 +3968,10 @@
     // FAS_REMOVAL_MAX_ATTEMPTS (and, above that, REMOVAL_HARD_STOP_AFTER_ATTEMPTS) before giving up,
     // so a genuinely stale/wrong recorded id cannot wedge the queue or get silently trusted.
     if (hereItemId) {
+      let pickedId = null;
+      try { pickedId = sessionStorage.getItem('fasMercDeleteTargetId'); } catch (e) {}
+      const gone = await mercDetailPageGoneVerdict(item, hereItemId, pickedId);
+      if (gone) { mercRemReportGone(item, gone); return; }
       try { sessionStorage.removeItem('fasMercDeleteTargetId'); } catch (e) {}
       overlayWarn('This Mercari listing page does not exactly match "' + escapeHtml(item.title) + '" -- nothing was deleted. Please remove it yourself.' + button('fas-merc-close', 'Close', false));
       try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'MERCARI', itemId: item.id, reason: 'detail_page_title_mismatch', continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}

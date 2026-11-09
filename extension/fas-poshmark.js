@@ -1621,6 +1621,61 @@
     }
     return null;
   }
+  // 1.0.91: the VALUE a dropdown control shows, without its own option panel. Poshmark keeps the open/closed panel inside the
+  // control (live 2026-11-08: the Category control's text was "home office all categories home accents art bath bedding ...",
+  // the selected value followed by every row of the panel), so reading textContent compared the leaf against the panel.
+  function poshmarkControlValueText(el) {
+    if (!el) return '';
+    let clone;
+    try { clone = el.cloneNode(true); } catch (e) { return norm(el.textContent); }
+    const panelSel = '[role="menu"], [role="listbox"], [role="menuitem"], [role="option"], ul, ol, li, [data-test="dropdown-content"], [data-test="dropdown-menu"], [data-test*="dropdown-list"]';
+    try { Array.from(clone.querySelectorAll(panelSel)).forEach((n) => { if (n.parentNode) n.parentNode.removeChild(n); }); } catch (e) { /* keep the clone as is */ }
+    return norm(clone.textContent).replace(/\ball categories\b/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  // Pure. Where the selected leaf can be seen: the Category control's value, the Subcategory control's value, or the names
+  // Poshmark's own catalog state reports. Returns the first source that shows it, or null.
+  function poshmarkLeafShownIn(leaf, sources) {
+    const want = norm(leaf);
+    if (!want) return null;
+    for (const src of sources) {
+      if (!src) continue;
+      const vals = Array.isArray(src.values) ? src.values : [src.value];
+      if (vals.some((v) => norm(v) === want || norm(v).indexOf(want) !== -1)) return src.name;
+    }
+    return null;
+  }
+  // Clicks the leaf in the separate "Subcategory" dropdown (exact row title only). Used when Category committed the
+  // department and category but the sub-category does not show anywhere. Returns true when a row was clicked.
+  async function pickPoshmarkSubcategoryLeaf(leaf) {
+    const sub = openerByLabel('Subcategory');
+    if (!sub) return false;
+    let clicked = false;
+    try {
+      await vueOpenDropdown(sub);
+      await sleep(400);
+      const row = await waitForPoshmarkExactRow(leaf, 1500);
+      if (row) { realClick(row); clicked = true; await sleep(350); }
+    } catch (e) { clicked = false; }
+    try {
+      const closeRes = await bridgeCall('closeDropdown', { el: sub });
+      if (!closeRes || !closeRes.closed) realClick(sub);
+      await sleep(250);
+    } catch (e) { /* best-effort */ }
+    return clicked;
+  }
+  async function poshmarkLeafSources() {
+    const st = await bridgeCall('getCatalogCommitState', {});
+    const cat = openerByLabel('Category');
+    const sub = openerByLabel('Subcategory');
+    return {
+      sources: [
+        { name: 'category-control', value: poshmarkControlValueText(cat) },
+        { name: 'subcategory-control', value: sub && sub !== cat ? poshmarkControlValueText(sub) : '' },
+        { name: 'catalog-state', values: st && Array.isArray(st.selectedNames) ? st.selectedNames : [] },
+      ],
+      shown: poshmarkControlValueText(cat),
+    };
+  }
   async function pickMappedPoshmarkCategory(item) {
     const parts = poshmarkMappedPathParts(item);
     // A real Poshmark path is Department > Category (> Sub-category): anything else is not trusted.
@@ -1678,16 +1733,27 @@
       persist();
       return false;
     }
-    const shown = norm(opener.textContent);
+    // 1.0.91: compare the leaf with the control's VALUE (not its option panel), the Subcategory control and Poshmark's own
+    // catalog state. When only department + category show and the path has a sub-category, pick it in the Subcategory
+    // dropdown (exact title) and check again.
+    let seen = await poshmarkLeafSources();
+    let where = poshmarkLeafShownIn(leaf, seen.sources);
+    if (!where && parts.length === 3 && await pickPoshmarkSubcategoryLeaf(leaf)) {
+      seen = await poshmarkLeafSources();
+      where = poshmarkLeafShownIn(leaf, seen.sources);
+      if (where) where = 'subcategory-picked:' + where;
+    }
+    const shown = seen.shown;
     outcome.shown = shown.slice(0, 120);
-    if (shown.indexOf(norm(leaf)) === -1) {
+    if (!where) {
       // Every level was an exact title match and Poshmark reports a committed category, so keep it -- but record
-      // that the Category control shows the value in a format this check did not expect (UNVERIFIED live).
-      console.warn('[FAS Poshmark] Category mapped and committed; the Category control shows "' + shown.slice(0, 80) + '" which does not contain "' + norm(leaf) + '" (display format unverified -- keeping the selection).');
+      // that the selected value does not show the leaf (UNVERIFIED live).
+      console.warn('[FAS Poshmark] Category mapped and committed; the Category value shows "' + shown.slice(0, 80) + '" which does not contain "' + norm(leaf) + '" (keeping the selection).');
       outcome.result = 'selected-format-mismatch';
     } else {
-      console.log('[FAS Poshmark] Category mapped and confirmed: control shows "' + shown.slice(0, 80) + '".');
+      console.log('[FAS Poshmark] Category mapped and confirmed (' + where + '): value shows "' + shown.slice(0, 80) + '".');
       outcome.result = 'selected';
+      outcome.confirmedBy = where;
     }
     persist();
     return true;

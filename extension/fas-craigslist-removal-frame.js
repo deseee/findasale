@@ -109,7 +109,8 @@
     if (r === 'renew_all_timed_out_unverified') return { title: 'Renew All clicked, but it never finished', why: 'The button still said "renewing, please wait" for the whole wait (it scales with how many postings you have, up to 6 minutes), and a fresh read of your postings did not show them renewed.', next: 'FindA.Sale does not count this as renewed. It was not clicked a second time. FindA.Sale checks again on the next renewal run.' };
     if (r.indexOf('renew_all_timed_out_partial') === 0) return { title: 'Renew All was still working when the wait ran out', why: 'Some postings were renewed (' + r.slice(28) + ' renew buttons before/after), but not all of them by the end of the wait.', next: 'FindA.Sale does not count this as renewed. It was not clicked a second time. FindA.Sale checks again on the next renewal run.' };
     if (r.indexOf('renew_all_finished_still_renewable') === 0) return { title: 'Renew All finished, but postings still show "renew"', why: 'The button returned to normal, yet a fresh read of your postings still shows the same renew buttons (' + r.slice(35) + ' before/after).', next: 'FindA.Sale does not count this as renewed. Check your Craigslist postings manually.' };
-    if (r === 'reloaded_after_click_unverified') return { title: 'Craigslist reloaded after Renew All', why: 'The page reloaded after the click, so the result could not be seen. The extension will not click a second time.', next: 'FindA.Sale does not count this as renewed. Check your Craigslist postings manually.' };
+    if (r === 'reloaded_after_click_unverified') return { title: 'Craigslist reloaded after Renew All', why: 'The page reloaded after the click and the dates on your postings could not be read, so the result could not be seen. The extension will not click a second time.', next: 'FindA.Sale does not count this as renewed. Check your Craigslist postings manually.' };
+    if (r.indexOf('reloaded_not_renewed') === 0) return { title: 'Renew All did not renew any posting', why: 'After the page reloaded, the dates on your postings show none renewed today, and ' + r.slice(21) + ' active posting(s) were last renewed more than 2 days ago.', next: 'FindA.Sale does not count this as renewed. It was not clicked a second time. FindA.Sale checks again on the next renewal run.' };
     return { title: 'Craigslist step did not complete', why: 'Reason code: ' + r, next: 'FindA.Sale will try again later.' };
   }
 
@@ -623,15 +624,96 @@
     return !!document.getElementById('accountRenewAllForm');
   }
 
+  // ---- 1.0.91: verify a Renew All from the dashboard's own dates column ----------------------------------------------------
+  // Live 2026-11-08: after the click Craigslist reloaded the page, the extension logged reloaded_after_click_unverified and told
+  // the owner to check manually. The dashboard says what happened: each posting row's dates cell (td.dates) reads
+  // "renewed DD Mon YYYY" once renewed. Craigslist renews a posting at most once every 48 hours, so a posting renewed in the last
+  // two days was not due.
+  const CR_MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+  function crParseDayMonYear(text) {
+    const t = String(text || '');
+    let m = /(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?,?\s+(\d{4})/.exec(t);
+    if (m && CR_MONTHS[m[2].toLowerCase()] != null) return new Date(parseInt(m[3], 10), CR_MONTHS[m[2].toLowerCase()], parseInt(m[1], 10));
+    m = /([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/.exec(t);
+    if (m && CR_MONTHS[m[1].toLowerCase()] != null) return new Date(parseInt(m[3], 10), CR_MONTHS[m[1].toLowerCase()], parseInt(m[2], 10));
+    m = /(\d{4})-(\d{2})-(\d{2})/.exec(t);
+    if (m) return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    return null;
+  }
+  // Last refresh date of a posting from its dates cell: the "renewed ..." date when present, else the first (posted) date.
+  function crLastRefreshFromDates(text) {
+    const t = String(text || '').replace(/\s+/g, ' ');
+    const r = /renewed\s*:?\s*(.+)$/i.exec(t);
+    const d = r ? crParseDayMonYear(r[1]) : null;
+    return { date: d || crParseDayMonYear(t), renewed: !!d };
+  }
+  function crDayIndex(d) { return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000); }
+  function crFmtDay(d) { return d.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()] + ' ' + d.getFullYear(); }
+  // Pure. cells: the td.dates text of each ACTIVE posting. Returns the counts the verdict needs.
+  function crRenewDatesSummary(cells, now) {
+    const today = crDayIndex(now || new Date());
+    const out = { active: 0, readable: 0, renewedToday: 0, recent: 0, stale: 0, latest: null };
+    (cells || []).forEach((c) => {
+      out.active++;
+      const r = crLastRefreshFromDates(c);
+      if (!r.date) return;
+      out.readable++;
+      const age = today - crDayIndex(r.date);
+      if (r.renewed && age === 0) out.renewedToday++;
+      if (age <= 2) out.recent++; else out.stale++;
+      if (!out.latest || r.date > out.latest) out.latest = r.date;
+    });
+    return out;
+  }
+  // Pure. Outcome of a Renew All that the page reload hid, from the dates summary (null = the dashboard could not be read).
+  function crRenewAllDatesVerdict(sum) {
+    if (!sum || !sum.active || !sum.readable) return { ok: false, reason: 'reloaded_after_click_unverified' };
+    if (sum.renewedToday > 0) return { ok: true, verified: 'renewed_dates_today', renewedCount: sum.renewedToday };
+    if (sum.stale === 0 && sum.recent > 0) return { ok: true, verified: 'nothing_due_recently_renewed', renewedOn: sum.latest ? crFmtDay(sum.latest) : '' };
+    return { ok: false, reason: 'reloaded_not_renewed:' + sum.stale };
+  }
+  // Fresh read of every dashboard page: the dates cell of each active posting. null when any page could not be read or a row
+  // has no dates cell (the layout changed).
+  async function crReadActiveRenewDates() {
+    const cells = [];
+    const seen = new Set();
+    let total = null;
+    for (let n = 1; n <= CR_MAX_PAGES; n++) {
+      if (n > 1) await sleep(400 + Math.random() * 400);
+      let page;
+      try { page = await crRemFetchPage(n); } catch (e) { return null; }
+      if (n === 1) total = crParseTotal((page.doc.body && (page.doc.body.innerText || page.doc.body.textContent)) || '');
+      const fresh = page.rows.filter((r) => !seen.has(r.postingId));
+      fresh.forEach((r) => seen.add(r.postingId));
+      for (const r of fresh) {
+        if (!r.active) continue;
+        const td = r.tr.querySelector('td.dates');
+        if (!td) return null;
+        cells.push(td.textContent || '');
+      }
+      if (page.rows.length < CR_PAGE_SIZE || !fresh.length) break;
+      if (total != null && seen.size >= total) break;
+    }
+    return cells;
+  }
+
   // Resumed after a reload that followed our click (background granted the click once and will
-  // never grant it again). Do NOT click. Wait briefly for the dashboard, then close out honestly.
+  // never grant it again). Do NOT click. Wait for the dashboard, then read the postings' dates to see what was renewed.
   async function runCraigslistRenewAllResumed() {
     const deadline = Date.now() + 8000;
-    while (!crRenewAllFormPresent() && Date.now() < deadline) await sleep(250);
-    console.log('[FAS Craigslist Renew All] resumed after reload; NOT clicking again. dashboard present=' + crRenewAllFormPresent());
-    FTA('warn', 'renew_all_resumed', 'Page reloaded after Renew All was clicked; not clicking again', { dashboardPresent: crRenewAllFormPresent(), frame: FT_FRAME });
-    overlayWarn('Craigslist reloaded after "renew all postings" was clicked, so the result could not be verified. Check your postings manually.');
-    return { ok: false, reason: 'reloaded_after_click_unverified' };
+    while (!crRenewAllFormPresent() && !document.querySelector('table.accthp_postings') && Date.now() < deadline) await sleep(250);
+    console.log('[FAS Craigslist Renew All] resumed after reload; NOT clicking again. Reading the dashboard dates to verify.');
+    FTA('step', 'Checking the renewal dates on your postings', 'The page reloaded after "renew all postings" was clicked. Each renewed posting shows "renewed" with the date, so the extension reads those instead of clicking again.', { frame: FT_FRAME });
+    let cells = null;
+    try { cells = await crReadActiveRenewDates(); } catch (e) { cells = null; }
+    const sum = cells ? crRenewDatesSummary(cells, new Date()) : null;
+    const verdict = crRenewAllDatesVerdict(sum);
+    FTA('info', 'renew_dates_verify', sum ? 'Active postings ' + sum.active + ', renewed today ' + sum.renewedToday + ', renewed in the last 2 days ' + sum.recent + ', older ' + sum.stale : 'Could not read the posting dates', { active: sum ? sum.active : undefined, renewedToday: sum ? sum.renewedToday : undefined, recent: sum ? sum.recent : undefined, stale: sum ? sum.stale : undefined, ok: verdict.ok, verified: verdict.verified, reason: verdict.reason });
+    if (verdict.ok && verdict.verified === 'renewed_dates_today') overlayInfo('Renewed ' + verdict.renewedCount + ' Craigslist posting' + (verdict.renewedCount === 1 ? '' : 's') + ' today (confirmed from the dates on your postings).');
+    else if (verdict.ok) overlayInfo('Nothing was due for renewal on Craigslist' + (verdict.renewedOn ? ' (renewed on ' + escapeHtml(verdict.renewedOn) + ')' : '') + '. Craigslist renews a posting at most once every 48 hours.');
+    else if (verdict.reason === 'reloaded_after_click_unverified') overlayWarn('Craigslist reloaded after "renew all postings" was clicked and the posting dates could not be read, so the result could not be verified. Check your postings manually.');
+    else overlayWarn('Craigslist reloaded after "renew all postings" was clicked, but the dates on your postings show none renewed today. FindA.Sale will try again on the next renewal run.');
+    return verdict;
   }
 
   async function runCraigslistRenewAll() {
@@ -689,9 +771,17 @@
     FTA('step', 'Checking the result by re-reading your postings', 'A posting that was renewed no longer offers "renew", so the extension counts those buttons again.');
     await sleep(2000);
     const after = await crCountRenewables();
-    const verdict = crRenewAllVerdict({ reverted: reverted, formGone: formGone, before: before, after: after });
+    let verdict = crRenewAllVerdict({ reverted: reverted, formGone: formGone, before: before, after: after });
+    if (!verdict.ok && /_unverified$/.test(String(verdict.reason || ''))) {
+      // 1.0.91: the renew buttons could not settle it; the dates on the postings can ("renewed <today>").
+      let cells = null;
+      try { cells = await crReadActiveRenewDates(); } catch (e) { cells = null; }
+      const byDates = crRenewAllDatesVerdict(cells ? crRenewDatesSummary(cells, new Date()) : null);
+      if (byDates.ok && byDates.verified === 'renewed_dates_today') verdict = byDates;
+    }
     FTA('info', 'renew_verify', 'Renew buttons before/after: ' + (before ? before.renewable : '?') + '/' + (after ? after.renewable : '?') + (reverted ? ' (button returned to normal)' : ' (button still busy or gone)'), { before: before ? before.renewable : undefined, after: after ? after.renewable : undefined, reverted: reverted, formGone: formGone, ok: verdict.ok, verified: verdict.verified, reason: verdict.reason });
-    if (verdict.ok) overlayInfo('Renewed your eligible Craigslist postings.');
+    if (verdict.ok && verdict.renewedCount) overlayInfo('Renewed ' + verdict.renewedCount + ' Craigslist posting' + (verdict.renewedCount === 1 ? '' : 's') + ' today (confirmed from the dates on your postings).');
+    else if (verdict.ok) overlayInfo('Renewed your eligible Craigslist postings.');
     else overlayWarn('Clicked "renew all postings" once but could not confirm every posting renewed (' + escapeHtml(verdict.reason) + '). Check your Craigslist postings manually.');
     return verdict;
   }

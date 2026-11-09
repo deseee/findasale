@@ -25,7 +25,8 @@ import {
   trackAICall,
 } from '../lib/aiCostTracker';
 import { getCategoryFamilySpec, type CategoryFamily } from './intakeCategoryFamilies';
-import { isShoutedWord, normalizeTitleCaps } from './titleCaps';
+import { normalizeTitleCaps, shoutedTokenIndexes } from './titleCaps';
+import { lotSignal, TITLE_MAX_LENGTH } from './intakePreservation';
 import type { AppliedIntakeCorrection, IntakeReviewNote, PrintedTextTranscription, VerifyPassStatus, VerifyPassUsage } from './intakeReviewTypes';
 
 /** Pass-1 fields the verify pass may check and correct. */
@@ -200,6 +201,9 @@ export interface ApplyVerifyOptions {
   threshold?: number;
   /** Vision OCR text for the item; with the pass-1 printedText it is the evidence a name-spelling change needs. */
   ocrText?: string | null;
+  /** Re-analyze / recheck: the listing before this run. A "Lot of N" may only be added when this (or the current text) states a lot. */
+  priorTitle?: string | null;
+  priorDescription?: string | null;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -330,24 +334,171 @@ export function spellingChanges(from: string, to: string): Array<{ from: string;
   return out;
 }
 
+/** Product-type words a title correction must not drop ("Baseball Card", "Vinyl LP", "Record"). Longest first. */
+export const TITLE_PRODUCT_TYPE_PHRASES: readonly string[] = [
+  'Baseball Card', 'Football Card', 'Basketball Card', 'Hockey Card', 'Trading Card', 'Sports Card', 'Vinyl LP', 'Vinyl Record',
+  'Comic Book', 'Card', 'LP', 'Record', 'Album', 'Cassette', 'Postcard',
+];
+
+function phraseRegex(phrase: string): RegExp {
+  const words = phrase.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(`(?:^|[^A-Za-z0-9])${words.join('[\\s-]+')}s?(?=$|[^A-Za-z0-9])`, 'i');
+}
+
 /**
- * Title guard. Returns null when the title correction is safe to apply, or the reason it is not. Exported for tests.
- *   (a) it drops more than 40% of the current title's significant words;
- *   (b) it introduces an ALL-CAPS word (3+ letters) the current title did not have in caps (codes with digits and
- *       known acronyms are fine);
- *   (c) it changes the spelling of a word (a name) and the OCR / printed text does not contain the new spelling.
+ * Product-type words in `current` whose head word ("Card", "LP", "Record") is missing from `next`. Returns the phrases
+ * exactly as written in `current` ("Baseball Card"), longest first, without overlaps. Exported for tests.
  */
-export function guardTitleCorrection(current: unknown, next: string, evidence: string): string | null {
-  const cur = String(current ?? '');
-  if (cur.trim()) {
-    if (tokenRetention(cur, next) < 0.6) return 'it would drop too much of the current title';
-    const curCaps = new Set(cur.split(/\s+/).filter((w) => isShoutedWord(w)).map((w) => w.replace(/[^A-Za-z]/g, '')));
-    const newCaps = next.split(/\s+/).filter((w) => isShoutedWord(w) && !curCaps.has(w.replace(/[^A-Za-z]/g, '')));
-    if (newCaps.length > 0) return `it puts "${newCaps[0]}" in capitals`;
-    const unsupported = spellingChanges(cur, next).find((c) => !evidence || !evidence.includes(c.to.toLowerCase()));
-    if (unsupported) return `the text read from the photos does not show the spelling "${unsupported.to}"`;
+export function droppedProductTypes(current: string, next: string): string[] {
+  const out: string[] = [];
+  const covered: string[] = [];
+  for (const phrase of TITLE_PRODUCT_TYPE_PHRASES) {
+    const re = phraseRegex(phrase);
+    const m = current.match(re);
+    if (!m) continue;
+    const written = m[0].replace(/^[^A-Za-z0-9]+/, '');
+    if (covered.some((c) => c.toLowerCase().includes(written.toLowerCase()))) continue;
+    covered.push(written);
+    const head = phrase.split(/\s+/).pop() as string;
+    if (phraseRegex(head).test(next)) continue; // the type word is still there ("Card" kept, only "Baseball" moved)
+    out.push(written);
   }
-  return null;
+  return out;
+}
+
+/** Function words: never the item's noun, and not counted when measuring how much of a title a correction keeps. */
+const FUNCTION_WORDS = new Set([
+  'after', 'before', 'with', 'without', 'from', 'into', 'onto', 'over', 'under', 'about', 'above', 'below', 'between', 'through',
+  'this', 'that', 'these', 'those', 'your', 'their', 'there', 'here', 'what', 'when', 'where', 'which', 'while', 'have', 'been',
+  'were', 'will', 'just', 'only', 'also', 'very', 'more', 'most', 'some', 'each', 'other', 'than', 'then', 'them', 'they',
+]);
+/** Function words plus listing filler adjectives that are not the item's noun. */
+const NON_NOUN_WORDS = new Set([
+  ...FUNCTION_WORDS,
+  'vintage', 'antique', 'retro', 'rare', 'used', 'original', 'genuine', 'authentic', 'classic', 'large', 'small', 'medium',
+]);
+
+/** Significant title words (as significantTokens) in order of appearance. */
+function orderedSignificant(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of String(text ?? '').toLowerCase().split(/[^a-z0-9]+/)) {
+    if (raw.length <= 3) continue;
+    const t = raw.length > 4 && raw.endsWith('s') ? raw.slice(0, -1) : raw;
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
+function isNounLike(token: string): boolean {
+  return /[a-z]/.test(token) && !/^\d+$/.test(token) && !NON_NOUN_WORDS.has(token);
+}
+
+/** True when `removed` reads as a misspelling of one of the added words (or of two adjacent added words joined): "Phumotion" -> "Promotion" / "Pro Motion". */
+function isRespelling(removed: string, nextText: string, added: string[]): boolean {
+  const limit = Math.max(2, Math.floor(removed.length * 0.3));
+  const cands = new Set(added);
+  const allWords = String(nextText).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  for (let i = 0; i < allWords.length; i++) {
+    cands.add(allWords[i]);
+    if (i + 1 < allWords.length) cands.add(allWords[i] + allWords[i + 1]);
+  }
+  for (const c of cands) if (c.length >= 3 && levenshtein(removed, c) <= limit) return true;
+  return false;
+}
+
+export interface TitleGuardContext {
+  /** Lowercase spelling evidence (OCR + printed text). */
+  evidence: string;
+  /** Text that may justify a lot / count: the current and prior title and description. */
+  lotEvidenceText?: string;
+  brand?: string | null;
+}
+
+export type TitleGuardResult = { ok: true; value: string; restored: string[] } | { ok: false; why: string };
+
+/**
+ * Title guard (2026-11-08, extended after the 212-item recheck). Returns the title to write (product-type words put
+ * back when the correction dropped them) or why the correction must stay a note. Exported for tests.
+ *   (a) it drops more than 40% of the current title's significant words;
+ *   (b) it drops a product-type word ("Baseball Card", "Vinyl LP", "Record") and putting it back would pass 80 characters;
+ *   (c) it replaces the item's noun: a noun-like word among the current title's last 3 significant words (the head noun
+ *       phrase) is removed ("Frog Doorstop" -> "Decorative Carving"), or 2+ significant words are removed while different
+ *       ones are added, unless the OCR / printed text shows the new words. A respelling of a misread word
+ *       ("Phumotion" -> "Pro Motion") is not a replacement;
+ *   (d) it adds "Lot" / "Lot of N" when neither the current nor the earlier title or description stated a lot or count
+ *       (the photo count alone is never evidence), or states a different count than they did;
+ *   (e) it introduces a 5+ letter ALL-CAPS name word the current title did not have in caps;
+ *   (f) it changes the spelling of a word (a name) and the OCR / printed text does not contain the new spelling.
+ */
+export function guardTitleCorrectionDetailed(current: unknown, next: string, ctx: TitleGuardContext): TitleGuardResult {
+  const cur = String(current ?? '');
+  const evidence = ctx.evidence || '';
+  if (!cur.trim()) return { ok: true, value: next, restored: [] };
+  {
+    // Share of the current title's content words kept (function words like "after" do not count; a respelled misread word
+    // like "Phumotion" -> "Pro Motion" counts as kept).
+    const base = orderedSignificant(cur).filter((t) => !FUNCTION_WORDS.has(t));
+    if (base.length > 0) {
+      const nextTokens = new Set(orderedSignificant(next));
+      const addedTokens = [...nextTokens].filter((t) => !base.includes(t));
+      const kept = base.filter((t) => nextTokens.has(t) || isRespelling(t, next, addedTokens)).length;
+      if (kept / base.length < 0.6) return { ok: false, why: 'it would drop too much of the current title' };
+    }
+  }
+
+  // (b) product-type words
+  let value = next;
+  const restored: string[] = [];
+  for (const phrase of droppedProductTypes(cur, next)) {
+    const attempt = `${value.replace(/\s+$/, '')} ${phrase}`;
+    if (attempt.length > TITLE_MAX_LENGTH) return { ok: false, why: `it drops "${phrase}" from the title` };
+    value = attempt;
+    restored.push(phrase);
+  }
+
+  // (c) noun replacement
+  const curSig = orderedSignificant(cur);
+  const nextSig = new Set(orderedSignificant(value));
+  const added = [...nextSig].filter((t) => !curSig.includes(t));
+  const removed = curSig.filter((t) => !nextSig.has(t) && !isRespelling(t, value, added));
+  const addedSupported = added.length > 0 && added.every((t) => evidence.includes(t));
+  if (removed.length > 0 && !addedSupported) {
+    const head = curSig.slice(-3);
+    const headNoun = removed.find((t) => head.includes(t) && isNounLike(t));
+    if (headNoun) return { ok: false, why: `it replaces "${headNoun}", the item's main word` };
+    const addedOther = added.filter((t) => !removed.includes(t));
+    if (removed.length >= 2 && addedOther.length > 0) return { ok: false, why: `it swaps the words ${removed.map((r) => `"${r}"`).join(', ')} for different ones` };
+  }
+
+  // (d) lot / count
+  const nextLot = lotSignal(value);
+  const curLot = lotSignal(cur);
+  if (nextLot.isLot && !curLot.isLot) {
+    const before = lotSignal(ctx.lotEvidenceText ?? cur);
+    if (!before.isLot) return { ok: false, why: 'it adds a lot or count that the earlier title and description did not state' };
+    if (before.count != null && nextLot.count != null && before.count !== nextLot.count) {
+      return { ok: false, why: `it says ${nextLot.count} pieces but the earlier listing said ${before.count}` };
+    }
+  }
+
+  // (e) new ALL-CAPS name words
+  const shouted = shoutedTokenIndexes(value, [ctx.brand ?? null], { priorText: [cur] });
+  if (shouted.size > 0) {
+    const toks = value.split(/\s+/).filter(Boolean);
+    const first = toks[[...shouted].sort((a, b) => a - b)[0]];
+    return { ok: false, why: `it puts "${first}" in capitals` };
+  }
+
+  // (f) spelling
+  const unsupported = spellingChanges(cur, value).find((c) => !evidence || !evidence.includes(c.to.toLowerCase()));
+  if (unsupported) return { ok: false, why: `the text read from the photos does not show the spelling "${unsupported.to}"` };
+  return { ok: true, value, restored };
+}
+
+/** Title guard, reason only (null when safe). Kept for callers and tests that only need the verdict. */
+export function guardTitleCorrection(current: unknown, next: string, evidence: string, lotEvidenceText?: string): string | null {
+  const r = guardTitleCorrectionDetailed(current, next, { evidence, lotEvidenceText });
+  return r.ok ? null : r.why;
 }
 
 /** Brand guard: a spelling change to the brand needs OCR / printed-text support. */
@@ -374,6 +525,8 @@ export function applyVerifyCorrections<T extends VerifiableResult>(
   const threshold = opts.threshold ?? verifyApplyThreshold();
   const edited = new Set((opts.userEditedFields || []).map((f) => String(f)));
   const touched = new Set<string>();
+  // Lot evidence: the title and description as they were before any correction in this pass, plus the earlier listing.
+  const lotEvidenceText = [result.title, result.description, opts.priorTitle, opts.priorDescription].filter((t) => typeof t === 'string' && t.trim()).join('\n');
   let evidenceCache: string | null = null;
   const evidence = (): string => (evidenceCache ??= spellingEvidence(result, opts.ocrText));
   try {
@@ -398,6 +551,7 @@ export function applyVerifyCorrections<T extends VerifiableResult>(
         let finalValue: unknown = cleaned;
         let blockedWhy: string | null = null;
         let appendedDesc = false;
+        let restoredTypes: string[] = [];
         if (c.confidence >= threshold && !staleOld) {
           if (field === 'description' && typeof cleaned === 'string') {
             const g = guardDescriptionCorrection(current, cleaned);
@@ -407,8 +561,13 @@ export function applyVerifyCorrections<T extends VerifiableResult>(
               appendedDesc = g.action === 'append';
             }
           } else if (field === 'title' && typeof cleaned === 'string') {
-            blockedWhy = guardTitleCorrection(current, cleaned, evidence());
-            if (!blockedWhy) finalValue = normalizeTitleCaps(cleaned, [typeof result.brand === 'string' ? result.brand : null]);
+            const brand = typeof result.brand === 'string' ? result.brand : null;
+            const g = guardTitleCorrectionDetailed(current, cleaned, { evidence: evidence(), lotEvidenceText, brand });
+            if (!g.ok) blockedWhy = g.why;
+            else {
+              finalValue = normalizeTitleCaps(g.value, [brand], { priorText: [typeof current === 'string' ? current : null], printedText: [evidence()] });
+              restoredTypes = g.restored;
+            }
           } else if (field === 'brand') {
             blockedWhy = guardBrandCorrection(current, cleaned, evidence());
           }
@@ -417,7 +576,8 @@ export function applyVerifyCorrections<T extends VerifiableResult>(
         if (c.confidence >= threshold && !staleOld && !blockedWhy) {
           (result as unknown as Record<string, unknown>)[field] = field === 'brand' && finalValue === null ? undefined : finalValue;
           touched.add(field);
-          applied.push({ field, from: current ?? null, to: finalValue, reason: appendedDesc ? `${reason}${reason ? ' ' : ''}(added to the description)` : reason, confidence: c.confidence, source: 'verify' });
+          const keptNote = restoredTypes.length > 0 ? ` (kept ${restoredTypes.map((r) => `"${r}"`).join(', ')} in the title)` : '';
+          applied.push({ field, from: current ?? null, to: finalValue, reason: appendedDesc ? `${reason}${reason ? ' ' : ''}(added to the description)` : `${reason}${keptNote}`, confidence: c.confidence, source: 'verify' });
           notes.push({
             code: 'VERIFY_APPLIED',
             severity: 'info',
@@ -425,7 +585,7 @@ export function applyVerifyCorrections<T extends VerifiableResult>(
             field,
             message: appendedDesc
               ? `Added a sentence to the description${reason ? `: ${reason}` : '.'}`
-              : `Updated the ${label} to match the photos${reason ? `: ${reason}` : '.'}`,
+              : `Updated the ${label} to match the photos${reason ? `: ${reason}` : '.'}${restoredTypes.length > 0 ? ` Kept ${restoredTypes.map((r) => `"${r}"`).join(', ')} in the title.` : ''}`,
             current: display(current),
             suggested: display(finalValue),
             confidence: c.confidence,

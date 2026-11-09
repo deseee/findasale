@@ -21,7 +21,7 @@ function extract(src, name) {
   throw new Error('unterminated ' + name);
 }
 const ASYNC = new Set(['mercLookupItemById', 'mercRemoveByListingId', 'mercRemResumeAfterDeleteClick']);
-const NAMES = ['mercRemovalListingId', 'mercParseNextData', 'mercClassifyItemLookup', 'mercLookupItemById', 'mercRemoveByListingId',
+const NAMES = ['mercRemovalListingId', 'mercParseNextData', 'mercClassifyItemLookup', 'mercLookupItemById', 'mercRemoveByListingId', 'mercRemReportGone',
   'mercRemReadMarker', 'mercRemWriteMarker', 'mercRemClearMarker', 'mercRemReportResult', 'mercRemFailureCopy', 'mercRemResumeAfterDeleteClick'];
 const body = NAMES.map((n) => (ASYNC.has(n) ? 'async ' : '') + extract(merc, n)).join('\n');
 

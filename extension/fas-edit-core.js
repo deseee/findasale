@@ -300,6 +300,14 @@
     // 2026-10-19: cleanCandidateTitle strips a trailing "$price ..." tail, which also eats real titles that contain a dollar
     // amount ("1950-C $50 *Minneapolis* Federal Reserve Star Note" became "1950-c" and never matched). Also accept the un-stripped text.
     if (foldTitle(candidateText).replace(/\s*\.{3,}\s*$/, '') === w) return true;
+    // 1.0.91: Craigslist's dashboard shows "<title> - $<price>", so the un-stripped text above still carries " - $85" and the same
+    // title was reported listing_not_found_on_dashboard (live: posting 7963221699). Strip ONLY that trailing price suffix, then
+    // compare; also compare with decoration characters (* ~ ^ | # ! $) dropped on both sides, since Craigslist may drop or keep
+    // them. Every word must still be the same, in the same order.
+    var suffixless = foldTitle(candidateText).replace(/\s*-\s*\$\s?\d[\d,]*(?:\.\d{1,2})?\s*$/, '').replace(/\s*\.{3,}\s*$/, '').trim();
+    if (suffixless === w) return true;
+    var deco = function (x) { return String(x).replace(/[*~^|#!$]+/g, ' ').replace(/\s+/g, ' ').trim(); };
+    if (deco(w).length >= MIN_TITLE && (deco(suffixless) === deco(w) || deco(c) === deco(w))) return true;
     if (w.length >= 75 && c.length >= 60 && w.length > c.length && w.indexOf(c) === 0 && /^[,;:]?\s+\S+$/.test(w.slice(c.length))) return true;
     return false;
   }

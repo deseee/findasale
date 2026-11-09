@@ -68,6 +68,20 @@ export function isSafeFetchUrl(raw: unknown, opts: { extraHosts?: string[] } = {
 }
 
 /**
+ * Extra hosts allowed for an ITEM's stored photos (2026-11-08). eBay-imported items keep eBay's own picture URLs
+ * (ebayController import writes product.imageUrls straight into Item.photoUrls), so their photos live on eBay's public
+ * image CDN, not Cloudinary. Without this the inventory recheck and re-analyze skipped every eBay-imported item with
+ * "photo download failed". Same rules as every other host: https, port 443, no credentials, no IP literal, and callers
+ * never follow redirects. The image proxy and the Etsy photo fetch already trust this host.
+ */
+export const ITEM_PHOTO_EXTRA_HOSTS: readonly string[] = ['i.ebayimg.com'];
+
+/** SSRF guard for an item's stored photo URL: the standard allowlist plus ITEM_PHOTO_EXTRA_HOSTS. */
+export function isSafeItemPhotoUrl(raw: unknown): boolean {
+  return isSafeFetchUrl(raw, { extraHosts: [...ITEM_PHOTO_EXTRA_HOSTS] });
+}
+
+/**
  * Hostnames of the app's own public origins (frontend, backend, site URL envs) plus the optional
  * BRAND_ASSET_ALLOWED_HOSTS list (comma-separated, exact hosts or "*.example.com"). Read lazily so
  * tests and env changes apply. Never throws; unparseable values are skipped.

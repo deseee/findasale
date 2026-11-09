@@ -1134,7 +1134,10 @@
   function clTitleMatches(raw, wanted, exactOnly) {
     if (C.titleEquals(raw, wanted)) return true;
     if (exactOnly) return false;
-    var c = C.cleanCandidateTitle(raw), w = C.foldTitle(wanted).replace(/\s*\.{3,}\s*$/, '').trim();
+    // 1.0.91: strip only the dashboard's trailing " - $price" (cleanCandidateTitle cuts at the FIRST "$", which ate titles such as
+    // "1950-C $50 *Minneapolis* Federal Reserve Star Note").
+    var c = C.foldTitle(raw).replace(/\s*-\s*\$\s?\d[\d,]*(?:\.\d{1,2})?\s*$/, '').replace(/\s*\.{3,}\s*$/, '').trim();
+    var w = C.foldTitle(wanted).replace(/\s*\.{3,}\s*$/, '').trim();
     return !!(c && w && w.length > 70 && c === w.slice(0, 70).trim());
   }
   function clPickByTitle(cands, wanted, exactOnly) {

@@ -21,8 +21,8 @@
  *   (see reanalyzeItemForOrganizer, which surfaces this as a client confirm).
  */
 
-import axios from 'axios';
-import { isSafeFetchUrl, SAFE_FETCH_AXIOS_OPTIONS } from '../utils/safeFetchUrl'; // SSRF guard for stored + caller-supplied image URLs
+import { isSafeFetchUrl } from '../utils/safeFetchUrl'; // SSRF guard for caller-supplied test image URLs
+import { downloadItemPhotos } from '../utils/itemPhotoDownload'; // stored photos: same routine as the inventory recheck
 import { prisma } from '../lib/prisma';
 import { analyzeItemImages } from './cloudAIService';
 import { enrichItem, planEnrichmentApply } from './productEnrichment';
@@ -185,22 +185,11 @@ export async function reanalyzeItem(
   // download THOSE (capped at 6) instead of the item's stored photos; otherwise use the
   // first 5 stored photoUrls. Only https URLs on the SSRF allowlist are fetched (see utils/safeFetchUrl).
   const sourceUrls = usingTestImages ? testImageUrls : item.photoUrls.slice(0, 5);
-  const buffers: Buffer[] = [];
-  const mimeTypes: string[] = [];
-  for (const url of sourceUrls) {
-    if (!isSafeFetchUrl(url)) {
-      console.warn('[Reanalyze] skipped photo URL that is not an allowed https image host');
-      continue;
-    }
-    try {
-      const resp = await axios.get(url, { ...SAFE_FETCH_AXIOS_OPTIONS, responseType: 'arraybuffer', timeout: 10000, headers: { 'User-Agent': 'FindaSale-ImageTagger/1.0 (+https://finda.sale; secondary-sale item tagging)' } });
-      const contentType = String(resp.headers?.['content-type'] || '').split(';')[0].trim();
-      buffers.push(Buffer.from(resp.data));
-      mimeTypes.push(contentType.startsWith('image/') ? contentType : 'image/jpeg');
-    } catch (err: any) {
-      console.error(`[Reanalyze] image download failed (${url}):`, err?.message || err);
-    }
-  }
+  // 2026-11-08: one shared routine with the inventory recheck (utils/itemPhotoDownload), so both read the same photos,
+  // including eBay-imported items whose photos are on eBay's picture CDN.
+  const downloaded = await downloadItemPhotos(sourceUrls, { max: usingTestImages ? 6 : 5, logTag: '[Reanalyze]' });
+  const buffers: Buffer[] = downloaded.buffers;
+  const mimeTypes: string[] = downloaded.mimeTypes;
   if (buffers.length === 0) return { ok: false, code: 'PHOTO_DOWNLOAD_FAILED' };
 
   let result;
