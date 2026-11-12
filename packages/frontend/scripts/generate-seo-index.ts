@@ -134,7 +134,7 @@ function generatePricingSections(city: string, state: string, saleType: string):
     },
     {
       heading: `Furniture Pricing in ${city}`,
-      body: `Furniture is often the revenue driver at ${saleType}s. Dining tables: $50–$200. Sofas/sectionals: $100–$400. Bedroom sets: $150–$500. Vintage/antique pieces: $200–$1000+. Condition matters—expect to price worn items 20–40% lower than excellent condition. High-quality brands (Ethan Allen, Baker) attract serious ${city} buyers.`,
+      body: `Furniture is often the revenue driver at ${saleType}s. Dining tables: $50–$200. Sofas/sectionals: $100–$400. Bedroom sets: $150–$500. Vintage/antique pieces: $200–$1000+. Condition matters. Expect to price worn items 20–40% lower than excellent condition. High-quality brands (Ethan Allen, Baker) attract serious ${city} buyers.`,
     },
     {
       heading: `Pricing Household Items and Decor`,
@@ -146,7 +146,7 @@ function generatePricingSections(city: string, state: string, saleType: string):
     },
     {
       heading: `Clothing and Fashion Pricing`,
-      body: `Clothing pricing varies by era and brand. Vintage 1950s–80s pieces: $3–$25. Contemporary department store: $1–$5. Designer handbags: $10–$200+. Shoes: $1–$10. Coats: $5–$30. Quality and condition are key—well-presented vintage fashion attracts niche ${city} buyers willing to pay premium prices.`,
+      body: `Clothing pricing varies by era and brand. Vintage 1950s–80s pieces: $3–$25. Contemporary department store: $1–$5. Designer handbags: $10–$200+. Shoes: $1–$10. Coats: $5–$30. Quality and condition are key: well-presented vintage fashion attracts niche ${city} buyers willing to pay premium prices.`,
     },
   ];
 }
@@ -193,7 +193,7 @@ function generatePricingEntry(city: string, state: string, saleType: string): Gu
     content: {
       intro: `${saleType}s in ${city}, ${state} follow regional pricing patterns shaped by local demographics and buyer preferences. This guide breaks down what furniture, collectibles, household items, and category-specific goods actually sell for in the ${city} market. Use these benchmarks to price your inventory competitively.`,
       sections: generatePricingSections(city, state, saleType),
-      cta: `List your ${saleType} on FindA.Sale — free to post, no commission.`,
+      cta: `List your ${saleType} on FindA.Sale: free to post, no commission.`,
     },
     metaTitle: `${city} ${cap} Pricing Guide 2026 | FindA.Sale`,
     metaDescription: `${cap} pricing benchmarks for ${city}, ${state}. What furniture, collectibles, and household items sell for in the ${city} market.`,
