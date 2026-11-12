@@ -2111,7 +2111,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     // Feature #5: Validate listing type if provided
-    if (listingType !== undefined && !VALID_LISTING_TYPES.includes(listingType)) {
+    // 'KIT' is allowed here so a kit's own edit form can save; the kit rules below decide what a KIT value may do (2026-11-12).
+    if (listingType !== undefined && listingType !== 'KIT' && !VALID_LISTING_TYPES.includes(listingType)) {
       return res.status(400).json({
         message: `Invalid listing type "${listingType}". Must be one of: ${VALID_LISTING_TYPES.join(', ')}`
       });

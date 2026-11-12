@@ -389,3 +389,32 @@ describe('publishItem: D3 FIX, a card without a price is refused', () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+describe('updateItem listing type on kits (2026-11-12)', () => {
+  it('a kit saved from its own edit form with listingType KIT is not rejected as an invalid listing type', async () => {
+    mockPrisma.item.findUnique.mockResolvedValue({ ...baseItem(), listingType: 'KIT', stockTotal: 8, stockSold: 0 });
+    mockPrisma.item.update.mockResolvedValue({ id: 'i1', title: 'Kit', price: 10, ebayOfferId: null });
+    const res = makeRes();
+    await updateItem({ user: organizerUser, params: { id: 'i1' }, body: { title: 'Kit renamed', listingType: 'KIT' } }, res);
+    expect(String(res.body?.message || '')).not.toMatch(/Invalid listing type/);
+    expect(res.body?.code).not.toBe('KIT_TYPE_FIXED');
+  });
+
+  it('a kit still cannot be switched to another listing type', async () => {
+    mockPrisma.item.findUnique.mockResolvedValue({ ...baseItem(), listingType: 'KIT', stockTotal: 8, stockSold: 0 });
+    const res = makeRes();
+    await updateItem({ user: organizerUser, params: { id: 'i1' }, body: { listingType: 'FIXED' } }, res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe('KIT_TYPE_FIXED');
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+  });
+
+  it('an ordinary item cannot become a kit through the item edit save', async () => {
+    mockPrisma.item.findUnique.mockResolvedValue(baseItem());
+    const res = makeRes();
+    await updateItem({ user: organizerUser, params: { id: 'i1' }, body: { listingType: 'KIT' } }, res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe('KIT_CREATE_ELSEWHERE');
+    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+  });
+});
