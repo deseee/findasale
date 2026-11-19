@@ -276,6 +276,7 @@ import './jobs/squareBillingChargeJob'; // Square Plan B: PRO/TEAMS + Hunt Pass 
 import './jobs/deliverabilityMonitorJob'; // Email deliverability monitoring — Sundays 19:00 UTC
 import './jobs/organizerOnboardingDripJob'; // Organizer onboarding drip (Email 5a/5b/5c) — daily 11:00 UTC
 import './jobs/gmailHealthCron';          // Gmail OAuth health, daily send summary, suspension detect
+import './jobs/signupFunnelReportCron'; // 2026-11-19: weekly organizer signup funnel logged Mondays 13:00 UTC
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
 import { scheduleSaleAutoCloseCron } from './jobs/saleAutoCloseCron'; // Auto-close expired PUBLISHED scraped sales hourly

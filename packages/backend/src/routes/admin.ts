@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth';
 import { requireAdmin } from '../middleware/adminAuth';
+import { getSignupFunnel } from '../services/signupFunnelService'; // 2026-11-19: weekly signup funnel
 import { setOrganizerCardSuspensionHandler, setItemRestrictedClassOverrideHandler, listRestrictedItemAuditHandler } from '../controllers/restrictedItemAdminController'; // 2026-11-06
 import { prisma } from '../index';
 import { Prisma } from '@prisma/client';
@@ -185,6 +186,16 @@ router.get('/scrape-pool-stats', getScrapePoolStats);
 // Outreach funnel stats and KPI drilldowns
 router.get('/outreach-stats', getOutreachStats);
 router.get('/outreach-opens', getOutreachOpens);
+// 2026-11-19: weekly organizer signup funnel, outreach email to first published sale (read-only)
+router.get('/signup-funnel', async (req, res) => {
+  try {
+    const weeks = Number(req.query.weeks) || 8;
+    res.json(await getSignupFunnel(weeks));
+  } catch (error) {
+    console.error('[SignupFunnel] admin route error:', error);
+    res.status(500).json({ message: 'Failed to load signup funnel' });
+  }
+});
 router.get('/activation-nudges', getActivationNudges); // 2026-10-23: organizer activation nudges (log + dry run, never sends)
 router.get('/drilldown/:metric', getDrilldown);
 

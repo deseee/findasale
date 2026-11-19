@@ -16,6 +16,7 @@ import {
   bulkUpsertEnrichedSales,
 } from '../controllers/internalSaleDetailEnrichmentController';
 import { sendOutreachEmails } from '../jobs/outreachEmailsCron';
+import { getSignupFunnel } from '../services/signupFunnelService'; // 2026-11-19: weekly signup funnel
 import { runWebsiteEnrichmentBackfill } from '../jobs/websiteEnrichmentJob';
 import { runInternalJob } from '../controllers/internalJobRunnerController';
 import { runListingEnrichmentBatch } from '../controllers/internalListingEnrichmentController';
@@ -674,6 +675,16 @@ router.post('/outreach/send', requireSecret, (req: express.Request, res: express
   sendOutreachEmails().catch((error: any) => {
     console.error('[OutreachManual] Route error:', error);
   });
+});
+
+// GET /api/internal/reports/signup-funnel?weeks=8 -- 2026-11-19: weekly organizer signup funnel (read-only)
+router.get('/reports/signup-funnel', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    res.json(await getSignupFunnel(Number(req.query.weeks) || 8));
+  } catch (err: any) {
+    console.error('[SignupFunnel] internal route error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // GET /api/internal/outreach/status

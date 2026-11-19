@@ -611,6 +611,12 @@ const AdminDashboard = () => {
                 >
                   View opened emails →
                 </a>
+                <Link
+                  href="/admin/signup-funnel"
+                  className="ml-4 inline-flex items-center gap-1 text-sm font-medium text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-200"
+                >
+                  Weekly signup funnel →
+                </Link>
               </div>
             </div>
           )}
