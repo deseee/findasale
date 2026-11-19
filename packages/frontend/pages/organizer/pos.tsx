@@ -1584,6 +1584,10 @@ export default function POSPage() {
     addConsignorTag(tag).then(({ added }) => {
       if (added) showToast('Consignor tag added to cart', 'success');
       clearParams();
+    }).catch(err => {
+      console.error('[pos] Consignor tag from link failed:', err);
+      setErrorMessage('Could not verify this price tag.');
+      clearParams();
     });
   }, [loading, user, router, addConsignorTag, showToast]);
 
@@ -2435,6 +2439,11 @@ export default function POSPage() {
                   setQrScanMessage(message || 'Could not add item to cart');
                   setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 3500);
                 }
+              }).catch(err => {
+                console.error('[pos] QR venue add-item error:', err);
+                setQrScanStatus('error');
+                setQrScanMessage('Could not add item to cart');
+                setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 3500);
               });
               return;
             }
@@ -2472,6 +2481,11 @@ export default function POSPage() {
             setQrScanMessage(message || 'Could not add this price tag');
             setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 3500);
           }
+        }).catch(err => {
+          console.error('[pos] QR consignor tag error:', err);
+          setQrScanStatus('error');
+          setQrScanMessage('Could not add this price tag');
+          setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 3500);
         });
         return;
       }
