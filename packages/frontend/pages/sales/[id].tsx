@@ -620,9 +620,20 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   const { data: sale, isLoading, isError, error: queryError } = useQuery({
     queryKey: ['sale', id],
     queryFn: async () => {
-      if (!id) throw new Error('No sale ID provided');
-      const response = await api.get(`/sales/${id}`);
-      return response.data as Sale;
+      if (!id || typeof id !== 'string') throw new Error('No sale ID provided');
+      // Encode the route param (same as getStaticProps) so a malformed id such as "..%2Fadmin"
+      // cannot walk to another API path and come back as a 200 with a non-sale body.
+      const response = await api.get(`/sales/${encodeURIComponent(id)}`);
+      const body = response.data;
+      // A bad id must land on the "Sale not found" state, not crash the render on
+      // sale.organizer / sale.photoUrls. Treat any body that is not a sale as a 404
+      // (404 also stops the retry and refetch loops below).
+      if (!body || typeof body !== 'object' || Array.isArray(body) || !body.id || !body.organizer || typeof body.organizer !== 'object') {
+        const notFound: any = new Error('Sale not found');
+        notFound.response = { status: 404 };
+        throw notFound;
+      }
+      return body as Sale;
     },
     enabled: !!id,
     staleTime: 3000, // BUG-11: Cache for 3s to avoid repeated fetches from child components/effects
@@ -925,7 +936,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   // SSR head-rendering block below (which renders og + JSON-LD from getStaticProps
   // props) without crashing. Once mounted, `sale` is always defined here, so all
   // downstream interactive behavior is unchanged.
-  const isOrganizer = !!sale && user?.id === sale.organizer.userId;
+  const isOrganizer = !!sale && !!user?.id && user.id === sale.organizer?.userId;
   const saleStartDate = sale ? parseISO(sale.startDate) : null;
   const saleEndDate = sale ? parseISO(sale.endDate) : null;
   const now = new Date();
@@ -947,7 +958,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   // Feature #43: OG Image Generator: transform photoUrls to photos format for SaleOGMeta
   const saleForOGMeta = sale ? {
     ...sale,
-    photos: sale.photoUrls.map(url => ({ url })),
+    photos: (sale.photoUrls || []).map(url => ({ url })),
   } : null;
 
   // Rank-Based Early Access: Check if sale is locked for this user
