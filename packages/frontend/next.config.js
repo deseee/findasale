@@ -232,6 +232,10 @@ const nextConfig = {
         destination: 'https://finda.sale/:path*',
         permanent: true,
       },
+      // 2026-11-19 (GSC 404 cleanup): next-sitemap's static build output (/sitemap-0.xml: 851 URLs incl. /admin*,
+      // /messages, /settings, /checkout and ungated /guide/* stubs) is no longer generated (package.json postbuild).
+      // The only sitemap is the index at /sitemap.xml -> /server-sitemap.xml; send any old sitemap-N.xml there.
+      { source: '/sitemap-:n(\\d+).xml', destination: '/sitemap.xml', permanent: true },
       { source: '/create-sale', destination: '/organizer/create-sale', permanent: true },
       // Onboarding, abandoned-signup, recap and win-back emails linked here; no such page exists ([id] caught "new")
       { source: '/organizer/sales/new', destination: '/organizer/create-sale', permanent: false },
