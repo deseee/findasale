@@ -23,6 +23,7 @@ import { buildSaleIcs } from '../utils/icalBuilder'; // RFC 5545 builder for GET
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
 import { triggerSaleAndCityRevalidation, triggerSaleTakedownRevalidation, citySlugFromCityState, debouncedTriggerSaleAndCityRevalidation } from '../services/revalidationService'; // ADR 2026-07-11: on-demand ISR revalidation
 import { isTrustedServerRequest } from '../middleware/rateLimitShared'; // 2026-10-23: getSale tells our ISR renderer a 404 is 'not public yet'
+import { saleGoneBodyForRow, prunedSaleGoneBody } from '../utils/saleGone'; // 2026-11-19: 410 SALE_GONE for removed sales (trusted renderer only)
 import { notifyNearbyFavorites } from '../services/rippleService'; // Phase 5: #51 Sale Ripples
 import { getIO } from '../lib/socket'; // V1: Socket.io instance
 import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Feature #32: Wishlist Alerts
@@ -605,7 +606,16 @@ export const getSale = async (req: Request, res: Response) => {
     });
 
     // Soft-deleted sales must 404 (not render a stale shell)
-    if (!sale || sale.deletedAt) return res.status(404).json({ message: 'Sale not found' });
+    if (!sale || sale.deletedAt) {
+      // 2026-11-19 (GSC 404 cleanup): our own ISR renderer (x-ssr-secret) learns that a pruned
+      // (tombstoned) or soft-deleted sale is gone for good, with its city slug, so /sales/[id] can
+      // 301 to the city page. Anonymous callers keep the plain 404 (no existence signal).
+      if (isTrustedServerRequest(req)) {
+        const gone = sale ? saleGoneBodyForRow(sale) : await prunedSaleGoneBody(id);
+        if (gone) return res.status(410).json(gone);
+      }
+      return res.status(404).json({ message: 'Sale not found' });
+    }
 
     // Rank-Based Early Access Gate: Check if user can view this sale
     const isOrganizer = authReq.user?.id === sale.organizer.userId;
@@ -622,6 +632,11 @@ export const getSale = async (req: Request, res: Response) => {
       // Anonymous callers get the same plain 404 as before (no existence signal).
       if (sale.status === 'DRAFT' && isTrustedServerRequest(req)) {
         return res.status(404).json({ message: 'Sale not found', code: 'SALE_NOT_PUBLIC' });
+      }
+      // 2026-11-19: CANCELLED never comes back, so the renderer gets 410 SALE_GONE (-> 301 to the city).
+      if (isTrustedServerRequest(req)) {
+        const gone = saleGoneBodyForRow(sale);
+        if (gone) return res.status(410).json(gone);
       }
       return res.status(404).json({ message: 'Sale not found' });
     }

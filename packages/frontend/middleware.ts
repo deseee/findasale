@@ -294,6 +294,13 @@ export async function middleware(request: NextRequest) {
   // notFound:true / plain-404 behavior below -- not a regression, just not
   // improved for the oldest tail of the backlog (see ADR for detail, including
   // why the July 2026 mass-prune's ~51K ids can't be backfilled).
+  //
+  // 2026-11-19 (GSC 404 cleanup): pruned ids are no longer bounded by this window.
+  // pruneScrapedSales.ts stores each tombstone's citySlug, GET /sales/:id answers our
+  // ISR renderer 410 SALE_GONE for ANY tombstoned, soft-deleted or CANCELLED sale, and
+  // pages/sales/[id].tsx turns that into a 301 to /city/<slug>. The window synced here
+  // now holds only tombstones WITHOUT a citySlug (pre-2026-11-19 rows), which cannot be
+  // redirected, so a 410 is still the best answer for them.
   const SEED_DELETED_SALE_IDS = new Set([
     'cmqf14g6x00t9bo1nibst4yk7',
     'cmqf14aag001hbo1nkd6lqcs7',

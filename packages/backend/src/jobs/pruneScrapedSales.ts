@@ -42,6 +42,12 @@ const SLEEP_MS = 100;
 const PRUNE_MAX_REVALIDATION_CITY_PATHS = 25;
 
 // Automated 410 tombstones (ADR-2026-09-02-automated-410-tombstones-and-cost-snapshots).
+// 2026-11-19 (GSC 404 cleanup): every tombstone written from now on carries the sale's
+// canonical citySlug, and GET /sales/:id answers 410 SALE_GONE for ANY tombstoned id
+// (no window), which /sales/[id] turns into a 301 to /city/<slug>. The Global Config
+// window below therefore only needs the tombstones that have NO citySlug (rows pruned
+// before 2026-11-19, or a city that cannot form a slug): those cannot be redirected,
+// so the middleware 410 is still their best answer.
 // Bounded rolling window synced to Vercel Global Config — see that ADR for why
 // this is capped rather than syncing the full (unbounded, growing) table: the
 // exact Global Config size ceiling per plan tier was not confirmed, so this
@@ -148,14 +154,14 @@ export async function pruneScrapedSales(
       // of the same batch (e.g. after a transient failure) from erroring on the
       // unique id constraint.
       await tx.prunedSaleTombstone.createMany({
-        data: ids.map((id) => ({ id })),
+        data: rows.map((r) => ({ id: r.id, citySlug: citySlugFromCityState(r.city, r.state) })),
         skipDuplicates: true,
       });
     });
 
     // On-demand revalidation (ADR 2026-07-11, fixed 2026-07-16): pruned sales' own
-    // /sales/[id] pages will 404 on next visit regardless (row is gone) — no need to
-    // revalidate those. The city listing pages that referenced them do need a refresh
+    // /sales/[id] pages answer from the tombstone on their next regeneration (GET
+    // /sales/:id -> 410 SALE_GONE -> 301 to /city/<slug>) — no need to revalidate those. The city listing pages that referenced them do need a refresh
     // so the pruned sales disappear from /city/[slug] before the 24h timer would have
     // caught it -- but tally touches here and fire the actual HTTP call once for the
     // whole run (see revalidationCityTouchCounts flush below), not once per batch.
@@ -188,12 +194,14 @@ export async function pruneScrapedSales(
   }
 
   // Automated-410 tombstone sync: keep Global Config holding exactly the most
-  // recently pruned TOMBSTONE_SYNC_WINDOW ids, regardless of how many (if any)
+  // recently pruned TOMBSTONE_SYNC_WINDOW ids that have no citySlug (the ones with a
+  // slug are answered unbounded by GET /sales/:id -> /sales/[id] 301; see above), regardless of how many (if any)
   // were deleted THIS run — self-correcting every run, no drift. Fire-and-forget
   // relative to the job's own return value; failures are logged inside
   // syncGlobalConfigExactSet and must never fail the prune job itself.
   try {
     const recentTombstones = await prisma.prunedSaleTombstone.findMany({
+      where: { citySlug: null },
       select: { id: true },
       orderBy: { prunedAt: 'desc' },
       take: TOMBSTONE_SYNC_WINDOW,

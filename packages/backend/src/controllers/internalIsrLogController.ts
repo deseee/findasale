@@ -30,6 +30,8 @@ const KNOWN_OUTCOMES = new Set([
   'missing_api_url',
   'backend_non_2xx',
   'catch_network_error',
+  'backend_410_gone', // 2026-11-19: removed sale -> 301 to its city page (or 404)
+  'invalid_id', // 2026-11-19: /sales/[id] param that is not a sale id
 ]);
 
 function truncateToHour(date: Date): Date {

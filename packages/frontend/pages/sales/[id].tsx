@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import { buildEventPlace, buildEventOrganizer, buildSeriesSubEvent, saleEventStatus, JsonLdNode } from '@/lib/seo/eventJsonLd';
 import { logIsrWrite } from '@/lib/isrWriteLogger'; // ADR-2026-09-16: ISR regeneration logging
+import { isValidSaleId, goneSaleRedirectPath } from '@/lib/seo/salePage'; // 2026-11-19: GSC 404 cleanup
 import { canonicalCitySlug } from '../../lib/seo/citySlug';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -2730,6 +2731,16 @@ export const getStaticPaths: GetStaticPaths = async () => {
 
 export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ params }) => {
   const id = params?.id as string;
+
+  // 2026-11-19 (GSC 404 cleanup): reject anything that cannot be a Sale id (cuid) before any fetch.
+  // Lone surrogates made encodeURIComponent(id) throw (URIError -> 5xx in GSC), and truncated ids
+  // (/sales/c, /sales/cm) cost a backend round trip each. isValidSaleId never throws. The id is not
+  // logged: it can hold anything.
+  if (!isValidSaleId(id)) {
+    await logIsrWrite('sales/[id]', 'invalid_id');
+    return { notFound: true, revalidate: 2592000 };
+  }
+
   const apiUrl = resolveApiBase();
 
   if (!apiUrl) {
@@ -2755,6 +2766,20 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
     clearTimeout(timeout);
 
     if (!res.ok) {
+      if (res.status === 410) {
+        // 2026-11-19 (GSC 404 cleanup): the backend tells this trusted renderer (x-ssr-secret) that the
+        // sale is gone for good: pruned (PrunedSaleTombstone, any age, not only the 5,000 the middleware
+        // 410s), soft-deleted or CANCELLED. With its city slug it 301s to the city page, which keeps the
+        // visitor and the link signal; without one it stays a plain 404. Permanent, so 30-day window.
+        const goneBody = await res.json().catch(() => null);
+        const destination = goneSaleRedirectPath(goneBody);
+        console.warn('[getStaticProps:fallback] backend-410-gone', { id, redirect: destination });
+        await logIsrWrite('sales/[id]', 'backend_410_gone');
+        if (destination) {
+          return { redirect: { destination, statusCode: 301 }, revalidate: 2592000 };
+        }
+        return { notFound: true, revalidate: 2592000 };
+      }
       if (res.status === 404) {
         // 2026-10-23 (first-sale QA): a sale that EXISTS but is not public yet (DRAFT) is
         // reported by the backend with code SALE_NOT_PUBLIC (only to this trusted renderer,

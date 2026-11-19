@@ -27,7 +27,9 @@ export type IsrLogOutcome =
   | 'malformed_body'
   | 'missing_api_url'
   | 'backend_non_2xx'
-  | 'catch_network_error';
+  | 'catch_network_error'
+  | 'backend_410_gone' // 2026-11-19: removed sale (pruned / deleted / cancelled) -> 301 to city or 404
+  | 'invalid_id'; // 2026-11-19: route param is not a sale id -> 404 without a backend call
 
 export async function logIsrWrite(route: IsrLogRoute, outcome: IsrLogOutcome): Promise<void> {
   if (!ISR_WRITE_LOGGING_ENABLED) return;
