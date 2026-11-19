@@ -17,8 +17,27 @@
  * Safe for use in URLs.
  */
 const encodeCloudinaryText = (text: string, maxLength: number = 60): string => {
-  const truncated = text.substring(0, maxLength);
-  return encodeURIComponent(truncated);
+  return encodeURIComponent(truncateText(text, maxLength));
+};
+
+/**
+ * Truncate by Unicode code point, never by UTF-16 unit, and drop any lone surrogate.
+ *
+ * 2026-11-19: cutting with String#substring split an emoji (two UTF-16 units) in half when
+ * one sat on the cut, leaving a lone surrogate; encodeURIComponent then threw
+ * "URIError: URI malformed" while rendering a sale page, so imported sales with emoji in
+ * the title answered 500. Array.from walks code points, so a pair is never split, and a
+ * lone surrogate already present in imported data comes out as its own entry and is removed.
+ */
+export const truncateText = (text: string, maxLength: number): string => {
+  const out: string[] = [];
+  for (const ch of Array.from(String(text ?? ''))) {
+    if (out.length >= maxLength) break;
+    const code = ch.charCodeAt(0);
+    if (ch.length === 1 && code >= 0xd800 && code <= 0xdfff) continue; // lone surrogate
+    out.push(ch);
+  }
+  return out.join('');
 };
 
 /**
@@ -75,7 +94,7 @@ export function generateSaleOGImage(params: {
   // Text overlay: date + location
   let dateLocationText = '';
   if (saleDate && location) {
-    const combined = `${saleDate.substring(0, 25)} • ${location.substring(0, 25)}`;
+    const combined = `${truncateText(saleDate, 25)} • ${truncateText(location, 25)}`;
     dateLocationText = `l_text:Arial_36:${encodeCloudinaryText(combined)},co_rgb:6B5A42,x_0,y_50`;
   } else if (saleDate) {
     dateLocationText = `l_text:Arial_36:${encodeCloudinaryText(saleDate)},co_rgb:6B5A42,x_0,y_50`;
