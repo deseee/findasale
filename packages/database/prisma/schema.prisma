@@ -8506,6 +8506,11 @@ model AdminImpersonationLog {
 model PrunedSaleTombstone {
   id       String   @id // same cuid as the original Sale.id
   prunedAt DateTime @default(now())
+  // Canonical /city/<slug> of the pruned sale (utils/citySlug canonicalCitySlug), captured at prune
+  // time so GET /sales/:id can answer 410 SALE_GONE with it and /sales/[id] can 301 to the city page.
+  // NULL for rows pruned before 2026-11-19 (the Sale row was already gone) and for sales whose
+  // city/state cannot form a valid slug.
+  citySlug String?
 
   @@index([prunedAt])
 }
