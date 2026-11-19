@@ -3200,8 +3200,6 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           } : {}),
         };
 
-        console.log(`[eBay InventoryPayload] sku=${sku} weightOz=${item.packageWeightOz ?? 'null'} dims=${item.packageLengthIn ?? '?'}x${item.packageWidthIn ?? '?'}x${item.packageHeightIn ?? '?'} hasPackageWeightAndSize=${Boolean((inventoryPayload as any).packageWeightAndSize)}`);
-
         const inventoryResponse = await fetch(inventoryUrl, {
           method: 'PUT',
           headers: {
@@ -3243,9 +3241,12 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           if (verifyRes.ok) {
             trackEbayCall();
             const verifyData = (await verifyRes.json()) as { condition?: string };
-            console.log(
-              `[eBay InventoryVerify] ${sku}: sent=${ebayCondition} stored=${verifyData.condition || 'null'}`
-            );
+            // Only a mismatch is worth a log line; a matching condition is the normal case.
+            if (verifyData.condition !== ebayCondition) {
+              console.warn(
+                `[eBay InventoryVerify] ${sku}: condition did not stick, sent=${ebayCondition} stored=${verifyData.condition || 'null'}`
+              );
+            }
           }
         } catch (err) {
           console.warn('[eBay InventoryVerify] error:', err);
