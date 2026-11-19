@@ -31,10 +31,19 @@ jest.mock('../../lib/vercelGlobalConfig', () => ({ syncGlobalConfigExactSet: jes
 
 import { pruneScrapedSales } from '../pruneScrapedSales';
 import { syncGlobalConfigExactSet } from '../../lib/vercelGlobalConfig';
+import { resetCitySlugColumnCache } from '../../utils/tombstoneCitySlugColumn';
+
+const p2022 = () =>
+  Object.assign(new Error('The column `citySlug` does not exist in the current database.'), {
+    code: 'P2022',
+    meta: { modelName: 'PrunedSaleTombstone', column: 'citySlug' },
+  });
 
 beforeEach(() => {
   jest.clearAllMocks();
+  resetCitySlugColumnCache();
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
+  jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
 
@@ -76,4 +85,39 @@ it('syncs only tombstones without a city slug to the Global Config 410 window', 
     take: 5000,
   });
   expect(syncGlobalConfigExactSet).toHaveBeenCalledWith(['cmlegacy1', 'cmlegacy2']);
+});
+
+it('citySlug column not migrated yet (P2022): reruns the whole batch transaction without citySlug', async () => {
+  const rows = [{ id: 'cmaaaaaaaaaaaaaaaaaaaaaa1', city: 'Grand Rapids', state: 'MI' }];
+  mockPrisma.sale.count.mockResolvedValue(1);
+  mockPrisma.sale.findMany.mockResolvedValueOnce(rows).mockResolvedValueOnce([]);
+  mockPrisma.prunedSaleTombstone.findMany.mockResolvedValue([]);
+  mockTx.prunedSaleTombstone.createMany.mockRejectedValueOnce(p2022());
+
+  const result = await pruneScrapedSales({ dryRun: false, maxDeletes: 10 });
+
+  expect(result.deleted).toBe(1);
+  expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2); // aborted tx is not reused: the batch is rerun
+  expect(mockTx.sale.deleteMany).toHaveBeenCalledTimes(2);
+  expect(mockTx.prunedSaleTombstone.createMany).toHaveBeenLastCalledWith({
+    data: [{ id: 'cmaaaaaaaaaaaaaaaaaaaaaa1' }],
+    skipDuplicates: true,
+  });
+});
+
+it('citySlug column not migrated yet (P2022): the 410 window falls back to the newest tombstones of all', async () => {
+  mockPrisma.sale.count.mockResolvedValue(0);
+  mockPrisma.sale.findMany.mockResolvedValue([]);
+  mockPrisma.prunedSaleTombstone.findMany
+    .mockRejectedValueOnce(p2022())
+    .mockResolvedValueOnce([{ id: 'cmnew1' }, { id: 'cmold1' }]);
+
+  await pruneScrapedSales({ dryRun: false, maxDeletes: 10 });
+
+  expect(mockPrisma.prunedSaleTombstone.findMany).toHaveBeenLastCalledWith({
+    select: { id: true },
+    orderBy: { prunedAt: 'desc' },
+    take: 5000,
+  });
+  expect(syncGlobalConfigExactSet).toHaveBeenCalledWith(['cmnew1', 'cmold1']);
 });

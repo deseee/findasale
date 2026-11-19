@@ -28,6 +28,7 @@ jest.mock('../services/commandCenterService', () => ({ invalidateCommandCenterCa
 import { getSale } from '../controllers/saleController';
 import { saleGoneBodyForRow, prunedSaleGoneBody } from '../utils/saleGone';
 import { hasThinDescription, THIN_SALE_MIN_DESCRIPTION_CHARS } from '../utils/thinSale';
+import { resetCitySlugColumnCache } from '../utils/tombstoneCitySlugColumn';
 
 const SECRET = 'test-ssr-secret';
 const ID = 'cmqf14g6x00t9bo1nibst4yk7';
@@ -64,7 +65,9 @@ afterAll(() => { process.env.REVALIDATE_SECRET = savedSecret; });
 beforeEach(() => {
   for (const m of Object.values(mockPrisma) as any[]) for (const fn of Object.values(m) as any[]) (fn as jest.Mock).mockReset();
   mockPrisma.prunedSaleTombstone.findUnique.mockResolvedValue(null);
+  resetCitySlugColumnCache();
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
 
@@ -150,6 +153,31 @@ describe('utils/saleGone', () => {
   it('prunedSaleGoneBody ignores a stored slug that is not a valid city slug', async () => {
     mockPrisma.prunedSaleTombstone.findUnique.mockResolvedValue({ citySlug: '../admin' });
     expect(await prunedSaleGoneBody(ID)).toEqual({ message: 'Sale removed', code: 'SALE_GONE', citySlug: null });
+  });
+
+  it('prunedSaleGoneBody: citySlug column not migrated yet (P2022) -> looks the tombstone up by id, slug null', async () => {
+    const p2022 = Object.assign(new Error('The column `PrunedSaleTombstone.citySlug` does not exist'), {
+      code: 'P2022', meta: { column: 'PrunedSaleTombstone.citySlug' },
+    });
+    mockPrisma.prunedSaleTombstone.findUnique.mockRejectedValueOnce(p2022).mockResolvedValueOnce({ id: ID });
+    expect(await prunedSaleGoneBody(ID)).toEqual({ message: 'Sale removed', code: 'SALE_GONE', citySlug: null });
+    expect(mockPrisma.prunedSaleTombstone.findUnique.mock.calls[1][0]).toEqual({ where: { id: ID }, select: { id: true } });
+
+    // Cached: the next lookup goes straight to the id-only query.
+    mockPrisma.prunedSaleTombstone.findUnique.mockResolvedValueOnce(null);
+    expect(await prunedSaleGoneBody('cmother0000000000000000000')).toBeNull();
+    expect(mockPrisma.prunedSaleTombstone.findUnique).toHaveBeenCalledTimes(3);
+    expect(mockPrisma.prunedSaleTombstone.findUnique.mock.calls[2][0].select).toEqual({ id: true });
+  });
+
+  it('GET /sales/:id still answers 410 for a pruned sale while the column is missing', async () => {
+    mockPrisma.sale.findUnique.mockResolvedValue(null);
+    mockPrisma.prunedSaleTombstone.findUnique
+      .mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'P2022', meta: { column: 'PrunedSaleTombstone.citySlug' } }))
+      .mockResolvedValueOnce({ id: ID });
+    const res = await run(true);
+    expect(res.statusCode).toBe(410);
+    expect(res.body.citySlug).toBeNull();
   });
 
   it('prunedSaleGoneBody skips the lookup for an empty or oversized id', async () => {

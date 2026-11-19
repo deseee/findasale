@@ -23,6 +23,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { triggerRevalidation, citySlugFromCityState } from '../services/revalidationService';
 import { syncGlobalConfigExactSet } from '../lib/vercelGlobalConfig';
+import { withCitySlugFallback } from '../utils/tombstoneCitySlugColumn';
 
 const CUTOFF_DAYS = 15;
 const BATCH_SIZE = 500;
@@ -145,19 +146,25 @@ export async function pruneScrapedSales(
 
     const ids = rows.map((r) => r.id);
 
-    await prisma.$transaction(async (tx) => {
-      // Only onDelete:Restrict relation on Sale — clear first so the delete never blocks.
-      await tx.affiliateLink.deleteMany({ where: { saleId: { in: ids } } });
-      await tx.sale.deleteMany({ where: { id: { in: ids } } });
-      // Automated-410 tombstone: record every pruned id permanently (no relation to
-      // Sale on purpose — the row is already gone). skipDuplicates guards a re-run
-      // of the same batch (e.g. after a transient failure) from erroring on the
-      // unique id constraint.
-      await tx.prunedSaleTombstone.createMany({
-        data: rows.map((r) => ({ id: r.id, citySlug: citySlugFromCityState(r.city, r.state) })),
-        skipDuplicates: true,
+    const pruneBatch = (withCitySlug: boolean) =>
+      prisma.$transaction(async (tx) => {
+        // Only onDelete:Restrict relation on Sale — clear first so the delete never blocks.
+        await tx.affiliateLink.deleteMany({ where: { saleId: { in: ids } } });
+        await tx.sale.deleteMany({ where: { id: { in: ids } } });
+        // Automated-410 tombstone: record every pruned id permanently (no relation to
+        // Sale on purpose — the row is already gone). skipDuplicates guards a re-run
+        // of the same batch (e.g. after a transient failure) from erroring on the
+        // unique id constraint.
+        await tx.prunedSaleTombstone.createMany({
+          data: rows.map((r) =>
+            withCitySlug ? { id: r.id, citySlug: citySlugFromCityState(r.city, r.state) } : { id: r.id }
+          ),
+          skipDuplicates: true,
+        });
       });
-    });
+    // citySlug column may not exist yet (migration lands after deploy). A failed statement aborts the
+    // Postgres transaction, so the fallback reruns the WHOLE batch transaction without citySlug.
+    await withCitySlugFallback(() => pruneBatch(true), () => pruneBatch(false));
 
     // On-demand revalidation (ADR 2026-07-11, fixed 2026-07-16): pruned sales' own
     // /sales/[id] pages answer from the tombstone on their next regeneration (GET
@@ -200,12 +207,22 @@ export async function pruneScrapedSales(
   // relative to the job's own return value; failures are logged inside
   // syncGlobalConfigExactSet and must never fail the prune job itself.
   try {
-    const recentTombstones = await prisma.prunedSaleTombstone.findMany({
-      where: { citySlug: null },
-      select: { id: true },
-      orderBy: { prunedAt: 'desc' },
-      take: TOMBSTONE_SYNC_WINDOW,
-    });
+    // Without the citySlug column (migration not applied yet): the previous behavior, newest N of all.
+    const recentTombstones = await withCitySlugFallback(
+      () =>
+        prisma.prunedSaleTombstone.findMany({
+          where: { citySlug: null },
+          select: { id: true },
+          orderBy: { prunedAt: 'desc' },
+          take: TOMBSTONE_SYNC_WINDOW,
+        }),
+      () =>
+        prisma.prunedSaleTombstone.findMany({
+          select: { id: true },
+          orderBy: { prunedAt: 'desc' },
+          take: TOMBSTONE_SYNC_WINDOW,
+        })
+    );
     await syncGlobalConfigExactSet(recentTombstones.map((t) => t.id));
   } catch (err) {
     console.error('[prune-scraped-sales] tombstone sync failed (non-fatal):', err);

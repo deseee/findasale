@@ -13,6 +13,7 @@
  */
 import { prisma } from '../lib/prisma';
 import { canonicalCitySlug, CITY_SLUG_PATTERN } from './citySlug';
+import { withCitySlugFallback } from './tombstoneCitySlugColumn';
 
 export const SALE_GONE_CODE = 'SALE_GONE' as const;
 
@@ -47,9 +48,15 @@ export function saleGoneBodyForRow(sale: {
 /** For an id with no Sale row: the gone body when the id was pruned (tombstoned), else null. */
 export async function prunedSaleGoneBody(id: string): Promise<SaleGoneBody | null> {
   if (typeof id !== 'string' || id.length === 0 || id.length > 64) return null;
-  const tombstone = await prisma.prunedSaleTombstone.findUnique({
-    where: { id },
-    select: { citySlug: true },
-  });
-  return tombstone ? goneBody(tombstone.citySlug) : null;
+  // Column may not exist yet (migration applied after deploy): then look up by id only, no slug.
+  return withCitySlugFallback(
+    async () => {
+      const t = await prisma.prunedSaleTombstone.findUnique({ where: { id }, select: { citySlug: true } });
+      return t ? goneBody(t.citySlug) : null;
+    },
+    async () => {
+      const t = await prisma.prunedSaleTombstone.findUnique({ where: { id }, select: { id: true } });
+      return t ? goneBody(null) : null;
+    }
+  );
 }
