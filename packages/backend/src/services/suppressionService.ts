@@ -65,6 +65,15 @@ export const UNSENDABLE_DOMAINS: ReadonlySet<string> = new Set([
   'noemail.com',
   'noemail.net',
   'noemail.org',
+  // Template placeholders that slipped through to live outreach (Nov 2026 bounces):
+  // example@youremail.com (MX points at a dead host, so the DSN is only "delayed" and
+  // never hard-suppresses) and username@YOUR-DOMAIN.NAME.
+  'youremail.com',
+  'youremail.net',
+  'yourcompany.com',
+  'yourwebsite.com',
+  'your-domain.name',
+  'yourdomain.name',
 ]);
 
 /**
@@ -75,7 +84,24 @@ const JUNK_FULL_ADDRESSES: ReadonlySet<string> = new Set([
   'filler@godaddy.com',   // GoDaddy template placeholder in website-builder contact fields
   'admin@facebook.com',   // Facebook admin address scraped from NAA/directory profiles
   'info@indiantypefoundry.com', // Indian tech company — scraped from ESN profile mismatch (S-email-inv)
+  'plans@tripit.com',     // TripIt itinerary-import address scraped into an organizer row (Nov 2026)
 ]);
+
+/**
+ * Template placeholder local parts (example@, youremail@, username@ ...). Never a real
+ * organizer inbox regardless of domain. Checked on every rail via isEmailDomainBlocked.
+ */
+const PLACEHOLDER_LOCAL_PARTS: ReadonlySet<string> = new Set([
+  'example', 'youremail', 'your.email', 'your_email', 'yourname', 'your.name',
+  'username', 'user.name', 'sample', 'someone', 'emailaddress', 'email.address',
+]);
+
+/**
+ * Invisible / whitespace characters (zero-width space, NBSP, BOM ...) copied in by
+ * scrapers. An address containing one never matches its suppression row and hard-bounces
+ * (Nov 2026: a zero-width space before "sundayarts@yahoo.com").
+ */
+const INVISIBLE_CHAR_RE = /[\s\u00a0\u00ad\u200b-\u200f\u2028\u2029\u2060\ufeff]/;
 
 /**
  * Returns true if the local part of the email is a programmatic hash (32+ hex chars).
@@ -151,6 +177,8 @@ export function isEmailDomainBlocked(email: string): boolean {
   const atIndex = e.lastIndexOf('@');
   if (atIndex === -1) return false;
   if (SENDABLE_INTERNAL_ALLOWLIST.has(e)) return false;
+  if (INVISIBLE_CHAR_RE.test(e)) return true;
+  if (PLACEHOLDER_LOCAL_PARTS.has(e.slice(0, atIndex))) return true;
   const domain = e.slice(atIndex + 1);
   // Reserved TLDs (.test/.invalid/...), example.*, and dotless domains never deliver.
   if (isNonDeliverableEmail(e)) return true;
