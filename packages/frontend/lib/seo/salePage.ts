@@ -31,3 +31,22 @@ export function goneSaleRedirectPath(body: unknown): string | null {
   if (typeof citySlug !== 'string' || !CITY_SLUG_PATTERN.test(citySlug)) return null;
   return `/city/${citySlug}`;
 }
+
+/**
+ * Thin sale page: nothing on it but a title, date and place. No public items, no photos and
+ * (almost) no description. These are what GSC files under "Discovered/Crawled - currently not
+ * indexed" and "Duplicate, Google chose different canonical", so the page is noindex. KEEP IN SYNC
+ * with packages/backend/src/utils/thinSale.ts (GET /sales/sitemap leaves the same sales out).
+ */
+export const THIN_SALE_MIN_DESCRIPTION_CHARS = 50;
+
+export function isThinSale(sale: {
+  items?: unknown[] | null;
+  photoUrls?: unknown[] | null;
+  description?: string | null;
+}): boolean {
+  const itemCount = Array.isArray(sale.items) ? sale.items.length : 0;
+  const photoCount = Array.isArray(sale.photoUrls) ? sale.photoUrls.length : 0;
+  const descriptionChars = typeof sale.description === 'string' ? sale.description.trim().length : 0;
+  return itemCount === 0 && photoCount === 0 && descriptionChars < THIN_SALE_MIN_DESCRIPTION_CHARS;
+}

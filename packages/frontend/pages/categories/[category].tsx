@@ -155,6 +155,11 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
       <Head>
         <title>{`${label ?? ''}. FindA.Sale`}</title>
         <link rel="canonical" href={`https://finda.sale/categories/${category}`} key="canonical" />
+        {/* 2026-11-19 (GSC thin-page cleanup): noindex only when the server confirmed zero items (initialData
+            is absent after a fetch error, which must never noindex a real category). */}
+        {initialData && initialData.items.length === 0 && (initialData.pagination?.total ?? 0) === 0 && (
+          <meta name="robots" content="noindex, follow" />
+        )}
         <meta
           name="description"
           content={`Browse ${label} items from auctions, yard sales, and consignment near you. New listings added daily.`}

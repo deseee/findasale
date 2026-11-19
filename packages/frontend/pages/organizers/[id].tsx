@@ -244,6 +244,9 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
         <meta property="og:description" content={`Garage sales, auctions, and more from ${organizer.businessName}${locationSuffix}.`} />
         <meta property="og:type" content="business.business" />
         <meta property="og:url" content={`https://finda.sale/organizers/${organizer.id}`} />
+        {/* 2026-11-19 (GSC thin-page cleanup): a profile with no sales is a name and nothing else; noindex it.
+            Organizer profiles are not in the sitemap (S1071). */}
+        {(!Array.isArray(organizer.sales) || organizer.sales.length === 0) && <meta name="robots" content="noindex, follow" />}
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(localBusinessSchema) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(breadcrumbSchema) }} />
       </Head>

@@ -63,6 +63,8 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
     <>
       <Head>
         <title>{`${formattedTag ?? ''} for Sale | FindA.Sale`}</title>
+        {/* 2026-11-19 (GSC thin-page cleanup): a tag page with no items is empty; noindex it. */}
+        {itemCount === 0 && items.length === 0 && <meta name="robots" content="noindex, follow" />}
         <meta
           name="description"
           content={`Browse ${itemCount} ${tag} items available at upcoming sales near you. Updated weekly.`}

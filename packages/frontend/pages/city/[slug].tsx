@@ -172,7 +172,9 @@ export default function CityPage({
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={title} />
         <meta name="twitter:description" content={description} />
-        <meta name="robots" content="index, follow" />
+        {/* 2026-11-19 (GSC thin-page cleanup): a hub with no live sales in or near the city is an empty
+            page; noindex it (links still followed). server-sitemap.xml lists only hubs with active sales. */}
+        <meta name="robots" content={sales.length === 0 ? 'noindex, follow' : 'index, follow'} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: jsonLdSafe(breadcrumbJsonLd) }}

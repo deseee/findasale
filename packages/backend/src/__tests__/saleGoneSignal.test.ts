@@ -27,6 +27,7 @@ jest.mock('../services/commandCenterService', () => ({ invalidateCommandCenterCa
 
 import { getSale } from '../controllers/saleController';
 import { saleGoneBodyForRow, prunedSaleGoneBody } from '../utils/saleGone';
+import { hasThinDescription, THIN_SALE_MIN_DESCRIPTION_CHARS } from '../utils/thinSale';
 
 const SECRET = 'test-ssr-secret';
 const ID = 'cmqf14g6x00t9bo1nibst4yk7';
@@ -155,5 +156,14 @@ describe('utils/saleGone', () => {
     expect(await prunedSaleGoneBody('')).toBeNull();
     expect(await prunedSaleGoneBody('x'.repeat(65))).toBeNull();
     expect(mockPrisma.prunedSaleTombstone.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('utils/thinSale', () => {
+  it('a description under the threshold (after trimming) is thin', () => {
+    expect(hasThinDescription(null)).toBe(true);
+    expect(hasThinDescription('')).toBe(true);
+    expect(hasThinDescription(`   ${'x'.repeat(THIN_SALE_MIN_DESCRIPTION_CHARS - 1)}   `)).toBe(true);
+    expect(hasThinDescription('x'.repeat(THIN_SALE_MIN_DESCRIPTION_CHARS))).toBe(false);
   });
 });

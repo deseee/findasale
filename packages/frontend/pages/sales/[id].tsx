@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import { buildEventPlace, buildEventOrganizer, buildSeriesSubEvent, saleEventStatus, JsonLdNode } from '@/lib/seo/eventJsonLd';
 import { logIsrWrite } from '@/lib/isrWriteLogger'; // ADR-2026-09-16: ISR regeneration logging
-import { isValidSaleId, goneSaleRedirectPath } from '@/lib/seo/salePage'; // 2026-11-19: GSC 404 cleanup
+import { isValidSaleId, goneSaleRedirectPath, isThinSale } from '@/lib/seo/salePage'; // 2026-11-19: GSC 404 cleanup
 import { canonicalCitySlug } from '../../lib/seo/citySlug';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -2873,7 +2873,9 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
     //    so Google drops the page naturally after the event closes (no 410s per board).
     //    Permanent storefronts (isOngoing / RETAIL) never expire → no directive.
     const isEnded = sale.status === 'ENDED';
-    const noindex = isEnded;
+    // 2026-11-19: thin sales (no public items, no photos, no real description) are noindex too, and
+    // GET /sales/sitemap leaves them out (lib/seo/salePage.ts isThinSale).
+    const noindex = isEnded || isThinSale(sale);
     let unavailableAfter: string | null = null;
     const isPermanentStorefront = sale.isOngoing === true || sale.saleType === 'RETAIL';
     if (!isEnded && sale.status === 'PUBLISHED' && sale.endDate && !isPermanentStorefront) {

@@ -81,7 +81,7 @@ export async function getServerSideProps(ctx: any) {
     // thin leaderboard-derived pages. Do not re-add without board sign-off.
 
     // Fetch canonical city slugs (e.g. "grand-rapids-mi") + per-type ACTIVE sale counts.
-    // S1071 crawl-budget policy: bare /city/[slug] hubs are ALWAYS included (all 200), but
+    // S1071 crawl-budget policy: bare /city/[slug] hubs are included when the city has any active sale, but
     // every city×type variant (/city/[slug]/[category], /this-weekend/) is emitted ONLY
     // when that city has >= 3 ACTIVE sales of the relevant type (this-weekend gate:
     // >= 3 active of ANY type).
@@ -119,15 +119,20 @@ export async function getServerSideProps(ctx: any) {
     const hasActiveOfType = (row: CityRow, saleType: string): boolean =>
       (Number(row.activeByType?.[saleType]) || 0) >= MIN_ACTIVE_SALES_FOR_TYPE_PAGE;
 
-    // Bare city hubs (all) + gated city+category URLs
+    // Bare city hubs + gated city+category URLs.
+    // 2026-11-19 (GSC thin-page cleanup): a bare hub is listed only when the city has >= 1 ACTIVE sale.
+    // /city/[slug] renders noindex when it has no live sales, and a sitemap must not list noindex pages.
+    // (activeCount is an exact-city count; the page also shows sales within 35 mi, so a listed hub is never empty.)
     const cityCategoryUrls: any[] = [];
     for (const row of cityRows) {
-      cityCategoryUrls.push({
-        loc: `${baseUrl}/city/${row.slug}`,
-        lastmod: STATIC_LASTMOD,
-        changefreq: 'daily',
-        priority: 0.75, // lowered from 0.8. Preserve crawl budget for core nav pages
-      });
+      if (row.activeCount >= 1) {
+        cityCategoryUrls.push({
+          loc: `${baseUrl}/city/${row.slug}`,
+          lastmod: STATIC_LASTMOD,
+          changefreq: 'daily',
+          priority: 0.75, // lowered from 0.8. Preserve crawl budget for core nav pages
+        });
+      }
       for (const [category, saleType] of Object.entries(SALE_CATEGORY_TYPE_MAP)) {
         if (!hasActiveOfType(row, saleType)) continue;
         cityCategoryUrls.push({

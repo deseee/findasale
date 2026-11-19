@@ -4,7 +4,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isValidSaleId, goneSaleRedirectPath } from '../seo/salePage';
+import { isValidSaleId, goneSaleRedirectPath, isThinSale, THIN_SALE_MIN_DESCRIPTION_CHARS } from '../seo/salePage';
 
 test('isValidSaleId accepts real cuid sale ids', () => {
   assert.equal(isValidSaleId('cmqf14g6x00t9bo1nibst4yk7'), true);
@@ -42,4 +42,15 @@ test('goneSaleRedirectPath returns null without a usable slug or code', () => {
   assert.equal(goneSaleRedirectPath({ code: 'SALE_NOT_PUBLIC', citySlug: 'grand-rapids-mi' }), null);
   assert.equal(goneSaleRedirectPath(null), null);
   assert.equal(goneSaleRedirectPath('SALE_GONE'), null);
+});
+
+test('isThinSale: only a sale with no items, no photos and a short description is thin', () => {
+  const short = 'x'.repeat(THIN_SALE_MIN_DESCRIPTION_CHARS - 1);
+  const long = 'x'.repeat(THIN_SALE_MIN_DESCRIPTION_CHARS);
+  assert.equal(isThinSale({ items: [], photoUrls: [], description: null }), true);
+  assert.equal(isThinSale({ items: [], photoUrls: [], description: `  ${short}  ` }), true);
+  assert.equal(isThinSale({}), true);
+  assert.equal(isThinSale({ items: [], photoUrls: [], description: long }), false);
+  assert.equal(isThinSale({ items: [{}], photoUrls: [], description: null }), false);
+  assert.equal(isThinSale({ items: [], photoUrls: ['https://img'], description: '' }), false);
 });

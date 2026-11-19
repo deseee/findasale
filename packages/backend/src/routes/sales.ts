@@ -48,6 +48,7 @@ import { geocodeCityStateWithStatus, type GeocodeCityStateResult } from '../serv
 import { getSaleOgBuyerCount } from '../services/badgeService'; // Feature #404: OG Buyer count
 import { redactSalesForViewer, notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy'; // public address gate + early-access embargo
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
+import { listSitemapSales } from '../utils/thinSale'; // 2026-11-19: thin sales stay out of the sitemap
 
 const router = Router();
 
@@ -588,21 +589,12 @@ router.get('/city-slugs', async (req, res) => {
 // SEO: GET /sales/sitemap — returns all PUBLISHED sale IDs + updatedAt for sitemaps
 // Returns at most 5000 most recently updated sales to stay within sitemap limits.
 // No auth, no endDate filter (expired sales still have indexable pages).
+// PUBLISHED + not deleted already keeps pruned (hard-deleted), ENDED, CANCELLED and ARCHIVED sales out.
+// 2026-11-19: thin sales (no public items, no photos, description under 50 chars; utils/thinSale.ts) are
+// noindex on /sales/[id], so they are left out here too: a sitemap must not list noindex pages.
 router.get('/sitemap', async (req, res) => {
   try {
-    const sales = await prisma.sale.findMany({
-      where: {
-        status: 'PUBLISHED',
-        deletedAt: null,
-        isInventoryContainer: false,
-      },
-      select: {
-        id: true,
-        updatedAt: true,
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 5000,
-    });
+    const sales = await listSitemapSales(5000);
     return res.json({ sales });
   } catch (err) {
     console.error('[sales/sitemap] error:', err);
