@@ -101,6 +101,19 @@ const PLACEHOLDER_LOCAL_PARTS: ReadonlySet<string> = new Set([
  * scrapers. An address containing one never matches its suppression row and hard-bounces
  * (Nov 2026: a zero-width space before "sundayarts@yahoo.com").
  */
+/**
+ * Page label words a scraper glued onto the front of a mailbox name, e.g. the
+ * "Address" label on a contact page producing addressmainstreetcloset@verizon.net
+ * (hard bounce, Nov 2026), or a raw "mailto:" href. Prefix match on the local part.
+ */
+const GLUED_LABEL_PREFIXES: readonly string[] = [
+  'mailto', 'address', 'emailaddress', 'e-mail', 'contactemail',
+];
+
+function hasGluedLabelPrefix(localPart: string): boolean {
+  return GLUED_LABEL_PREFIXES.some(p => localPart.length > p.length && localPart.startsWith(p));
+}
+
 const INVISIBLE_CHAR_RE = /[\s\u00a0\u00ad\u200b-\u200f\u2028\u2029\u2060\ufeff]/;
 
 /**
@@ -179,6 +192,7 @@ export function isEmailDomainBlocked(email: string): boolean {
   if (SENDABLE_INTERNAL_ALLOWLIST.has(e)) return false;
   if (INVISIBLE_CHAR_RE.test(e)) return true;
   if (PLACEHOLDER_LOCAL_PARTS.has(e.slice(0, atIndex))) return true;
+  if (hasGluedLabelPrefix(e.slice(0, atIndex))) return true;
   const domain = e.slice(atIndex + 1);
   // Reserved TLDs (.test/.invalid/...), example.*, and dotless domains never deliver.
   if (isNonDeliverableEmail(e)) return true;
