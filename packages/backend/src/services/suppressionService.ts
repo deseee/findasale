@@ -114,6 +114,38 @@ function hasGluedLabelPrefix(localPart: string): boolean {
   return GLUED_LABEL_PREFIXES.some(p => localPart.length > p.length && localPart.startsWith(p));
 }
 
+/**
+ * Misspelled template placeholders, e.g. placehoder@mail.com (hard bounce, Nov 2026).
+ * The local part (dots, dashes and underscores removed) is compared to each word;
+ * one typo is allowed for words of 7+ letters, two for 11+. Short words are not
+ * fuzzy-matched so real names are never caught.
+ */
+const FUZZY_PLACEHOLDER_WORDS: readonly string[] = [
+  'placeholder', 'youremail', 'yourname', 'username', 'emailaddress', 'example',
+];
+function typoDistance(a: string, b: string): number {
+  // Optimal string alignment distance (insert, delete, substitute, swap neighbours).
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+    }
+  }
+  return d[a.length][b.length];
+}
+function isMisspelledPlaceholder(localPart: string): boolean {
+  const l = localPart.replace(/[._-]/g, '');
+  return FUZZY_PLACEHOLDER_WORDS.some(w => {
+    const allowed = w.length >= 11 ? 2 : w.length >= 7 ? 1 : 0;
+    return Math.abs(l.length - w.length) <= allowed && typoDistance(l, w) <= allowed;
+  });
+}
+
 const INVISIBLE_CHAR_RE = /[\s\u00a0\u00ad\u200b-\u200f\u2028\u2029\u2060\ufeff]/;
 
 /**
@@ -193,6 +225,7 @@ export function isEmailDomainBlocked(email: string): boolean {
   if (INVISIBLE_CHAR_RE.test(e)) return true;
   if (PLACEHOLDER_LOCAL_PARTS.has(e.slice(0, atIndex))) return true;
   if (hasGluedLabelPrefix(e.slice(0, atIndex))) return true;
+  if (isMisspelledPlaceholder(e.slice(0, atIndex))) return true;
   const domain = e.slice(atIndex + 1);
   // Reserved TLDs (.test/.invalid/...), example.*, and dotless domains never deliver.
   if (isNonDeliverableEmail(e)) return true;
