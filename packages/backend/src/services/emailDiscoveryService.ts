@@ -292,8 +292,15 @@ async function scrapeWebsiteEmails(domain: string): Promise<{ emails: string[]; 
       $('script[type="application/ld+json"]').each((_, el) => {
         try {
           const schema = JSON.parse($(el).html() || '{}');
-          if (schema.email) emails.push(schema.email);
-          if (schema.founder?.email) emails.push(schema.founder.email);
+          // 2026-11-23 fix: schema.org `email` is not guaranteed to be a string — it can
+          // legally be an array (multiple ContactPoints) or absent/object per the vocab.
+          // Pushing a non-string here crashed isJunkEmail()/isGenericEmail() downstream
+          // with "email.toLowerCase is not a function", which the outer try/catch in
+          // discoverEmail() swallowed as a silent per-organizer failure (confirmed live
+          // 2026-11-23, Railway deploy logs: TypeError at emailDiscoveryService.js:280).
+          // Only push when it's actually a string.
+          if (typeof schema.email === 'string') emails.push(schema.email);
+          if (typeof schema.founder?.email === 'string') emails.push(schema.founder.email);
         } catch {
           // Invalid JSON, skip
         }
