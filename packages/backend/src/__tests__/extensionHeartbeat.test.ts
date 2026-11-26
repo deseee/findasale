@@ -319,8 +319,14 @@ describe('1.0.67 stale holds and organizer release (2026-10-26)', () => {
   });
 
   it('recordExtensionHeartbeat returns the releases still pending after the ack', async () => {
-    mockLogFindFirst.mockResolvedValueOnce({ id: 'row1', context: { v: '1.0.66', held, release: [{ itemId: STRAP, at }, { itemId: SOLD, at }] } });
-    await expect(recordExtensionHeartbeat('org1', { held, version: '1.0.67', acked: [SOLD] }, )).resolves.toEqual([STRAP]);
+    // Pin the clock to the fixture date: these releases are stamped NOW and expire after RELEASE_TTL_MS (30 days).
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    try {
+      mockLogFindFirst.mockResolvedValueOnce({ id: 'row1', context: { v: '1.0.66', held, release: [{ itemId: STRAP, at }, { itemId: SOLD, at }] } });
+      await expect(recordExtensionHeartbeat('org1', { held, version: '1.0.67', acked: [SOLD] }, )).resolves.toEqual([STRAP]);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('addHeldReleases writes only the context (last-poll time unchanged); false when there is no heartbeat row', async () => {
@@ -386,17 +392,23 @@ describe('1.0.71: the 1.0.69 certify-as-not-oversized path is gone (2026-10-27)'
   });
 
   it('a poll drops a leftover certify list from an older release and returns only releaseHolds', async () => {
-    const ctx = { v: '1.0.70', held: [], release: [{ itemId: STRAP, at }], certify: [{ itemId: STRAP, at }] };
-    expect(mergeHeartbeatContext(ctx, { held: [], version: '1.0.71' }, NOW).certify).toBeUndefined();
-    mockLogFindFirst.mockResolvedValueOnce({ id: 'row1', context: ctx });
-    const r = await recordExtensionPoll('org1', { held: [], version: '1.0.71', acked: [] });
-    expect(r).toEqual({ releaseHolds: [STRAP] });
-    expect(mockLogUpdate.mock.calls[0][0].data.context.certify).toBeUndefined();
-    mockLogFindFirst.mockResolvedValueOnce({ id: 'row1', context: ctx });
-    await expect(recordExtensionHeartbeat('org1', { held: [], version: '1.0.71' })).resolves.toEqual([STRAP]);
-    await expect(recordExtensionPoll('org1', { held: [], version: null })).resolves.toEqual({ releaseHolds: [] });
-    mockLogFindFirst.mockRejectedValueOnce(new Error('db down'));
-    await expect(recordExtensionPoll('org1', { held: [], version: '1.0.71' })).resolves.toEqual({ releaseHolds: [] });
+    // Pin the clock to the fixture date: the release is stamped NOW and expires after RELEASE_TTL_MS (30 days).
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    try {
+      const ctx = { v: '1.0.70', held: [], release: [{ itemId: STRAP, at }], certify: [{ itemId: STRAP, at }] };
+      expect(mergeHeartbeatContext(ctx, { held: [], version: '1.0.71' }, NOW).certify).toBeUndefined();
+      mockLogFindFirst.mockResolvedValueOnce({ id: 'row1', context: ctx });
+      const r = await recordExtensionPoll('org1', { held: [], version: '1.0.71', acked: [] });
+      expect(r).toEqual({ releaseHolds: [STRAP] });
+      expect(mockLogUpdate.mock.calls[0][0].data.context.certify).toBeUndefined();
+      mockLogFindFirst.mockResolvedValueOnce({ id: 'row1', context: ctx });
+      await expect(recordExtensionHeartbeat('org1', { held: [], version: '1.0.71' })).resolves.toEqual([STRAP]);
+      await expect(recordExtensionPoll('org1', { held: [], version: null })).resolves.toEqual({ releaseHolds: [] });
+      mockLogFindFirst.mockRejectedValueOnce(new Error('db down'));
+      await expect(recordExtensionPoll('org1', { held: [], version: '1.0.71' })).resolves.toEqual({ releaseHolds: [] });
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('addHeldReleases writes a plain release', async () => {
