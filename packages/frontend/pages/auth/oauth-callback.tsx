@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
 import { safeReturnTo } from '../../lib/safeUrl';
+import { csrfHeaders } from '../../lib/csrfHeader';
 
 const OAuthCallbackPage = () => {
   const router = useRouter();
@@ -54,9 +55,11 @@ const OAuthCallbackPage = () => {
       if (inviteCode) {
         try {
           // Call the redeem-invite endpoint
+          // BUG FIX (2026-11-26): session cookies are set by now, so the backend CSRF check
+          // needs the double-submit header on this raw fetch (lib/csrfHeader.ts).
           const response = await fetch('/api/auth/redeem-invite', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
             body: JSON.stringify({ inviteCode }),
             credentials: 'include',
           });
