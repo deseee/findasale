@@ -26,6 +26,7 @@ import Head from 'next/head';
 import { QueryClient, QueryClientProvider, MutationCache } from '@tanstack/react-query';
 import { SessionProvider, useSession, signOut } from 'next-auth/react';
 import api from '../lib/api';
+import { csrfHeaders } from '../lib/csrfHeader';
 import { shouldShowSwUpdateToast } from '../lib/swUpdateToast';
 import Layout from '../components/Layout';
 import { AuthProvider, useAuth } from '../components/AuthContext';
@@ -287,9 +288,12 @@ function OAuthBridge() {
               // almost certainly the dominant silent-failure site.
               let claimOk = false;
               try {
+                // BUG FIX (2026-11-26): /api/auth/oauth just set the session cookies, so the backend's
+                // CSRF check no longer accepts Bearer alone and 403'd every OAuth claim. Send the
+                // double-submit header too (lib/csrfHeader.ts).
                 const claimRes = await fetch(`/api/organizers/${claimOrganizerId}/claim-oauth`, {
                   method: 'POST',
-                  headers: { Authorization: `Bearer ${data.token}` },
+                  headers: { Authorization: `Bearer ${data.token}`, ...csrfHeaders() },
                   credentials: 'include',
                 });
                 claimOk = claimRes.ok;
