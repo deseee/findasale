@@ -153,6 +153,7 @@ import brandKitRoutes from './routes/brandKit';               // #31 Brand Kit e
 import wishlistAlertRoutes from './routes/wishlistAlerts';     // Feature #32: Wishlist Alerts
 import smartFollowRoutes from './routes/smartFollows';         // Feature #32: Smart Follow
 import shopperWaitlistRoutes from './routes/shopperWaitlist';   // Feature #455: Shopper Notify Me waitlist (logged-in) + public unsubscribe link
+import weekendDigestRoutes from './routes/weekendDigest';          // 2026-11-26: guest weekend sales email (email + ZIP signup)
 import { scheduleNotifyMeSenderCron } from './jobs/notifyMeSenderJob'; // Feature #455: Notify Me sender (inert unless NOTIFY_ME_SENDER_ENABLED=true)
 import loyaltyRoutes from './routes/loyalty';                 // Feature #29: Loyalty Passport
 import flipReportRoutes from './routes/flipReport';           // Feature #41: Flip Report
@@ -867,6 +868,7 @@ app.use('/api/brand-kit', brandKitRoutes);                           // #31 Bran
 app.use('/api/wishlist-alerts', wishlistAlertRoutes);                // Feature #32: Wishlist Alerts
 app.use('/api/smart-follows', smartFollowRoutes);                    // Feature #32: Smart Follow
 app.use('/api/shopper/waitlist', shopperWaitlistRoutes);             // Feature #455: Shopper Notify Me waitlist
+app.use('/api/digest', weekendDigestRoutes);                         // 2026-11-26: guest weekend sales email signup
 app.use('/api/loyalty', loyaltyRoutes);                              // Feature #29: Loyalty Passport
 app.use('/api/collector-passport', collectorPassportRoutes);        // Feature #45: Collector Passport
 app.use('/api/challenges', challengeRoutes);                         // Feature #55: Seasonal Discovery Challenges

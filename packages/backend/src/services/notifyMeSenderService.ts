@@ -47,6 +47,7 @@ import { suppressionService, isEmailDomainBlocked } from './suppressionService';
 import { bulkEmailEnabled } from '../utils/bulkEmailGate';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
 import { notEmbargoedForPublicWhere } from '../lib/saleLocationPrivacy';
+import { NOT_RESERVED_SEARCH_QUERY } from './weekendDigestSignupService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
@@ -488,7 +489,8 @@ async function loadTargets(limit: number): Promise<NotifyTarget[]> {
   // are eligible (double opt-in); waitlist entries belong to a logged-in account.
   const rotation = [{ lastCheckedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }] as any;
   const search = await prisma.searchNotification.findMany({
-    where: { isActive: true, notifiedAt: null, confirmedAt: { not: null } },
+    // Reserved rows (weekend-digest guest signups) are not Notify Me alerts.
+    where: { isActive: true, notifiedAt: null, confirmedAt: { not: null }, ...NOT_RESERVED_SEARCH_QUERY },
     orderBy: rotation,
     take: half,
   });
@@ -536,7 +538,8 @@ async function expireOldEntries(now: Date): Promise<number> {
   const cutoff = new Date(now.getTime() - NOTIFY_ME_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
   const age = [{ armedAt: { lt: cutoff } }, { armedAt: null, createdAt: { lt: cutoff } }];
   const s = await prisma.searchNotification.updateMany({
-    where: { isActive: true, OR: age },
+    // Weekend-digest guest signups do not expire (they stop only on unsubscribe).
+    where: { isActive: true, OR: age, ...NOT_RESERVED_SEARCH_QUERY },
     data: { isActive: false, expiredAt: now },
   });
   const w = await prisma.shopperWaitlistEntry.updateMany({

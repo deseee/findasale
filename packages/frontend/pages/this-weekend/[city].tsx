@@ -14,6 +14,7 @@ import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
 import { hasKnownCityRegion } from '@/lib/seo/cityRegion';
 import Head from 'next/head';
 import Link from 'next/link';
+import WeekendEmailSignup from '../../components/WeekendEmailSignup';
 
 interface SaleListing {
   id: string;
@@ -275,6 +276,9 @@ export default function ThisWeekendPage({
               })}
             </div>
           )}
+
+          {/* Weekend sales email signup (2026-11-26): next weekend's sales by email */}
+          <WeekendEmailSignup source="this-weekend" placeName={cityName} className="mt-8" />
 
           {/* Link back to full city page */}
           {sales.length > 0 && (

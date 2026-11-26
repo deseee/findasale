@@ -16,6 +16,7 @@ const TreasureHuntBanner = dynamic(() => import('../components/TreasureHuntBanne
 const CityHeatBanner = dynamic(() => import('../components/CityHeatBanner'), { ssr: false });
 const SaleOfTheDayCard = dynamic(() => import('../components/SaleOfTheDayCard'), { ssr: false }); // Feature #401
 import EmptyState from '../components/EmptyState';
+import WeekendEmailSignup from '../components/WeekendEmailSignup';
 import { useToast } from '../components/ToastContext';
 import { useAuth } from '../components/AuthContext';
 import { serverFetch } from '@/lib/serverFetch';
@@ -453,6 +454,9 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
               </div>
             </div>
           </section>
+
+          {/* Weekend sales email signup (2026-11-26): email + ZIP, double opt-in */}
+          <WeekendEmailSignup source="home" className="mb-12" />
 
           {/* Discovery banners: moved below the map (CLS S968): they load async, so
               keeping them above the map/sales shifted primary content on mount */}

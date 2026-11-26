@@ -6,6 +6,7 @@ import { isValidSaleId, goneSaleRedirectPath, isThinSale } from '@/lib/seo/saleP
 import { canonicalCitySlug } from '../../lib/seo/citySlug';
 import Head from 'next/head';
 import Link from 'next/link';
+import WeekendEmailSignup from '../../components/WeekendEmailSignup';
 import { useRouter } from 'next/router';
 import { GetStaticPaths, GetStaticProps } from 'next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -2604,6 +2605,13 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
           </div>
         );
       })()}
+
+      {/* Weekend sales email signup (2026-11-26): logged-out visitors; account holders already get the digest */}
+      {!user && (
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <WeekendEmailSignup source="sale" defaultZip={sale.zip} placeName={sale.city} />
+        </div>
+      )}
 
       </main>
       )}{/* end !isSaleLocked */}

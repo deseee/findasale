@@ -620,11 +620,35 @@ const firstNameOf = (name: string | null | undefined): string => {
 };
 
 // Helper: build the HTML for a weekly digest email (exported so the escaping can be unit tested)
-export const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, unsubUrl: string, nearYou: boolean, now: Date = new Date()): string => {
+export interface DigestHtmlOptions {
+  /** false for a guest signup (no account): the address gate and footer copy follow. Default true. */
+  isAccountHolder?: boolean;
+  /** Guest signup ZIP code, named in the greeting and footer. */
+  zip?: string;
+}
+
+export const buildDigestHtml = (
+  userName: string | null,
+  sales: any[],
+  frontendUrl: string,
+  unsubUrl: string,
+  nearYou: boolean,
+  now: Date = new Date(),
+  options: DigestHtmlOptions = {},
+): string => {
+  const isAccountHolder = options.isAccountHolder !== false;
+  const zip = options.zip && /^\d{5}$/.test(options.zip) ? options.zip : '';
+  const nearText = zip ? ` near ${zip}` : nearYou ? ' near you' : '';
+  const reason = isAccountHolder
+    ? "You're receiving this because you have a FindA.Sale account."
+    : `You're receiving this because you signed up for weekend sales${zip ? ` near ZIP code ${zip}` : ''} on FindA.Sale.`;
+  const dashboardLink = isAccountHolder
+    ? ` &middot;\n        <a href="${escapeHtml(frontendUrl)}/shopper/dashboard" style="color:#2563eb;">My Dashboard</a>`
+    : '';
   const saleCards = sales.map((sale) => {
     // 2026-10-13: digest recipients are account holders, but a sale's street address only goes out from the day
     // before it starts (organizer time zone, evaluated at send time). Before that: city, state zip + a link.
-    const location = messageSaleLocation(sale, sale.organizer?.timezone, true, now);
+    const location = messageSaleLocation(sale, sale.organizer?.timezone, isAccountHolder, now);
     const saleHref = `${escapeHtml(frontendUrl)}/sales/${escapeHtml(sale.id)}`;
     const locationNote = location.note
       ? `<p style="margin:0 0 6px;font-size:12px;"><a href="${saleHref}" style="color:#2563eb;text-decoration:none;">${escapeHtml(location.note)}</a></p>`
@@ -665,7 +689,7 @@ export const buildDigestHtml = (userName: string, sales: any[], frontendUrl: str
     <!-- Greeting -->
     <p style="color:#374151;font-size:15px;margin-bottom:20px;">
       Hi ${escapeHtml(firstNameOf(userName))},<br><br>
-      Here are the sales happening this weekend${nearYou ? ' near you' : ''}: yard sales, auctions, flea markets, consignment sales, and more. Don't miss out!
+      Here are the sales happening this weekend${nearText}: yard sales, auctions, flea markets, consignment sales, and more. Don't miss out!
     </p>
 
     <!-- Sale cards -->
@@ -674,10 +698,10 @@ export const buildDigestHtml = (userName: string, sales: any[], frontendUrl: str
     <!-- Footer -->
     <div style="border-top:1px solid #e5e7eb;margin-top:24px;padding-top:16px;text-align:center;">
       <p style="color:#9ca3af;font-size:12px;margin:0;">
-        You're receiving this because you have a FindA.Sale account.<br>
-        <a href="${escapeHtml(frontendUrl)}" style="color:#2563eb;">View all sales</a> &middot;
-        <a href="${escapeHtml(frontendUrl)}/shopper/dashboard" style="color:#2563eb;">My Dashboard</a>
+        ${escapeHtml(reason)}<br>
+        <a href="${escapeHtml(frontendUrl)}" style="color:#2563eb;">View all sales</a>${dashboardLink}
       </p>
+      <p style="font-size:13px;color:#374151;margin-top:12px;">Running a sale? <a href="${escapeHtml(frontendUrl)}/register?role=organizer&amp;utm_source=weekend_email" style="color:#2563eb;">List it free on FindA.Sale</a></p>
       <p style="font-size:12px;color:#9ca3af;margin-top:8px;">Don't want these? <a href="${escapeHtml(unsubUrl)}" style="color:#6b7280;">Unsubscribe</a></p>
       <p style="font-size:11px;color:#9ca3af;margin-top:8px;">${process.env.OUTREACH_PHYSICAL_ADDRESS || '219 E Michigan Ave, Suite F, Paw Paw, MI 49079'}</p>
     </div>
@@ -740,6 +764,139 @@ export const weeklyDigestEditionKey = (now: Date = new Date()): string => {
   return `weekly_digest:${friday.toISOString().slice(0, 10)}`;
 };
 
+/**
+ * Guest weekend email (2026-11-26): visitors who signed up with an email and ZIP code and clicked the
+ * confirmation link (services/weekendDigestSignupService.ts). Runs inside each sendWeeklyDigest run,
+ * before the account holders, on the same Gmail rail, quota stop and pacing.
+ *   - Sales: PUBLISHED, starting in the next 7 days, within GUEST_DIGEST_RADIUS of the ZIP's center.
+ *     A guest with no sales near their ZIP gets no email that week (they asked for nearby sales only).
+ *   - Edition marker: SearchNotification.lastCheckedAt >= the edition's Friday (00:00 UTC) means sent.
+ *   - A guest whose address also has an account: skipped if that account opted out of the digest or
+ *     already got this edition; after a guest send the account's edition marker is written, so the
+ *     account path does not send a second copy.
+ * Returns quotaHit=true when the Gmail daily quota stopped the run (the caller then stops too).
+ */
+export const sendGuestWeeklyDigest = async (now: Date, editionKey: string, frontendUrl: string): Promise<{ quotaHit: boolean; sent: number }> => {
+  const {
+    loadConfirmedDigestGuests,
+    geocodeZip,
+    digestUnsubUrl,
+    markDigestGuestSent,
+    GUEST_DIGEST_RADIUS,
+  } = await import('../services/weekendDigestSignupService');
+  const guests = await loadConfirmedDigestGuests();
+  if (guests.length === 0) return { quotaHit: false, sent: 0 };
+
+  const editionStart = new Date(`${editionKey.slice(editionKey.indexOf(':') + 1)}T00:00:00.000Z`);
+  const pending = guests.filter((g) => !g.lastSentAt || g.lastSentAt.getTime() < editionStart.getTime());
+  if (pending.length === 0) return { quotaHit: false, sent: 0 };
+
+  const { emailService, QuotaExceededError } = await import('../lib/emailService');
+  const { suppressionService } = await import('../services/suppressionService');
+  const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const salesByZip = new Map<string, any[]>();
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (let index = 0; index < pending.length; index++) {
+    const guest = pending[index];
+    try {
+      if (!salesByZip.has(guest.zip)) {
+        const center = await geocodeZip(guest.zip);
+        let nearby: any[] = [];
+        if (center) {
+          const latDelta = GUEST_DIGEST_RADIUS / 111;
+          const lngDelta = GUEST_DIGEST_RADIUS / (111 * Math.cos((center.lat * Math.PI) / 180));
+          nearby = await prisma.sale.findMany({
+            where: {
+              status: 'PUBLISHED',
+              startDate: { gte: now, lte: sevenDaysOut },
+              lat: { gte: center.lat - latDelta, lte: center.lat + latDelta },
+              lng: { gte: center.lng - lngDelta, lte: center.lng + lngDelta },
+            },
+            include: { organizer: { select: { businessName: true, timezone: true } } },
+            orderBy: { startDate: 'asc' },
+            take: 10,
+          });
+        }
+        salesByZip.set(guest.zip, nearby);
+      }
+      const sales = salesByZip.get(guest.zip) || [];
+      if (sales.length === 0) {
+        skipped++;
+        continue;
+      }
+      if (await suppressionService.isSuppressed(guest.email)) {
+        skipped++;
+        continue;
+      }
+
+      const account = await prisma.user.findFirst({
+        where: { email: { equals: guest.email, mode: 'insensitive' } },
+        select: { id: true, notificationPrefs: true },
+      });
+      if (account) {
+        const prefs = (account.notificationPrefs as Record<string, unknown> | null) ?? {};
+        const already = await prisma.emailAutomationLog.findFirst({
+          where: { userId: account.id, automationKey: editionKey },
+          select: { id: true },
+        });
+        if (prefs['emailWeeklyDigest'] === false || already) {
+          skipped++;
+          continue;
+        }
+      }
+
+      const unsubUrl = digestUnsubUrl(guest.email);
+      if (!unsubUrl) {
+        console.error('Weekly digest (guests): no unsubscribe secret configured - not sending guest digests');
+        return { quotaHit: false, sent };
+      }
+      const html = buildDigestHtml(null, sales, frontendUrl, unsubUrl, true, new Date(), {
+        isAccountHolder: false,
+        zip: guest.zip,
+      });
+      let result: unknown;
+      try {
+        result = await emailService.emails.send({
+          from: DIGEST_FROM_EMAIL(),
+          to: guest.email,
+          subject: `🏷️ ${sales.length} sale${sales.length > 1 ? 's' : ''} near ${guest.zip} this weekend`,
+          html,
+          listUnsubscribe: `<${unsubUrl}>`,
+          jobName: 'weeklyDigestGuest',
+          retryOnRateLimit: true,
+        });
+      } catch (sendErr) {
+        const msg = String((sendErr as any)?.message ?? sendErr);
+        if (sendErr instanceof QuotaExceededError || /daily user sending|sending limit exceeded/i.test(msg)) {
+          console.warn(`Weekly digest (${editionKey}): Gmail daily quota reached during guest sends - ${pending.length - index} deferred`);
+          return { quotaHit: true, sent };
+        }
+        throw sendErr;
+      }
+      if (result) {
+        sent++;
+        await markDigestGuestSent(guest.id, new Date());
+        if (account) {
+          try {
+            await prisma.emailAutomationLog.create({ data: { userId: account.id, automationKey: editionKey } });
+          } catch (markErr) {
+            console.error(`Weekly digest: guest send to ${maskEmail(guest.email)} could not record the account marker:`, markErr);
+          }
+        }
+      } else skipped++;
+      await new Promise((resolve) => setTimeout(resolve, DIGEST_SEND_INTERVAL_MS));
+    } catch (error) {
+      console.error(`Weekly digest: failed guest send to ${maskEmail(guest.email)}:`, error);
+      failed++;
+    }
+  }
+  console.info(`Weekly digest (${editionKey}) guests: ${sent} sent, ${skipped} skipped, ${failed} failed`);
+  return { quotaHit: false, sent };
+};
+
 // Send weekly digest email to all users with upcoming sales this weekend
 export const sendWeeklyDigest = async () => {
   try {
@@ -781,6 +938,15 @@ export const sendWeeklyDigest = async () => {
     if (upcomingSales.length === 0) {
       console.info('Weekly digest: no upcoming published sales — skipping');
       return;
+    }
+
+    // Guest signups (email + ZIP) go first: they asked for this email by name and their ZIP is precise.
+    // A guest-side failure must never stop the account holders' digest.
+    try {
+      const guestRun = await sendGuestWeeklyDigest(now, weeklyDigestEditionKey(now), frontendUrl);
+      if (guestRun.quotaHit) return; // the Saturday/Sunday catch-up runs resume
+    } catch (guestErr) {
+      console.error('Weekly digest: guest signups run failed, continuing with account holders:', guestErr);
     }
 
     // Get all users with email addresses

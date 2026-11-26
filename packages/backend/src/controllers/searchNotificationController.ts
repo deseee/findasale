@@ -19,6 +19,7 @@ import {
   signNotifyConfirmToken,
   signNotifyMeToken,
 } from '../services/notifyMeSenderService';
+import { isReservedSearchQuery } from '../services/weekendDigestSignupService';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_ACTIVE_ALERTS_PER_EMAIL = 10;
@@ -110,6 +111,11 @@ export const notifyOnSearch = async (req: Request, res: Response): Promise<void>
     }
 
     const q = query.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 200);
+    // Queries starting with "__" are reserved for internal rows (e.g. weekend-digest guest signups).
+    if (isReservedSearchQuery(q)) {
+      res.status(400).json({ success: false, message: 'Search query required.' });
+      return;
+    }
     const e = email.trim().toLowerCase();
     const c = typeof city === 'string' && city.trim() ? city.trim().slice(0, 100) : null;
 
@@ -122,8 +128,9 @@ export const notifyOnSearch = async (req: Request, res: Response): Promise<void>
     const sessionEmail = await signedInEmail(req);
     const ownEmail = sessionEmail !== null && sessionEmail === e;
 
+    // Only this address's Notify Me alerts: the weekend-digest signup row has its own opt-out and no alert cap.
     const rows = await prisma.searchNotification.findMany({
-      where: { email: e },
+      where: { email: e, NOT: { searchQuery: { startsWith: '__' } } },
       select: { id: true, searchQuery: true, isActive: true, notifiedAt: true, confirmedAt: true, expiredAt: true },
     });
 

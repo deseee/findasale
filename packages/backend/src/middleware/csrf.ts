@@ -132,6 +132,7 @@ const CSRF_EXEMPT_EXACT_PATHS: ReadonlySet<string> = new Set([
   '/api/shopper/waitlist/unsubscribe', // RFC 8058 one-click for Notify Me emails (HMAC token in the URL)
   '/api/notifications/guest-unsubscribe', // RFC 8058 one-click for guest sale-reminder emails (HMAC token in the URL)
   '/api/notifications/confirm-email-subscription', // guest double opt-in confirm: single-use token in the body, no session
+  '/api/digest/unsubscribe', // RFC 8058 one-click for the guest weekend sales email (HMAC token in the URL)
 ]);
 
 /** Prefixes whose every route is server-to-server (each route verifies its own secret/signature). */

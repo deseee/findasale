@@ -13,6 +13,7 @@ import { buildListingEvent, JsonLdNode } from '@/lib/seo/eventJsonLd';
 import { toPublicSaleList } from '@/lib/seo/publicSaleLocation';
 import Head from 'next/head';
 import Link from 'next/link';
+import WeekendEmailSignup from '../../components/WeekendEmailSignup';
 import { useState, useEffect } from 'react';
 import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
 import { buildFaqJsonLd } from '@/lib/seo/cityData';
@@ -348,6 +349,9 @@ export default function CityPage({
               })}
             </div>
           )}
+
+          {/* Weekend sales email signup (2026-11-26) */}
+          <WeekendEmailSignup source="city" placeName={cityName} className="mt-8" />
 
           {/* FAQ section — answered from live listing data */}
           {liveFaqs.length > 0 && (

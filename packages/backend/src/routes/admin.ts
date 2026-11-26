@@ -369,6 +369,10 @@ router.get('/demand-signals', async (req: any, res: any) => {
 // Reads BOTH capture tables: ShopperWaitlistEntry (logged-in shoppers, `entries`) and
 // SearchNotification (anonymous /search "notify me" emails, `searchNotifications`).
 // Also returns sender status so the admin can see whether alerts are actually going out.
+// Weekend-digest guest signups share the SearchNotification table under a reserved searchQuery
+// (services/weekendDigestSignupService.ts); they are counted separately, not listed as alerts.
+const NOTIFY_ME_ONLY = { NOT: { searchQuery: { startsWith: '__' } } };
+
 router.get('/waitlist', async (req: any, res: any) => {
   try {
     const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
@@ -389,17 +393,22 @@ router.get('/waitlist', async (req: any, res: any) => {
         }),
         (prisma as any).shopperWaitlistEntry.count({ where }),
         (prisma as any).searchNotification.findMany({
-          where,
+          where: { ...where, ...NOTIFY_ME_ONLY },
           orderBy: { createdAt: 'desc' },
           skip: (page - 1) * limit,
           take: limit,
         }),
-        (prisma as any).searchNotification.count({ where }),
+        (prisma as any).searchNotification.count({ where: { ...where, ...NOTIFY_ME_ONLY } }),
         (prisma as any).shopperWaitlistEntry.count({ where: { isActive: true, notifiedAt: null } }),
         (prisma as any).shopperWaitlistEntry.count({ where: { notifiedAt: { not: null } } }),
-        (prisma as any).searchNotification.count({ where: { isActive: true, notifiedAt: null } }),
-        (prisma as any).searchNotification.count({ where: { notifiedAt: { not: null } } }),
+        (prisma as any).searchNotification.count({ where: { isActive: true, notifiedAt: null, ...NOTIFY_ME_ONLY } }),
+        (prisma as any).searchNotification.count({ where: { notifiedAt: { not: null }, ...NOTIFY_ME_ONLY } }),
       ]);
+    const [digestConfirmed, digestPending, digestUnsubscribed] = await Promise.all([
+      (prisma as any).searchNotification.count({ where: { searchQuery: '__weekend_digest__', isActive: true, confirmedAt: { not: null } } }),
+      (prisma as any).searchNotification.count({ where: { searchQuery: '__weekend_digest__', isActive: true, confirmedAt: null } }),
+      (prisma as any).searchNotification.count({ where: { searchQuery: '__weekend_digest__', isActive: false } }),
+    ]);
 
     res.json({
       entries,
@@ -412,6 +421,7 @@ router.get('/waitlist', async (req: any, res: any) => {
       stats: {
         waitlist: { pending: waitlistPending, notified: waitlistNotified },
         search: { pending: searchPending, notified: searchNotified },
+        weekendEmail: { confirmed: digestConfirmed, pending: digestPending, unsubscribed: digestUnsubscribed },
       },
       sender: {
         enabled: process.env.NOTIFY_ME_SENDER_ENABLED === 'true',
