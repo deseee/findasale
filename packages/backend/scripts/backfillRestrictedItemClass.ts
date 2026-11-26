@@ -13,7 +13,9 @@
 // Default: rows with restrictedClassifiedAt IS NULL. --all-versions: also rows classified by an older classifier
 // version. Keyset pagination on id, in batches (default 500), so it can be stopped and re-run at any time: each batch
 // only touches rows still stale. Every write is compare-and-set on the classifier inputs
-// (restrictedClassStore.reclassifyRow) and the ratchet never lowers an existing class. Admin overrides are untouched.
+// (restrictedClassStore.reclassifyRow) and the ratchet never lowers an existing class, except after a rule change for a
+// row nobody edited since its last automatic pass (restrictedClassStore.nextStoredClass, rk-2 kitchen knives and
+// flatware). Admin overrides are untouched.
 // Every class change is audited by the database trigger "Item_restricted_class_audit" (source 'BACKFILL').
 // Deterministic keywords + category only: no model calls, no paid API calls, no network.
 //
@@ -25,8 +27,8 @@
 // NOT RUN by the session that wrote it. Run only after the migration is deployed.
 
 import { PrismaClient } from '@prisma/client';
-import { classifyRestrictedItem, applyAutoRatchet, isRestrictedItemClassName, RESTRICTED_CLASSIFIER_VERSION } from '../src/services/restrictedItem/restrictedItemClassifier';
-import { readItemClassificationRows, reclassifyRow, type RawSqlClient } from '../src/services/restrictedItem/restrictedClassStore';
+import { classifyRestrictedItem, isRestrictedItemClassName, RESTRICTED_CLASSIFIER_VERSION } from '../src/services/restrictedItem/restrictedItemClassifier';
+import { nextStoredClass, readItemClassificationRows, reclassifyRow, type RawSqlClient } from '../src/services/restrictedItem/restrictedClassStore';
 
 const prisma = new PrismaClient();
 const db = prisma as unknown as RawSqlClient;
@@ -45,7 +47,7 @@ async function main() {
   console.log(`[backfillRestrictedItemClass] mode=${APPLY ? 'APPLY' : 'DRY RUN'} version=${RESTRICTED_CLASSIFIER_VERSION} batch=${BATCH} allVersions=${ALL_VERSIONS}`);
   const tally: Record<string, number> = {};
   let processed = 0;
-  let raised = 0;
+  let raised = 0; // any class change, up or down
   let casLost = 0;
   let cursor = '';
   while (processed < LIMIT) {
@@ -69,7 +71,7 @@ async function main() {
         if (!out.persisted) casLost += 1;
       } else {
         const auto = classifyRestrictedItem(row).restrictedClass;
-        after = applyAutoRatchet(before, auto);
+        after = nextStoredClass(row, auto);
       }
       tally[after] = (tally[after] ?? 0) + 1;
       if (after !== before) raised += 1;

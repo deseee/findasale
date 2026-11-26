@@ -5,6 +5,7 @@ import {
   applyAutoRatchet,
   classifyRestrictedItem,
   effectiveRestrictedClass,
+  isClearlyKitchenCutlery,
   RESTRICTED_CLASSIFIER_VERSION,
   stripExclusions,
   normalizeForRestrictedMatch,
@@ -33,10 +34,7 @@ describe('restricted classifier: positives', () => {
     ['Case XX Pocket Knife', 'KNIFE'],
     ['Bowie Knife with Sheath', 'KNIFE'],
     ['Machete 18 inch', 'KNIFE'],
-    ['Chef Knife 8"', 'KNIFE'],
-    ['Wusthof Paring Knives (3)', 'KNIFE'],
     ['Swiss Army Knife', 'KNIFE'],
-    ['Meat Cleaver', 'KNIFE'],
     ['1 oz .999 Fine Silver Round', 'COIN_BULLION_PRECIOUS_METAL'],
     ['1921 Morgan Silver Dollar', 'COIN_BULLION_PRECIOUS_METAL'],
     ['Krugerrand 1 oz', 'COIN_BULLION_PRECIOUS_METAL'],
@@ -83,7 +81,6 @@ describe('restricted classifier: negatives and exclusions', () => {
     'Lord of the Rings DVD Set',
     'Butter Knife Set',
     'Silverware Set Service for 8',
-    'Sterling Silver Flatware',
     'Palette Knife Set for Painting',
     'Putty Knife 3 inch',
     'Knife Sharpener',
@@ -116,10 +113,6 @@ describe('restricted classifier: negatives and exclusions', () => {
     expect(cls('Key Ring and 14k Gold Ring')).toBe('JEWELRY');
   });
 
-  it('a steak knife set is KNIFE even when the silverware word is present', () => {
-    expect(cls('Silverware Set with Steak Knives')).toBe('KNIFE');
-  });
-
   it('whole words only', () => {
     expect(cls('Shotgun Wedding Card Game')).toBe('FIREARM_RELATED'); // deliberate: "shotgun" always matches
     expect(cls('Gunther Bear Plush')).toBe('NONE');
@@ -128,6 +121,101 @@ describe('restricted classifier: negatives and exclusions', () => {
     expect(cls('Coincidence Novel')).toBe('NONE');
     expect(cls('Sabertooth Tiger Model')).toBe('NONE');
   });
+});
+
+describe('kitchen knives and flatware (rk-2, Finix 2026-11-23: OK if clearly for eating/cooking)', () => {
+  it.each([
+    'Chef Knife 8"',
+    'Wusthof Paring Knives (3)',
+    'Meat Cleaver',
+    'Steak Knives Set of 6',
+    'Silverware Set with Steak Knives',
+    'Henckels 15 Piece Knife Block Set',
+    'Cutco Knife Set',
+    'Bread Knife Serrated',
+    'Carving Knife and Fork',
+    'Santoku Knife 7 inch',
+    'Victorinox Fibrox Chef Knife',
+    'Kitchen Utility Knife',
+    'Oneida Flatware Service for 12',
+    'Butcher Knife Vintage',
+  ])('%s -> NONE', (title) => {
+    expect(cls(title)).toBe('NONE');
+  });
+
+  it('a generic knife in a kitchen, cutlery or flatware category is NONE', () => {
+    expect(cls('Knife Set', { category: 'Kitchenware' })).toBe('NONE');
+    expect(cls('8 inch Knife', { ebayCategoryName: 'Kitchen Knives' })).toBe('NONE');
+    expect(cls('Knives Lot', { category: 'Home & Garden', ebayCategoryName: 'Flatware, Knives & Cutlery' })).toBe('NONE');
+  });
+
+  it('a kitchen-knife maker in the brand field counts as kitchen context', () => {
+    expect(cls('8 inch Knife', { brand: 'Wusthof' })).toBe('NONE');
+  });
+
+  it('other knives stay KNIFE', () => {
+    expect(cls('Knife')).toBe('KNIFE');
+    expect(cls('Vintage Knife Lot')).toBe('KNIFE');
+    expect(cls('Cleaver')).toBe('KNIFE');
+    expect(cls('Utility Knife')).toBe('KNIFE');
+    expect(cls('Knife Set')).toBe('KNIFE');
+    expect(cls('Hunting Knife')).toBe('KNIFE');
+    expect(cls('Case XX Pocket Knife')).toBe('KNIFE');
+    expect(cls('Box Cutter')).toBe('KNIFE');
+    expect(cls('Machete 18 inch')).toBe('KNIFE');
+    expect(cls('Spyderco Folding Knife', { category: 'Kitchenware' })).toBe('KNIFE');
+  });
+
+  it('an outdoor or weapon word cancels the kitchen reading', () => {
+    expect(cls('Hunting and Kitchen Knives Lot')).toBe('KNIFE');
+    expect(cls('Chef Knife with Leather Sheath')).toBe('KNIFE');
+    expect(cls('Tactical Steak Knife')).toBe('KNIFE');
+    expect(cls('Survival Knife', { category: 'Kitchenware' })).toBe('KNIFE');
+    expect(cls('Kitchen and Pocket Knives')).toBe('KNIFE');
+    expect(cls('Steak Knives and a Switchblade')).toBe('KNIFE');
+  });
+
+  it('a kitchen word does not unblock daggers, swords or firearms', () => {
+    expect(cls('Kitchen Dagger Decor')).toBe('WEAPON');
+    expect(cls('Chef Sword Letter Opener')).toBe('WEAPON');
+    expect(cls('Steak Knives and Pistol Holster')).toBe('FIREARM_RELATED');
+  });
+
+  it('isClearlyKitchenCutlery', () => {
+    expect(isClearlyKitchenCutlery({ title: 'Chef Knife' })).toBe(true);
+    expect(isClearlyKitchenCutlery({ title: 'Knife', category: 'Kitchenware' })).toBe(true);
+    expect(isClearlyKitchenCutlery({ title: 'Knife' })).toBe(false);
+    expect(isClearlyKitchenCutlery({ title: 'Pocket Knife', category: 'Kitchenware' })).toBe(false);
+  });
+});
+
+describe('sterling (rk-2, Finix 2026-11-23: "Jewelry and sterling is not acceptable")', () => {
+  it.each([
+    ['Sterling Silver Flatware', 'COIN_BULLION_PRECIOUS_METAL'],
+    ['Gorham Sterling Silverware Set Service for 8', 'COIN_BULLION_PRECIOUS_METAL'],
+    ['Sterling Tea Set', 'COIN_BULLION_PRECIOUS_METAL'],
+    ['Solid Sterling Candlesticks', 'COIN_BULLION_PRECIOUS_METAL'],
+    ['Sterling Silver Butter Knife', 'COIN_BULLION_PRECIOUS_METAL'],
+    ['Sterling Silver Charm Bracelet', 'JEWELRY'],
+  ] as const)('%s -> %s', (title, expected) => {
+    expect(cls(title)).toBe(expected);
+  });
+
+  it('sterling in a description or category also blocks', () => {
+    expect(cls('Serving Spoon', { description: 'Marked sterling silver, 52 grams.' })).toBe('COIN_BULLION_PRECIOUS_METAL');
+    expect(cls('Serving Spoon', { ebayCategoryName: 'Sterling Silver (.925)' })).toBe('COIN_BULLION_PRECIOUS_METAL');
+  });
+
+  it('silver plate and other "sterling" names stay NONE', () => {
+    expect(cls('Silver Plated Flatware Set')).toBe('NONE');
+    expect(cls('Silverplate Serving Tray, not sterling')).toBe('NONE');
+    expect(cls('Sterling China Restaurant Plates')).toBe('NONE');
+  });
+
+  it('a sterling steak knife set is blocked even though steak knives alone are allowed', () => {
+    expect(cls('Sterling Silver Steak Knives')).toBe('COIN_BULLION_PRECIOUS_METAL');
+  });
+
 });
 
 describe('restricted classifier: fields', () => {

@@ -123,10 +123,29 @@ describe('restricted-item classification (real database)', () => {
     expect(all[0].storedClass).toBe('KNIFE');
   });
 
+  it('rk-2 rule change: an untouched kitchen knife stored KNIFE by the older rules is card-allowed, a ratcheted one is not', async () => {
+    const chef = rid('chef');
+    const held = rid('held');
+    await makeItem(chef, 'Wusthof Chef Knife');
+    await makeItem(held, 'Wusthof Chef Knife');
+    // Simulate rows classified by rk-1, which blocked every knife: one untouched, one held up by the ratchet.
+    await prisma.$executeRaw`UPDATE "Item" SET "restrictedClass" = 'KNIFE', "restrictedClassAuto" = 'KNIFE',
+      "restrictedClassifierVersion" = 'rk-1-2026-11-06', "restrictedClassifiedAt" = NOW() WHERE "id" = ${chef}`;
+    await prisma.$executeRaw`UPDATE "Item" SET "restrictedClass" = 'KNIFE', "restrictedClassAuto" = 'NONE',
+      "restrictedClassifierVersion" = 'rk-1-2026-11-06', "restrictedClassifiedAt" = NOW() WHERE "id" = ${held}`;
+    const d = await assertCardAllowedForItems('FINIX', [{ itemId: chef, amountCents: 1000 }, { itemId: held, amountCents: 1000 }], ORG, { path: 'test' }, gateDeps());
+    expect(d.allowed.map((a) => a.itemId)).toEqual([chef]);
+    expect(d.blocked.map((b) => b.itemId)).toEqual([held]);
+    const [fresh] = await readItemClassificationRows(db, [chef]);
+    expect(fresh.restrictedClass).toBe('NONE');
+    const change = await prisma.restrictedItemAuditLog.findFirst({ where: { itemId: chef, kind: 'CLASSIFICATION_CHANGE', newClass: 'NONE' } });
+    expect(change?.oldClass).toBe('KNIFE');
+  });
+
   it('admin override clears and restores, with audit rows', async () => {
     const id = rid('override');
-    await makeItem(id, 'Butter Knife Set plus Chef Knife');
-    const cleared = await setRestrictedClassOverride(db, { itemId: id, override: 'NONE', reason: 'Kitchen set, reviewed', adminUserId: ADMIN });
+    await makeItem(id, 'Butter Knife Set plus Hunting Knife');
+    const cleared = await setRestrictedClassOverride(db, { itemId: id, override: 'NONE', reason: 'Reviewed', adminUserId: ADMIN });
     expect(cleared).toMatchObject({ found: true, previousEffective: 'KNIFE', newEffective: 'NONE' });
     const d = await assertCardAllowedForItems('FINIX', [{ itemId: id, amountCents: 1000 }], ORG, { path: 'test' }, gateDeps());
     expect(d.allCardAllowed).toBe(true);

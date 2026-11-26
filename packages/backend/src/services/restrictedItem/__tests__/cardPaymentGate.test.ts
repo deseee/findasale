@@ -98,6 +98,37 @@ describe('assertCardAllowedForItems', () => {
     expect(d.blocked[0].restrictedClass).toBe('KNIFE');
   });
 
+  it('a rule change unblocks an untouched kitchen knife stored as KNIFE by the older rules (rk-2)', async () => {
+    const chef = row({ id: 'c', title: 'Wusthof Chef Knife', restrictedClass: 'KNIFE', restrictedClassAuto: 'KNIFE', restrictedClassifierVersion: 'rk-1-2026-11-06' });
+    const { deps, executed } = fakeDeps([chef]);
+    const d = await assertCardAllowedForItems('FINIX', [{ itemId: 'c', amountCents: 1500 }], ORG, ctx, deps);
+    expect(d.allCardAllowed).toBe(true);
+    expect(executed[0]).toContain('NONE');
+  });
+
+  it('a rule change does not unblock a knife the ratchet was holding (renamed under the older rules)', async () => {
+    const renamed = row({ id: 'r2', title: 'Chef Knife', restrictedClass: 'KNIFE', restrictedClassAuto: 'NONE', restrictedClassifierVersion: 'rk-1-2026-11-06' });
+    const { deps } = fakeDeps([renamed]);
+    const d = await assertCardAllowedForItems('FINIX', [{ itemId: 'r2', amountCents: 1500 }], ORG, ctx, deps);
+    expect(d.blocked[0].restrictedClass).toBe('KNIFE');
+  });
+
+  it('a rule change does not unblock a row edited since its last pass, or one with no stored auto value', async () => {
+    const edited = row({ id: 'e', title: 'Chef Knife', restrictedClass: 'KNIFE', restrictedClassAuto: 'KNIFE', restrictedClassifiedAt: null, restrictedClassifierVersion: 'rk-1-2026-11-06' });
+    const unknown = row({ id: 'u', title: 'Chef Knife', restrictedClass: 'KNIFE', restrictedClassifierVersion: 'rk-1-2026-11-06' });
+    const { deps } = fakeDeps([edited, unknown]);
+    const d = await assertCardAllowedForItems('FINIX', [{ itemId: 'e', amountCents: 1500 }, { itemId: 'u', amountCents: 1500 }], ORG, ctx, deps);
+    expect(d.allCash).toBe(true);
+    expect(d.blocked.map((b) => b.restrictedClass)).toEqual(['KNIFE', 'KNIFE']);
+  });
+
+  it('a rule change raises untouched sterling flatware to a blocked class (rk-2)', async () => {
+    const sterling = row({ id: 'st', title: 'Sterling Silver Flatware', restrictedClass: 'NONE', restrictedClassAuto: 'NONE', restrictedClassifierVersion: 'rk-1-2026-11-06' });
+    const { deps } = fakeDeps([sterling]);
+    const d = await assertCardAllowedForItems('FINIX', [{ itemId: 'st', amountCents: 1500 }], ORG, ctx, deps);
+    expect(d.blocked[0].restrictedClass).toBe('COIN_BULLION_PRECIOUS_METAL');
+  });
+
   it('an admin override clears the class', async () => {
     const { deps } = fakeDeps([row({ id: 'k', restrictedClass: 'KNIFE', restrictedClassOverride: 'NONE' })]);
     const d = await assertCardAllowedForItems('FINIX', [{ itemId: 'k', amountCents: 1500 }], ORG, ctx, deps);

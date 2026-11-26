@@ -36,6 +36,9 @@ export interface ItemClassificationRow {
   tags: string[] | null;
   brand: string | null;
   restrictedClass: string | null;
+  /** The last automatic classifier result (before the ratchet). Optional so older callers and fixtures still type-check;
+   *  absent means "unknown" and the strict ratchet applies (see nextStoredClass). */
+  restrictedClassAuto?: string | null;
   restrictedClassOverride: string | null;
   restrictedClassifiedAt: Date | null;
   restrictedClassifierVersion: string | null;
@@ -49,6 +52,7 @@ export async function readItemClassificationRows(db: RawSqlClient, itemIds: read
     SELECT i."id", i."organizerId", s."organizerId" AS "saleOrganizerId",
            i."title", i."description", i."category", i."ebayCategoryName", i."tags", i."brand",
            i."restrictedClass"::text AS "restrictedClass",
+           i."restrictedClassAuto"::text AS "restrictedClassAuto",
            i."restrictedClassOverride"::text AS "restrictedClassOverride",
            i."restrictedClassifiedAt", i."restrictedClassifierVersion"
     FROM "Item" i
@@ -59,6 +63,33 @@ export async function readItemClassificationRows(db: RawSqlClient, itemIds: read
 
 export function isStale(row: Pick<ItemClassificationRow, 'restrictedClassifiedAt' | 'restrictedClassifierVersion'>): boolean {
   return !row.restrictedClassifiedAt || row.restrictedClassifierVersion !== RESTRICTED_CLASSIFIER_VERSION;
+}
+
+/**
+ * The stored class after an automatic pass that produced `auto`.
+ *
+ * Normally the ratchet: raise, never lower (an organizer who renames "Bowie Knife" to "Kitchen Tool" stays KNIFE).
+ *
+ * ONE exception, for a RULE change: the row was last classified by an OLDER classifier version, it has not been edited
+ * since (restrictedClassifiedAt is still set: the invalidate trigger nulls it on any edit of a classifier input), and its
+ * stored class is exactly that pass's own automatic result (the ratchet was not holding it above). Then the inputs are
+ * the same ones the old rules saw and nothing was ever held up by an earlier edit, so a lower result can only come from
+ * the rules themselves, and it is taken as is. This is how a loosening such as rk-2 (kitchen knives and flatware, Finix
+ * 2026-11-23) reaches items already stored as KNIFE. Any doubt (no stored auto value, an edit, a ratcheted row, an admin
+ * override, which is a separate column) keeps the strict ratchet. Only an admin override can lower anything else.
+ */
+export function nextStoredClass(
+  row: Pick<ItemClassificationRow, 'restrictedClass' | 'restrictedClassAuto' | 'restrictedClassifiedAt' | 'restrictedClassifierVersion'>,
+  auto: RestrictedItemClassName,
+): RestrictedItemClassName {
+  const current: RestrictedItemClassName = isRestrictedItemClassName(row.restrictedClass) ? row.restrictedClass : 'NONE';
+  const ruleChangeOnly =
+    !!row.restrictedClassifiedAt &&
+    !!row.restrictedClassifierVersion &&
+    row.restrictedClassifierVersion !== RESTRICTED_CLASSIFIER_VERSION &&
+    isRestrictedItemClassName(row.restrictedClassAuto) &&
+    row.restrictedClassAuto === current;
+  return ruleChangeOnly ? auto : applyAutoRatchet(current, auto);
 }
 
 export interface ReclassifyOutcome {
@@ -82,7 +113,7 @@ export async function reclassifyRow(db: RawSqlClient, row: ItemClassificationRow
     tags: row.tags,
     brand: row.brand,
   }).restrictedClass;
-  const stored = applyAutoRatchet(isRestrictedItemClassName(row.restrictedClass) ? row.restrictedClass : 'NONE', auto);
+  const stored = nextStoredClass(row, auto);
   const tags = row.tags ?? [];
   const updated = await db.$executeRaw`
     UPDATE "Item" SET
