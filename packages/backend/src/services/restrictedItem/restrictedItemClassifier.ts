@@ -23,10 +23,20 @@
  *     item on the category alone (Patrick 2026-10-07: Finix gets a category-wide block plus keyword screening). Storage
  *     and accessory leaves (jewelry boxes, coin albums, display cases, cleaning, tools) are carved out.
  *
+ * KITCHEN KNIVES AND FLATWARE (rk-2, 2026-11-26). Finix underwriting (Jeo Henriquez, 2026-11-23): "If they have cutlery
+ *   such as flatware sets & kitchen knives, that is acceptable as long as it is clearly for eating/cooking". So:
+ *   - Table knives, flatware and silverware are NONE, as before (exclusion phrases below).
+ *   - The GENERIC knife words (knife, knives, cleaver, utility knife) do not count when the item is clearly kitchen or table
+ *     cutlery: a kitchen word or kitchen-knife maker in the title / tags / brand ("chef", "steak", "paring", "carving",
+ *     "bread", "santoku", "Wusthof", "Cutco"...), or a kitchen / cutlery / flatware category. "Wusthof Chef Knife",
+ *     "Steak Knives Set of 6", "Silverware Set with Steak Knives" and a "Knife Set" in Kitchenware are NONE.
+ *   - "Clearly" is enforced the other way too: any outdoor / weapon knife word anywhere in the title, tags or brand
+ *     (hunting, pocket, folding, tactical, survival, bowie, sheath, military...) cancels the kitchen reading, and the
+ *     specific knife keywords (pocket knife, switchblade, bowie, dagger, machete, hunting knife, box cutter, Swiss Army,
+ *     Spyderco...) always count, kitchen word or not. A bare "Knife" or "Cleaver" with no kitchen context stays KNIFE.
+ *   - Jewelry and sterling stay blocked (same mail: "Jewelry and sterling is not acceptable"). See STERLING below.
+ *
  * DELIBERATE EDGE DECISIONS (open for Patrick to change, see report):
- *   - Table knives are NONE: butter / dinner / table / cheese / fish / spreader knives, flatware and silverware, palette and
- *     putty knives, knife rests, sharpeners and knife blocks with no knife named. Sharp kitchen knives stay KNIFE: chef,
- *     carving, paring, bread, steak, boning, santoku, cleaver. A "silverware set with steak knives" is therefore KNIFE.
  *   - Costume / fashion jewelry is still JEWELRY.
  *   - Watches are NOT jewelry by keyword. A watch listed in eBay's "Jewelry & Watches" category is JEWELRY by the category
  *     rule (category-wide block).
@@ -35,8 +45,11 @@
  *     Air, BB, pellet, airsoft and paintball guns are FIREARM_RELATED.
  *   - Coin accessories are NONE (coin purse, coin bank, coin holder/album/tube/folder/sorter/counter/wrapper, coin-op
  *     machines, chocolate coins, coin cell batteries). A coin PENDANT is JEWELRY.
- *   - Sterling silverware is NONE (not bullion). Bullion contexts (bars, rounds, troy ounces, .999, scrap, nuggets, named
- *     bullion coins) are COIN_BULLION_PRECIOUS_METAL.
+ *   - STERLING (rk-2): anything sterling (sterling flatware, hollowware, a "sterling" tea set) is
+ *     COIN_BULLION_PRECIOUS_METAL when no higher or jewelry class matched; sterling jewelry stays JEWELRY. Finix
+ *     2026-11-23: "Jewelry and sterling is not acceptable". Silver PLATE ("silver plated", "silverplate") is not sterling
+ *     and stays NONE. Bullion contexts (bars, rounds, troy ounces, .999, scrap, nuggets, named bullion coins) are
+ *     COIN_BULLION_PRECIOUS_METAL as before.
  */
 
 export type RestrictedItemClassName =
@@ -57,7 +70,7 @@ export const RESTRICTED_CLASSES: readonly Exclude<RestrictedItemClassName, 'NONE
 
 /** Bump whenever a keyword, exclusion or category rule changes: the sweep job reclassifies every row whose stored
  *  restrictedClassifierVersion differs, so a rule change reaches existing items without a manual backfill. */
-export const RESTRICTED_CLASSIFIER_VERSION = 'rk-1-2026-11-06';
+export const RESTRICTED_CLASSIFIER_VERSION = 'rk-2-2026-11-26';
 
 /** Precedence / ratchet rank. Higher = more restricted. */
 export const RESTRICTED_CLASS_RANK: Record<RestrictedItemClassName, number> = {
@@ -142,7 +155,47 @@ const EXCLUSION_PHRASES: readonly string[] = [
   'diamond plate', 'diamond painting', 'diamond art', 'diamond blade', 'diamond sharpener', 'diamond drill',
   'diamond bit', 'diamond pattern', 'diamond quilted', 'diamond shaped', 'diamond shape', 'diamond cut glass',
   'black diamond', 'diamond back', 'diamondback', 'diamond dust', 'diamond grit',
+  // "sterling" that is not sterling silver (rk-2)
+  'not sterling', 'non sterling', 'sterling china', 'sterling publishing', 'sterling archer',
 ];
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Kitchen knives and flatware (rk-2, Finix 2026-11-23: OK on card "as long as it is clearly for eating/cooking")
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** KNIFE keywords that do not count on their own when the item is clearly kitchen or table cutlery. */
+const GENERIC_KNIFE_KEYWORDS: ReadonlySet<string> = new Set(['knife', 'knives', 'cleaver', 'utility knife']);
+
+/** Title / tags / brand words that make an item clearly kitchen or table cutlery. Whole words, optional plural. */
+const KITCHEN_KNIFE_CONTEXT: readonly string[] = [
+  'kitchen', 'chef', 'chefs', 'cook', 'cooks', 'cooking', 'culinary', 'cutlery', 'flatware', 'silverware', 'tableware',
+  'dinnerware', 'place setting', 'service for', 'steak', 'carving', 'carver', 'paring', 'bread', 'santoku', 'nakiri',
+  'gyuto', 'usuba', 'deba', 'petty', 'boning', 'fillet', 'filet', 'slicing', 'slicer', 'butcher', 'meat', 'vegetable',
+  'tomato', 'grapefruit', 'cheese', 'butter', 'dinner', 'table', 'knife block', 'block set',
+  // kitchen-knife makers
+  'wusthof', 'wüsthof', 'henckels', 'zwilling', 'cutco', 'chicago cutlery', 'ginsu', 'shun', 'miyabi', 'messermeister',
+  'mercer culinary', 'dexter russell', 'rada cutlery', 'farberware', 'cuisinart', 'kitchenaid', 'calphalon', 'oneida',
+];
+
+/** Category words (category + ebayCategoryName) that make an item clearly kitchen or table cutlery. */
+const KITCHEN_CATEGORY_CONTEXT: readonly string[] = [
+  'kitchen', 'kitchenware', 'cutlery', 'flatware', 'silverware', 'tableware', 'dining', 'cookware',
+];
+
+/** Any of these in the title / tags / brand cancels the kitchen reading: the item is not clearly for eating or cooking. */
+const NON_KITCHEN_KNIFE_CONTEXT: readonly string[] = [
+  'hunting', 'hunter', 'pocket', 'pocketknife', 'folding', 'lockback', 'lock blade', 'tactical', 'combat', 'survival',
+  'fighting', 'fighter', 'throwing', 'military', 'army', 'trench', 'boot knife', 'neck knife', 'bowie', 'skinning',
+  'skinner', 'gut hook', 'sheath', 'scabbard', 'camp', 'camping', 'outdoor', 'fixed blade', 'assisted', 'automatic', 'otf',
+  'switchblade', 'balisong', 'dagger', 'bayonet', 'commemorative', 'collector', 'collectible', 'ww1', 'ww2', 'wwi',
+  'wwii', 'usmc', 'marine', 'navy', 'scout', 'barlow', 'trapper', 'stockman', 'whittler', 'whittling', 'karambit',
+  'kukri', 'machete',
+];
+
+/** STERLING (rk-2): classed COIN_BULLION_PRECIOUS_METAL only when nothing else matched (sterling jewelry stays JEWELRY). */
+const STERLING_KEYWORDS: readonly string[] = ['sterling', 'sterling silver', 'solid sterling', '925 silver'];
+const STERLING_STRONG: readonly string[] = ['sterling silver', 'solid sterling'];
+const STERLING_CATEGORY: readonly string[] = ['sterling', 'sterling silver'];
 
 interface KeywordRule {
   cls: Exclude<RestrictedItemClassName, 'NONE'>;
@@ -352,6 +405,26 @@ function firstMatch(normText: string, phrases: readonly string[]): string | null
 // Public API
 // ---------------------------------------------------------------------------------------------------------------------
 
+const KNIFE_KEYWORDS_SPECIFIC: readonly string[] = (KEYWORD_RULES.find((r) => r.cls === 'KNIFE') as KeywordRule).keywords.filter(
+  (k) => !GENERIC_KNIFE_KEYWORDS.has(k),
+);
+
+/**
+ * True when the item is clearly kitchen or table cutlery (Finix 2026-11-23): a kitchen word or kitchen-knife maker in the
+ * title / tags / brand, or a kitchen / cutlery / flatware category, AND no outdoor or weapon knife word anywhere in the
+ * title / tags / brand. Read on the text BEFORE exclusions are stripped, so "steak knife" or "butter knife" count as
+ * kitchen context. Exported for tests.
+ */
+export function isClearlyKitchenCutlery(input: RestrictedClassifierInput, normalizedCategoryText?: string): boolean {
+  const ownText = normalizeForRestrictedMatch(
+    [input.title, (input.tags || []).join(' '), input.brand].filter((v) => typeof v === 'string' && v).join(' | '),
+  );
+  const categoryText =
+    normalizedCategoryText ?? normalizeForRestrictedMatch([input.category, input.ebayCategoryName].filter(Boolean).join(' | '));
+  if (firstMatch(ownText, NON_KITCHEN_KNIFE_CONTEXT)) return false;
+  return !!(firstMatch(ownText, KITCHEN_KNIFE_CONTEXT) || (categoryText && firstMatch(categoryText, KITCHEN_CATEGORY_CONTEXT)));
+}
+
 /**
  * Classifies one item from its own fields. Pure and synchronous. Returns the HIGHEST matching class (see precedence in
  * the file header), or NONE.
@@ -366,6 +439,7 @@ export function classifyRestrictedItem(input: RestrictedClassifierInput): Restri
   );
   const descText = stripExclusions(normalizeForRestrictedMatch(input.description));
   const categoryText = normalizeForRestrictedMatch([input.category, input.ebayCategoryName].filter(Boolean).join(' | '));
+  const kitchenCutlery = isClearlyKitchenCutlery(input, categoryText);
 
   let best: { cls: RestrictedItemClassName; matched: string } | null = null;
   const consider = (cls: RestrictedItemClassName, matched: string) => {
@@ -373,7 +447,8 @@ export function classifyRestrictedItem(input: RestrictedClassifierInput): Restri
   };
 
   for (const rule of KEYWORD_RULES) {
-    const hit = firstMatch(fullText, rule.keywords);
+    const keywords = rule.cls === 'KNIFE' && kitchenCutlery ? KNIFE_KEYWORDS_SPECIFIC : rule.keywords;
+    const hit = firstMatch(fullText, keywords);
     if (hit) {
       consider(rule.cls, `keyword:${hit}`);
       continue;
@@ -388,6 +463,15 @@ export function classifyRestrictedItem(input: RestrictedClassifierInput): Restri
       const hit = firstMatch(categoryText, rule.categoryKeywords);
       if (hit) consider(rule.cls, `category:${hit}`);
     }
+  }
+
+  if (!best) {
+    // Sterling: only when no other class matched, so sterling jewelry keeps the more telling JEWELRY class.
+    const sterlingHit =
+      firstMatch(fullText, STERLING_KEYWORDS) ??
+      firstMatch(descText, STERLING_STRONG) ??
+      (categoryText ? firstMatch(categoryText, STERLING_CATEGORY) : null);
+    if (sterlingHit) consider('COIN_BULLION_PRECIOUS_METAL', `sterling:${sterlingHit}`);
   }
 
   const decided = best as { cls: RestrictedItemClassName; matched: string } | null;
